@@ -106,11 +106,16 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
     cfg["_applivery_api_key"] = key
     cfg.setdefault("applivery", {})["org_id"] = workspace_id
     cfg["incident_webhook_url"] = (runtime.get("incident_webhook_url") or "").strip()
+    # Atomic Mail Agentic: real email for the SaaS (opt-in per tenant).
+    am = runtime.get("atomicmail") or {}
+    if isinstance(am, dict) and am:
+        cfg["atomicmail"] = {k: v for k, v in am.items() if v not in (None, "")}
     return cfg
 
 
 def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
-                             incident_webhook_url: str = "") -> None:
+                             incident_webhook_url: str = "",
+                             atomicmail: dict | None = None) -> None:
     path = tdir / "integration.json"
     runtime = {}
     try:
@@ -124,6 +129,15 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
             runtime["incident_webhook_url"] = incident_webhook_url.strip()
         else:
             runtime.pop("incident_webhook_url", None)
+    if atomicmail is not None:
+        # atomicmail carries the tenant's Atomic Mail config (username / api_key
+        # / recipient). Strip empty values; the api_key is a secret and lives in
+        # this tenant-local, chmod 0600 file only.
+        cleaned = {k: v for k, v in (atomicmail or {}).items() if v not in (None, "")}
+        if cleaned:
+            runtime["atomicmail"] = cleaned
+        else:
+            runtime.pop("atomicmail", None)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
@@ -907,6 +921,85 @@ class Handler(BaseHTTPRequestHandler):
             devs = [s.to_dict() for s in eng.store.snapshot().values()]
             fired = eng.alerts.evaluate(devs)
             return _send_json(self, {"ok": True, "firings": fired, "count": len(fired)})
+
+        if route == "/api/atomicmail/status" and method == "GET":
+            tdir = _tenants.data_dir(org)
+            runtime = {}
+            try:
+                runtime = json.loads((tdir / "integration.json").read_text(encoding="utf-8"))
+            except Exception:
+                runtime = {}
+            am = runtime.get("atomicmail") or {}
+            # Never leak the api_key; only report configured + masked inbox.
+            configured = bool(am.get("username") or am.get("api_key"))
+            masked_key = ("*" * 8 + (am["api_key"][-4:] if am.get("api_key") else "")) if am.get("api_key") else ""
+            out = {
+                "configured": configured,
+                "username": am.get("username", ""),
+                "masked_api_key": masked_key,
+                "incident_email_to": am.get("incident_email_to", ""),
+                "digest_email_to": am.get("digest_email_to", ""),
+                "ready": False,
+                "inbox": None,
+                "last_error": None,
+            }
+            mb = eng.mailbox
+            if mb is not None:
+                st = mb.status()
+                out["ready"] = st.get("ready")
+                out["inbox"] = st.get("inbox")
+                out["last_error"] = st.get("last_error")
+            return _send_json(self, out)
+        if route == "/api/atomicmail/setup" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            tdir = _tenants.data_dir(org)
+            am_cfg = {
+                "username": (body.get("username") or "").strip(),
+                "api_key": (body.get("api_key") or "").strip(),
+                "incident_email_to": (body.get("incident_email_to") or "").strip(),
+                "digest_email_to": (body.get("digest_email_to") or "").strip(),
+            }
+            if not (am_cfg["username"] or am_cfg["api_key"]):
+                return _send_json(self, {"ok": False, "error": "requiere username o api_key"}, 400)
+            _save_tenant_integration(
+                tdir, eng.config.get("mode", "simulation"),
+                eng.config.get("dry_run", True),
+                incident_webhook_url=eng.config.get("incident_webhook_url", ""),
+                atomicmail=am_cfg,
+            )
+            try:
+                reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "warning": f"config guardada pero engine no recargó: {exc}"})
+            return _send_json(self, {"ok": True,
+                                     "configured": bool(eng.mailbox is not None),
+                                     "inbox": eng.mailbox.status().get("inbox") if eng.mailbox else None})
+        if route == "/api/atomicmail/test" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            to = (body.get("to") or "").strip()
+            mb = eng.mailbox
+            if mb is None:
+                return _send_json(self, {"ok": False, "error": "atomicmail no configurado"}, 400)
+            if not to:
+                return _send_json(self, {"ok": False, "error": "falta 'to'"}, 400)
+            try:
+                ok = mb.send(to=to, subject="[LucidFence] Test de Atomic Mail",
+                             text="Este es un correo de prueba enviado por LucidFence vía Atomic Mail Agentic.")
+                return _send_json(self, {"ok": ok, "inbox": mb._inbox_id,
+                                         "last_error": mb.last_error})
+            except Exception as exc:
+                return _send_json(self, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+        if route == "/api/atomicmail/digest" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self) or {}
+            to = (body.get("to") or "").strip() or None
+            ok = eng.send_digest(to=to)
+            return _send_json(self, {"ok": ok})
 
         # ---- Bulk export / audit (CSV + print-ready HTML) ----------------
         if route == "/api/export" and method == "GET":

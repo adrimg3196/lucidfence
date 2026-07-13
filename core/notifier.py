@@ -108,3 +108,57 @@ class IncidentNotifier:
                 "footer": "LucidFence",
             }],
         }
+
+
+class AtomicMailNotifier:
+    """Incident lifecycle notifier that emails via Atomic Mail Agentic.
+
+    Wraps a ``core.atomicmail_client.TenantMailbox`` so incidents (open /
+    acknowledged / resolved) are delivered as real email through the tenant's
+    @atomicmail.ai inbox. Never raises: a failed send is recorded and returns
+    False so the engine cycle never 500s because email is down.
+
+    ``to`` is the recipient address (e.g. the SOC mailbox). The mailbox itself
+    is the sender and is owned by the tenant's data directory.
+    """
+
+    def __init__(self, mailbox, to: str = "", subject_prefix: str = "[LucidFence]"):
+        self.mailbox = mailbox
+        self.to = (to or "").strip()
+        self.subject_prefix = subject_prefix
+        self.last_result: Optional[dict] = None
+        self.deliveries: list[dict] = []
+
+    def enabled(self) -> bool:
+        return bool(self.to) and self.mailbox is not None
+
+    def notify(self, transition: str, incident: dict) -> bool:
+        if not self.enabled():
+            return False
+        try:
+            severity = (incident.get("severity") or "info").lower()
+            verb = _VERB.get(transition, transition)
+            title = incident.get("title") or incident.get("id") or "Incidente"
+            device = incident.get("device_name") or incident.get("device_id") or "—"
+            subject = f"{self.subject_prefix} [{severity.upper()}] {verb}: {title}"
+            text = (
+                f"{verb.capitalize()} de incidente\n"
+                f"ID: {incident.get('id') or '—'}\n"
+                f"Severidad: {severity}\n"
+                f"Dispositivo: {device}\n"
+                f"Estado: {transition}\n"
+            )
+            if incident.get("fence_id"):
+                text += f"Geocerca: {incident['fence_id']}\n"
+            if incident.get("assignee"):
+                text += f"Asignado a: {incident['assignee']}\n"
+            ok = self.mailbox.send(to=self.to, subject=subject, text=text)
+            self.last_result = {"ok": ok}
+            self.deliveries.append({
+                "transition": transition,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "result": self.last_result,
+            })
+            return bool(ok)
+        except Exception:  # noqa: BLE001 - never propagate
+            return False

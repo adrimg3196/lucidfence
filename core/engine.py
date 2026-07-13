@@ -62,11 +62,16 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
-        # Wire the incident lifecycle notifier (Slack/Teams) if configured.
+        # Wire the incident lifecycle notifiers (Slack/Teams and/or Atomic Mail)
+        # if configured. Both are tenant-local and never raise.
         webhook_url = config.get("incident_webhook_url", "") or ""
         if webhook_url:
             from core.notifier import IncidentNotifier
             self.incidents.notifier = IncidentNotifier(webhook_url=webhook_url)
+        # Atomic Mail Agentic: real email for the SaaS (alerts + incidents +
+        # digest). Opt-in per tenant: requires atomicmail config in integration.
+        self.mailbox = None
+        self._wire_atomicmail(config)
         self.fences_path = Path(config["fences_path"])
         self.fences = load_fences(self.fences_path)
         self.fence_by_id = fence_index(self.fences)
@@ -116,7 +121,86 @@ class Engine:
         self._cycle_fired: dict[str, set] = {}
         # --- Configurable threshold alerts (MDM/UEM alerting) ---
         from core.alerts import AlertEngine
-        self.alerts = AlertEngine(self.data_dir)
+        self.alerts = AlertEngine(self.data_dir, mailer=self.mailbox)
+
+    # ---- Atomic Mail Agentic wiring ------------------------------------
+    def _wire_atomicmail(self, config: dict) -> None:
+        """Build the tenant's Atomic Mail mailbox (real @atomicmail.ai inbox).
+
+        Configuration is read from the tenant's ``integration.json`` (written by
+        the SaaS settings endpoint). Opt-in only: if no atomicmail section is
+        present, ``self.mailbox`` stays None and no email channel is active.
+        Never raises — a bad/missing config simply disables the channel.
+        """
+        try:
+            from core.atomicmail_client import build_tenant_mailbox
+            am = config.get("atomicmail") or {}
+            if not isinstance(am, dict):
+                return
+            username = am.get("username") or ""
+            api_key = am.get("api_key") or ""
+            email_to = am.get("incident_email_to") or am.get("email_to") or ""
+            if not (username or api_key):
+                return
+            tdir = Path(self.data_dir)
+            self.mailbox = build_tenant_mailbox(
+                tdir, username=username or None, api_key=api_key or None,
+            )
+            # If an incident email recipient is configured, wrap the mailbox in
+            # an AtomicMailNotifier and attach it alongside any webhook notifier.
+            if email_to and self.incidents.notifier is None:
+                from core.notifier import AtomicMailNotifier
+                self.incidents.notifier = AtomicMailNotifier(self.mailbox, to=email_to)
+            # Warm the session (register/recover) best-effort so the first
+            # alert doesn't pay the PoW cost. Failures are tolerated.
+            try:
+                self.mailbox.ensure_registered()
+            except Exception:
+                pass
+        except Exception:
+            self.mailbox = None
+
+    def send_digest(self, *, to: str | None = None, subject: str | None = None) -> bool:
+        """Send a fleet + risk digest email via Atomic Mail.
+
+        Returns True if delivered. Safe to call from a cron/periodic task; never
+        raises. Requires the atomicmail channel to be configured.
+        """
+        if self.mailbox is None:
+            return False
+        try:
+            stats = self.last_stats or {}
+            devices = [s.to_dict() for s in self.store.snapshot().values()]
+            total = len(devices)
+            outside = sum(1 for d in devices if d.get("fence_state") == "outside")
+            noncompliant = sum(1 for d in devices if d.get("compliant") is False)
+            high_risk = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
+            lines = [
+                f"Resumen LucidFence — {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
+                "",
+                f"Dispositivos monitorizados: {total}",
+                f"Fuera de geocerca: {outside}",
+                f"Non-compliant: {noncompliant}",
+                f"Riesgo alto (>=70): {high_risk}",
+                "",
+                "Dispositivos en riesgo:",
+            ]
+            for d in sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:10]:
+                lines.append(
+                    f"  - {d.get('name') or d.get('device_id')}: riesgo {d.get('risk_score') or 0} "
+                    f"({d.get('fence_state')})"
+                )
+            text = "\n".join(lines)
+            recipient = to or (self.config.get("atomicmail", {}) or {}).get("digest_email_to") or ""
+            if not recipient:
+                return False
+            return self.mailbox.send(
+                to=recipient,
+                subject=subject or "[LucidFence] Digest de flota y riesgo",
+                text=text,
+            )
+        except Exception:
+            return False
 
     # ---- cycle -----------------------------------------------------------
     def _release_lock(self):

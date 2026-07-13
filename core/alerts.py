@@ -33,7 +33,7 @@ ALERT_TYPES = {
 }
 
 # Channels we currently support.
-CHANNELS = {"slack", "email", "none"}
+CHANNELS = {"slack", "email", "atomicmail", "none"}
 
 # Human labels (used by the UI) -> internal type keys. The frontend may send
 # either the key or the label; add_rule normalizes both.
@@ -86,7 +86,8 @@ class AlertRule:
 
 
 class AlertEngine:
-    def __init__(self, data_dir: Path | str, http_post: Optional[Callable] = None):
+    def __init__(self, data_dir: Path | str, http_post: Optional[Callable] = None,
+                 mailer: Optional[object] = None):
         self.path = Path(data_dir) / "alert_rules.json"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
@@ -94,6 +95,7 @@ class AlertEngine:
         self._firings: list[dict] = []
         self._last_fired: dict[str, float] = {}  # f"{rule_id}:{device_id}" -> ts
         self._post = http_post
+        self._mailer = mailer  # Optional AtomicMail TenantMailbox for "atomicmail" channel
         self._load()
 
     # ---- persistence ----------------------------------------------------
@@ -262,6 +264,26 @@ class AlertEngine:
             return firing
         if rule.channel == "email":
             return self._send_email(rule.target, firing)
+        if rule.channel == "atomicmail":
+            # Email via Atomic Mail Agentic (real @atomicmail.ai inbox, JMAP,
+            # no SMTP server). The mailer is injected by the Engine; if absent
+            # the firing is recorded but not delivered.
+            mailer = self._mailer
+            if mailer is None:
+                firing["delivered"] = False
+                firing["delivery_note"] = "atomicmail no configurado para este tenant"
+                return firing
+            subject = f"[LucidFence] {firing['severity'].upper()}: {firing['device_name']}"
+            text = (
+                f"Dispositivo: {firing['device_name']} ({firing['device_id']})\n"
+                f"Regla: {firing['rule_type']}\n"
+                f"Detalle: {firing['detail']}\n"
+                f"Hora: {firing['ts']}\n"
+            )
+            ok = mailer.send(to=rule.target, subject=subject, text=text)
+            firing["delivered"] = ok
+            firing["delivery_result"] = {"ok": ok, "channel": "atomicmail"}
+            return firing
         firing["delivered"] = False
         return firing
 
