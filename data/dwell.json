@@ -1,0 +1,22 @@
+{
+  "dev-001": {
+    "seconds": 0,
+    "cycles": 0
+  },
+  "dev-002": {
+    "seconds": 9000,
+    "cycles": 10
+  },
+  "dev-003": {
+    "seconds": 4500,
+    "cycles": 5
+  },
+  "dev-1001": {
+    "seconds": 65700,
+    "cycles": 73
+  },
+  "dev-1002": {
+    "seconds": 65700,
+    "cycles": 73
+  }
+}

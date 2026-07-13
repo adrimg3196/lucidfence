@@ -1,0 +1,176 @@
+{
+  "devices": [
+    {
+      "id": "dev-001",
+      "name": "Tablet Campo A1",
+      "platform": "android",
+      "status": "active",
+      "compliant": true,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.21",
+      "os_version": "Android 14",
+      "model": "Samsung Galaxy Tab Active5",
+      "manufacturer": "Samsung",
+      "serial_number": "RZ8T40EMBPD",
+      "imei": "354679110234567",
+      "battery_level": 87,
+      "battery_state": "discharging",
+      "storage_total_gb": 128.0,
+      "storage_free_gb": 64.5,
+      "carrier": "Movistar",
+      "assigned_user": "Lucia Fernandez",
+      "department": "Operaciones",
+      "enrolled_at": "2025-09-12T08:30:00Z",
+      "device_tag": "OPS-TAB-001",
+      "waypoints": [
+        { "lat": 40.4200, "lng": -3.7100 },
+        { "lat": 40.4205, "lng": -3.7095 },
+        { "lat": 40.4195, "lng": -3.7105 }
+      ],
+      "apps": [
+        { "name": "Chrome", "version": "120.0.0" },
+        { "name": "Slack", "version": "4.30" },
+        { "name": "Adobe Reader", "version": "1.2.3" },
+        { "name": "Notepad", "version": "9.9" }
+      ]
+    },
+    {
+      "id": "dev-002",
+      "name": "Movil Reparto B7",
+      "platform": "android",
+      "status": "active",
+      "compliant": true,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.22",
+      "os_version": "Android 13",
+      "model": "Xiaomi Redmi Note 12",
+      "manufacturer": "Xiaomi",
+      "serial_number": "XN7G22KLM88",
+      "imei": "866123456789012",
+      "battery_level": 43,
+      "battery_state": "discharging",
+      "storage_total_gb": 256.0,
+      "storage_free_gb": 198.2,
+      "carrier": "Vodafone",
+      "assigned_user": "Miguel Ortega",
+      "department": "Logistica",
+      "enrolled_at": "2025-11-03T10:15:00Z",
+      "device_tag": "LOG-PH-007",
+      "waypoints": [
+        { "lat": 40.4300, "lng": -3.6900 },
+        { "lat": 40.4200, "lng": -3.7100 },
+        { "lat": 40.3900, "lng": -3.7400 }
+      ],
+      "apps": [
+        { "name": "WhatsApp", "version": "2.23" },
+        { "name": "Chrome", "version": "119.0.0" },
+        { "name": "Maps", "version": "11.0" }
+      ]
+    },
+    {
+      "id": "dev-003",
+      "name": "iPad Showroom C3",
+      "platform": "ios",
+      "status": "active",
+      "compliant": false,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.23",
+      "os_version": "iOS 17.4",
+      "model": "iPad Air (5th gen)",
+      "manufacturer": "Apple",
+      "serial_number": "F2LWK3QHQ6L4",
+      "imei": "356938000123456",
+      "battery_level": 92,
+      "battery_state": "charging",
+      "storage_total_gb": 64.0,
+      "storage_free_gb": 12.1,
+      "carrier": "Orange",
+      "assigned_user": "Carmen Ruiz",
+      "department": "Ventas",
+      "enrolled_at": "2025-06-21T09:00:00Z",
+      "device_tag": "SAL-IPD-003",
+      "waypoints": [
+        { "lat": 40.3900, "lng": -3.7400 },
+        { "lat": 40.3880, "lng": -3.7420 },
+        { "lat": 40.3920, "lng": -3.7380 }
+      ],
+      "apps": [
+        { "name": "Acroread", "version": "1.2.3" },
+        { "name": "Outlook", "version": "16.0" },
+        { "name": "Teams", "version": "1.6" },
+        { "name": "WinRAR", "version": "6.0" }
+      ]
+    },
+    {
+      "id": "dev-004",
+      "name": "Terminal Almacen D2",
+      "platform": "windows",
+      "status": "active",
+      "compliant": true,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.24",
+      "os_version": "Windows 11 23H2",
+      "model": "Dell OptiPlex 7090",
+      "manufacturer": "Dell",
+      "serial_number": "DL-7GK42-9912",
+      "battery_level": 100,
+      "battery_state": "full",
+      "storage_total_gb": 512.0,
+      "storage_free_gb": 301.8,
+      "carrier": "LAN",
+      "assigned_user": "Javier Gomez",
+      "department": "Almacen",
+      "enrolled_at": "2024-12-15T11:45:00Z",
+      "device_tag": "ALM-WIN-002",
+      "waypoints": [
+        { "lat": 40.4300, "lng": -3.6900 },
+        { "lat": 40.4300, "lng": -3.6850 },
+        { "lat": 40.4320, "lng": -3.6900 }
+      ],
+      "apps": [
+        { "name": "Chrome", "version": "121.0.0" },
+        { "name": "OpenVPN", "version": "2.6" },
+        { "name": "FileZilla", "version": "3.60" },
+        { "name": "Zoom", "version": "5.15" }
+      ]
+    },
+    {
+      "id": "dev-005",
+      "name": "Movil Tecnico E9",
+      "platform": "android",
+      "status": "active",
+      "compliant": false,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.25",
+      "os_version": "Android 12",
+      "model": "Motorola Moto G04",
+      "manufacturer": "Motorola",
+      "serial_number": "MOTO0042X99",
+      "imei": "354807090000111",
+      "battery_level": 21,
+      "battery_state": "discharging",
+      "storage_total_gb": 64.0,
+      "storage_free_gb": 5.3,
+      "carrier": "Yoigo",
+      "assigned_user": "Sergio Navarro",
+      "department": "Soporte",
+      "enrolled_at": "2026-01-08T14:20:00Z",
+      "device_tag": "SOP-PH-009",
+      "waypoints": [
+        { "lat": 40.4700, "lng": -3.6000 },
+        { "lat": 40.4800, "lng": -3.5900 },
+        { "lat": 40.4900, "lng": -3.5800 }
+      ],
+      "apps": [
+        { "name": "WhatsApp", "version": "2.24" },
+        { "name": "Slack", "version": "4.31" },
+        { "name": "Outlook", "version": "16.0" }
+      ]
+    }
+  ]
+}

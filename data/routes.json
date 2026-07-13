@@ -1,0 +1,17 @@
+[
+  {
+    "id": "route-centro",
+    "name": "Ruta Comercial Centro",
+    "corridor_m": 300,
+    "device_ids": ["dev-002"],
+    "color": "#22c55e",
+    "waypoints": [
+      {"lat": 40.4300, "lng": -3.6900},
+      {"lat": 40.4200, "lng": -3.7100}
+    ],
+    "actions": [
+      {"action": "notify", "when": "on_exit", "enabled": true,
+       "params": {"channel": "security", "msg": "Comercial fuera de la ruta asignada"}}
+    ]
+  }
+]

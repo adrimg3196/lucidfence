@@ -1,0 +1,590 @@
+{
+  "generated_at": "2026-07-12T05:30:34.830539+00:00",
+  "scope": "all",
+  "totals": {
+    "devices": 5,
+    "inside": 5,
+    "outside": 0,
+    "unknown": 0,
+    "non_compliant": 1,
+    "violations": 0,
+    "compliance_rate_pct": 80.0
+  },
+  "by_fence": {
+    "office-hq": {
+      "name": "Oficina HQ (Madrid)",
+      "inside": 3,
+      "violations": 0
+    },
+    "warehouse-poly": {
+      "name": "Almacen (poligono)",
+      "inside": 2,
+      "violations": 0
+    }
+  },
+  "devices": [
+    {
+      "device_id": "dev-001",
+      "name": "Field Tablet A1",
+      "platform": "android",
+      "status": "active",
+      "compliant": true,
+      "fence_state": "inside",
+      "fence_id": "office-hq",
+      "fence_name": "Oficina HQ (Madrid)",
+      "lat": 40.42024131157815,
+      "lng": -3.7093660571037383,
+      "accuracy_m": 17.788535969157675,
+      "country": "ES",
+      "city": "Madrid",
+      "location_source": "simulated",
+      "dwell_seconds": 0,
+      "is_violation": false
+    },
+    {
+      "device_id": "dev-002",
+      "name": "Delivery Phone B7",
+      "platform": "android",
+      "status": "active",
+      "compliant": true,
+      "fence_state": "inside",
+      "fence_id": "warehouse-poly",
+      "fence_name": "Almacen (poligono)",
+      "lat": 40.429758684958884,
+      "lng": -3.690634032602542,
+      "accuracy_m": 5.500215104453339,
+      "country": "ES",
+      "city": "Madrid",
+      "location_source": "simulated",
+      "dwell_seconds": 9000,
+      "is_violation": false
+    },
+    {
+      "device_id": "dev-003",
+      "name": "iPad Showroom C3",
+      "platform": "ios",
+      "status": "active",
+      "compliant": false,
+      "fence_state": "inside",
+      "fence_id": "office-hq",
+      "fence_name": "Oficina HQ (Madrid)",
+      "lat": 40.42024131157815,
+      "lng": -3.7093660571037383,
+      "accuracy_m": 10.500586367382386,
+      "country": "ES",
+      "city": "Madrid",
+      "location_source": "simulated",
+      "dwell_seconds": 4500,
+      "is_violation": false
+    },
+    {
+      "device_id": "dev-1001",
+      "name": "dev-1001",
+      "platform": "unknown",
+      "status": "UNKNOWN",
+      "compliant": null,
+      "fence_state": "inside",
+      "fence_id": "office-hq",
+      "fence_name": "Oficina HQ (Madrid)",
+      "lat": 40.42,
+      "lng": -3.71,
+      "accuracy_m": null,
+      "country": null,
+      "city": null,
+      "location_source": "applivery",
+      "dwell_seconds": 65700,
+      "is_violation": false
+    },
+    {
+      "device_id": "dev-1002",
+      "name": "dev-1002",
+      "platform": "unknown",
+      "status": "UNKNOWN",
+      "compliant": null,
+      "fence_state": "inside",
+      "fence_id": "warehouse-poly",
+      "fence_name": "Almacen (poligono)",
+      "lat": 40.43,
+      "lng": -3.69,
+      "accuracy_m": null,
+      "country": null,
+      "city": null,
+      "location_source": "applivery",
+      "dwell_seconds": 65700,
+      "is_violation": false
+    }
+  ],
+  "recent_events": [
+    {
+      "ts": "2026-07-07T20:06:35.505491+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "none:unknown",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.506018+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "none:unknown",
+      "to": "warehouse-poly:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.506454+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "none:unknown",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.511616+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "office-hq:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.518967+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "office-hq:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.522258+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "warehouse-poly:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.525674+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "None:outside",
+      "to": "warehouse-poly:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.534274+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:35.540805+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "warehouse-poly:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-07T20:06:40.974726+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:40.975219+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "office-hq:inside",
+      "to": "warehouse-poly:inside"
+    },
+    {
+      "ts": "2026-07-07T20:06:40.975642+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-08T06:52:32.614544+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "office-hq:inside",
+      "to": "restricted-zone:inside"
+    },
+    {
+      "ts": "2026-07-08T07:01:56.880847+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "restricted-zone:inside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-08T10:06:04.337459+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "office-hq:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-08T10:36:04.324099+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "office-hq:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-08T11:51:04.274210+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "warehouse-poly:inside",
+      "to": "None:outside"
+    },
+    {
+      "ts": "2026-07-08T14:06:04.175424+00:00",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "from": "None:outside",
+      "to": "warehouse-poly:inside"
+    },
+    {
+      "ts": "2026-07-08T15:21:04.099620+00:00",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-08T15:56:42.926765+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-08T18:13:22.502499+00:00",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "from": "None:outside",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-09T08:25:48.249874+00:00",
+      "device_id": "dev-1001",
+      "device_name": "Field Tablet A",
+      "from": "none:unknown",
+      "to": "office-hq:inside"
+    },
+    {
+      "ts": "2026-07-09T08:25:48.250532+00:00",
+      "device_id": "dev-1002",
+      "device_name": "Delivery Phone B",
+      "from": "none:unknown",
+      "to": "warehouse-poly:inside"
+    }
+  ],
+  "recent_actions": [
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-d08ba7dce167",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:35.505599+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-fabf1c07852d",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:35.506070+00:00",
+      "fence_id": "warehouse-poly",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-0d8554c0e266",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:35.506502+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-3ca68130a87b",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:35.525725+00:00",
+      "fence_id": "warehouse-poly",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-09b1b9198df4",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:35.534322+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-c9918c969adf",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:40.974803+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-a47efda4a903",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:40.975270+00:00",
+      "fence_id": "warehouse-poly",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-bbe2463c4274",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-07T20:06:40.975692+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-d76994a24bee",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "lock",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.615311+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-87ea98c0c4e9",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "Dispositivo bloqueado: entrada en zona restringida."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.615401+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-40b2bc3b6603",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.616203+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_violation",
+      "dwell_cycles": 1
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-d54cc4798c24",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "ALERTA: dispositivo no-compliant dentro de zona restringida. Remediacion activa."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.616263+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_violation",
+      "dwell_cycles": 1
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-802fa6e8e38f",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.616958+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_violation",
+      "dwell_cycles": 2
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-f96ed3b703e2",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "ALERTA: dispositivo no-compliant dentro de zona restringida. Remediacion activa."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T06:52:32.617012+00:00",
+      "fence_id": "restricted-zone",
+      "trigger": "on_violation",
+      "dwell_cycles": 2
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-222f85d086ad",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T07:01:56.881287+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-e47b4278303f",
+      "device_id": "dev-002",
+      "device_name": "Delivery Phone B7",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T14:06:04.176385+00:00",
+      "fence_id": "warehouse-poly",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-230a3060b9e8",
+      "device_id": "dev-003",
+      "device_name": "iPad Showroom C3",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T15:21:04.100059+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-14b2e4a79428",
+      "device_id": "dev-001",
+      "device_name": "Field Tablet A1",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-08T18:13:22.502771+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-54b296aa5258",
+      "device_id": "dev-1001",
+      "device_name": "Field Tablet A",
+      "action": "message",
+      "params": {
+        "text": "Bienvenido a la Oficina HQ."
+      },
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-09T08:25:48.249955+00:00",
+      "fence_id": "office-hq",
+      "trigger": "on_enter"
+    },
+    {
+      "adapter": "simulation",
+      "ok": true,
+      "command_id": "sim-ade990a7bdb4",
+      "device_id": "dev-1002",
+      "device_name": "Delivery Phone B",
+      "action": "locate",
+      "params": {},
+      "dry_run": true,
+      "note": "Simulated action (no real device contacted).",
+      "ts": "2026-07-09T08:25:48.250591+00:00",
+      "fence_id": "warehouse-poly",
+      "trigger": "on_enter"
+    }
+  ]
+}

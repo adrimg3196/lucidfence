@@ -1,0 +1,3 @@
+# Geofence UEM — dependencias (100% local)
+# Solo una dependencia externa. El resto es stdlib de Python 3.9+.
+requests>=2.28

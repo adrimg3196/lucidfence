@@ -1,0 +1,6 @@
+device_id,name,platform,status,compliant,fence_state,fence_name,lat,lng,accuracy_m,country,city,location_source,dwell_seconds,is_violation
+dev-001,Field Tablet A1,android,active,True,inside,Oficina HQ (Madrid),40.42024131157815,-3.7093660571037383,17.788535969157675,ES,Madrid,simulated,0,False
+dev-002,Delivery Phone B7,android,active,True,inside,Almacen (poligono),40.429758684958884,-3.690634032602542,5.500215104453339,ES,Madrid,simulated,9000,False
+dev-003,iPad Showroom C3,ios,active,False,inside,Oficina HQ (Madrid),40.42024131157815,-3.7093660571037383,10.500586367382386,ES,Madrid,simulated,4500,False
+dev-1001,dev-1001,unknown,UNKNOWN,None,inside,Oficina HQ (Madrid),40.42,-3.71,None,None,None,applivery,63900,False
+dev-1002,dev-1002,unknown,UNKNOWN,None,inside,Almacen (poligono),40.43,-3.69,None,None,None,applivery,63900,False

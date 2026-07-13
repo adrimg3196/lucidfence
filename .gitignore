@@ -1,0 +1,44 @@
+# === Geofence UEM — .gitignore (open-source, multi-MDM) ===
+# Nunca subir datos de tenant, secretos ni runtime.
+
+# Datos de tenant (cada cliente en su propio dir; locales y confidenciales)
+data/tenants/
+data/*.tmp
+data/*.log
+
+# Config con secretos en runtime (el repo trae config.example.json)
+config.json
+*.local.json
+
+# Logs
+logs/
+*.log
+/tmp/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+*.tar.gz
+
+# OS
+.DS_Store
+.AppleDouble
+
+# Edge deps de skill refs (fuera del repo del producto)
+.skills-refs/
+
+# Node (si se añaden herramientas JS)
+node_modules/

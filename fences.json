@@ -1,0 +1,45 @@
+{
+  "fences": [
+    {
+      "id": "office-hq",
+      "name": "Oficina HQ (Madrid)",
+      "type": "circle",
+      "center": { "lat": 40.4200, "lng": -3.7100 },
+      "radius_m": 350,
+      "rules": { "description": "Perimetro de oficina. Aviso al entrar/salir." },
+      "actions": [
+        { "action": "message", "when": "on_enter", "enabled": true, "params": { "text": "Bienvenido a la Oficina HQ." } },
+        { "action": "message", "when": "on_exit", "enabled": true, "params": { "text": "Has salido de la zona HQ. Reporte registrado." } }
+      ]
+    },
+    {
+      "id": "restricted-zone",
+      "name": "Zona Restringida (remediacion automatica)",
+      "type": "circle",
+      "center": { "lat": 40.3900, "lng": -3.7400 },
+      "radius_m": 300,
+      "rules": { "description": "Si un dispositivo entra, se bloquea automaticamente (auto-remediacion UEM). Si es no-compliant y permanece dentro, se relocaliza/avisa cada ciclo (on_violation).", "violation_interval_cycles": 1 },
+      "actions": [
+        { "action": "lock", "when": "on_enter", "enabled": true, "params": {} },
+        { "action": "message", "when": "on_enter", "enabled": true, "params": { "text": "Dispositivo bloqueado: entrada en zona restringida." } },
+        { "action": "locate", "when": "on_violation", "enabled": true, "params": {} },
+        { "action": "message", "when": "on_violation", "enabled": true, "params": { "text": "ALERTA: dispositivo no-compliant dentro de zona restringida. Remediacion activa." } }
+      ]
+    },
+    {
+      "id": "warehouse-poly",
+      "name": "Almacen (poligono)",
+      "type": "polygon",
+      "coordinates": [
+        { "lat": 40.4350, "lng": -3.7000 },
+        { "lat": 40.4350, "lng": -3.6800 },
+        { "lat": 40.4250, "lng": -3.6800 },
+        { "lat": 40.4250, "lng": -3.7000 }
+      ],
+      "rules": { "description": "Poligono de almacen. Localizacion forzada al entrar." },
+      "actions": [
+        { "action": "locate", "when": "on_enter", "enabled": true, "params": {} }
+      ]
+    }
+  ]
+}

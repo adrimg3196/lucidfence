@@ -1,0 +1,60 @@
+[
+  {
+    "id": "pol-offshift-outside",
+    "name": "Fuera de geocerca fuera de turno",
+    "description": "Dispositivo fuera de su geocerca permitida y fuera del turno asignado -> riesgo alto: aislar.",
+    "severity": "high",
+    "enabled": true,
+    "when": [
+      {"field": "fence_state", "op": "eq", "value": "outside"},
+      {"field": "signal:shift_match.shift_match", "op": "eq", "value": false},
+      {"field": "signal:shift_match.shift_known", "op": "eq", "value": true}
+    ],
+    "actions": [
+      {"action": "notify", "params": {"channel": "security", "msg": "Dispositivo fuera de geocerca fuera de turno"}},
+      {"action": "lock", "params": {}}
+    ]
+  },
+  {
+    "id": "pol-rooted-outside",
+    "name": "Dispositivo rooteado fuera de geocerca",
+    "description": "Root/jailbreak + fuera de geocerca = fuga de datos probable -> critico: aislar y notificar CISO.",
+    "severity": "critical",
+    "enabled": true,
+    "when": [
+      {"field": "fence_state", "op": "eq", "value": "outside"},
+      {"field": "signal:device_health.rooted", "op": "eq", "value": true}
+    ],
+    "actions": [
+      {"action": "notify", "params": {"channel": "ciso", "msg": "CRITICO: dispositivo rooteado fuera de geocerca"}},
+      {"action": "wipe", "params": {}}
+    ]
+  },
+  {
+    "id": "pol-zone-risk-high",
+    "name": "Zona de riesgo elevado",
+    "description": "Dispositivo en zona de riesgo alta (dataset externo) -> notificar al equipo de seguridad.",
+    "severity": "high",
+    "enabled": true,
+    "when": [
+      {"field": "signal:zone_risk.zone_risk", "op": "gte", "value": 0.7}
+    ],
+    "actions": [
+      {"action": "notify", "params": {"channel": "security", "msg": "Dispositivo en zona de riesgo elevado"}}
+    ]
+  },
+  {
+    "id": "pol-unknown-location",
+    "name": "Ubicacion desconocida prolongada",
+    "description": "Señal perdida (unknown) y dispositivo no conforme -> posible robo.",
+    "severity": "medium",
+    "enabled": true,
+    "when": [
+      {"field": "fence_state", "op": "eq", "value": "unknown"},
+      {"field": "compliant", "op": "eq", "value": false}
+    ],
+    "actions": [
+      {"action": "notify", "params": {"channel": "security", "msg": "Ubicacion desconocida en dispositivo no conforme"}}
+    ]
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "name": "geofence-uem",
+  "owner": {
+    "name": "Tu Consultora UEM",
+    "url": "https://github.com/tu-org"
+  },
+  "metadata": {
+    "description": "Marketplace de skills para Geofence UEM: geofencing local multi-MDM para flotas UEM, extensible por adaptadores MDMAdapter (Apache-2.0).",
+    "version": "0.1.0",
+    "repository": "https://github.com/tu-org/geofence-uem"
+  },
+  "plugins": [
+    {
+      "name": "geofence-uem",
+      "description": "Plugin de Geofence UEM con skills de arranque del producto y de creación de adaptadores MDM (Intune, Jamf, Fleet, Applivery) mediante la interfaz MDMAdapter.",
+      "source": "./"
+    }
+  ]
+}
