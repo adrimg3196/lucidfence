@@ -5,6 +5,8 @@
 data/tenants/
 data/*.tmp
 data/*.log
+data/geocode_cache.db
+data/reports/
 
 # Config con secretos en runtime (el repo trae config.example.json)
 config.json
