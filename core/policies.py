@@ -277,6 +277,18 @@ class RiskEngine:
 
         score = max(0.0, min(100.0, score))
 
+        # --- Evidence gate (patrón T3MP3ST: un claim no es válido sin provenancia) ---
+        # Un score de riesgo SOLO se considera "verified" si está respaldado por
+        # señales/provenance reales (reasons no vacío). Un score > 0 sin razón es
+        # un overclaim y se marca como no verificado (honest by construction).
+        provenance = "tool" if reasons else "none"
+        verified = bool(reasons)  # el score lleva su justificación o no cuenta como hallazgo
+        if score > 0 and not reasons:
+            # Salvaguarda: nunca emitir riesgo sin explicación.
+            reasons.append("riesgo sin señal explícita (score base)")
+            provenance = "context"
+            verified = False
+
         # severidad derivada
         if score >= 80:
             severity = "critical"
@@ -294,6 +306,8 @@ class RiskEngine:
             "fence_state": fence_state,
             "signals": signals,
             "reasons": reasons,
+            "provenance": provenance,
+            "verified": verified,
         }
 
     def match_policies(self, policies: list[Policy], risk: dict, device: dict, fence_state: str) -> list[dict]:
