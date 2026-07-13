@@ -630,6 +630,16 @@ class Engine:
         if fence_type == "circle" and not raw.get("center"):
             if data.get("lat") is not None and data.get("lng") is not None:
                 raw["center"] = {"lat": data["lat"], "lng": data["lng"]}
+            elif data.get("address"):
+                # Free geocoding (Nominatim/OSM, no API key) -> coords.
+                try:
+                    from core import geocode
+                    hit = geocode.geocode(data["address"])
+                    if hit:
+                        raw["center"] = {"lat": hit["lat"], "lng": hit["lon"]}
+                        raw["address_resolved"] = hit["label"]
+                except Exception:
+                    pass  # operator may supply coords later
         try:
             fence = Fence.from_raw(raw)
         except (KeyError, TypeError, ValueError) as exc:

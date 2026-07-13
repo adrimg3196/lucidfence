@@ -549,7 +549,10 @@ class Handler(BaseHTTPRequestHandler):
         method = self.command
 
         # static
-        if route in ("/", "/index.html"):
+        if route in ("/", "/landing.html", "/landing"):
+            _send_file(self, STATIC / "landing.html", "text/html; charset=utf-8")
+            return
+        if route in ("/app", "/app/", "/index.html", "/dashboard"):
             _send_file(self, STATIC / "index.html", "text/html; charset=utf-8")
             return
         if route.startswith("/static/"):
