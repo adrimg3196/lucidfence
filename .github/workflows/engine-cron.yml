@@ -5,8 +5,7 @@ name: engine-cron
 # ciclo on-demand. El engine envia alertas/incidentes via Atomic Mail
 # (requiere secretos ATOMIC_MAIL_API_KEY / ATOMIC_MAIL_USER en Settings).
 # La IA (MoA) es opcional: si no hay MoA local, core.ai hace
-# fallback a texto plano (never raises). Para IA real, anade un paso
-# que clone tu MoA o monta las claves de free tiers.
+# fallback a texto plano (never raises).
 on:
   schedule:
     - cron: "*/15 * * * *"

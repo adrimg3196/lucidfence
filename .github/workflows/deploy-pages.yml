@@ -1,7 +1,8 @@
 name: deploy-pages
 
-# Despliegue de la LANDING + dashboard estático a GitHub Pages.
-# Siempre-on, gratis, sin intervención (gh ya autenticado).
+# Landing + dashboard estático a GitHub Pages (siempre-on, gratis).
+# Copia static/ a la raíz del artefacto con -L (dereferencia symlinks)
+# para evitar el fallo de deploy-pages con enlaces simbólicos.
 on:
   push:
     branches: [main]
@@ -20,18 +21,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Preparar artefacto (landing como index)
+      - name: Preparar artefacto (static/ -> raíz, sin symlinks)
         run: |
-          mkdir -p _pages
-          cp static/landing.html _pages/index.html
-          cp static/app.js _pages/app.js 2>/dev/null || true
-          cp static/index.html _pages/dashboard.html 2>/dev/null || true
-          cp README.md _pages/README.md 2>/dev/null || true
+          rm -rf _pages && mkdir -p _pages
+          cp -rL static/. _pages/
+          # landing es la portada
+          [ -f _pages/index.html ] || cp _pages/landing.html _pages/index.html
+          ls -la _pages | head
       - name: Subir artefacto de Pages
         uses: actions/upload-artifact@v4
         with:
           name: github-pages
           path: _pages
+          include-hidden-files: false
           retention-days: 1
       - name: Desplegar a Pages
         id: deployment
