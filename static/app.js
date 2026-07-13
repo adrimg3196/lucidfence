@@ -92,23 +92,111 @@ function toast(title, sub, kind="info"){
 async function api(path, opts={}){
   const r = await fetch(path, opts);
   if(r.status === 401){
-    // sesión perdida — intentamos re-login silencioso con demo user
-    const ok = await silentLogin();
-    if(ok) return api(path, opts);
-    toast("Sesión expirada", "vuelve a iniciar sesión", "bad");
+    // Sin sesión (o expiró). Mostramos el modal de login REAL del SaaS
+    // multi-tenant en lugar de un auto-login demo: el backend gestiona la
+    // sesión vía cookie httpOnly y no exponemos contraseñas en el cliente.
+    showAuthModal();
     throw new Error("no autenticado");
   }
   if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||("HTTP "+r.status)); }
   return r.json();
 }
-async function silentLogin(){
+
+/* ---------- autenticación SaaS real (multi-tenant, 100% local) ---------- */
+// El backend ya setea la cookie de sesión (httpOnly) vía Set-Cookie en
+// signup/login/logout; el navegador la envía solo (same-origin). Solo hacemos
+// fetch. NUNCA guardamos ni hardcodeamos tokens/secrets en el cliente.
+async function ensureAuth(){
   try{
-    // The product is bound to 127.0.0.1. The backend grants this local-only
-    // demo session without exposing or hardcoding the demo password in JS.
-    const r = await fetch("/api/auth/demo", {method:"POST"});
-    return r.ok;
-  }catch(e){ return false; }
+    const me = await api("/api/auth/me");
+    App.user = me.user; App.orgs = me.orgs||[];
+    await refreshOrg();      // rellena App.org (nombre/plan) y la UI lateral
+    updateUserUI();
+    return true;
+  }catch(e){
+    showAuthModal();
+    return false;
+  }
 }
+async function refreshOrg(){
+  try{ const o = await api("/api/org"); App.org = o; }catch(e){}
+  if(App.org && App.org.org){
+    $("#orgName").textContent = App.org.org.name||"";
+    if(App.org.org.plan) $("#planPill").textContent = String(App.org.org.plan).toUpperCase();
+  }
+}
+function updateUserUI(){
+  const u = App.user; if(!u) return;
+  const su = $("#sideUser"); if(su) su.style.display="flex";
+  const av = $("#sideAv"); if(av) av.textContent = avatarText(u.email||u.name||"?");
+  const em = $("#sideEmail"); if(em) em.textContent = u.email||"";
+  const org = (App.org && App.org.org && App.org.org.name) || (App.orgs&&App.orgs[0]&&App.orgs[0].name) || "";
+  const ro = $("#sideOrg"); if(ro) ro.textContent = org || "";
+}
+function showAuthModal(){
+  const m = $("#authModal"), ov = $("#authOvl");
+  if(!m) return;
+  setAuthTab(App._authTab||"login");
+  m.classList.add("show"); ov.classList.add("show");
+  const e = $("#authEmail"); if(e) setTimeout(()=>e.focus(), 30);
+}
+function hideAuthModal(){
+  const m = $("#authModal"), ov = $("#authOvl");
+  if(m) m.classList.remove("show"); if(ov) ov.classList.remove("show");
+  const res = $("#authResult"); if(res){ res.className="test-result"; res.textContent=""; }
+}
+function setAuthTab(tab){
+  App._authTab = tab;
+  $$("#authTabs button").forEach(b=>b.classList.toggle("active", b.dataset.t===tab));
+  const orgField = $("#authOrgField"); if(orgField) orgField.style.display = tab==="signup"?"block":"none";
+  const title = $("#authTitle"); if(title) title.textContent = tab==="signup"?"Crea tu organización":"Accede a LucidFence";
+  const sub = $("#authSub"); if(sub) sub.textContent = tab==="signup"?"Registro rápido · 100% local":"Gestiona tu flota de forma segura";
+  const btn = $("#authSubmit"); if(btn) btn.textContent = tab==="signup"?"Crear cuenta":"Entrar";
+  const res = $("#authResult"); if(res){ res.className="test-result"; res.textContent=""; }
+}
+async function submitAuth(){
+  const tab = App._authTab||"login";
+  const email = ($("#authEmail").value||"").trim();
+  const pass = ($("#authPass").value||"");
+  const org = ($("#authOrg").value||"").trim();
+  const res = $("#authResult");
+  if(!email || !pass){ res.className="test-result bad show"; res.textContent="Email y contraseña son obligatorios."; return; }
+  if(tab==="signup" && !org){ res.className="test-result bad show"; res.textContent="El nombre de la organización es obligatorio."; return; }
+  const body = tab==="signup" ? {email, password:pass, org_name:org, name:email} : {email, password:pass};
+  const btn = $("#authSubmit"); if(btn) btn.disabled=true;
+  try{
+    const r = await fetch("/api/auth/"+tab, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok || !data.ok){
+      res.className="test-result bad show"; res.textContent = data.error||("Error "+r.status); return;
+    }
+    App.user = data.user; App.orgs = data.orgs || (data.org?[data.org]:[]);
+    await refreshOrg();
+    updateUserUI();
+    hideAuthModal();
+    startApp();   // arranca/refresca el dashboard ya autenticado
+    toast("Sesión iniciada", (App.org&&App.org.org&&App.org.org.name)||email, "ok");
+  }catch(e){
+    res.className="test-result bad show"; res.textContent = e.message||"No se pudo conectar";
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+async function logout(){
+  try{ await api("/api/auth/logout", {method:"POST"}); }catch(e){}
+  App.user=null; App.orgs=null; App.org=null; App._riskMap=null; App._started=false;
+  stopPolling();
+  const su = $("#sideUser"); if(su) su.style.display="none";
+  $("#orgName").textContent=""; $("#planPill").textContent="FREE";
+  ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
+  showAuthModal();
+}
+function startApp(){
+  renderNav();
+  refresh(true).then(()=>{ goView(App.view||"overview"); App._started=true; startPolling(); }).catch(()=>{});
+}
+function startPolling(){ stopPolling(); App.pollTimer = setInterval(()=>refresh(false), 60000); }
+function stopPolling(){ if(App.pollTimer){ clearInterval(App.pollTimer); App.pollTimer=null; } }
 
 /* ---------- navegación (iconos reicon: github.com/dqev/reicon) ---------- */
 const NAV = [
@@ -116,6 +204,7 @@ const NAV = [
   {id:"map",        label:"Mapa",        icon:"map"},
   {id:"devices",    label:"Dispositivos",icon:"devices"},
   {id:"inventory",  label:"Inventario",  icon:"box"},
+  {id:"riesgo",     label:"Riesgo",       icon:"shield-alert"},
   {id:"ai",         label:"IA · MoA",    icon:"cpu"},
   {id:"events",     label:"Eventos",     icon:"calendar"},
   {id:"incidents",  label:"Incidentes",  icon:"alert-triangle2"},
@@ -154,6 +243,7 @@ function goView(id){
   if(id==="map") renderMapView();
   if(id==="devices") renderDevices();
   if(id==="inventory") renderInventory();
+  if(id==="riesgo") renderRisk();
   if(id==="ai") renderAI();
   if(id==="events") renderEvents();
   if(id==="incidents") renderIncidents();
@@ -170,27 +260,34 @@ function goView(id){
 /* ---------- boot ---------- */
 async function boot(){
   hydrateReicons();
-  try{ await refresh(true); }catch(e){ /* silentLogin ya intentado en api */ }
-  renderNav();
   bindGlobal();
-  goView("overview");
-  App.pollTimer = setInterval(()=>refresh(false), 60000);
+  const ok = await ensureAuth();   // decide login modal vs dashboard
+  if(!ok){ return; }               // login modal visible; startApp() tras login
+  startApp();
 }
 async function refresh(initial){
   const before = App.status;
   try{
     const [st, org] = await Promise.all([api("/api/status"), api("/api/org").catch(()=>null)]);
     App.status = st; App.org = org;
-    $("#orgName").textContent = org? (org.org.name||"") : "";
-    if(org && org.plan) $("#planPill").textContent = (org.plan||"free").toUpperCase();
+    // org llega como {org:{id,name,plan}, role, plan:<limits>}. El nombre real
+    // está en org.org.name y el plan en org.org.plan (no en org.plan, que es un
+    // dict de límites). Corregimos para no mostrar [object Object].
+    if(org && org.org){
+      $("#orgName").textContent = org.org.name||"";
+      if(org.org.plan) $("#planPill").textContent = String(org.org.plan).toUpperCase();
+    }
     updateSync(st, before);
     // pull open-incident count for the sidebar badge (best-effort)
     try{ const inc = await api("/api/incidents"); const open=(inc.incidents||[]).filter(i=>i.status!=="resolved").length; App._openIncidents = open||null; renderNav(); }catch(e){}
+    // refresca el mapa de riesgo explicable (evidence gate) en segundo plano
+    refreshRiskMap();
     // refresca la vista activa
     if(App.view==="overview") renderOverview();
     else if(App.view==="map") renderMapView();
     else if(App.view==="devices") renderDevices();
     else if(App.view==="inventory") renderInventory();
+    else if(App.view==="riesgo") renderRisk();
     else if(App.view==="events") renderEvents();
     else if(App.view==="incidents") renderIncidents();
     else if(App.view==="soar") renderSoar();
@@ -216,6 +313,103 @@ function updateSync(st, before){
   const mode = st&&st.mode? st.mode : (App.org && App.org.org ? "live":"simulation");
   $("#modeText").textContent = (st&&st.mode==="simulation")?"demo":(mode||"live");
   $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":"var(--green)";
+}
+
+/* ============================================================
+   RISK ENGINE EXPLICABLE (G2 — el moat del producto)
+   Normaliza TANTO la forma especificada {risk_score, severity, reasons[],
+   verified} como la forma real del product-layer {/api/risk -> risk:[{score,
+   level, factors:[{label}], ...}]}. En ambos casos extrae reasons y verified.
+   ============================================================ */
+// Caché del último /api/risk (se actualiza en cada refresh y en el modal).
+async function refreshRiskMap(){
+  try{
+    const data = await api("/api/risk");
+    // product-layer devuelve {risk:[...]}; también toleramos {devices:[...]}
+    const arr = data.risk || data.devices || (Array.isArray(data)? data : []);
+    const map = {};
+    (arr||[]).forEach(r=>{
+      const id = r.device_id || r.id;
+      if(!id) return;
+      map[id] = normalizeRisk(r);
+    });
+    App._riskMap = map;
+    // si la vista de riesgo o dispositivos está activa, repinta con reasons
+    if(App.view==="riesgo") renderRisk();
+    else if(App.view==="devices") renderDeviceRows();
+  }catch(e){ /* best-effort: el score de /api/status sigue disponible */ }
+}
+function normalizeRisk(r){
+  // reasons: nivel superior o derivado de factors[].label
+  let reasons = Array.isArray(r.reasons) ? r.reasons : [];
+  if(!reasons.length && Array.isArray(r.factors)) reasons = r.factors.map(f=>f.label||f).filter(Boolean);
+  if(!reasons.length && Array.isArray(r.signals)) reasons = r.signals.map(s=>s.label||s).filter(Boolean);
+  // verified: campo explícito, o deducido de "hay reasons => señal real"
+  let verified = r.verified;
+  if(verified===undefined) verified = reasons.length>0;
+  const score = r.risk_score!=null ? r.risk_score : (r.score!=null ? r.score : 0);
+  const severity = r.severity || r.level || sevFromScore(score);
+  return { score, severity, reasons, verified, signals: r.signals||{} };
+}
+function sevFromScore(s){ s=Number(s)||0; return s>=70?"critical":s>=40?"high":s>=20?"medium":"low"; }
+function severityLabel(s){ return ({low:"Bajo",medium:"Medio",high:"Alto",critical:"Crítico"})[s]||"—"; }
+function verifiedBadge(verified, opts={}){
+  // verified=true => señal real (verde); false => sin señal / no verificado (ámbar)
+  const cls = verified ? "in" : "unk";
+  const txt = verified ? (opts.short?"✓ Verificado":"✓ Verificado (señal real)") : (opts.short?"⚠ No verif.":"⚠ Sin señal / no verificado");
+  return `<span class="tag ${cls}" title="${verified?'Riesgo respaldado por señales reales (reasons no vacío)':'Sin señal que respalde el score'}"><span class="d"></span>${txt}</span>`;
+}
+function reasonsSummary(risk, max=1){
+  if(!risk || !risk.reasons || !risk.reasons.length) return '<span class="sub">sin razones registradas</span>';
+  const items = risk.reasons.slice(0, max).map(x=>esc(x));
+  return items.join(" · ");
+}
+function reasonsList(risk){
+  if(!risk || !risk.reasons || !risk.reasons.length)
+    return `<div class="sub">Este dispositivo no tiene señales de riesgo activas.</div>`;
+  return `<ul class="reasons">${risk.reasons.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+
+/* ============================================================
+   VISTA: RIESGO (G2c) — lista de dispositivos por risk_score + reasons
+   ============================================================ */
+async function renderRisk(){
+  const node = $("#view-riesgo"); if(!node) return;
+  let devs = (App.status && App.status.devices) || [];
+  // construye filas combinando status + risk explicable
+  let rows = devs.map(d=>{
+    const risk = (App._riskMap && App._riskMap[d.device_id]) || normalizeRisk({score: d.risk_score||0, reasons:[], verified:false});
+    return { d, risk };
+  }).sort((a,b)=> (b.risk.score||0) - (a.risk.score||0));
+  const hi = rows.filter(r=>r.risk.score>=70).length;
+  node.innerHTML = `
+    <div class="view-head">
+      <div><h2>Motor de Riesgo Explicable</h2>
+        <div class="sub">Cada score lleva su justificación (reasons) y un sello de verificación (señal real vs. sin señal). Nada de "caja negra".</div></div>
+      <div class="acts"><span class="tag ${hi?'nocomp':'in'}"><span class="d"></span>${hi} dispositivos en riesgo alto</span></div>
+    </div>
+    <div class="card"><div class="hd"><h3>Dispositivos por nivel de riesgo</h3><div class="grow"></div>
+      <span class="sub">ordenados de mayor a menor score</span></div>
+      <div class="bd"><div class="alist" id="riskList"></div></div></div>`;
+  const list = $("#riskList");
+  if(!rows.length){ list.innerHTML = emptyState("Sin dispositivos", "No hay datos de flota para evaluar."); return; }
+  rows.forEach(({d, risk})=>{
+    const item = el("div", "aitem");
+    item.style.cursor = "pointer";
+    const sc = risk.score!=null ? Math.round(risk.score) : "—";
+    const sevCls = risk.score>=70?"bad":risk.score>=40?"warn":"ok";
+    item.innerHTML = `
+      <div class="ic" style="color:var(--${sevCls==='bad'?'red':sevCls==='warn'?'amber':'green'})">${platformIcon(d.platform)}</div>
+      <div class="grow"><div class="nm">${esc(d.name||d.device_id)}</div>
+        <div class="ds">${risk.reasons.length? esc(risk.reasons[0]) + (risk.reasons.length>1?` · +${risk.reasons.length-1} más`:"") : "sin señales"}</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        ${verifiedBadge(risk.verified, {short:true})}
+        <span class="kpi ${sevCls}" style="padding:2px 10px;min-width:64px;text-align:center"><b style="font-size:15px">${sc}</b> <small style="color:var(--muted)">${esc(severityLabel(risk.severity))}</small></span>
+      </div>
+      <span class="act" title="Abrir detalle" onclick="openDeviceModal('${esc(d.device_id)}')">${I.bolt}</span>`;
+    item.onclick = ()=>openDeviceModal(d.device_id);
+    list.appendChild(item);
+  });
 }
 
 window.addEventListener("DOMContentLoaded", boot);
@@ -459,7 +653,7 @@ function renderDevices(){
     <div class="card"><table class="tt"><thead><tr>
       <th class="sort" data-s="name">Dispositivo</th><th class="sort" data-s="platform">Plataforma</th>
       <th class="sort" data-s="fence_state">Estado</th><th class="sort" data-s="compliant">Conformidad</th>
-      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th></th>
+      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Verif.</th><th></th>
     </tr></thead><tbody id="devBody"></tbody></table></div>`;
   $$("#devFilters .chip").forEach(c=>c.onclick=()=>{
     $$("#devFilters .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active");
@@ -488,13 +682,18 @@ function renderDeviceRows(){
   };
   devs.sort(sorters[App.devSort]||sorters.name);
   const tb = $("#devBody");
-  if(!devs.length){ tb.innerHTML = `<tr><td colspan="7">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
+  if(!devs.length){ tb.innerHTML = `<tr><td colspan="8">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
   tb.innerHTML="";
   devs.forEach(d=>{
     const state = d.fence_state||"unknown";
     const tagCls = state==="inside"?"in":state==="outside"?"out":"unk";
     const compPct = d.compliance_pct!=null? d.compliance_pct : (d.compliant===false?0:100);
     const cbCls = compPct<40?"low":compPct<75?"mid":"";
+    // G2b: risk explicable a nivel de fila
+    const risk = (App._riskMap && App._riskMap[d.device_id]) || null;
+    const verifiedCell = risk
+      ? `<span title="${risk.reasons && risk.reasons.length ? esc(risk.reasons.join(' · ')) : 'sin señales'}" style="cursor:help">${verifiedBadge(risk.verified, {short:true})}</span>`
+      : `<span class="sub" title="score de /api/status (sin reasons)">—</span>`;
     const tr = el("tr");
     tr.innerHTML = `
       <td><div class="dev"><div class="av" style="background:${avatarColor(d.device_id)}">${avatarText(d.name)}</div>
@@ -505,6 +704,7 @@ function renderDeviceRows(){
       <td>${d.compliant===false?`<span class="tag nocomp"><span class="d"></span>Incumple</span>`:`<div style="display:flex;align-items:center;gap:8px"><div class="cbar ${cbCls}"><i style="width:${compPct}%"></i></div><span class="mono">${compPct}%</span></div>`}</td>
       <td class="mono">${esc(d.city||d.country|| (d.lat!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
       <td class="mono">${fmt.ago(d.last_seen)}</td>
+      <td>${verifiedCell}</td>
       <td><span class="plat" style="cursor:pointer" onclick="openDeviceModal('${esc(d.device_id)}')">${I.act}</span></td>`;
     tr.onclick = ()=>openDeviceModal(d.device_id);
     tb.appendChild(tr);
@@ -529,6 +729,36 @@ async function openDeviceModal(id){
     ["Visto", fmt.date(d.last_seen)],
   ];
   $("#mKv").innerHTML = rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(r[1])}</div>`).join("");
+  // ---- G2a: Risk Engine explicable (reasons + verified) ----
+  const mRisk = $("#mRisk");
+  if(mRisk){
+    // El score de riesgo compuesto ya viene en /api/status (d.risk_score).
+    // El detalle explicable (reasons + verified) vive en App._riskMap, que se
+    // llena con /api/risk en cada refresh (refreshRiskMap). Lo usamos y, si no
+    // está aún disponible, hacemos un fetch puntual del bundle global.
+    const renderRiskBlock = (rk)=>{
+      mRisk.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          ${verifiedBadge(rk.verified)}
+          <span class="kpi ${rk.score>=70?'bad':rk.score>=40?'warn':'ok'}" style="padding:3px 12px">
+            <b style="font-size:16px">${Math.round(rk.score)}</b> <small style="color:var(--muted)">${esc(severityLabel(rk.severity))}</small>
+          </span>
+          <span class="sub">score de riesgo compuesto</span>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600">¿Por qué este riesgo?</div>
+        <div id="mReasons" style="margin-top:6px">${reasonsList(rk)}</div>`;
+    };
+    const fromStatus = (App._riskMap && App._riskMap[id]) || normalizeRisk({score: d.risk_score||0, severity: d.risk_severity});
+    renderRiskBlock(fromStatus);
+    if(!(App._riskMap && App._riskMap[id])){
+      // fetch puntual del bundle global para rellenar reasons/verified
+      api("/api/risk").then(data=>{
+        const arr = data.risk || data.devices || [];
+        const hit = (arr||[]).find(x=> (x.device_id||x.id)===id);
+        if(hit && App.view) renderRiskBlock(normalizeRisk(hit));
+      }).catch(()=>{});
+    }
+  }
   // apps installed + CVE risk
   const mApps = $("#mApps");
   if(mApps){
@@ -1243,6 +1473,14 @@ function bindGlobal(){
   $("#cycleBtn").onclick = ()=>forceCycle();
   $("#themeBtn").onclick = ()=>toggleTheme();
   $("#cmdBtn").onclick = ()=>openCmdk();
+  // ---- G1: auth UI wiring ----
+  $("#authSubmit") && ($("#authSubmit").onclick = submitAuth);
+  $("#authPass") && $("#authPass").addEventListener("keydown", e=>{ if(e.key==="Enter") submitAuth(); });
+  $("#authEmail") && $("#authEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#authPass").focus(); });
+  $("#authOrg") && $("#authOrg").addEventListener("keydown", e=>{ if(e.key==="Enter") submitAuth(); });
+  $$("#authTabs button").forEach(b=>b.onclick=()=>setAuthTab(b.dataset.t));
+  $("#authOvl") && ($("#authOvl").onclick = ()=>{ /* modal auth no se cierra con backdrop: evita acceso sin sesión */ });
+  $("#sideLogout") && ($("#sideLogout").onclick = logout);
   document.addEventListener("keydown", e=>{
     if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); openCmdk(); }
     if(e.key==="Escape"){ closeModal(); closeCmdk(); }
@@ -1276,6 +1514,7 @@ async function renderInventory(){
     {k:"battery_level", t:"Batería"},
     {k:"storage_free_gb", t:"Libre (GB)"},
     {k:"risk_score", t:"Riesgo"},
+    {k:"verified", t:"Verif."},
   ];
   const filt = App.invFilter || "all";
   const filtered = devs.filter(d=>{
@@ -1321,6 +1560,7 @@ async function renderInventory(){
               <td>${batt(d.battery_level)}</td>
               <td>${d.storage_free_gb!=null?d.storage_free_gb+' GB':'—'}</td>
               <td>${riskPill(d.risk_score)}</td>
+              <td>${invVerified(d.device_id)}</td>
               <td><button class="btn sm" onclick="openDeviceModal('${esc(d.device_id)}')">Ver</button></td>
             </tr>`).join("")}
         </tbody>
@@ -1339,6 +1579,11 @@ function riskPill(v){
   // "out" (azul) que significa "fuera de geovalla" — confunde a un admin IT.
   const sev = v>=70?"nocomp":v>=40?"unk":"in";
   return `<span class="tag ${sev}">${Math.round(v)}</span>`;
+}
+function invVerified(id){
+  const risk = (App._riskMap && App._riskMap[id]) || null;
+  if(!risk) return '<span class="sub">—</span>';
+  return `<span title="${risk.reasons && risk.reasons.length ? esc(risk.reasons.join(' · ')) : 'sin señales'}" style="cursor:help">${verifiedBadge(risk.verified, {short:true})}</span>`;
 }
 function stateTag(s){
   if(s==="inside") return '<span class="tag in"><span class="d"></span>dentro</span>';

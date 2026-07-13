@@ -20,12 +20,41 @@ def test_frontend_normalizes_iso_and_unix_timestamps():
     assert "y:undefined" not in js, "Chart.js scale config is overwritten and logs runtime errors"
 
 
-def test_local_dashboard_uses_passwordless_loopback_demo_session():
+def test_risk_engine_explicable_is_wired_in_ui():
+    """G2: the Risk Engine's explicable output (reasons + verified)
+    must be rendered in the UI. The client normalizes BOTH the
+    spec'd shape {reasons[], verified} and the real product-layer
+    /api/risk -> risk:[{factors:[{label}], level}]."""
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    assert "function normalizeRisk" in js
+    assert "function verifiedBadge" in js
+    assert "function reasonsList" in js or "function reasonsSummary" in js
+    # handles the real backend shape (factors[].label) when reasons absent
+    assert "factors" in js
+    # verified badge text reflects real signal vs no-signal
+    assert "Verificado" in js
+    assert "no verificado" in js or "Sin señal" in js
+
+
+def test_local_dashboard_requires_real_authentication_no_demo_shortcut():
+    """G1: the dashboard must use the REAL multi-tenant SaaS auth
+    (signup/login via /api/auth/*), never a passwordless demo shortcut.
+    A demo login would let anyone into any tenant on localhost."""
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
-    assert 'fetch("/api/auth/demo", {method:"POST"})' in js
-    assert 'route == "/api/auth/demo"' in server
-    assert "demo login solo disponible en localhost" in server
+    # No demo shortcut left in the client or the server.
+    assert 'fetch("/api/auth/demo"' not in js
+    assert 'route == "/api/auth/demo"' not in server
+    # Real auth flow is wired: ensureAuth -> /api/auth/me,
+    # submitAuth -> /api/auth/{login,signup}, logout -> /api/auth/logout.
+    assert "async function ensureAuth" in js
+    assert "async function submitAuth" in js
+    assert "async function logout" in js
+    assert '"/api/auth/me"' in js
+    assert '"/api/auth/logout"' in js
+    # login + signup are reached (tab-driven; no demo).
+    assert "login" in js and "signup" in js
+    # No hardcoded credentials in the client.
     assert "demo1234" not in js
 
 

@@ -543,8 +543,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._signup()
         if route == "/api/auth/login" and method == "POST":
             return self._login()
-        if route == "/api/auth/demo" and method == "POST":
-            return self._demo_login()
         if route == "/api/auth/logout" and method == "POST":
             return self._logout()
         if route == "/api/auth/me" and method == "GET":
@@ -1026,27 +1024,6 @@ class Handler(BaseHTTPRequestHandler):
             _set_cookie(self, COOKIE_ORG, first_org)
         _send_json(self, {"ok": True, "token": token, "user": user.to_public(),
                           "orgs": [o.to_dict() for o in _tenants.list_for_user(user.id)]})
-
-    def _demo_login(self):
-        """Passwordless bootstrap for the 127.0.0.1-only local dashboard.
-
-        This intentionally keeps normal password auth/RBAC intact while removing
-        login friction from the local product. It is denied to non-loopback
-        clients even if the bind address is changed accidentally.
-        """
-        remote = (self.client_address[0] or "").lower()
-        if remote not in ("127.0.0.1", "::1", "localhost"):
-            return _send_json(self, {"error": "demo login solo disponible en localhost"}, 403)
-        user = _auth.get_by_email("ciso@acme.test")
-        if not user or not user.active:
-            return _send_json(self, {"error": "usuario demo no configurado"}, 404)
-        token = _auth.create_session(user.id)
-        _set_cookie(self, COOKIE_SESSION, token)
-        first_org = next(iter(user.org_roles), None)
-        if first_org:
-            _set_cookie(self, COOKIE_ORG, first_org)
-        return _send_json(self, {"ok": True, "user": user.to_public(),
-                                 "orgs": [o.to_dict() for o in _tenants.list_for_user(user.id)]})
 
     def _logout(self):
         token = _cookie(self, COOKIE_SESSION)

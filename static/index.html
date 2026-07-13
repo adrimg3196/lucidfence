@@ -373,6 +373,14 @@
   .btn.sec:hover{border-color:var(--accent)}
   .btn.sm.bad{background:var(--red-soft);border-color:var(--red);color:var(--red)}
   .btn.sm.bad:hover{background:var(--red);color:#fff}
+
+  /* reasons list (Risk Engine explicable) */
+  .reasons{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .reasons li{position:relative;padding:7px 11px 7px 28px;background:var(--panel-2);border:1px solid var(--border);
+    border-radius:8px;font-size:12.5px;color:var(--fg-2);line-height:1.4}
+  .reasons li::before{content:"";position:absolute;left:11px;top:11px;width:7px;height:7px;border-radius:50%;
+    background:var(--amber);box-shadow:0 0 0 3px var(--amber-soft)}
+  .reasons li:first-child::before{background:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
   </style>
 </head>
 <body>
@@ -389,6 +397,14 @@
       <div class="side-foot">
         <div class="plan"><span class="p">Plan</span><span class="pill" id="planPill">Free</span>
           <b id="orgName" style="margin-left:auto;font-size:11px"></b></div>
+        <div class="row" id="sideUser" style="display:none;align-items:center;gap:8px;margin-bottom:8px">
+          <div class="av" id="sideAv" style="width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:var(--accent)">?</div>
+          <div style="min-width:0;flex:1">
+            <div id="sideEmail" style="font-size:11px;color:var(--fg-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+            <div id="sideOrg" style="font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          </div>
+          <button class="ibtn" id="sideLogout" title="Cerrar sesión" style="width:28px;height:28px"><span data-reicon="power" data-size="15"></span></button>
+        </div>
         <div class="row"><span>Ciclo</span><b id="ratePill">15 min</b></div>
         <div class="row" style="margin-top:6px"><span>Estado</span><b id="modeText" style="color:var(--green)">live</b></div>
       </div>
@@ -411,6 +427,7 @@
       <div class="view hidden" id="view-map"></div>
       <div class="view hidden" id="view-devices"></div>
       <div class="view hidden" id="view-inventory"></div>
+      <div class="view hidden" id="view-riesgo"></div>
       <div class="view hidden" id="view-ai"></div>
       <div class="view hidden" id="view-events"></div>
       <div class="view hidden" id="view-incidents"></div>
@@ -437,8 +454,9 @@
       <button class="xbtn" id="mClose"><span data-reicon="x-square" data-size="16"></span></button>
     </div>
     <div class="mbody">
-      <div class="kv" id="mKv"></div>
-      <div style="margin-top:14px">
+    <div class="kv" id="mKv"></div>
+    <div id="mRisk" style="margin-top:14px"></div>
+    <div style="margin-top:14px">
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:8px">Comandos remotos (MDM/UEM)</div>
         <div class="row gap wrap" id="mCmd">
           <button class="btn sm" data-cmd="lock">🔒 Bloquear</button>
@@ -459,6 +477,29 @@
   <div class="cmdk" id="cmdk"><div class="cmdk-box"><input id="cmdkInput" placeholder="Buscar comando o dispositivo…" /><div class="cmdk-list" id="cmdkList"></div></div></div>
 
   <div id="toasts"></div>
+
+  <!-- AUTH MODAL (G1) — login/signup SaaS multi-tenant, 100% local -->
+  <div class="ovl" id="authOvl"></div>
+  <div class="modal auth-modal" id="authModal">
+    <div class="mhd" style="border-bottom:1px solid var(--border)">
+      <div class="mav" style="background:linear-gradient(135deg,var(--accent),#8b5cf6)"><span data-reicon="shield-check" data-size="18"></span></div>
+      <div style="flex:1;min-width:0">
+        <h2 id="authTitle">Accede a LucidFence</h2><div class="msub" id="authSub">Gestiona tu flota de forma segura</div>
+      </div>
+    </div>
+    <div class="mbody">
+      <div class="seg" id="authTabs" style="width:100%;margin-bottom:16px">
+        <button data-t="login" class="active" style="flex:1">Entrar</button>
+        <button data-t="signup" style="flex:1">Crear cuenta</button>
+      </div>
+      <div class="field"><label>Email</label><input class="input" id="authEmail" type="email" autocomplete="username" placeholder="tu@empresa.com" /></div>
+      <div class="field" id="authOrgField" style="display:none"><label>Organización</label><input class="input" id="authOrg" autocomplete="organization" placeholder="Mi Empresa S.L." /></div>
+      <div class="field"><label>Contraseña</label><input class="input" id="authPass" type="password" autocomplete="current-password" placeholder="••••••••" /></div>
+      <div id="authResult" class="test-result"></div>
+      <button class="btn primary" id="authSubmit" style="width:100%;justify-content:center;margin-top:6px">Entrar</button>
+      <div class="sub" style="text-align:center;margin-top:12px">100% local · sin terceros · credenciales nunca salen de tu máquina</div>
+    </div>
+  </div>
 
   <script src="/static/vendor/leaflet.js"></script>
   <script src="/static/vendor/chart.umd.min.js"></script>
