@@ -1,0 +1,43 @@
+# fly.toml — LucidFence (Free tier, always-on)
+# Doc: https://fly.io/docs/reference/configuration/
+app = "lucidfence"
+primary_region = "mad"   # Madrid (cerca de ti); cambia a "gru" o "cdg" si prefieres
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # El engine + MoA son locales; no se filtran secrets aqui.
+  MOA_PORT = "8085"
+  LUCIDFENCE_PORT = "8765"
+  PYTHONUNBUFFERED = "1"
+
+[http_service]
+  internal_port = 8765
+  force_https = true
+  auto_stop_machines = "off"      # SIEMPRE ON (no se duerme)
+  auto_start_machines = true
+  min_machines_running = 1         # al menos 1 VM siempre viva (free tier)
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[http_service.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+[[vm]]
+  size = "shared-cpu-1x"   # free tier: 1 vCPU compartida, 256MB
+  cpus = 1
+  memory = "256mb"
+
+# Nota: el free tier de Fly.io cubre hasta 3 VMs shared-CPU siempre
+# encendidas. Con 1 VM y 256MB alcanza para MoA (dry) + SaaS + SQLite.
+# Si quieres IA real (llamadas a free tiers externos) necesitas las API
+# keys en /app/moa/.env (monte un secreto de Fly: flyctl secrets set).
