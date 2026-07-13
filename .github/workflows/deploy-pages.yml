@@ -29,11 +29,9 @@ jobs:
           [ -f _pages/index.html ] || cp _pages/landing.html _pages/index.html
           ls -la _pages | head
       - name: Subir artefacto de Pages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: github-pages
           path: _pages
-          include-hidden-files: false
           retention-days: 1
       - name: Desplegar a Pages
         id: deployment
