@@ -1,0 +1,80 @@
+{
+  "source": "NVD",
+  "generated": "2026-07-13T11:11:00Z",
+  "apps": {
+    "google chrome": [
+      {
+        "id": "CVE-2007-0045",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Multiple cross-site scripting (XSS) vulnerabilities in Adobe Acrobat Reader Plugin before 8.0.0, and possibly the plugin distributed with Ad",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2007-0048",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Adobe Acrobat Reader Plugin before 8.0.0, and possibly the plugin distributed with Adobe Reader 7.x before 7.1.4, 8.x before 8.1.7, and 9.x ",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2008-4340",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Google Chrome 0.2.149.29 and 0.2.149.30 allows remote attackers to cause a denial of service (memory consumption) via an HTML document conta",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2008-4724",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Multiple cross-site scripting (XSS) vulnerabilities in Google Chrome 0.2.149.30 allow remote attackers to inject arbitrary web script or HTM",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2008-5749",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Argument injection vulnerability in Google Chrome 1.0.154.36 on Windows XP SP3 allows remote attackers to execute arbitrary commands via the",
+        "epss": 0.0
+      }
+    ],
+    "whatsapp": [
+      {
+        "id": "CVE-2015-1157",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "CoreText in Apple iOS 8.x through 8.3 allows remote attackers to cause a denial of service (reboot and messaging disruption) via crafted Uni",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2017-8769",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "Facebook WhatsApp Messenger before 2.16.323 for Android uses the SD card for cleartext storage of files (Audio, Documents, Images, Video, an",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2018-11632",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "An issue was discovered in the MULTIDOTS Add Social Share Messenger Buttons Whatsapp and Viber plugin 1.0.8 for WordPress. If an admin user ",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2018-6344",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "A heap corruption in WhatsApp can be caused by a malformed RTP packet being sent after a call is established. The vulnerability can be used ",
+        "epss": 0.0
+      },
+      {
+        "id": "CVE-2019-3566",
+        "severity": "medium",
+        "score": 0.0,
+        "title": "A bug in WhatsApp for Android's messaging logic would potentially allow a malicious individual who has taken over over a WhatsApp user's acc",
+        "epss": 0.0
+      }
+    ]
+  }
+}
