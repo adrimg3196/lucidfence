@@ -1,13 +1,13 @@
 {
   "name": "geofence-uem",
   "owner": {
-    "name": "Tu Consultora UEM",
-    "url": "https://github.com/tu-org"
+    "name": "adrimg3196",
+    "url": "https://github.com/adrimg3196"
   },
   "metadata": {
     "description": "Marketplace de skills para Geofence UEM: geofencing local multi-MDM para flotas UEM, extensible por adaptadores MDMAdapter (Apache-2.0).",
     "version": "0.1.0",
-    "repository": "https://github.com/tu-org/geofence-uem"
+    "repository": "https://github.com/adrimg3196/geofence-uem"
   },
   "plugins": [
     {
