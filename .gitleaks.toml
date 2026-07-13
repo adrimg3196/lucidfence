@@ -1,0 +1,30 @@
+# LucidFence — gitleaks config
+# Escaneo de secretos en CI (capa 2 de defensa, además del pre-commit local).
+# Reglas por defecto de gitleaks + allowlist de placeholders/documentación.
+
+title = "LucidFence gitleaks config"
+
+[extend]
+# Usa las reglas integradas de gitleaks (AWS, GitHub, OpenAI, Stripe, etc.)
+useDefault = true
+
+[allowlist]
+# No alertar sobre placeholders de ejemplo ni documentación de marketing.
+description = "Allowlist de placeholders y docs sin secretos reales"
+paths = [
+    '''.*\.env\.example$''',
+    '''.*docs/.*''',
+    '''.*README\.md$''',
+    '''.*\.github/.*''',
+    '''.*reports/.*''',
+    '''.*tests/.*''',   # los tests usan tenants/tokens de mentira
+]
+regexes = [
+    # placeholders tipo <INSERT_...> o TU_ALGO
+    '''<[A-Z_]+>''',
+    '''TU_[A-Z_]+''',
+    '''example\.com''',
+    '''acme\.test''',
+    '''your-org''',
+    '''adrimg3196''',
+]
