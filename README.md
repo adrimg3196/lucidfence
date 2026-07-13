@@ -140,6 +140,29 @@ Plantillas en `.github/ISSUE_TEMPLATE/` y `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ---
 
+## Comunidad — Adapter Bounty Sprint 🏆
+
+LucidFence es multi-MDM **porque la comunidad lo alimenta**. El producto es agnóstico al MDM vía la interfaz `MDMAdapter` (`core/adapters/base.py`). Hoy: `simulation` + `applivery` (live) + `intune`/`jamf` (mock).
+
+**Buscamos adapters live de:** Intune (#1), Jamf (#2), y cualquier otro MDM (SOTI, Workspace ONE, Mosyle, Kandji…).
+
+### Recompensa (Hall of Fame)
+- El primer PR verificado de cada MDM entra al **Hall of Fame** de este README + rol de *Adapter Maintainer*.
+- Los contributors activos reciben acceso anticipado a la capa **Enterprise on-prem**.
+- Bounties para adapters de MDM de pago y para señales de riesgo verificadas por CISOs.
+
+### Cómo participar
+1. Fork → branch `feature/<adapter-tu-mdm>`.
+2. Implementa `MDMAdapter` (ver `core/adapters/ADAPTER.md`) contra mock.
+3. Tests en `tests/test_adapters_contrib.py` (sin credenciales reales).
+4. PR → CI obligatorio (`tests/run_tests.py` + `node --check`) → badge **verified**.
+
+Issues del sprint: [#1 Intune](https://github.com/adrimg3196/lucidfence/issues/1) · [#2 Jamf](https://github.com/adrimg3196/lucidfence/issues/2) · [#3 Sprint meta](https://github.com/adrimg3196/lucidfence/issues/3).
+
+Copy de lanzamiento (thread X, LinkedIn, contributors) en [`docs/launch-copy/`](docs/launch-copy/).
+
+---
+
 ## Licencia
 
 Core: **Apache-2.0** (ver `LICENSE`). Módulo Enterprise on-prem: propietario, disponible vía licencia.
