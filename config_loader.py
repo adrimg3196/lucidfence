@@ -20,8 +20,20 @@ def _load_env(path: Path) -> dict:
 
 
 def load(config_path: Path) -> dict:
-    cfg = json.loads(Path(config_path).read_text(encoding="utf-8"))
-    env = _load_env(Path(config_path).resolve().parent / ".env")
+    config_path = Path(config_path)
+    if not config_path.exists():
+        # No config file yet (fresh clone / first run): start from safe defaults
+        # instead of crashing. The server runs in simulation mode out of the box.
+        cfg: dict = {"mode": "simulation"}
+        env = _load_env(config_path.resolve().parent / ".env")
+        for k, v in env.items():
+            os.environ.setdefault(k, v)
+        org_env = env.get("APPLIVERY_ORG_ID")
+        if org_env and cfg.get("applivery") is not None:
+            cfg.setdefault("applivery", {})["org_id"] = org_env
+        return cfg
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    env = _load_env(config_path.resolve().parent / ".env")
     # If a real API key is present, default to live mode unless explicitly set.
     if env.get("APPLIVERY_API_KEY") and cfg.get("mode", "simulation") == "simulation":
         # respect explicit mode, but if dry_run is on keep simulation-safe behaviour
