@@ -40,7 +40,7 @@ def _http_get_json(url: str, params: dict, timeout: int = 30) -> Optional[dict]:
     import urllib.parse
     import urllib.request
     full = url + "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(full, headers={"User-Agent": "geofence-uem-cve-sync/0.1"})
+    req = urllib.request.Request(full, headers={"User-Agent": "lucidfence-cve-sync/0.1"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())

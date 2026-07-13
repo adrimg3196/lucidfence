@@ -1,11 +1,11 @@
-# Geofence UEM — Estrategia de Comunidad & Programa de Adapters
+# LucidFence — Estrategia de Comunidad & Programa de Adapters
 
 *Generado con skill `community-marketing` + dictamen DevRel del tribunal.*
 *Identidad del community: "MSPs y devs que se niegan a subir la ubicación de su flota a la nube y quieren un plano de control agnóstico a MDM".*
 
 ---
 
-## 1. Identidad (no es "usuarios de Geofence UEM")
+## 1. Identidad (no es "usuarios de LucidFence")
 
 Comunidad de **self-hosters UEM soberanos + MSPs multi-MDM**. Se quedan por la identidad: "controlo mi flota sin vendor lock-in de nube". Modelo: r/homelab pero para UEM.
 
@@ -37,7 +37,7 @@ Del DevRel: el carrot NO es dinero. Es:
 ```
 MSP forkea → instala adapter de su MDM → lo manda a su cliente
    → cliente pide otro MDM → MSP abre PR de adapter → se vuelve maintainer
-   → recomienda Geofence UEM a otro MSP (word-of-mouth)
+   → recomienda LucidFence a otro MSP (word-of-mouth)
 ```
 
 ## 6. Rituales

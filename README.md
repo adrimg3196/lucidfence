@@ -1,4 +1,4 @@
-# Geofence UEM · Command Center
+# LucidFence · Command Center
 
 > **Geofencing que no exfiltrra. Riesgo que se explica.**
 
@@ -13,9 +13,9 @@ Local-first **UEM Risk & Geofence Control Plane** que convierte la geolocalizaci
 
 ## Por qué no tu MDM nativo
 
-Tu MDM hace geofencing básico. Pero no correlaciona riesgo, no explica el porqué, y manda la ubicación de tu flota a la nube. Geofence UEM lo hace **local y explicable**.
+Tu MDM hace geofencing básico. Pero no correlaciona riesgo, no explica el porqué, y manda la ubicación de tu flota a la nube. LucidFence lo hace **local y explicable**.
 
-| | MDM nativo (Intune/Jamf) | Geofence UEM |
+| | MDM nativo (Intune/Jamf) | LucidFence |
 |---|---|---|
 | Geofencing | ✅ commodity | ✅ |
 | Riesgo explicable (0-100 + razón) | ❌ | ✅ |
@@ -28,7 +28,7 @@ Tu MDM hace geofencing básico. Pero no correlaciona riesgo, no explica el porqu
 ## Quickstart (1 comando)
 
 ```bash
-git clone <tu-repo> geofence-uem && cd geofence-uem
+git clone <tu-repo> lucidfence && cd lucidfence
 pip install -r requirements.txt
 ./start_all.sh
 ```
@@ -63,7 +63,7 @@ El producto es agnóstico al MDM. Cada conector implementa la interfaz `MDMAdapt
 ## Arquitectura (open-core)
 
 ```
-geofence-uem/
+lucidfence/
 ├── core/
 │   ├── engine.py          # ciclo de geofencing + Risk Engine (moat, Enterprise)
 │   ├── adapters/          # MDMAdapter: simulation / applivery / intune / jamf

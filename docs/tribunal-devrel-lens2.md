@@ -1,6 +1,6 @@
 # TRIBUNAL DE MARKETING — LENS 2: DEVELOPER RELATIONS / COMUNIDAD
 
-**Dictamen DevRel: cómo hacer open-source a Geofence UEM para atraer contribuidores y adoptantes**
+**Dictamen DevRel: cómo hacer open-source a LucidFence para atraer contribuidores y adoptantes**
 
 **(1) ¿MDMAdapter es la superficie de contribución correcta?** SÍ, con un matiz. Es la superficie ideal porque es *bien delimitada, de alto valor visible y con baja dependencia del core*: alguien puede escribir el adapter de Jamf sin tocar el Risk Engine, los 115 tests ni el dashboard. Cumple la regla de oro de DevRel — "un PR de fin de semana". Riesgo real: si la interfaz no está congelada (contract), cada adapter rompe el core. Mantener la interfaz mínima (`fetch_devices`, `execute_action`, `get_health`) es lo que decide si engancha o ahuyenta.
 

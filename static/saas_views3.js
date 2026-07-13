@@ -1,4 +1,4 @@
-/* Geofence UEM SaaS — Routes view (Task 5 of the hardening plan).
+/* LucidFence SaaS — Routes view (Task 5 of the hardening plan).
 Renders the commercial route polyline + device markers colored by adherence,
 plus a side list with deviation badges. Consumes GET /api/routes and
 GET /api/devices (states expose route_state / route_deviation_m). */

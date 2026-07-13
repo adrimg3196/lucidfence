@@ -1,5 +1,5 @@
 <!--
-Plantilla de Pull Request para Geofence UEM.
+Plantilla de Pull Request para LucidFence.
 Todos los apartados son OBLIGATORIOS salvo los marcados como opcionales.
 -->
 

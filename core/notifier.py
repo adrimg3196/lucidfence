@@ -105,6 +105,6 @@ class IncidentNotifier:
             "attachments": [{
                 "color": color,
                 "fields": fields,
-                "footer": "Geofence UEM",
+                "footer": "LucidFence",
             }],
         }

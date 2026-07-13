@@ -1,4 +1,4 @@
-# Informe CEO — Review Geofence UEM
+# Informe CEO — Review LucidFence
 
 **Veredicto:** Producto funcional y demo-comercial sólido, pero **el moat es más fino de lo que dice el marketing** y la propuesta "ejecuta acciones UEM automáticas" **no funciona out-of-the-box en live**. Vendible como servicio gestionado de una consultora, no como SaaS autónomo.
 

@@ -208,7 +208,7 @@ def main():
     port = int(cfg.get("server", {}).get("port", 8765))
     get_engine()  # start engine loop
     httpd = ThreadingHTTPServer((host, port), Handler)
-    print(f"Geofence UEM product running at http://{host}:{port}")
+    print(f"LucidFence product running at http://{host}:{port}")
     print(f"  mode={cfg.get('mode')} interval={cfg.get('interval_seconds')}s dry_run={cfg.get('dry_run')}")
     print("  Press Ctrl+C to stop.")
     try:

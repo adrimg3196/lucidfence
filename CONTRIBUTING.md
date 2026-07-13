@@ -1,6 +1,6 @@
-# Contribuyendo a Geofence UEM
+# Contribuyendo a LucidFence
 
-¡Gracias por tu interés en contribuir! Geofence UEM es un **dashboard local de
+¡Gracias por tu interés en contribuir! LucidFence es un **dashboard local de
 geofencing para flotas UEM** (multi-tenant) que hoy funciona con Applivery y se
 está abriendo a **múltiples MDM** (Intune, Jamf, Fleet…) mediante adaptadores.
 

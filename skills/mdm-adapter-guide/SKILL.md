@@ -1,11 +1,11 @@
 ---
 name: mdm-adapter-guide
-description: Cómo escribir un adaptador MDM nuevo para Geofence UEM implementando la interfaz MDMAdapter, dónde ubicarlo (core/adapters/), cómo testearlo contra mock y el flujo de Pull Request. Usa cuando el usuario quiere añadir soporte para un nuevo UEM (Intune, Jamf, Fleet, etc.), crear un adapter, o entender la interfaz MDMAdapter.
+description: Cómo escribir un adaptador MDM nuevo para LucidFence implementando la interfaz MDMAdapter, dónde ubicarlo (core/adapters/), cómo testearlo contra mock y el flujo de Pull Request. Usa cuando el usuario quiere añadir soporte para un nuevo UEM (Intune, Jamf, Fleet, etc.), crear un adapter, o entender la interfaz MDMAdapter.
 ---
 
-# Guía de adaptadores MDM para Geofence UEM
+# Guía de adaptadores MDM para LucidFence
 
-Geofence UEM es multi-MDM mediante **adaptadores** que implementan una interfaz
+LucidFence es multi-MDM mediante **adaptadores** que implementan una interfaz
 común. El motor de geofencing y el dashboard hablan con cualquier UEM a través
 de `MDMAdapter`, sin conocer el proveedor.
 

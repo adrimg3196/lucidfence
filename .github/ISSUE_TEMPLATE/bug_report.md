@@ -1,6 +1,6 @@
 ---
 name: Reporte de bug
-about: Informa de un comportamiento incorrecto o inesperado en Geofence UEM
+about: Informa de un comportamiento incorrecto o inesperado en LucidFence
 title: "[BUG] "
 labels: bug
 assignees: ''

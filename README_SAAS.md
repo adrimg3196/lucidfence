@@ -1,4 +1,4 @@
-# Geofence UEM — SaaS 100% local
+# LucidFence — SaaS 100% local
 
 Plataforma **multi-tenant** de geofencing + UEM (Unified Endpoint Management) que
 corre íntegramente en tu máquina. Sin nube, sin bases de datos externas, sin
@@ -15,7 +15,7 @@ y **Radar** (geofencing-as-a-service), pero 100% local y listo para demo comerci
 ## Arranque rápido
 
 ```bash
-cd /Users/adri/geofence-uem
+cd /Users/adri/lucidfence
 python3 saas_server.py
 # Abre http://127.0.0.1:8765
 ```

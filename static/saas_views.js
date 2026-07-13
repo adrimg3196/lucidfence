@@ -1,4 +1,4 @@
-/* Geofence UEM SaaS — product views (part 1: overview, devices, map, risk). */
+/* LucidFence SaaS — product views (part 1: overview, devices, map, risk). */
 window.GFViews = window.GFViews || {};
 const h = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const k in (attrs||{})) { if (k==="class") e.className=attrs[k]; else if (k==="html") e.innerHTML=attrs[k]; else e.setAttribute(k, attrs[k]); } (kids||[]).forEach(c=>e.append(c)); return e; };
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

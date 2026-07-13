@@ -1,4 +1,4 @@
-# === Geofence UEM — .gitignore (open-source, multi-MDM) ===
+# === LucidFence — .gitignore (open-source, multi-MDM) ===
 # Nunca subir datos de tenant, secretos ni runtime.
 
 # Datos de tenant (cada cliente en su propio dir; locales y confidenciales)

@@ -1,18 +1,18 @@
 {
-  "name": "geofence-uem",
+  "name": "lucidfence",
   "owner": {
     "name": "adrimg3196",
     "url": "https://github.com/adrimg3196"
   },
   "metadata": {
-    "description": "Marketplace de skills para Geofence UEM: geofencing local multi-MDM para flotas UEM, extensible por adaptadores MDMAdapter (Apache-2.0).",
+    "description": "Marketplace de skills para LucidFence: geofencing local multi-MDM para flotas UEM, extensible por adaptadores MDMAdapter (Apache-2.0).",
     "version": "0.1.0",
-    "repository": "https://github.com/adrimg3196/geofence-uem"
+    "repository": "https://github.com/adrimg3196/lucidfence"
   },
   "plugins": [
     {
-      "name": "geofence-uem",
-      "description": "Plugin de Geofence UEM con skills de arranque del producto y de creación de adaptadores MDM (Intune, Jamf, Fleet, Applivery) mediante la interfaz MDMAdapter.",
+      "name": "lucidfence",
+      "description": "Plugin de LucidFence con skills de arranque del producto y de creación de adaptadores MDM (Intune, Jamf, Fleet, Applivery) mediante la interfaz MDMAdapter.",
       "source": "./"
     }
   ]

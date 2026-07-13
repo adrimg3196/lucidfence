@@ -1,4 +1,4 @@
-"""Zero-dependency test runner for the Geofence UEM SaaS.
+"""Zero-dependency test runner for the LucidFence SaaS.
 
 Discovers every `test_*` function in `tests/*.py` and runs them, mirroring
 pytest's behaviour without adding a dependency (the product stays stdlib-only).

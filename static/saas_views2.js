@@ -1,4 +1,4 @@
-/* Geofence UEM SaaS — product views (part 2: policies, compliance, billing, users, settings). */
+/* LucidFence SaaS — product views (part 2: policies, compliance, billing, users, settings). */
 const v2 = window.GFViews = window.GFViews || {};
 
 // ---------- POLICIES ----------

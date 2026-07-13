@@ -8,7 +8,7 @@ Diseno (respeta "100% local" en runtime):
   - No imprime nada salvo errores (pensado para cron silencioso).
 
 Uso en cron:
-  17 3 * * *  /usr/bin/python3 /Users/adri/geofence-uem/scripts/refresh_cve_feed.py
+  17 3 * * *  /usr/bin/python3 /Users/adri/lucidfence/scripts/refresh_cve_feed.py
 """
 import os
 import sys

@@ -131,7 +131,7 @@ def export_inventory_html(devices: list[dict], org_name: str = "",
   @media print {{ body {{ padding:0; }} .noprint {{ display:none; }} }}
 </style></head>
 <body>
-  <h1>Inventario de Flota — Geofence UEM</h1>
+  <h1>Inventario de Flota — LucidFence</h1>
   <div class="meta">Organización: {_h(org_name)} · Generado: {now} · {len(devices)} dispositivos</div>
   <div class="sum">
     <div>Total<b>{s.get('total', len(devices))}</b></div>

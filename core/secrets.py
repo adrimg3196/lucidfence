@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local, safe Applivery credential storage for the Geofence UEM product.
+"""Local, safe Applivery credential storage for the LucidFence product.
 
 Design goals (security first, 100% local):
 - Credentials live in a `.env` file NEXT TO config.json (project root), never in

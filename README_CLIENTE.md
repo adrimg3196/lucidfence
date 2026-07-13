@@ -1,4 +1,4 @@
-# Geofence UEM — Guía de arranque (para el cliente)
+# LucidFence — Guía de arranque (para el cliente)
 
 Centro de mando local de **geofencing para flotas móviles gestionadas por UEM** (Applivery/Intune/Jamf/Fleet).
 100% local en macOS: nada sale de tu máquina. Dashboard en http://127.0.0.1:8765
@@ -8,12 +8,12 @@ Centro de mando local de **geofencing para flotas móviles gestionadas por UEM**
 ## 1. Arranque (un solo comando)
 
 ```bash
-cd /ruta/a/geofence-uem
+cd /ruta/a/lucidfence
 ./start_all.sh
 ```
 
 Esto levanta dos servicios locales:
-- **Geofence UEM** en http://127.0.0.1:8765  ← el dashboard
+- **LucidFence** en http://127.0.0.1:8765  ← el dashboard
 - **MoA (IA)** en http://127.0.0.1:8085       ← motor de preguntas en lenguaje natural
 
 Al terminar, el script reporta `✓ MoA arriba` y `✓ Geofence arriba` y la URL del dashboard.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Multi-tenant layer for the local Geofence UEM SaaS.
+"""Multi-tenant layer for the local LucidFence SaaS.
 
 Each organization (tenant) gets its own isolated data directory under
 ``data/tenants/<org_id>/`` and its own engine instance. This is what turns the

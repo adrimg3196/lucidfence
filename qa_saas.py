@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end API QA for the Geofence UEM SaaS using raw http.client
+"""End-to-end API QA for the LucidFence SaaS using raw http.client
 (direct socket, bypasses any environment HTTP proxy that eats POSTs)."""
 import json, http.client, time
 
@@ -43,7 +43,7 @@ def check(label, cond, extra=""):
     return cond
 
 
-print("=== Geofence UEM SaaS — QA (http.client direct) ===")
+print("=== LucidFence SaaS — QA (http.client direct) ===")
 s = call("POST", "/api/auth/signup", {"email":OWNER_EMAIL,"password":"SuperSecret1","name":"Ana","org_name":ORG_NAME,"plan":"pro"})
 print("signup:", s[0], s[1].get("error") if isinstance(s[1], dict) else s[1])
 l = call("POST", "/api/auth/login", {"email":OWNER_EMAIL,"password":"SuperSecret1"})
@@ -112,7 +112,7 @@ check("unauth /api/status -> 401", rc == 401, f"http={rc}")
 conn = http.client.HTTPConnection(HOST, PORT, timeout=10)
 conn.request("GET", "/")
 hc = conn.getresponse(); body = hc.read().decode(); conn.close()
-check("dashboard HTML served", hc.status == 200 and "Geofence UEM" in body, f"http={hc.status}")
+check("dashboard HTML served", hc.status == 200 and "LucidFence" in body, f"http={hc.status}")
 
 print(f"=== QA complete: {failures} failure(s) ===")
 raise SystemExit(1 if failures else 0)

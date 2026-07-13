@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
-# Geofence UEM — arranque completo (100% LOCAL)
-# Levanta:  MoA (127.0.0.1:8085)  +  Geofence UEM (127.0.0.1:8765)
+# LucidFence — arranque completo (100% LOCAL)
+# Levanta:  MoA (127.0.0.1:8085)  +  LucidFence (127.0.0.1:8765)
 # Verifica salud y reporta estado de claves de IA.
 # Uso:  ./start_all.sh          (arranca y deja en background)
 #       ./start_all.sh stop     (para ambos)
@@ -44,7 +44,7 @@ case "${1:-start}" in
   status) status_all; exit 0 ;;
 esac
 
-echo -e "${c_cyn}== Geofence UEM · arranque completo ==${c_off}"
+echo -e "${c_cyn}== LucidFence · arranque completo ==${c_off}"
 
 # 1) dependencia mínima
 python3 -c "import requests" 2>/dev/null || { echo "Instalando 'requests'..."; pip3 install --quiet requests; }
@@ -64,7 +64,7 @@ fi
 
 # 3) Geofence
 if [ "$(is_up $GEO_PORT)" = "000" ]; then
-  echo "Arrancando Geofence UEM..."
+  echo "Arrancando LucidFence..."
   ( cd "$GEO_DIR" && nohup python3 saas_server.py >"$LOG_GEO" 2>&1 </dev/null & )
   for i in $(seq 1 20); do
     sleep 1

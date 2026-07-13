@@ -47,7 +47,7 @@ def check(label, cond, extra=""):
     print(f"  [{'PASS' if cond else 'FAIL'}] {label}" + (f" :: {extra}" if extra else ""))
 
 
-print("=== Geofence UEM — IT admin features QA ===")
+print("=== LucidFence — IT admin features QA ===")
 s, _, ck = call("POST", "/api/auth/signup",
                 {"email": OWNER, "password": "SuperSecret1", "name": "IT Admin",
                  "org_name": ORG, "plan": "pro"})

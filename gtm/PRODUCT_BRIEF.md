@@ -1,4 +1,4 @@
-# Geofence UEM — Product Brief (one-pager)
+# LucidFence — Product Brief (one-pager)
 
 ## Categoría (reframe para adquisición)
 **Geospatial Risk & Policy Engine para dispositivos frontline gestionados.**

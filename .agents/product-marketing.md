@@ -1,4 +1,4 @@
-# Product Marketing Context — Geofence UEM Command Center
+# Product Marketing Context — LucidFence Command Center
 
 *Last updated: 2026-07-13*
 

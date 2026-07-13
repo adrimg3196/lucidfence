@@ -1,12 +1,12 @@
 {
-  "name": "geofence-uem",
-  "description": "Plugin de Geofence UEM: dashboard local de geofencing para flotas UEM multi-tenant, extensible a múltiples MDM (Intune, Jamf, Fleet, Applivery) mediante adaptadores (MDMAdapter). Incluye skills de arranque y de creación de adaptadores MDM.",
+  "name": "lucidfence",
+  "description": "Plugin de LucidFence: dashboard local de geofencing para flotas UEM multi-tenant, extensible a múltiples MDM (Intune, Jamf, Fleet, Applivery) mediante adaptadores (MDMAdapter). Incluye skills de arranque y de creación de adaptadores MDM.",
   "version": "0.1.0",
   "author": {
     "name": "adrimg3196"
   },
-  "homepage": "https://github.com/adrimg3196/geofence-uem",
-  "repository": "https://github.com/adrimg3196/geofence-uem",
+  "homepage": "https://github.com/adrimg3196/lucidfence",
+  "repository": "https://github.com/adrimg3196/lucidfence",
   "license": "Apache-2.0",
   "skills": "./skills"
 }

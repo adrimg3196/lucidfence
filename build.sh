@@ -1,16 +1,16 @@
 #!/bin/bash
 # ============================================================
-# Geofence UEM — empaquetado del entregable (100% LOCAL)
+# LucidFence — empaquetado del entregable (100% LOCAL)
 # Genera un tarball listo para entregar al cliente.
 # Uso:  ./build.sh
-# Salida: dist/geofence-uem-<fecha>.tar.gz
+# Salida: dist/lucidfence-<fecha>.tar.gz
 # ============================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 
 VERSION=$(date +%Y%m%d)
 OUT_DIR="dist"
-NAME="geofence-uem-$VERSION"
+NAME="lucidfence-$VERSION"
 STAGE="$OUT_DIR/$NAME"
 
 mkdir -p "$STAGE"
@@ -24,7 +24,7 @@ rsync -a --exclude='data/tenants' --exclude='__pycache__' --exclude='.pytest_cac
 
 # --- manifest del entregable ---
 cat > "$STAGE/MANIFEST.txt" <<EOF
-Geofence UEM Command Center — entregable cliente
+LucidFence Command Center — entregable cliente
 Generado: $(date)
 Modo: 100% local (macOS). Sin exfiltrar datos.
 Arranque: ./start_all.sh

@@ -1,6 +1,6 @@
 ---
 name: Solicitud de funcionalidad
-about: Propón una nueva capacidad o mejora para Geofence UEM
+about: Propón una nueva capacidad o mejora para LucidFence
 title: "[FEAT] "
 labels: enhancement
 assignees: ''

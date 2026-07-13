@@ -1,4 +1,4 @@
-# Plan: Módulo de Workflows Integrados (Applivery) — geofence-uem
+# Plan: Módulo de Workflows Integrados (Applivery) — lucidfence
 
 ## Objetivo (pedido del usuario)
 > "quiero que tenga un apartado de lógica de workflows integrados ya hechos de uso

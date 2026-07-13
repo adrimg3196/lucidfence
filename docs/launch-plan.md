@@ -1,4 +1,4 @@
-# Geofence UEM — Plan de Lanzamiento (GTM open-source / multi-MDM)
+# LucidFence — Plan de Lanzamiento (GTM open-source / multi-MDM)
 
 *Generado con skill `launch` (ORB + 5 fases) + dictamen Growth del tribunal.*
 *Modelo: Apache-2.0 core + Enterprise on-prem (SSO/SOAR/Risk Engine premium). Land via MSPs.*

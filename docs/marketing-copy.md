@@ -1,4 +1,4 @@
-# Geofence UEM — Copy de Lanzamiento (open-source / multi-MDM)
+# LucidFence — Copy de Lanzamiento (open-source / multi-MDM)
 
 *Generado con skills de marketing (cro + copywriting) sobre `.agents/product-marketing.md` y dictamen del tribunal.*
 *Principio del CMO: liderar con RIESGO EXPLICABLE + SOBERANÍA LOCAL, no con "geofencing open-source" (commodity).*
@@ -13,7 +13,7 @@
 
 ## 2. ONE-LINER (GitHub / README)
 
-> **Geofence UEM** es un control plane open-core, local-first, que convierte la geolocalización de tu flota móvil en riesgo explicable (0-100) y acciones automáticas — agnóstico a tu MDM vía adapters.
+> **LucidFence** es un control plane open-core, local-first, que convierte la geolocalización de tu flota móvil en riesgo explicable (0-100) y acciones automáticas — agnóstico a tu MDM vía adapters.
 
 ## 3. HERO (homepage / README top)
 
@@ -32,7 +32,7 @@
 ## 5. COPY POR SECCIÓN (README / landing)
 
 ### ¿Por qué no tu MDM nativo?
-Tu MDM hace geofencing básico. Pero no correlaciona riesgo, no explica el porqué, y manda la ubicación de tu flota a la nube. Geofence UEM lo hace local y explicable.
+Tu MDM hace geofencing básico. Pero no correlaciona riesgo, no explica el porqué, y manda la ubicación de tu flota a la nube. LucidFence lo hace local y explicable.
 
 ### El moat: Risk Engine explicable
 Cada dispositivo recibe un score 0-100 con la razón (fuera de geovalla + CVE crítico + batería baja = 87). Auditable para tu cliente y para un auditor.

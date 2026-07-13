@@ -1,4 +1,4 @@
-"""Product intelligence layer for the local Geofence UEM dashboard.
+"""Product intelligence layer for the local LucidFence dashboard.
 
 This module is deliberately read-only and fully local. It derives product-grade
 risk, incidents, policies, analytics and an executive report from the existing

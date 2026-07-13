@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI for the Geofence UEM product.
+"""CLI for the LucidFence product.
 
 Usage:
   python3 cli.py serve        # run the engine loop + local dashboard (default)

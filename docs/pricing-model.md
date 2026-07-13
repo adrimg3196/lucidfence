@@ -1,4 +1,4 @@
-# Geofence UEM — Modelo de Monetización (Open-Core)
+# LucidFence — Modelo de Monetización (Open-Core)
 
 *Generado con skill `pricing` + dictamen Growth del tribunal.*
 *Principio: OSS genera inbound y confianza; el servicio gestionado + inteligencia de amenazas recurrente es la captura. Nunca abrir Risk Engine/CVE/SOAR.*

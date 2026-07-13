@@ -1,11 +1,11 @@
 ---
 name: geofence-setup
-description: Cómo arrancar el producto Geofence UEM en local (./start_all.sh), qué levanta y cuándo usarlo. Usa cuando el usuario quiere iniciar el dashboard, poner en marcha el servidor, probar en modo demo/simulación, o verificar que Geofence UEM está corriendo.
+description: Cómo arrancar el producto LucidFence en local (./start_all.sh), qué levanta y cuándo usarlo. Usa cuando el usuario quiere iniciar el dashboard, poner en marcha el servidor, probar en modo demo/simulación, o verificar que LucidFence está corriendo.
 ---
 
-# Geofence UEM — Arranque local
+# LucidFence — Arranque local
 
-Geofence UEM es un **dashboard local de geofencing para flotas UEM**, 100%
+LucidFence es un **dashboard local de geofencing para flotas UEM**, 100%
 funcional en macOS, multi-tenant, que acciona acciones automáticas (lock, wipe,
 message, locate, reboot) cuando un dispositivo entra/sale de una geovalla. Hoy
 funciona con Applivery; es extensible a Intune/Jamf/Fleet vía adaptadores
@@ -17,7 +17,7 @@ Levanta dos servicios en background y verifica su salud:
 
 - **MoA** en `http://127.0.0.1:8085` — capa de mezcla de modelos de IA
   (opcional; usa modo DEMO/mock si no hay claves de proveedor).
-- **Geofence UEM** en `http://127.0.0.1:8765` — el dashboard y motor de
+- **LucidFence** en `http://127.0.0.1:8765` — el dashboard y motor de
   geofencing (arranca `saas_server.py`).
 
 Al final reporta el estado de las claves de IA (solo presencia, nunca el valor)
@@ -35,7 +35,7 @@ y la URL del dashboard.
 ## Cómo arrancar
 
 ```bash
-cd /Users/adri/geofence-uem
+cd /Users/adri/lucidfence
 ./start_all.sh            # arranca MoA + Geofence en background
 ./start_all.sh status     # muestra estado de ambos puertos
 ./start_all.sh stop       # detiene ambos servidores

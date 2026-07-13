@@ -1,4 +1,4 @@
-/* Geofence UEM SaaS — client core: auth, router, API helpers, shell. */
+/* LucidFence SaaS — client core: auth, router, API helpers, shell. */
 (function () {
   "use strict";
   const _HTTP_METHODS = new Set(["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]);

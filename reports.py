@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local compliance/report generator for the Geofence UEM product.
+"""Local compliance/report generator for the LucidFence product.
 
 Produces Markdown + CSV + JSON reports from the local state store. Fully
 offline: reads only `data/` and `fences.json`, writes to a local `--out` dir.
@@ -106,7 +106,7 @@ def build_report(store: StateStore, fences: list, fence_id: str | None,
 def render_markdown(report: dict) -> str:
     t = report["totals"]
     lines = []
-    lines.append(f"# Geofence UEM Compliance Report")
+    lines.append(f"# LucidFence Compliance Report")
     lines.append("")
     lines.append(f"- Generated: `{report['generated_at']}`")
     lines.append(f"- Scope: `{report['scope']}`")
@@ -169,7 +169,7 @@ def render_csv(report: dict) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Geofence UEM local compliance report")
+    ap = argparse.ArgumentParser(description="LucidFence local compliance report")
     ap.add_argument("--out", default="reports", help="output directory")
     ap.add_argument("--fences", default="fences.json", help="fences config path")
     ap.add_argument("--data-dir", default="data", help="state store dir")

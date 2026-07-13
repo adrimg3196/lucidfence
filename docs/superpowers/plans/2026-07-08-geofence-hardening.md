@@ -1,8 +1,8 @@
-# Geofence UEM SaaS — Hardening & Route Module Completion Plan
+# LucidFence SaaS — Hardening & Route Module Completion Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (or subagent-driven-development) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Take the local Geofence UEM SaaS from "feature-complete but unverified" to "verified, hardened, code-reviewed" — completing the route-adherence module with real TDD, killing the residual 500 bug, and proving every endpoint end-to-end with a green QA suite. No push, 100% local.
+**Goal:** Take the local LucidFence SaaS from "feature-complete but unverified" to "verified, hardened, code-reviewed" — completing the route-adherence module with real TDD, killing the residual 500 bug, and proving every endpoint end-to-end with a green QA suite. No push, 100% local.
 
 **Architecture:** Keep the existing layered core (`core/engine.py`, `core/routes.py`, `core/policies.py`, `core/state_store.py`) and the SaaS HTTP layer (`saas_server.py`, `saas/auth.py`, `saas/tenant.py`). Add a real pytest suite under `tests/` that exercises the engine and the HTTP API over `http.client` (the local proxy eats POST to 127.0.0.1, so QA uses raw `http.client`, not `requests`). Frontend (vanilla JS) gets the Routes view. RBAC stays capability-based. All changes are local; nothing is published.
 

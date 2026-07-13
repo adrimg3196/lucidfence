@@ -1,5 +1,5 @@
 /* ============================================================
-   Geofence UEM — Command Center  (app.js)
+   LucidFence — Command Center  (app.js)
    UI tipo Linear + IA/MoA + workflows + rutas + geovallas
    ============================================================ */
 "use strict";

@@ -1,4 +1,4 @@
-# SPEC — Geofence UEM Command Center
+# SPEC — LucidFence Command Center
 
 > Spec bloqueada antes de build. Ciclo: grill → spec → build → review (CEO/Eng/Design/DevEx) → QA → ship.
 > Producto 100% local (macOS), multi-tenant, sin exfiltrar datos. Nada llega a "producción" (entregable cliente) sin pasar review + QA.
@@ -7,7 +7,7 @@
 
 ## 1. QUÉ ES
 
-Geofence UEM es un **centro de mando local de geofencing para flotas móviles gestionadas por UEM** (MDM/EMM: Applivery, Intune, Jamf, Fleet).
+LucidFence es un **centro de mando local de geofencing para flotas móviles gestionadas por UEM** (MDM/EMM: Applivery, Intune, Jamf, Fleet).
 Toma la ubicación que el agente del UEM reporta cada 15 min, la cruza con **geovallas** y **rutas comerciales**, y ejecuta **acciones UEM automáticas** (lock, wipe, message, locate, reboot, reset-passcode) cuando un dispositivo entra/sale de una zona, se desvía de su ruta, o cruza un umbral de riesgo.
 
 Diferenciador (moat): no es "dibujar geocercas y avisar" (eso lo absorbe cualquier UEM en una sprint). El moat es el **Geospatial Risk & Policy Engine**: riesgo como función compuesta
@@ -28,7 +28,7 @@ No es para: consumidor, ni para quien solo quiere "ver mapa". Es una herramienta
 
 - Un dispositivo fuera de su perímetro autorizado o desviado de ruta = riesgo (robo, fuga de datos, incumplimiento).
 - Hoy el UEM avisa, pero no **actúa de forma policy-driven ni puntúa riesgo compuesto**.
-- Geofence UEM cierra el loop: detecta → puntúa → decide → ejecuta acción UEM → notifica → audita.
+- LucidFence cierra el loop: detecta → puntúa → decide → ejecuta acción UEM → notifica → audita.
 
 ## 4. MONETIZACIÓN (g-stack: "even good at monetisation")
 

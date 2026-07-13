@@ -244,7 +244,7 @@ class AlertEngine:
             return firing
         if rule.channel == "slack":
             payload = {
-                "text": f"[{firing['severity'].upper()}] Geofence UEM: {firing['detail']}",
+                "text": f"[{firing['severity'].upper()}] LucidFence: {firing['detail']}",
                 "attachments": [{
                     "color": {"critical": "#b42318", "high": "#d92d20",
                               "medium": "#f79009", "low": "#2e90fa"}.get(firing["severity"], "#475467"),
@@ -253,7 +253,7 @@ class AlertEngine:
                         {"title": "Regla", "value": firing["rule_type"], "short": True},
                         {"title": "Detalle", "value": firing["detail"], "short": False},
                     ],
-                    "footer": "Geofence UEM",
+                    "footer": "LucidFence",
                 }],
             }
             res = self._post_http(rule.target, payload) if self._post is None else self._post(rule.target, payload)
@@ -288,9 +288,9 @@ class AlertEngine:
 
     def _send_email(self, to_addr: str, firing: dict,
                     smtp_host: str = "127.0.0.1", smtp_port: int = 25,
-                    from_addr: str = "geofence-uem@localhost") -> dict:
+                    from_addr: str = "lucidfence@localhost") -> dict:
         msg = EmailMessage()
-        msg["Subject"] = f"[Geofence UEM] {firing['severity'].upper()}: {firing['device_name']}"
+        msg["Subject"] = f"[LucidFence] {firing['severity'].upper()}: {firing['device_name']}"
         msg["From"] = from_addr
         msg["To"] = to_addr
         msg.set_content(

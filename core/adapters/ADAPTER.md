@@ -1,4 +1,4 @@
-# ADAPTER.md — Cómo escribir un conector MDM para Geofence UEM
+# ADAPTER.md — Cómo escribir un conector MDM para LucidFence
 
 El producto es **agnóstico al MDM**. La única superficie que tocas para soportar
 un nuevo UEM (Intune, Jamf, Fleet, Workspace ONE...) es la interfaz `MDMAdapter`.
