@@ -72,13 +72,10 @@ def test_soar_does_not_fire_without_match():
 
 def test_soar_executes_action_in_run_once():
     """A matched SOAR playbook must produce a real UEM action during the cycle."""
-    import tempfile, config_loader, types
+    import tempfile, types
     from core.engine import Engine
-    tmp = Path(tempfile.mkdtemp())
-    cfg = config_loader.load(Path("config.json"))
-    cfg["data_dir"] = str(tmp)
-    cfg["autostart"] = False
-    eng = Engine(cfg)
+    from helpers import make_temp_engine
+    eng = make_temp_engine()
     # capture executed actions
     executed = []
     eng.adapter = types.SimpleNamespace(

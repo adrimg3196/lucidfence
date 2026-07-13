@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config_loader  # noqa: E402
 from saas.tenant import TenantStore  # noqa: E402
 from core.engine import Engine  # noqa: E402
+from helpers import make_temp_engine  # noqa: E402
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,12 +19,7 @@ def _org_id():
 
 
 def _engine():
-    org_id = _org_id()
-    ts = TenantStore(ROOT / "data")
-    tdir = ts.data_dir(org_id)
-    cfg = config_loader.load(ROOT / "config.json")
-    cfg["data_dir"] = str(tdir)
-    return Engine(cfg)
+    return make_temp_engine()
 
 
 def test_engine_assigns_route_state():

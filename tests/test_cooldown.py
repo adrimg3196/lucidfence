@@ -11,28 +11,23 @@ import time as _time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import config_loader  # noqa: E402
 from saas.tenant import TenantStore  # noqa: E402
 from core.engine import Engine  # noqa: E402
 from core.policies import Policy  # noqa: E402
 from core.location_source import LocationReport  # noqa: E402
+from helpers import make_temp_engine  # noqa: E402
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _engine(cooldown=3600):
-    org_id = TenantStore(ROOT / "data").all()[0].id
-    ts = TenantStore(ROOT / "data")
-    tdir = ts.data_dir(org_id)
+    eng = make_temp_engine(cooldown_seconds=cooldown)
     # Deterministic: wipe any persisted cooldown state left by prior runs.
-    cd = Path(tdir) / "action_cooldowns.json"
+    cd = Path(eng.data_dir) / "action_cooldowns.json"
     if cd.exists():
         cd.unlink()
-    cfg = config_loader.load(ROOT / "config.json")
-    cfg["data_dir"] = str(tdir)
-    cfg["action_cooldown_seconds"] = cooldown
-    return Engine(cfg)
+    return eng
 
 
 class _InsideSource:
@@ -61,12 +56,11 @@ def test_destructive_action_fires_once_per_cycle():
 
 
 def test_destructive_action_suppressed_by_cooldown_within_window():
-    org_id = TenantStore(ROOT / "data").all()[0].id
-    tdir = TenantStore(ROOT / "data").data_dir(org_id)
+    eng = _engine(cooldown=3600)
+    tdir = eng.data_dir
     cd = Path(tdir) / "action_cooldowns.json"
     if cd.exists():
         cd.unlink()
-    eng = _engine(cooldown=3600)
     eng.source = _InsideSource()
     eng.routes = []
     eng.policies = _destructive_policy()
@@ -79,9 +73,16 @@ def test_destructive_action_suppressed_by_cooldown_within_window():
     assert len(fired2) == 0, fired2
     # the suppression is persisted: a fresh Engine (simulating restart) sees it.
     # NOTE: build eng2 WITHOUT wiping the cooldown file (created by eng).
-    cfg = config_loader.load(ROOT / "config.json")
-    cfg["data_dir"] = str(tdir)
-    cfg["action_cooldown_seconds"] = 3600
+    cfg = {
+        "mode": "simulation",
+        "autostart": False,
+        "data_dir": str(tdir),
+        "org_id": eng.org_id,
+        "fences_path": eng.fences_path,
+        "routes_path": str(eng.routes_path),
+        "policies_path": str(eng.policies_path),
+        "action_cooldown_seconds": 3600,
+    }
     eng2 = Engine(cfg)
     eng2.source = _InsideSource()
     eng2.routes = []

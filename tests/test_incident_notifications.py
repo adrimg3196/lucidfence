@@ -59,19 +59,15 @@ def test_notifier_swallows_http_errors():
 
 def test_notifier_fires_during_run_once_not_only_on_poll():
     """New incidents must notify at cycle time, independent of the dashboard."""
-    import tempfile, config_loader
+    import tempfile
     from core.engine import Engine
     from core.location_source import LocationReport
-    tmp = Path(tempfile.mkdtemp())
+    from helpers import make_temp_engine
     sent = []
     def fake_post(url, payload):
         sent.append(payload)
         return {"ok": True, "status": 200}
-    cfg = config_loader.load(Path("config.json"))
-    cfg["data_dir"] = str(tmp)
-    cfg["autostart"] = False
-    cfg["incident_webhook_url"] = "https://hooks.slack.com/X"
-    eng = Engine(cfg)
+    eng = make_temp_engine()
     eng.incidents.notifier._post = fake_post
     eng.routes = []
     eng.source = type("S", (), {"fetch": lambda self: [
@@ -82,7 +78,7 @@ def test_notifier_fires_during_run_once_not_only_on_poll():
     # notification fired during the cycle itself
     assert len(sent) >= 1, "esperado >=1 delivery en run_once"
     assert any("fuera de geovalla" in (p.get("text") or "") or "no cumple" in (p.get("text") or "") for p in sent)
-    tmp = Path(__import__("tempfile").mkdtemp())
+    tmp = Path(tempfile.mkdtemp())
     store = _make_store(tmp)
     now = _time.time()
     # Incident 1: opened at t0, resolved at t0+600 -> MTTR 600
