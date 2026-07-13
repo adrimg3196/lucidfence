@@ -8,7 +8,7 @@
 
 Local-first **UEM Risk & Geofence Control Plane** que convierte la geolocalización de tu flota móvil en **riesgo explicable** (score 0-100 **con su razón**) y acciones automáticas — **agnóstico a tu MDM** vía adapters.
 
-- 🛡️ **Soberano**: 100% local, 0 exfiltración de datos de ubicación
+- 🛡️ **Soberanía / local-first**: la ubicación y los datos de tu flota **no salen de tu infraestructura**. El único egress es el que TÚ configuras: tu MDM (Applivery/Intune/Jamf) y el feed de CVEs de NVD (read-only de vulnerabilidades). Sin CDNs de terceros en el dashboard (100% local).
 - 🧠 **Risk Engine explicable**: cada dispositivo recibe un score 0-100 **con la razón** — nunca un número mágico
 - 🔌 **Multi-MDM**: Applivery (live) + Intune/Jamf (mock incluidos) + la comunidad añade el resto
 - 📊 **Dashboard**: geovallas, inventario IT, comandos remotos, alertas, CVE/SOAR
@@ -26,7 +26,7 @@ Los MDM nativos (Intune, Jamf, Applivery, SOTI, Workspace ONE) hacen **geofencin
 |---|---|---|
 | Geofencing | ✅ commodity | ✅ |
 | **Riesgo explicable** (0-100 **+ razón**) | ❌ caja negra | ✅ score + `reasons` |
-| **Sin exfiltrar ubicación** | ❌ (cloud del vendor) | ✅ 100% local |
+| **Sin exfiltrar ubicación** | ❌ (cloud del vendor) | ✅ local-first (egress solo a tu MDM + feed NVD read-only) |
 | Agnóstico a MDM | ❌ atado al tuyo | ✅ vía adapters |
 | SOAR + CVE en vivo + comandos on-demand | parcial | ✅ |
 
@@ -110,7 +110,7 @@ lucidfence/
 ├── static/                # SPA del dashboard (vanilla JS)
 ├── skills/                # Agent Skills installables
 ├── .claude-plugin/        # manifest de plugin (installable)
-├── tests/                 # 115 tests + adapters + evidence gate
+├── tests/                 # 87 tests + adapters + evidence gate
 └── docs/                  # GTM: marketing-copy, community, launch, pricing
 ```
 
@@ -171,8 +171,8 @@ Core: **Apache-2.0** (ver `LICENSE`). Módulo Enterprise on-prem: propietario, d
 
 ## Estado
 
-- ✅ 115 tests core + 25 IT + 19 SaaS PASS
-- ✅ Risk Engine explicable + evidence gate (anti-overclaim)
+- ✅ 87 tests PASS (core + IT + SaaS)
+- ✅ Risk Engine explicable + evidence gate (anti-overclaim): el score 0-100 lleva `reasons` y `verified`
 - ✅ 4 adapters (simulation/applivery/intune/jamf)
-- ✅ Dashboard verificado (0 errores JS, KPIs vivos)
-- 🟡 Live real de Intune/Jamf pendiente de Enterprise on-prem (hoy mock)
+- ✅ Dashboard 100% local (sin CDNs de terceros): risk score + evidence gate visibles en el modal de dispositivo
+- ⚠️ Live real de Intune/Jamf pendiente de Enterprise on-prem (hoy mock + webhook)

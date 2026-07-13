@@ -66,11 +66,10 @@ def save_credentials(root: Path, api_key: Optional[str], org_id: Optional[str]) 
 
     lines = [f"{k}={v}" for k, v in existing.items() if v]
     _secure_write(path, "\n".join(lines) + "\n")
-    # Make the key available to the running process immediately.
-    if ENV_KEY in existing:
-        os.environ[ENV_KEY] = existing[ENV_KEY]
-    if ORG_KEY in existing:
-        os.environ[ORG_KEY] = existing[ORG_KEY]
+    # NOTE: the key is intentionally NOT pushed to os.environ. The engine
+    # reads it from the tenant .env via core.secrets.read_key() and passes
+    # it to the adapter through config only — never to the global process
+    # environment, so sibling services (e.g. a local MoA on :8085) cannot read it.
     return {"ok": True, "configured": bool(existing.get(ENV_KEY)), "path": str(path)}
 
 

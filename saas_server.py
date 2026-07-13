@@ -294,13 +294,41 @@ def _cookie(handler, name: str) -> Optional[str]:
     return None
 
 
+def _host_allowed(handler) -> bool:
+    """Reject requests whose Host header points elsewhere (DNS-rebinding /
+    CSRF against a non-loopback bind). Allow loopback + configured host."""
+    import os
+    host = (handler.headers.get("Host") or "").split(":")[0].strip().lower()
+    if not host:
+        return True  # let non-HTTP/1.1 or missing header through (server decides)
+    allowed = {"127.0.0.1", "localhost", "::1",
+               (os.environ.get("LUCIDFENCE_HOST") or "").lower()}
+    allowed.discard("")
+    if host in allowed:
+        return True
+    # allow a configured public host (e.g. behind a reverse proxy)
+    cfg_host = ""
+    try:
+        cfg_host = (handler.server and getattr(handler.server, "lucidfence_host", "")) or ""
+    except Exception:
+        cfg_host = ""
+    return host == cfg_host.lower()
+
+
 def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7):
     # Accumulate; emitted inside _send_json AFTER send_response (Python 3.9
-    # flush-order quirk: send_header before send_response leaks the header first).
+    # flush-order quirk: send_header before send_response leaks the header first)
     lst = getattr(handler, "_set_cookies", None)
     if lst is None:
         lst = handler._set_cookies = []
-    lst.append(f"{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}")
+    secure = ""
+    try:
+        proto = (handler.headers.get("X-Forwarded-Proto") or "").lower()
+        if proto == "https" or os.environ.get("LUCIDFENCE_TLS") == "1":
+            secure = "Secure; "
+    except Exception:
+        secure = ""
+    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Strict; Max-Age={max_age}")
 
 
 def _clear_cookie(handler, name: str):
@@ -308,6 +336,33 @@ def _clear_cookie(handler, name: str):
     if lst is None:
         lst = handler._set_cookies = []
     lst.append(f"{name}=; Path=/; HttpOnly; Max-Age=0")
+
+
+def _safe_webhook_url(url: str):
+    """SSRF guard: only https, never private/link-local/loopback targets.
+    Returns the normalized URL or '' if unsafe/unusable."""
+    from urllib.parse import urlparse
+    if not url:
+        return ""
+    try:
+        p = urlparse(url)
+    except Exception:
+        return ""
+    if p.scheme != "https":
+        return ""
+    host = (p.hostname or "").lower()
+    if not host:
+        return ""
+    import ipaddress
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return ""
+    except ValueError:
+        # hostname (not IP): block obvious internal suffixes
+        if host.endswith((".local", ".internal", ".lan", ".home")) or host == "localhost":
+            return ""
+    return url
 
 
 def _send_json(handler, obj, code=200):
@@ -318,6 +373,12 @@ def _send_json(handler, obj, code=200):
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
+    # CSP: only same-origin resources; blocks injected third-party scripts (XSS)
+    handler.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+    )
     for c in getattr(handler, "_set_cookies", []) or []:
         handler.send_header("Set-Cookie", c)
     handler._set_cookies = []
@@ -407,6 +468,9 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self):
+        if not _host_allowed(self):
+            self.send_error(400, "bad host")
+            return
         try:
             self._route()
         except Exception as e:
@@ -418,6 +482,9 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
     def do_POST(self):
+        if not _host_allowed(self):
+            self.send_error(400, "bad host")
+            return
         try:
             # Pre-read the full body so the socket is left clean under HTTP/1.0
             # (otherwise the connection closes with unread bytes and the client
@@ -798,6 +865,10 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             body = _read_body(self)
             url = (body.get("url") or "").strip()
+            # SSRF guard: only https, and never internal/link-local targets.
+            url = _safe_webhook_url(url)
+            if (body.get("url") or "").strip() and not url:
+                return _send_json(self, {"ok": False, "error": "URL no permitida (solo https, sin rangos privados)"}, 400)
             tdir = _tenants.data_dir(org)
             _save_tenant_integration(tdir, eng.config.get("mode", "simulation"),
                                      eng.config.get("dry_run", True),

@@ -119,6 +119,14 @@ class Engine:
         self.alerts = AlertEngine(self.data_dir)
 
     # ---- cycle -----------------------------------------------------------
+    def _release_lock(self):
+        # Idempotent: a cycle may release via an early return AND the
+        # finally below; never raise if already released.
+        try:
+            self._cycle_lock.release()
+        except RuntimeError:
+            pass
+
     def run_once(self) -> dict:
         # Serialize cycles: the autostart loop and an on-demand /api/run-once
         # must never run concurrently (they share the per-cycle accumulators and
@@ -140,7 +148,7 @@ class Engine:
                 return self.last_stats
             reports = self.source.fetch()
         except Exception as exc:  # never let a flaky upstream API 500 the dashboard
-            self._cycle_lock.release()
+            self._release_lock()
             self.last_stats = {
                 "error": f"integration_error: {type(exc).__name__}: {exc}",
                 "ts": now_iso(),
@@ -152,7 +160,7 @@ class Engine:
         # generic crash.
         src_err = getattr(self.source, "last_error", None)
         if src_err:
-            self._cycle_lock.release()
+            self._release_lock()
             self.last_stats = {
                 "integration_error": src_err,
                 "ts": now_iso(),
@@ -354,24 +362,29 @@ class Engine:
                         self._cycle_actions[-1]["playbook_id"] = ex.get("playbook_id")
 
         self.cycle_count += 1
-        stats = self._stats(states_cur, events, self._cycle_actions)
-        self.store.log_stats(stats)
-        # Derive + merge incidents during the cycle so new incidents (and their
-        # webhook notifications) fire at detection time, independent of UI polling.
         try:
-            device_dicts = [s.to_dict() for s in states_cur.values()]
-            derived = _product_mod.derive_incidents(device_dicts, events, [], [])
-            self.incidents.merge(derived)
-        except Exception:
-            pass
-        # --- Evaluate configurable threshold alerts against the current fleet.
-        try:
-            alert_firings = self.alerts.evaluate(device_dicts)
-            stats["alert_firings"] = len(alert_firings)
-        except Exception:
-            stats["alert_firings"] = 0
-        self.last_stats = stats
-        self._cycle_lock.release()
+            stats = self._stats(states_cur, events, self._cycle_actions)
+            self.store.log_stats(stats)
+            # Derive + merge incidents during the cycle so new incidents (and their
+            # webhook notifications) fire at detection time, independent of UI polling.
+            try:
+                device_dicts = [s.to_dict() for s in states_cur.values()]
+                derived = _product_mod.derive_incidents(device_dicts, events, [], [])
+                self.incidents.merge(derived)
+            except Exception:
+                pass
+            # --- Evaluate configurable threshold alerts against the current fleet.
+            try:
+                alert_firings = self.alerts.evaluate(device_dicts)
+                stats["alert_firings"] = len(alert_firings)
+            except Exception:
+                stats["alert_firings"] = 0
+            self.last_stats = stats
+        finally:
+            # Release the cycle lock on EVERY path (normal, early-return, or
+            # exception) so a flaky downstream call can never deadlock
+            # all future cycles. Idempotent via _release_lock().
+            self._release_lock()
         return stats
 
     # Actions that physically alter a device and MUST be cooled so a standing

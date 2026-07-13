@@ -107,7 +107,7 @@ def sig_device_posture(device, ctx):
             disk_low = False
     battery_critical = battery is not None and float(battery) <= 15
     # Heurística de SO sin parchear: versiones "antiguas" conocidas por plataforma.
-    os_unpatched = any(tok in os_ver for tok in ("android 12", "android 11", "ios 15", "windows 10 ", "windows 10"))
+    os_unpatched = any(tok in os_ver for tok in ("android 12", "android 11", "ios 15", "windows 10", "windows 10 pro", "win10"))
 
     return {
         "disk_low": disk_low,
@@ -250,7 +250,7 @@ class RiskEngine:
             score += 8; reasons.append("disco casi lleno (<10% libre)")
         if posture.get("battery_critical"):
             score += 6; reasons.append("batería crítica (≤15%)")
-        if posture.get("os_unpatched"):
+        if posture.get("os_unpatched") and not signals.get("device_health", {}).get("os_outdated"):
             score += 12; reasons.append("SO sin parchear de seguridad")
         if posture.get("encryption_off"):
             score += 15; reasons.append("almacenamiento sin cifrar")
@@ -263,6 +263,20 @@ class RiskEngine:
         zr = signals.get("zone_risk", {}).get("zone_risk", 0.0) or 0.0
         if zr:
             score += float(zr) * 20; reasons.append(f"zona de riesgo elevado ({zr})")
+
+        # CVE risk from device apps (external vulnerability signal) — moat "riesgo compuesto"
+        max_cve = 0.0
+        for app in (device.get("apps") or []):
+            cr = app.get("cve_risk") or app.get("max_cve_severity_score") or 0.0
+            try:
+                cr = float(cr)
+            except (TypeError, ValueError):
+                cr = 0.0
+            if cr > max_cve:
+                max_cve = cr
+        if max_cve:
+            score += min(40.0, max_cve * 0.4)
+            reasons.append(f"apps con CVE de riesgo ({int(max_cve)}/100)")
 
         # Route deviation: off-route commercial device is a distinct signal
         rs = signals.get("route_state", {})
