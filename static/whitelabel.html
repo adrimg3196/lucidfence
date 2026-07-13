@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LucidFence · Whitelabel (FreeDomain)</title>
+  <style>
+    :root{
+      --bg:#08090a; --panel:#111214; --panel-2:#16181b; --border:#26282c;
+      --fg:#f7f8f8; --muted:#8a8f98; --accent:#5e6ad5; --green:#4cc38a;
+      --amber:#f2c94c; --red:#ff6b6b; --blue:#4ea7fc;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:32px}
+    h1{font-size:20px;margin:0 0 4px}
+    .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+    .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:880px;margin-bottom:20px}
+    label{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px}
+    input{width:100%;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--fg);padding:10px 12px;font-size:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .row>*{flex:1;min-width:200px}
+    button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;margin-top:14px}
+    button.sec{background:var(--panel-2);border:1px solid var(--border);color:var(--fg)}
+    pre{background:#0c0d0f;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-size:12px;line-height:1.5;max-height:340px}
+    .status{font-size:13px;margin-top:12px;padding:10px 12px;border-radius:8px;display:none}
+    .ok{background:rgba(76,195,138,.12);color:var(--green);border:1px solid rgba(76,195,138,.3)}
+    .partial{background:rgba(242,201,76,.12);color:var(--amber);border:1px solid rgba(242,201,76,.3)}
+    .missing,.err{background:rgba(255,107,107,.12);color:var(--red);border:1px solid rgba(255,107,107,.3)}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+    th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+    th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+    code{background:var(--panel-2);padding:2px 6px;border-radius:4px;font-size:12px}
+    a{color:var(--blue)}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;background:var(--panel-2);border:1px solid var(--border);margin-left:6px}
+  </style>
+</head>
+<body>
+  <h1>LucidFence · Whitelabel con DigitalPlat FreeDomain</h1>
+  <div class="sub">Dale a tu tenant un dominio propio gratuito y email soberano (SPF/DKIM) vía Atomic Mail.
+    Servicio de dominios: <a href="https://github.com/DigitalPlatDev/FreeDomain" target="_blank" rel="noopener">DigitalPlatDev/FreeDomain</a>.</div>
+
+  <div class="panel">
+    <strong>1 · Acceso</strong>
+    <div class="row">
+      <div><label>Email</label><input id="email" placeholder="admin@acme.test" value="admin@acme.test"></div>
+      <div><label>Password</label><input id="password" type="password" placeholder="••••••••" value="test1234"></div>
+    </div>
+    <button id="loginBtn">Entrar / Crear sesión</button>
+    <div id="loginStatus" class="status"></div>
+  </div>
+
+  <div class="panel" id="wlPanel" style="display:none">
+    <strong>2 · Dominio del tenant</strong>
+    <p class="sub" style="margin:6px 0 0">Registra tu dominio gratis en <a href="https://dash.domain.digitalplat.org/" target="_blank" rel="noopener">dash.domain.digitalplat.org</a> (p.ej. <code>acme-fence.dpdns.org</code>) y delega sus NS a Cloudflare o a DigitalPlat.</p>
+    <label>Dominio FreeDomain</label>
+    <input id="domain" placeholder="acme-fence.dpdns.org">
+    <div class="row">
+      <div><label>DKIM selector (Atomic Mail)</label><input id="selector" placeholder="atomicmail"></div>
+      <div><label>Dashboard target (opcional, IP o CNAME)</label><input id="dashTarget" placeholder="lucidfence.example.com"></div>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <button id="suggestBtn" class="sec">Sugerir registros DNS</button>
+      <button id="saveBtn">Guardar whitelabel</button>
+      <button id="validateBtn" class="sec">Validar DNS (en vivo)</button>
+    </div>
+    <div id="wlStatus" class="status"></div>
+    <div id="suggestOut" style="margin-top:14px;display:none">
+      <strong>Registros a crear en tu DNS</strong>
+      <table id="recTable"><thead><tr><th>Tipo</th><th>Nombre</th><th>Valor</th><th>Uso</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div id="validateOut" style="margin-top:14px;display:none">
+      <strong>Reporte de validación DNS</strong>
+      <pre id="validatePre"></pre>
+    </div>
+  </div>
+
+  <div class="panel" id="senderPanel" style="display:none">
+    <strong>3 · Remitente resultante</strong>
+    <p id="senderInfo" class="sub" style="margin:6px 0 0"></p>
+    <p class="sub">Una vez <code>overall: ok</code>, LucidFence envía alertas/incidentes/digest desde este remitente con SPF/DKIM alineados a tu dominio.</p>
+  </div>
+
+  <script src="/static/whitelabel.js"></script>
+</body>
+</html>

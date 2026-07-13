@@ -110,12 +110,18 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
     am = runtime.get("atomicmail") or {}
     if isinstance(am, dict) and am:
         cfg["atomicmail"] = {k: v for k, v in am.items() if v not in (None, "")}
+    # Whitelabel domain (DigitalPlat FreeDomain) used as the sender/branding
+    # domain for sovereign email (paired with Atomic Mail's DKIM).
+    wl = runtime.get("whitelabel") or {}
+    if isinstance(wl, dict) and wl.get("domain"):
+        cfg["whitelabel"] = {k: v for k, v in wl.items() if v not in (None, "")}
     return cfg
 
 
 def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
                              incident_webhook_url: str = "",
-                             atomicmail: dict | None = None) -> None:
+                             atomicmail: dict | None = None,
+                             whitelabel: dict | None = None) -> None:
     path = tdir / "integration.json"
     runtime = {}
     try:
@@ -138,6 +144,14 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
             runtime["atomicmail"] = cleaned
         else:
             runtime.pop("atomicmail", None)
+    if whitelabel is not None:
+        # whitelabel = tenant's FreeDomain domain + dkim selector, used as the
+        # sender/branding domain for sovereign email. domain is not secret.
+        cleaned = {k: v for k, v in (whitelabel or {}).items() if v not in (None, "")}
+        if cleaned:
+            runtime["whitelabel"] = cleaned
+        else:
+            runtime.pop("whitelabel", None)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
@@ -1000,6 +1014,101 @@ class Handler(BaseHTTPRequestHandler):
             to = (body.get("to") or "").strip() or None
             ok = eng.send_digest(to=to)
             return _send_json(self, {"ok": ok})
+
+        # ---- Whitelabel (DigitalPlat FreeDomain) -------------------------
+        if route == "/api/whitelabel/suggest" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self) or {}
+            domain = (body.get("domain") or "").strip()
+            if not domain:
+                return _send_json(self, {"ok": False, "error": "requiere domain"}, 400)
+            from core.freedomain import suggest_dns_records
+            try:
+                sug = suggest_dns_records(
+                    domain,
+                    atomicmail_inbox=(eng.mailbox._inbox_id if eng.mailbox else "") or "",
+                    dkim_selector=(body.get("dkim_selector") or "atomicmail"),
+                    dashboard_target=(body.get("dashboard_target") or "").strip(),
+                    receive_mail=bool(body.get("receive_mail", True)),
+                )
+                return _send_json(self, {"ok": True, "suggestion": sug})
+            except ValueError as exc:
+                return _send_json(self, {"ok": False, "error": str(exc)}, 400)
+        if route == "/api/whitelabel/setup" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            domain = (body.get("domain") or "").strip()
+            if not domain:
+                return _send_json(self, {"ok": False, "error": "requiere domain"}, 400)
+            tdir = _tenants.data_dir(org)
+            wl_cfg = {
+                "domain": domain,
+                "dkim_selector": (body.get("dkim_selector") or "atomicmail").strip(),
+                "dashboard_target": (body.get("dashboard_target") or "").strip(),
+            }
+            _save_tenant_integration(
+                tdir, eng.config.get("mode", "simulation"),
+                eng.config.get("dry_run", True),
+                incident_webhook_url=eng.config.get("incident_webhook_url", ""),
+                atomicmail=eng.config.get("atomicmail"),
+                whitelabel=wl_cfg,
+            )
+            try:
+                reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "warning": f"config guardada pero engine no recargó: {exc}"})
+            return _send_json(self, {"ok": True, "domain": domain,
+                                     "sender": f"{eng.config.get('atomicmail', {}).get('username', '')}@{domain}"})
+        if route == "/api/whitelabel/status" and method == "GET":
+            tdir = _tenants.data_dir(org)
+            runtime = {}
+            try:
+                runtime = json.loads((tdir / "integration.json").read_text(encoding="utf-8"))
+            except Exception:
+                runtime = {}
+            wl = runtime.get("whitelabel") or {}
+            out = {
+                "configured": bool(wl.get("domain")),
+                "domain": wl.get("domain", ""),
+                "dkim_selector": wl.get("dkim_selector", "atomicmail"),
+                "dashboard_target": wl.get("dashboard_target", ""),
+                "last_validation": wl.get("last_validation"),
+                "sender": (
+                    f"{eng.config.get('atomicmail', {}).get('username', '')}@{wl['domain']}"
+                    if wl.get("domain") else None
+                ),
+            }
+            return _send_json(self, out)
+        if route == "/api/whitelabel/validate" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self) or {}
+            tdir = _tenants.data_dir(org)
+            runtime = {}
+            try:
+                runtime = json.loads((tdir / "integration.json").read_text(encoding="utf-8"))
+            except Exception:
+                runtime = {}
+            domain = (body.get("domain") or runtime.get("whitelabel", {}).get("domain") or "").strip()
+            if not domain:
+                return _send_json(self, {"ok": False, "error": "sin dominio configurado"}, 400)
+            from core.freedomain import validate
+            report = validate(domain, dkim_selector=(runtime.get("whitelabel", {}).get("dkim_selector") or "atomicmail"))
+            # Persist last validation in the whitelabel config (non-secret).
+            wl = runtime.get("whitelabel") or {}
+            wl["last_validation"] = report
+            runtime["whitelabel"] = wl
+            try:
+                tmp = tdir / "integration.json.tmp"
+                tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+                os.chmod(tmp, 0o600)
+                tmp.replace(tdir / "integration.json")
+                os.chmod(tdir / "integration.json", 0o600)
+            except Exception:
+                pass
+            return _send_json(self, {"ok": True, "report": report})
 
         # ---- Bulk export / audit (CSV + print-ready HTML) ----------------
         if route == "/api/export" and method == "GET":

@@ -142,9 +142,15 @@ class Engine:
             email_to = am.get("incident_email_to") or am.get("email_to") or ""
             if not (username or api_key):
                 return
+            # Whitelabel: if the tenant has a FreeDomain domain configured, use
+            # it as the sender/branding domain so mail goes out as
+            # <username>@<whitelabel-domain> with SPF/DKIM aligned there.
+            wl = config.get("whitelabel") or {}
+            inbox_domain = (wl.get("domain") or "").strip() or None
             tdir = Path(self.data_dir)
             self.mailbox = build_tenant_mailbox(
                 tdir, username=username or None, api_key=api_key or None,
+                inbox_domain=inbox_domain,
             )
             # If an incident email recipient is configured, wrap the mailbox in
             # an AtomicMailNotifier and attach it alongside any webhook notifier.
