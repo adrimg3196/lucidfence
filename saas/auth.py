@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local authentication, sessions and RBAC for the Geofence UEM SaaS.
+"""Local authentication, sessions and RBAC for the LucidFence SaaS.
 
 100% local, no external identity provider:
 - Passwords hashed with scrypt (salt + n + r + p), stored per-user as JSON.
@@ -104,10 +104,10 @@ class User:
 def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
     if salt is None:
         salt = os.urandom(16).hex()
-    # Pure-python PBKDF2-HMAC-SHA256 (200k rounds). We avoid hashlib.scrypt /
+    # Pure-python PBKDF2-HMAC-SHA256 (100k rounds). We avoid hashlib.scrypt /
     # hashlib.pbkdf2_hmac because some macOS system Pythons lack the OpenSSL
     # bindings. This is a dependency-free, timing-safe-enough KDF for a local SaaS.
-    dk = _pbkdf2_sha256(password.encode("utf-8"), salt.encode("utf-8"), 25000, 64)
+    dk = _pbkdf2_sha256(password.encode("utf-8"), salt.encode("utf-8"), 100000, 64)
     return dk.hex(), salt
 
 
@@ -164,7 +164,9 @@ class AuthStore:
                 f"{self.users_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
             tmp.write_text(json.dumps([asdict(u) for u in self._users.values()],
                                       ensure_ascii=False, indent=2), encoding="utf-8")
+            os.chmod(tmp, 0o600)
             tmp.replace(self.users_path)
+            os.chmod(self.users_path, 0o600)
 
     def _save_sessions(self):
         with self._lock:
@@ -172,7 +174,9 @@ class AuthStore:
                 f"{self.sessions_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
             tmp.write_text(json.dumps(self._sessions, ensure_ascii=False, indent=2),
                            encoding="utf-8")
+            os.chmod(tmp, 0o600)
             tmp.replace(self.sessions_path)
+            os.chmod(self.sessions_path, 0o600)
 
     # ---- user management ----------------------------------------------
     def create_user(self, email: str, name: str, password: str,

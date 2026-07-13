@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SaaS HTTP server for Geofence UEM — 100% local, multi-tenant.
+"""SaaS HTTP server for LucidFence — 100% local, multi-tenant.
 
 This server wraps the existing single-fleet engine and adds the SaaS layer:
 - Authentication (login/signup/logout) with session cookies
@@ -315,6 +315,9 @@ def _send_json(handler, obj, code=200):
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
     for c in getattr(handler, "_set_cookies", []) or []:
         handler.send_header("Set-Cookie", c)
     handler._set_cookies = []
@@ -369,7 +372,10 @@ def _summary(devices: list[dict]) -> dict:
 def _read_body(handler) -> dict:
     raw = getattr(handler, "_preread_body", None)
     if raw is None:
-        length = int(handler.headers.get("Content-Length", 0) or 0)
+        try:
+            length = int(handler.headers.get("Content-Length", 0) or 0)
+        except (ValueError, TypeError):
+            return {}
         if not length:
             return {}
         if length > 1_048_576:  # 1 MiB hard cap
@@ -483,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # ---- Healthcheck sin auth (para monitoreo externo / start_all.sh) ----
         if route == "/api/health" and method == "GET":
-            return _send_json(self, {"status": "ok", "service": "geofence-uem",
+            return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
         # everything else needs a session
@@ -1076,7 +1082,7 @@ def main():
     host = cfg.get("server", {}).get("host", "127.0.0.1")
     port = int(cfg.get("server", {}).get("port", 8765))
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] Geofence UEM SaaS running at http://{host}:{port}")
+    print(f"[{ts}] LucidFence SaaS running at http://{host}:{port}")
     print(f"  Multi-tenant local SaaS · mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
     print(f"  Tenants: {len(_tenants.all()) if '_tenants' in globals() else '?'}")
     httpd = ThreadingHTTPServer((host, port), Handler)
