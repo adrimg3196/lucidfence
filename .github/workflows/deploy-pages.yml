@@ -2,8 +2,6 @@ name: deploy-pages
 
 # Despliegue de la LANDING + dashboard estático a GitHub Pages.
 # Siempre-on, gratis, sin intervención (gh ya autenticado).
-# El server con estado (engine + MoA) queda para Fly.io (tu token) o local;
-# ver docs/DEPLOY_FREE.md.
 on:
   push:
     branches: [main]
@@ -12,6 +10,7 @@ on:
 permissions:
   contents: read
   pages: write
+  id-token: write
 
 jobs:
   pages:
@@ -21,13 +20,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar artefacto (landing como index)
+        run: |
+          mkdir -p _pages
+          cp static/landing.html _pages/index.html
+          cp static/app.js _pages/app.js 2>/dev/null || true
+          cp static/index.html _pages/dashboard.html 2>/dev/null || true
+          cp README.md _pages/README.md 2>/dev/null || true
       - name: Subir artefacto de Pages
         uses: actions/upload-artifact@v4
         with:
           name: github-pages
-          path: |
-            static
-            README.md
+          path: _pages
           retention-days: 1
       - name: Desplegar a Pages
         id: deployment
