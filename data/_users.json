@@ -7042,5 +7042,149 @@
     },
     "created_at": "2026-07-13T10:16:23.384060+00:00",
     "active": true
+  },
+  {
+    "id": "usr_76d16138f9",
+    "email": "itadmin-1783940259290032000@acme.test",
+    "name": "IT Admin",
+    "pw_hash": "b116ac508c25395bdeead58396e60a493054dcdea7ba7206744c6cb73ba6c7a8349fbc65c09d5a03fe1d7be590b3ba595be7cecb8577796e218d4c60017be3a1",
+    "pw_salt": "0f9d98b247b22e5eaf256eb4383eb372",
+    "org_roles": {
+      "org_56b8a11a8b": "owner"
+    },
+    "created_at": "2026-07-13T10:57:39.487249+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_bb619f5e3c",
+    "email": "viewer-1783940259290032000@acme.test",
+    "name": "Vic",
+    "pw_hash": "e39b9328c516af0b5e8981b80666fb7b8d99644556560a733597bb61f2473c1d6eea1f6b96b6341f95b9d92dff3a847e107e23a18e6d6b590dc36476d28115e7",
+    "pw_salt": "b2d7f35c5f6037f37f7695e8a8df1303",
+    "org_roles": {
+      "org_56b8a11a8b": "viewer"
+    },
+    "created_at": "2026-07-13T10:57:40.731239+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_3e4adad0bd",
+    "email": "itadmin-1783940260994534000@acme.test",
+    "name": "IT Admin",
+    "pw_hash": "08f1a4d4c3c39a85da90623b0a7a5cd54356d3472bbe241f789bdb08977d3b7a7854ae08e7720f01fdc2d2242435760d01e6e95d8a2b2c93af71d54e60f5e3e5",
+    "pw_salt": "b17d74f498a56d97f86971c8d4a3ceb5",
+    "org_roles": {
+      "org_9fbf8e4384": "owner"
+    },
+    "created_at": "2026-07-13T10:57:41.187746+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_9cd97549de",
+    "email": "viewer-1783940260994534000@acme.test",
+    "name": "Vic",
+    "pw_hash": "5e31759a4b659ac5c973096f00e396ded9f8f9b5679a4ae65987de3143fa4f0391a60c39590bf369ee7b93a802a7864bb2205d07ba82ba53d3a22bf72fb6c675",
+    "pw_salt": "79cf0d78321ace3eef037903b8b71acf",
+    "org_roles": {
+      "org_9fbf8e4384": "viewer"
+    },
+    "created_at": "2026-07-13T10:57:42.430585+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_771b736998",
+    "email": "admin-1783940262684130000@acme.test",
+    "name": "Ana",
+    "pw_hash": "0799d1284cb93e5539ec1875a0e773c4643b696a9c1461ef9abb31e815ad0ef709a9ffb585ec6870a3dffd71f054f6c1e5ff0e0350a8df8b2842002e6f7c3c24",
+    "pw_salt": "426855c9f56346ccdd27cd3482eb4532",
+    "org_roles": {
+      "org_8b589c08ce": "owner"
+    },
+    "created_at": "2026-07-13T10:57:42.877699+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_227390c1e4",
+    "email": "viewer-1783940262684130000@acme.test",
+    "name": "Vic",
+    "pw_hash": "c870294aaa23ca408b258015ceb492ed1f424782828da8bd621aa11887b6ba61b59012175a12c46536237129dcdbf2e67652ea0bfaf2f3ef5ad58fa6083d987e",
+    "pw_salt": "ef7db7bc908775a7852b74b8d1496874",
+    "org_roles": {
+      "org_8b589c08ce": "viewer"
+    },
+    "created_at": "2026-07-13T10:57:43.296747+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_faca541db2",
+    "email": "itadmin-1783941156454964000@acme.test",
+    "name": "IT Admin",
+    "pw_hash": "3ce190bd687af1d35ae03a95ce36ac66130d0a225304da474eee54889bf17533059188289a47a73dafb6c4ad254c55ee54fa6b1d7ffb53e435cec7524538a89d",
+    "pw_salt": "759c619e8570d33797467b39d46474d0",
+    "org_roles": {
+      "org_a9a13793c4": "owner"
+    },
+    "created_at": "2026-07-13T11:12:36.651667+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_722f461267",
+    "email": "viewer-1783941156454964000@acme.test",
+    "name": "Vic",
+    "pw_hash": "88ad68bcdedd1dc9300b6f7e1bb7cdf038e8c115503151aa94974c2cd6f4d84ac77f4975872a264a02ce925c5f0d2909988658ae50a595f548654872a75b9055",
+    "pw_salt": "0e400377db328f17c201880b7a187dd6",
+    "org_roles": {
+      "org_a9a13793c4": "viewer"
+    },
+    "created_at": "2026-07-13T11:12:37.893474+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_b3858af317",
+    "email": "itadmin-1783941158188831000@acme.test",
+    "name": "IT Admin",
+    "pw_hash": "6542b3c525fccdb60260b734ec66693c5439cf351959cd28d7d37a75f5cf6c8712c373bf3a1a8cfc58a09ee1df5b35e5235ffb6a898878d123f6ec19111ca62e",
+    "pw_salt": "156a2c8cfab640bd5a8bc280b4dacc64",
+    "org_roles": {
+      "org_338deb5e23": "owner"
+    },
+    "created_at": "2026-07-13T11:12:38.381370+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_9ff84d0d58",
+    "email": "viewer-1783941158188831000@acme.test",
+    "name": "Vic",
+    "pw_hash": "fa3f01811c57cac8d98e870847ee07dfc9ea5b1efe1b2df1b8d71a58701a86f9531d2049541cbbf08b9c3ae92f4cafeb8b61cfb1a9e56349874dcb0c23be4da2",
+    "pw_salt": "cbac918f122582279317ee56b6c0042c",
+    "org_roles": {
+      "org_338deb5e23": "viewer"
+    },
+    "created_at": "2026-07-13T11:12:39.622773+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_9145d710fe",
+    "email": "admin-1783941159874899000@acme.test",
+    "name": "Ana",
+    "pw_hash": "fed05f78f36a8000c5beb59abd6a90a05d80742879554bc18c86408d940c5991b8fc67b8ca30c9294c932faafb6d1703934396666e7b6a64075d4f34b33b1932",
+    "pw_salt": "16b52016488d9fc180a471b52a9b51d0",
+    "org_roles": {
+      "org_977cc31316": "owner"
+    },
+    "created_at": "2026-07-13T11:12:40.067417+00:00",
+    "active": true
+  },
+  {
+    "id": "usr_cb4a644c44",
+    "email": "viewer-1783941159874899000@acme.test",
+    "name": "Vic",
+    "pw_hash": "1152bcbfe0b5027b18f9676d35f7df711421a2f2196ccc5a85b2c4e9f06036aec3988d26ac8a90c8becd12e03ef1843b1a7eef209ff1895e953cf30c4eabfffb",
+    "pw_salt": "9714e460b520ae16328ff3b0a7872979",
+    "org_roles": {
+      "org_977cc31316": "viewer"
+    },
+    "created_at": "2026-07-13T11:12:40.487971+00:00",
+    "active": true
   }
 ]

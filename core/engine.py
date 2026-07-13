@@ -85,6 +85,15 @@ class Engine:
         )
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
+        # Nutrir CVEs desde feed NVD vivo (si existe y es reciente). Best-effort:
+        # nunca rompe el arranque si la red/cache falla.
+        try:
+            from core.cve_feed_nvd import load_nvd_feed_into_cve
+            n = load_nvd_feed_into_cve()
+            if n:
+                self.logger and self.logger.info(f"CVE feed NVD cargado: {n} entradas")
+        except Exception:
+            pass
         pol_path = config.get("policies_path", Path(self.data_dir) / "policies.json")
         self.policies_path = Path(pol_path)
         self.policies = load_policies(self.policies_path)

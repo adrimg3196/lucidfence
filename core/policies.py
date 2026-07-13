@@ -88,6 +88,35 @@ def sig_device_health(device, ctx):
     }
 
 
+@register_signal("device_posture")
+def sig_device_posture(device, ctx):
+    """Señales de posture del endpoint (inspirado en Fleet/osquery):
+    disco casi lleno, batería crítica, SO sin parchear, sin cifrado.
+    El Risk Engine las usa para penalizar el score de forma explicable."""
+    free = device.get("storage_free_gb")
+    total = device.get("storage_total_gb")
+    battery = device.get("battery_level")
+    os_ver = (device.get("os_version") or "").lower()
+    encryption = bool(device.get("encryption_enabled", True))
+
+    disk_low = False
+    if free is not None and total:
+        try:
+            disk_low = (float(free) / float(total)) < 0.10  # <10% libre
+        except (TypeError, ValueError):
+            disk_low = False
+    battery_critical = battery is not None and float(battery) <= 15
+    # Heurística de SO sin parchear: versiones "antiguas" conocidas por plataforma.
+    os_unpatched = any(tok in os_ver for tok in ("android 12", "android 11", "ios 15", "windows 10 ", "windows 10"))
+
+    return {
+        "disk_low": disk_low,
+        "battery_critical": battery_critical,
+        "os_unpatched": os_unpatched,
+        "encryption_off": not encryption,
+    }
+
+
 @register_signal("zone_risk")
 def sig_zone_risk(device, ctx):
     """Riesgo de la zona desde ctx['zone_risk'] (dataset externo opcional)."""
@@ -213,6 +242,18 @@ class RiskEngine:
             score += 15; reasons.append("dispositivo con root/jailbreak")
         if signals.get("device_health", {}).get("os_outdated"):
             score += 10; reasons.append("SO desactualizado")
+
+        # Posture del endpoint (estilo Fleet/osquery): penaliza estados de salud
+        # del dispositivo que un MDM nativo no correlaciona con georriesgo.
+        posture = signals.get("device_posture", {})
+        if posture.get("disk_low"):
+            score += 8; reasons.append("disco casi lleno (<10% libre)")
+        if posture.get("battery_critical"):
+            score += 6; reasons.append("batería crítica (≤15%)")
+        if posture.get("os_unpatched"):
+            score += 12; reasons.append("SO sin parchear de seguridad")
+        if posture.get("encryption_off"):
+            score += 15; reasons.append("almacenamiento sin cifrar")
 
         if signals.get("time_of_day", {}).get("off_hours"):
             score += 10; reasons.append("fuera de horario laboral")
