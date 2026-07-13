@@ -1179,6 +1179,27 @@ class Handler(BaseHTTPRequestHandler):
                 "history": moa.get("history"),
             })
 
+        # ---- IA: borrador de respuesta de soporte (todo impulsado por IA) --
+        if route == "/api/ai/support" and method == "POST":
+            body = _read_body(self) or {}
+            ticket = {
+                "subject": (body.get("subject") or body.get("topic") or "").strip(),
+                "body": (body.get("body") or body.get("message") or "").strip(),
+            }
+            if not ticket["subject"] and not ticket["body"]:
+                return _send_json(self, {"ok": False, "error": "requiere subject/body"}, 400)
+            try:
+                from core import ai
+                reply = ai.support_reply(ticket, dry=True)
+            except Exception as exc:
+                return _send_json(self, {"ok": False,
+                    "error": f"motor IA no disponible: {exc}"}, 503)
+            return _send_json(self, {
+                "ok": True,
+                "reply": reply,
+                "moa_available": ai.available(),
+            })
+
         self.send_error(404)
 
     # ---- auth handlers --------------------------------------------------
