@@ -32,7 +32,15 @@ def main():
     failed = 0
     failures = []
     # Arranca el server local en :8765 para los tests de integración que lo
-    # requieren (test_it_admin_features.py). Se mata al terminar. Hermético en CI.
+    # requieren (test_it_admin_features.py, test_qa_e2e.py Part A, endpoints
+    # SOAR/CVE, etc.). Se mata al terminar. Hermético en CI.
+    #
+    # Robustez: si quedó un saas_server.py huérfano de un run anterior
+    # escuchando en :8765, éste y el nuevo compiten por el puerto y el boot del
+    # nuevo falla -> ConnectionRefused intermitente en los tests de integración.
+    # Antes de arrancar, matamos cualquier proceso nuestro que ya esté en :8765
+    # (pero jamás matamos un server que el usuario tenga levantado a propósito,
+    # pues esos corren fuera de este PID/venv).
     import subprocess
     srv = None
     try:
@@ -47,11 +55,33 @@ def main():
             except Exception:
                 return False
         if not _server_up():
+            # Liberar :8765 si lo ocupa un server huérfano de un run previo.
+            try:
+                out = subprocess.run(
+                    ["lsof", "-tiTCP:8765", "-sTCP:LISTEN"],
+                    capture_output=True, text=True,
+                ).stdout.strip().split()
+                for pid in out:
+                    try:
+                        p = int(pid)
+                        # Solo matamos nuestro propio server: confirmamos por el
+                        # nombre del ejecutable vía `ps` (portable macOS/Linux).
+                        ps_out = subprocess.run(
+                            ["ps", "-o", "command=", "-p", str(p)],
+                            capture_output=True, text=True,
+                        ).stdout
+                        if "saas_server.py" in ps_out:
+                            os.kill(p, 15)
+                    except Exception:
+                        pass
+                time.sleep(1)
+            except Exception:
+                pass
             srv = subprocess.Popen(
                 [sys.executable, "saas_server.py"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            for _ in range(30):
+            for _ in range(60):
                 if _server_up():
                     break
                 time.sleep(0.5)
