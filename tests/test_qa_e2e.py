@@ -16,6 +16,7 @@ import sys
 import http.client
 import json
 import time as _t
+from pathlib import Path
 
 H, P = "127.0.0.1", 8765
 passed = 0
@@ -90,29 +91,55 @@ def test_e2e():
     check(body.get("error") is not None, "viewer blocked from POST /api/routes (route:write)")
 
     # ============ PART B: engine determinism (no server race) ============
+    # Hermetic: build an isolated Engine in a tempdir (like the rest of the
+    # engine integration tests) so the live data/ tenant dir shared with the
+    # auto-started saas_server.py cannot pollute this engine's simulation
+    # state. We then inject a DETERMINISTIC location source: dev-002 starts
+    # on-route (cycle 0, prev=None -> no transition) and goes off-route on
+    # every subsequent cycle, guaranteeing the on_route->off_route transition
+    # (and therefore the route_exit event + fallback notify action) fires
+    # exactly once, regardless of run order in the full suite.
     print("== Part B: engine ==")
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import config_loader
-    from pathlib import Path
-    from saas.tenant import TenantStore
-    from core.engine import Engine
+    from helpers import make_temp_engine
+    from core.location_source import LocationReport
+    from core.routes import Point, Route, load_routes, save_routes
 
-    ROOT = Path(".")
-    ts = TenantStore(ROOT / "data")
-    org = "org_c40aa88904"
-    cfg = config_loader.load(ROOT / "config.json")
-    cfg["mode"] = "simulation"  # deterministic even when local .env has a live token
-    cfg["dry_run"] = True
-    cfg["data_dir"] = str(ts.data_dir(org))
-    cfg["sim_seed_path"] = str(ts.data_dir(org) / "fleet_seed.json")
-    cfg["routes_path"] = str(ts.data_dir(org) / "routes.json")
-    cfg["policies_path"] = str(ts.data_dir(org) / "policies.json")
-    cfg["fences_path"] = str(ts.data_dir(org) / "fences.json")
-    eng = Engine(cfg)
+    eng = make_temp_engine(cooldown_seconds=0)
+
+    # Load the REAL product route fixture so route_exit carries route-centro.
+    repo_routes = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / "data" / "routes.json"
+    seed_routes = load_routes(repo_routes) if repo_routes.exists() else []
+    if not any(r.id == "route-centro" for r in seed_routes):
+        seed_routes.append(Route(
+            id="route-centro", name="Ruta Comercial Centro", corridor_m=300,
+            device_ids=["dev-002"], color="#22c55e",
+            waypoints=[Point(40.4300, -3.6900), Point(40.4200, -3.7100)],
+        ))
+    eng.routes = seed_routes
+    eng.fence_by_id = {f.id: f for f in eng.fences}  # no fences; pure route test
+
+    on_pt = Point(40.4250, -3.7000)   # midpoint of the route segment
+    off_pt = Point(40.3900, -3.7400)  # ~3.5km off the route
+
+    class _DeterministicRouteSource:
+        def __init__(self):
+            self.i = 0
+        def fetch(self):
+            if self.i == 0:
+                loc = on_pt
+            else:
+                loc = off_pt
+            self.i += 1
+            return [LocationReport(
+                device_id="dev-002", name="Movil Reparto B7", platform="android",
+                status="active", compliant=True, lat=loc.lat, lng=loc.lng,
+            )]
+
+    eng.source = _DeterministicRouteSource()
     off_seen = False
     off_risk = None
     on_risk = None
-    prev_state = None
     for _ in range(90):
         eng.run_once()
         d = [x for x in eng.store.snapshot().values() if x.device_id == "dev-002"]
@@ -123,9 +150,11 @@ def test_e2e():
             off_seen = True
             if off_risk is None:
                 off_risk = d[0].risk_score
-        elif st == "on_route" and off_risk is not None and on_risk is None:
-            on_risk = d[0].risk_score
-        prev_state = st
+        elif st == "on_route":
+            # Captured at cycle 0 (dev-002 starts on-route). Recorded the first
+            # time we see it so we can compare on_route vs off_route risk.
+            if on_risk is None:
+                on_risk = d[0].risk_score
     check(off_seen, "dev-002 reaches off_route (engine, 90 cycles)")
     check(off_risk is not None and on_risk is not None, "captured risk in both states")
     if off_risk is not None and on_risk is not None:
