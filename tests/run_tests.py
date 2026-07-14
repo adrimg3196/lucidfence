@@ -5,6 +5,8 @@ pytest's behaviour without adding a dependency (the product stays stdlib-only).
 
 Run:  python3 tests/run_tests.py
 """
+from __future__ import annotations
+
 import importlib.util
 import os
 import sys
