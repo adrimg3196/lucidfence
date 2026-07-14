@@ -65,7 +65,7 @@ def test_command_center_uses_reicon_for_ui_icons():
     # not the marketing landing index.html. Assert against the real SPA shell.
     html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
-    assert html.index("/static/reicon-data.js") < html.index("/static/reicon.js") < html.index("/static/app.js")
+    assert html.index("static/reicon-data.js") < html.index("static/reicon.js") < html.index("static/app.js")
     assert "data:image/svg" not in html
     assert "<svg" not in html, "static shell still contains hand-rolled icons"
     assert "hydrateReicons" in js and 'reicon("trash")' in js
