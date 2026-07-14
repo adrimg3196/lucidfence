@@ -164,6 +164,11 @@
       return ({android:"Android", ios:"iOS", ipados:"iPadOS", chromeos:"ChromeOS", windows:"Windows", macos:"macOS"})[key] || key;
     }
 
+    function platformClass(p){
+      const key = String(p||"unknown").toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+      return `plat ${key}`;
+    }
+
     async function load(){
       try{
         const r = await fetch(STATE_URL, {cache:"no-store"});
@@ -320,13 +325,12 @@
         const stxt = d.fence_state==="inside"?"dentro":(d.fence_state==="outside"?"fuera":"desconocido");
         const comp = d.compliant===false?"comp-no":"comp-yes";
         const ctxt = d.compliant===false?"no":"sí";
-        const platform = (d.platform||"unknown").toLowerCase();
         const geoApplicable = d.geofence_compliance_applicable===true;
         const geoClass = !geoApplicable || d.geofence_compliant==null ? "unk" : (d.geofence_compliant ? "comp-yes" : "comp-no");
         const geoText = !geoApplicable ? "—" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
         tb.insertAdjacentHTML("beforeend",
           `<tr><td class="tag">${esc(d.device_id)}</td><td>${esc(d.name||"")}</td>`+
-          `<td><span class="pill plat ${esc(platform)}">${esc(platformLabel(platform))}</span></td>`+
+          `<td><span class="pill ${esc(platformClass(d.platform))}">${esc(platformLabel(d.platform))}</span></td>`+
           `<td><span class="pill ${st}">${stxt}</span></td>`+
           `<td><span class="pill ${comp}">${ctxt}</span></td>`+
           `<td><span class="pill ${geoClass}" title="${esc(d.geofence_compliance_label||"")}">${geoText}</span></td>`+

@@ -39,8 +39,9 @@ class SimulationAdapter(MDMAdapter):
         local demo can show Apple/iOS geofence compliance without contacting any
         real MDM tenant or forcing community adapters to implement new methods.
         """
-        platform = getattr(device, "platform", None) if not isinstance(device, dict) else device.get("platform")
-        if "ios" not in str(platform or "").lower():
+        from core.adapters.ios_geofence import is_ios_device
+
+        if not is_ios_device(device):
             return None
 
         raw = device if isinstance(device, dict) else getattr(device, "raw", {}) or {}

@@ -109,6 +109,16 @@ def test_ios_geofence_compliance_adapter():
           "no aplica a no-iOS")
 
 
+def test_simulation_adapter_surfaces_ipados_geofence_snapshot():
+    a = SimulationAdapter()
+    dev = {"device_id": "ipad-1", "platform": "iPadOS", "fence_state": "inside"}
+    snap = a.geofence_compliance_snapshot(dev, fence_state="inside", fence_id="hq")
+    check(snap is not None, "iPadOS también aplica al cumplimiento iOS")
+    assert snap is not None
+    check(snap["platform"] == "ios", "snapshot normaliza la familia Apple móvil")
+    check(snap["compliant"] is True, "iPadOS dentro de geocerca cumple")
+
+
 if __name__ == "__main__":
     for fn in (v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)):
         fn()

@@ -1,0 +1,36 @@
+[
+  {
+    "id": "inc-outside-xcover-ops-04",
+    "type": "geofence_exit",
+    "severity": "high",
+    "status": "open",
+    "title": "Samsung XCover Ops 04 está fuera de geovalla",
+    "device_id": "xcover-ops-04",
+    "device_name": "Samsung XCover Ops 04",
+    "recommendation": "Validar ubicación reciente, contactar propietario y ejecutar acción UEM si procede.",
+    "first_seen": "2026-07-14T15:27:15.905685+00:00",
+    "last_seen": "2026-07-14T15:27:15Z",
+    "count": 1,
+    "assignee": null,
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "timeline": []
+  },
+  {
+    "id": "inc-noncompliant-iphone-ventas-02",
+    "type": "device_non_compliant",
+    "severity": "high",
+    "status": "open",
+    "title": "iPhone 15 Field Ventas 02 no cumple la política UEM",
+    "device_id": "iphone-ventas-02",
+    "device_name": "iPhone 15 Field Ventas 02",
+    "recommendation": "Revisar compliance, localizar el dispositivo y aplicar playbook de remediación.",
+    "first_seen": "2026-07-14T15:27:15.900357+00:00",
+    "last_seen": "2026-07-14T15:27:15Z",
+    "count": 1,
+    "assignee": null,
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "timeline": []
+  }
+]

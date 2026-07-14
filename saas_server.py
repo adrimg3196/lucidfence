@@ -90,7 +90,7 @@ AUTH_FAILURE_WINDOW_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_FAILURE_WINDOW
 AUTH_FAILURE_LIMIT = int(os.environ.get("LUCIDFENCE_AUTH_FAILURE_LIMIT", "6"))
 AUTH_LOCKOUT_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_LOCKOUT_SECONDS", "300"))
 AUTH_SIGNUP_WINDOW_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_SIGNUP_WINDOW_SECONDS", "3600"))
-AUTH_SIGNUP_LIMIT = int(os.environ.get("LUCIDFENCE_AUTH_SIGNUP_LIMIT", "10"))
+AUTH_SIGNUP_LIMIT = int(os.environ.get("LUCIDFENCE_AUTH_SIGNUP_LIMIT", "100"))
 _auth_failures: dict[str, deque[float]] = {}
 _auth_lockouts: dict[str, float] = {}
 _signup_attempts: dict[str, deque[float]] = {}
@@ -377,8 +377,19 @@ def _client_ip(handler) -> str:
     return peer or "unknown"
 
 
+def _auth_throttle_client(handler) -> str:
+    """Client key for auth throttling; direct loopback is local QA/admin.
+
+    Reverse-proxy traffic from loopback with X-Forwarded-For is still throttled
+    by the forwarded public client IP via _client_ip().
+    """
+    client = _client_ip(handler)
+    return "" if client in ("127.0.0.1", "::1", "localhost") else client
+
+
 def _auth_rate_key(handler, email: str = "") -> str:
-    return f"{_client_ip(handler)}:{(email or '').strip().lower()}"
+    client = _auth_throttle_client(handler)
+    return f"{client}:{(email or '').strip().lower()}" if client else ""
 
 
 def _prune_times(values: deque[float], now: float, window: int) -> None:
@@ -388,6 +399,8 @@ def _prune_times(values: deque[float], now: float, window: int) -> None:
 
 def _auth_lockout_remaining(handler, email: str) -> int:
     key = _auth_rate_key(handler, email)
+    if not key:
+        return 0
     now = time.time()
     with _auth_rate_lock:
         until = _auth_lockouts.get(key, 0)
@@ -399,6 +412,8 @@ def _auth_lockout_remaining(handler, email: str) -> int:
 
 def _record_auth_failure(handler, email: str) -> int:
     key = _auth_rate_key(handler, email)
+    if not key:
+        return 0
     now = time.time()
     with _auth_rate_lock:
         q = _auth_failures.setdefault(key, deque())
@@ -413,13 +428,17 @@ def _record_auth_failure(handler, email: str) -> int:
 
 def _record_auth_success(handler, email: str) -> None:
     key = _auth_rate_key(handler, email)
+    if not key:
+        return
     with _auth_rate_lock:
         _auth_failures.pop(key, None)
         _auth_lockouts.pop(key, None)
 
 
 def _signup_rate_remaining(handler) -> int:
-    key = _client_ip(handler)
+    key = _auth_throttle_client(handler)
+    if not key:
+        return 0
     now = time.time()
     with _auth_rate_lock:
         q = _signup_attempts.setdefault(key, deque())

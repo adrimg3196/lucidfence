@@ -411,7 +411,7 @@ class SimulationLocationSource:
                 last_checkin=dev.get("last_checkin"),
                 enrolled_at=dev.get("enrolled_at") or "2026-01-01T00:00:00Z",
                 device_tag=dev.get("device_tag") or dev.get("id"),
-                geofence_compliance=dev.get("geofence_compliance") if plat == "ios" else None,
+                geofence_compliance=dev.get("geofence_compliance") if plat in ("ios", "ipados") else None,
             ))
         return out
 

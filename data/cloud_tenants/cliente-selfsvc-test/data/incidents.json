@@ -1,0 +1,19 @@
+[
+  {
+    "id": "inc-noncompliant-d2",
+    "type": "device_non_compliant",
+    "severity": "high",
+    "status": "open",
+    "title": "Cliente SelfTest 2 no cumple la política UEM",
+    "device_id": "d2",
+    "device_name": "Cliente SelfTest 2",
+    "recommendation": "Revisar compliance, localizar el dispositivo y aplicar playbook de remediación.",
+    "first_seen": "2026-07-14T15:27:15.157455+00:00",
+    "last_seen": "2026-07-14T15:27:15Z",
+    "count": 1,
+    "assignee": null,
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "timeline": []
+  }
+]
