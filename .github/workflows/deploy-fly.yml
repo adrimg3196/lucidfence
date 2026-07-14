@@ -1,0 +1,41 @@
+name: deploy-fly
+
+# Despliegue always-on de LucidFence en Fly.io (free tier, $0).
+# REQUISITO: el usuario debe haber hecho `flyctl auth login` en su terminal
+# (no se puede hacer headless de forma fiable). Una vez logueado, este
+# workflow usa FLY_API_TOKEN para desplegar.
+#
+# Para activarlo: crear el secret FLY_API_TOKEN en Settings > Secrets y
+# disparar este workflow, o correr localmente ./deploy_fly.sh tras auth login.
+on:
+  workflow_dispatch:
+  # Opcional: descomenta para despliegue automático en cada push a main.
+  # push:
+  #   branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar flyctl
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> $GITHUB_PATH
+      - name: Desplegar
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "FLY_API_TOKEN no configurado. Haz 'flyctl auth login' y crea el secret."
+            exit 1
+          fi
+          flyctl auth whoami
+          flyctl launch --no-deploy --name lucidfence --region mad --vm-size shared-cpu-1x --memory 256 || true
+          flyctl deploy
