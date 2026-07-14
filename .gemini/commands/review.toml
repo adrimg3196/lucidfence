@@ -1,0 +1,7 @@
+description = "Five-axis code review of LucidFence changes"
+
+prompt = """
+Invoke code-review-and-quality adapted to LucidFence (Python).
+
+Review staged changes / recent commits across five axes: correctness (runtime-verified? edge cases?), readability (intent-revealing names?), architecture (fits SPEC.md? no dup logic?), security (untrusted input? auth on every endpoint? no secrets?), performance (engine loops, snapshots, render?). Output the template with severities: Critical/Required (block merge), Recommended, Nit. tests/run_tests.py must stay green; flag any test that hides failures.
+"""

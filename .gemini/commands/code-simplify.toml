@@ -1,0 +1,7 @@
+description = "Simplify LucidFence code without changing behavior"
+
+prompt = """
+Invoke code-simplification adapted to LucidFence (Python).
+
+Reduce complexity behavior-preserving: (1) understand WHY code exists before removing (Chesterton's Fence — legacy core/ may be load-bearing), (2) add a characterization test first if untested, (3) remove dead code / dup logic / debug output. Verify after each change: python3 tests/run_tests.py stays green. Never simplify untested code without a test first.
+"""

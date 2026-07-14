@@ -1,0 +1,11 @@
+description = "Pre-launch go/no-go via parallel fan-out to specialist personas"
+
+prompt = """
+Invoke shipping-and-launch adapted to LucidFence. /ship is a fan-out orchestrator.
+
+Phase A — parallel fan-out: run code-reviewer, security-auditor, test-engineer (agents/code-reviewer.md, agents/security-auditor.md, agents/test-engineer.md) in ONE turn against the current change. If subagents unavailable, run sequentially and merge.
+
+Phase B — merge: Code Quality (Critical/Required + failing tests), Security (Critical/High → blockers), Performance, Accessibility, Infrastructure (env, migrations, monitoring), Documentation (README, ADRs, CLIENTE.md).
+
+Phase C — decision: print "## Ship Decision: GO | NO-GO" with Blockers, Recommended fixes, Acknowledged risks, Rollback plan, Specialist reports. Parallel fan-out never sequential; rollback mandatory; Critical → default NO-GO unless user accepts risk.
+"""

@@ -1,0 +1,7 @@
+description = "Build LucidFence slices test-driven, committing atomically"
+
+prompt = """
+Invoke incremental-implementation + test-driven-development adapted to LucidFence.
+
+For each task in tasks/plan.md: (1) write the test first (fails without change), (2) implement minimally, (3) run python3 tests/run_tests.py (must stay green, 105 pass), (4) commit atomically (~100 lines, feat(scope): ...). Never skip runtime verification. Never let the runner hide failures. When done, run /review before merge.
+"""

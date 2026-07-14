@@ -1,0 +1,7 @@
+description = "Security audit and hardening pass for LucidFence"
+
+prompt = """
+Invoke security-and-hardening adapted to LucidFence.
+
+Run a vulnerability + threat-model pass using references/security-checklist.md: OWASP Top 10, secrets, auth/authz, dependency CVEs (pip-audit), multi-tenant isolation (one tenant must not read another's data), no /api/auth/demo in prod, no secrets in repo, MoA output untrusted. Output standard audit report. Critical/High = launch blockers. File findings, then enforce on new changes.
+"""

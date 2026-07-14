@@ -1,80 +1,87 @@
-# SPEC — LucidFence Command Center
+# SPEC.md — LucidFence (replanteado con agent-skills)
 
-> Spec bloqueada antes de build. Ciclo: grill → spec → build → review (CEO/Eng/Design/DevEx) → QA → ship.
-> Producto 100% local (macOS), multi-tenant, sin exfiltrar datos. Nada llega a "producción" (entregable cliente) sin pasar review + QA.
+> Spec-driven development. Este documento es la fuente de verdad del proyecto.
+> Vive en version control mientras el trabajo está en curso.
 
----
+## 1. Objective
 
-## 1. QUÉ ES
+LucidFence es geofencing UEM/MDM **100% local y soberano**: monitoriza flotas de
+dispositivos, evalúa conformidad por geocerca, calcula riesgo por dispositivo,
+escanea CVE en apps de la flota y ejecuta playbooks SOAR de remediación — con IA
+local (MoA), email soberano (Atomic Mail) y dominio propio (FreeDomain). $0, sin
+telemetría, sin proveedor de pago.
 
-LucidFence es un **centro de mando local de geofencing para flotas móviles gestionadas por UEM** (MDM/EMM: Applivery, Intune, Jamf, Fleet).
-Toma la ubicación que el agente del UEM reporta cada 15 min, la cruza con **geovallas** y **rutas comerciales**, y ejecuta **acciones UEM automáticas** (lock, wipe, message, locate, reboot, reset-passcode) cuando un dispositivo entra/sale de una zona, se desvía de su ruta, o cruza un umbral de riesgo.
+**Modelo de negocio (decisión del 2026-07-14):** el producto comercial es una
+*app local que se instalan los clientes* en su propia infra (soberano, $0 para
+el proveedor). La vitrina SaaS serverless en GitHub Pages es la captación
+comercial siempre-on ($0, fuera de nuestra máquina).
 
-Diferenciador (moat): no es "dibujar geocercas y avisar" (eso lo absorbe cualquier UEM en una sprint). El moat es el **Geospatial Risk & Policy Engine**: riesgo como función compuesta
+## 2. Commands (cómo trabajar en este repo)
 
-    risk(device) = f(geofence_state, device_health, external_signals, time)
+| Comando | Qué hace |
+|---|---|
+| `python3 tests/run_tests.py` | Corre TODOS los `test_*.py` (runner honesto, tally real). 105 pass = verde. |
+| `python3 cloud_publisher.py --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
+| `python3 saas_server.py` | Levanta el SaaS local en `:8765` (dashboard + API + engine). |
+| `./install.sh` | Instala LucidFence en la máquina del cliente (Docker o Python). |
+| `docker compose up -d` | Levanta el stack siempre-on del cliente. |
+| `gh workflow run engine-cron.yml` | Fuerza un ciclo del backend serverless en la nube. |
 
-con señales externas pluggable (turno, hora, zona de riesgo, salud/root/encryption) y políticas compuestas explicablemente auditables.
+## 3. Project Structure
 
-## 2. PARA QUIÉN
+```
+geofence-uem/
+├── saas_server.py            # SaaS + API HTTP + engine loop
+├── core/                     # engine, policies, state_store, adapters, cve_feed, location_source
+├── static/                   # dashboard.html (SPA local), cloud.html (vitrina), app.js, vendor/
+├── data/
+│   ├── cloud_state.json      # estado publicado para la vitrina (lo sirve Pages vía raw)
+│   └── cloud_tenants/        # tenants de la nube creados vía saas-api (multi-tenant real)
+├── tests/                    # test_*.py descubiertos por run_tests.py
+├── scripts/saas_api_op.py    # operaciones serverless (create_tenant/add_fence/remove_tenant)
+├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
+├── docker-compose.yml        # stack always-on para clientes
+├── install.sh                # installer de un comando para clientes
+├── .github/workflows/        # engine-cron, deploy-pages, saas-api, deploy-fly, ci
+├── .claude/ .gemini/ .agents/ # comandos y agents del marco agent-skills
+├── references/               # definition-of-done, testing-patterns, security-checklist
+├── agents/                   # code-reviewer, security-auditor, test-engineer
+├── SPEC.md  tasks/plan.md    # spec-driven + planning
+└── CLAUDE.md  AGENTS.md      # reglas de proyecto (context-engineering)
+```
 
-- **IT / Seguridad de campo** de empresas con flota móvil dispersa (logística, retail, sanidad, fuerza de ventas, frontline industrial).
-- **MSP / consultoras UEM** que quieren vender geofencing como servicio sobre Applivery.
-- **CISO** que necesita auditoría de conformidad de dispositivos fuera de perímetro.
+## 4. Code Style
 
-No es para: consumidor, ni para quien solo quiere "ver mapa". Es una herramienta de operación + auditoría.
+- Python 3.11, stdlib-first. Sin frameworks web (HTTP propio en `saas_server.py`).
+- Nombres en español para dominio (geocerca, conformidad, dispositivo); inglés para API.
+- Funciones pequeñas, una responsabilidad. Sin comentarios que expliquen el *qué*.
+- Commits atómicos (~100 líneas), mensaje tipo `feat(scope): ...`.
+- Sin secretos en el repo; `.env.example` solo placeholders.
 
-## 3. VALOR / PROBLEMA QUE RESUELVE
+## 5. Testing Strategy
 
-- Un dispositivo fuera de su perímetro autorizado o desviado de ruta = riesgo (robo, fuga de datos, incumplimiento).
-- Hoy el UEM avisa, pero no **actúa de forma policy-driven ni puntúa riesgo compuesto**.
-- LucidFence cierra el loop: detecta → puntúa → decide → ejecuta acción UEM → notifica → audita.
+- `tests/run_tests.py`: descubre todos los `test_*.py`, corre cada `test_*`,
+  captura `SystemExit` (tests que corren su propia suite al importar) y reporta
+  tally honesto. NO oculta fallos.
+- Cada feature nueva: test que falla sin el cambio y pasa con él.
+- Tests de integración arrancan el server en `:8765` de forma hermética.
+- Cobertura donde hay cambio planeado; no global forzado en legacy.
+- E2E de la vitrina: verificar en navegador que cloud.html renderiza KPIs/mapa/flota.
 
-## 4. MONETIZACIÓN (g-stack: "even good at monetisation")
+## 6. Boundaries (qué siempre hacer / preguntar / nunca hacer)
 
-Modelo SaaS multi-tenant local (ya implementado en `saas_server.py`):
-- **Free**: 5 dispositivos, 3 geovallas, features básicas. (Demo que corre en 127.0.0.1.)
-- **Pro**: flota ilimitada, políticas compuestas, SOAR/CVE, IA (MoA), alertas, export.
-- **Enterprise**: multi-tenant, RBAC granular, audit log, integración live Applivery.
+**Siempre:**
+- Verificar en runtime (correr el server / abrir la vitrina), no solo "compila".
+- Mantener el runner de tests honesto (tally real, exit code correcto).
+- Coste $0: solo free tiers; nada que facture.
+- Soberanía: los datos de tenant viven en la máquina del cliente, no en la nuestra.
 
-El producto ya tiene el esqueleto de planes (`/api/plan`, `/api/plan/upgrade`, limits por tenant). La monetización se realiza por el canal de venta de la consultora, no por el binario.
+**Preguntar primero:**
+- Cualquier dependencia de pago o cuenta con secreto del proveedor.
+- Exponer un backend always-on que requiera token nuestro (Fly/HF) — delegar al cliente.
 
-## 5. ALCANCE PRODUCTION-READY (lo que este ciclo debe dejar terminado)
-
-Funciones IT que todo admin pide (ya implementadas en sesiones previas, validadas en navegador):
-- [x] Geovallas + rutas + detección de transiciones
-- [x] Acciones UEM automáticas (lock/wipe/message/locate/reboot/reset-passcode) con cooldown
-- [x] Risk Engine compuesto (score 0-100) + políticas explicaples
-- [x] Incidentes + MTTR + notificaciones (Slack/Teams)
-- [x] Inventario de flota completo (SO, modelo, serial, batería, storage, usuario, depto, check-in)
-- [x] Comandos remotos on-demand por dispositivo
-- [x] Alertas configurables por umbral (6 tipos) + canales (email/Slack/none)
-- [x] SOAR + CVE (inventario de apps vulnerables por dispositivo)
-- [x] Workflows (plantillas + builder)
-- [x] IA (MoA) integrada para preguntas en lenguaje natural sobre la flota
-- [x] Export bulk/audit (CSV + HTML print-ready) de inventario/acciones/compliance
-- [x] RBAC (owner/admin/operator/viewer) + multi-tenant isolation
-- [x] Simulación realista sin credenciales + modo live con Applivery
-
-Lo que ESTE ciclo debe cerrar para SHIP (entregable cliente):
-1. SPEC formal (este doc).
-2. Build: gaps de robustez/observabilidad para uso real.
-3. Review 4 lentes (CEO/Eng/Design/DevEx) con informe de gaps.
-4. QA real (suites + navegador + performance del ciclo).
-5. SHIP: empaquetado (README ejecutivo, build/package, instrucciones de arranque para cliente).
-
-## 6. NO ALCANCE (explícito, para no adivinar)
-
-- No es un UEM: se apoya en el UEM existente (Applivery) para ejecutar acciones.
-- No exfiltrra datos: todo en 127.0.0.1 / disco local.
-- No incluye facturación real ni auth de terceros: el binario es la herramienta, la venta es aparte.
-- No se publica a ningún registry/git: 100% local por política del cliente.
-
-## 7. DEFINICIÓN DE HECHO (DoD)
-
-- `python3 tests/run_tests.py` → 0 fallos.
-- `python3 qa_saas.py` → 0 fallos.
-- `python3 tests/test_it_admin_features.py` → 0 fallos.
-- Dashboard carga en 127.0.0.1:8765, consola JS 0 errores, KPIs vivos.
-- Comando remoto, alerta y export verificados end-to-end en navegador.
-- Entregable empaquetado con README ejecutivo + instrucciones de arranque.
+**Nunca:**
+- Hardcodear secretos / tokens en el repo.
+- Exponer un token en el cliente de Pages (inaceptable para producto comercial).
+- Usar `flyctl auth login` headless (falla silenciosamente) — lo hace el cliente.
+- Dejar procesos zombi colgando entre sesiones.

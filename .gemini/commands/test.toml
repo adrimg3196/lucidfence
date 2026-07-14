@@ -1,0 +1,11 @@
+description = "Run LucidFence tests honestly and report the real tally"
+
+prompt = """
+Invoke test-driven-development adapted to LucidFence.
+
+Run: python3 tests/run_tests.py
+- Discovers every test_*.py, runs each test_*, catches SystemExit, prints real tally.
+- Green = "105 passed, 0 failed" and exit 0. Non-zero or exit 1 = RED.
+- NEVER mask failures. If a test hides an error, fix the test.
+For new behavior: write the test first (fails without change), implement, confirm green.
+"""

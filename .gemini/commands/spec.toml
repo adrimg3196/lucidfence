@@ -1,0 +1,9 @@
+description = "Start spec-driven development for LucidFence — write SPEC.md before code"
+
+prompt = """
+Invoke the spec-driven-development skill adapted to LucidFence (Python UEM/MDM geofencing).
+
+Understand what to build. Ask about: objective/target users (clients install locally; SaaS vitrina is capture), core features, tech constraints ($0, stdlib-first, GitHub serverless), and boundaries (see SPEC.md §6).
+
+Generate a structured spec covering the six core areas from SPEC.md: objective, commands, project structure, code style, testing strategy, boundaries. Save as SPEC.md (or update it) and confirm with the user before proceeding.
+"""

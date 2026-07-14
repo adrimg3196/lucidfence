@@ -464,3 +464,9 @@
 {"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T11:42:35.021941+00:00"}
 {"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T11:43:50.762878+00:00"}
 {"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T11:43:50.763856+00:00"}
+{"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T12:39:38.915308+00:00"}
+{"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:39:38.916419+00:00"}
+{"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T12:40:12.468876+00:00"}
+{"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:40:12.469956+00:00"}
+{"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T12:40:24.855056+00:00"}
+{"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:40:24.856213+00:00"}

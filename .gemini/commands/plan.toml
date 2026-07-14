@@ -1,0 +1,7 @@
+description = "Plan LucidFence work into tasks with acceptance criteria"
+
+prompt = """
+Invoke planning-and-task-breakdown adapted to LucidFence.
+
+Read SPEC.md first. Break work into tasks: objective, acceptance criteria, files touched, verification (runtime: python3 tests/run_tests.py, open cloud.html). Order by dependency. Respect references/definition-of-done.md. Save as tasks/plan.md and confirm. Brownfield note: LucidFence is established code — write characterization tests before changing untested legacy (references/testing-patterns.md).
+"""
