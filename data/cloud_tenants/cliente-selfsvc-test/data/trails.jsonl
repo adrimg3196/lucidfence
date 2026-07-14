@@ -1,2 +1,4 @@
 {"device_id": "d1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T15:27:15.155158+00:00"}
 {"device_id": "d2", "lat": 40.423, "lng": -3.7095, "fence_state": "inside", "ts": "2026-07-14T15:27:15.157261+00:00"}
+{"device_id": "d1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T15:42:49.870951+00:00"}
+{"device_id": "d2", "lat": 40.423, "lng": -3.7095, "fence_state": "inside", "ts": "2026-07-14T15:42:49.873939+00:00"}

@@ -77,8 +77,13 @@ COOKIE_SESSION = "gf_session"
 COOKIE_ORG = "gf_org"
 
 # Global stores (single instance, local-only SaaS).
-_tenants = TenantStore(ROOT / "data")
-_auth = AuthStore(ROOT / "data")
+# LUCIDFENCE_DATA_DIR lets the test runner point the server at an isolated
+# temp dir instead of the real data/ (so integration tests never inherit or
+# pollute production tenants / signup rate-limit state).
+_DATA_DIR = os.environ.get("LUCIDFENCE_DATA_DIR")
+_DATA_ROOT = Path(_DATA_DIR) if _DATA_DIR else (ROOT / "data")
+_tenants = TenantStore(_DATA_ROOT)
+_auth = AuthStore(_DATA_ROOT)
 _SIMULATION = False
 
 # In-memory abuse guard for the public auth surface. This is intentionally

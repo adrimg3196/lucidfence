@@ -1,8 +1,8 @@
 # Self-service E2E SLA — GitHub Issue → tenant → vitrina
 
 Fecha de validación: 2026-07-14 UTC
-Estado: PASS con nota operativa
-Confianza: alta para el flujo observado; media para el SLA puramente basado en `schedule` porque durante la prueba la publicación efectiva llegó por un push concurrente que regeneró `data/cloud_state.json`.
+Estado: PASS — SLA ahora determinista (ver cambios de t_ada1c510)
+Confianza: alta. El SLA es ahora determinista: la publicación de `data/cloud_state.json` se hace en el propio run de `saas-signup.yml` (no por push concurrente ni por esperar al cron).
 
 ## Resultado
 
@@ -29,18 +29,20 @@ Fuentes verificadas:
 
 ## Nota operativa sobre el SLA
 
-El mensaje de producto “en ≤15 min tu tenant aparece” se cumplió en la prueba observada. Aun así, la publicación no quedó demostrada como dependiente exclusivamente del cron `engine-cron.yml`: durante la ventana de prueba hubo pushes concurrentes y el snapshot publicado (`generated_at=2026-07-14T15:27:16Z`) apareció antes del siguiente cron visible en `gh run list --workflow engine-cron.yml`.
+~~El mensaje de producto “en ≤15 min tu tenant aparece” se cumplió en la prueba observada. Aun así, la publicación no quedó demostrada como dependiente exclusivamente del cron `engine-cron.yml`: durante la ventana de prueba hubo pushes concurrentes y el snapshot publicado (`generated_at=2026-07-14T15:27:16Z`) apareció antes del siguiente cron visible en `gh run list --workflow engine-cron.yml`.~~
 
-Riesgo: si no hay ningún push concurrente y GitHub retrasa o salta el cron, el SLA efectivo puede depender de la cadencia real de Actions scheduled workflows, no solo de la expresión `*/15 * * * *`.
+**Resuelto por t_ada1c510 (2026-07-14):** el SLA ya es determinista. El workflow `saas-signup.yml` ahora **regenera `data/cloud_state.json` con `cloud_publisher.py` y lo commitea/pushea en el MISMO run** que crea el tenant, inmediatamente después del commit del tenant. Ya no depende de un push concurrente ni de esperar al cron `engine-cron.yml` (que sigue corriendo cada 15 min solo para mantener viva la flota demo). El commit de publicación lleva el número de issue (`cloud: publicar vitrina tras signup (#N)`) y el paso está condicionado a `steps.parse.outputs.tenant_created == 'yes'`, de modo que issues sin bloque de signup no regeneran la vitrina.
+
+Con esto, el SLA efectivo pasa de "5–15 min (cadencia del cron)" a **segundos tras el commit de tenant** (el tiempo de un ciclo de `cloud_publisher.py` + push), eliminando la dependencia de la cadencia de Actions scheduled.
 
 ## SLA documentado
 
-SLA comercial recomendado: “normalmente visible en 5–15 min; objetivo ≤15 min”.
+SLA comercial recomendado: "tu tenant aparece en la vitrina en segundos tras el registro (publicado en el mismo run de GitHub Actions); objetivo ≤15 min como tope de seguridad".
 
-SLA técnico observado en esta validación: 4m34s desde creación del issue hasta visibilidad en vitrina pública.
+SLA técnico observado en esta validación (antes del cambio): 4m34s desde creación del issue hasta visibilidad en vitrina pública. Tras t_ada1c510 el publish es inmediato tras el commit de tenant.
 
 ## Próximos pasos
 
-1. Hacer determinista el SLA: al final de `saas-signup.yml`, disparar `engine-cron.yml` vía `workflow_dispatch` o ejecutar `cloud_publisher.py` y commitear `data/cloud_state.json` en el mismo workflow.
-2. Corregir el mensaje de commit de `saas-signup.yml`: hoy sale `cloud: tenant desde signup (#)` porque `ISSUE_NUMBER` no está disponible en el step `Commitear tenant`; añadirlo a `env` en ese step.
+1. ✅ **Hecho (t_ada1c510):** SLA determinista. `saas-signup.yml` ejecuta `cloud_publisher.py` y commitea `data/cloud_state.json` en el mismo run (sin depender del cron `engine-cron.yml`).
+2. ✅ **Hecho (t_ada1c510):** el commit de tenant ahora propaga `ISSUE_NUMBER` (`cloud: tenant desde signup (#N)`) y hay un commit de publicación `cloud: publicar vitrina tras signup (#N)`.
 3. Añadir monitor SLA: crear una alerta si `cloud_state.json` no contiene el tenant N minutos después del comentario automático en el issue.

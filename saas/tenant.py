@@ -119,13 +119,18 @@ class TenantStore:
 
 
 # Plan catalogue (mock billing — no real payment, 100% local).
+# Free limits reconciled with the GTM pricing (docs/revenue-model.md +
+# static/PRICING.md + landing index.html): the Freemium/self-hosted tier
+# is advertised as "hasta 25 dispositivos" with geocercas ilimitadas.
+# The truly-unlimited self-hosted product ships via scripts/lucidfence_saas_seed.sh
+# (Docker, no PLAN_LIMITS enforcement); these caps govern the managed SaaS free trial.
 PLAN_LIMITS: dict[str, dict] = {
     "free": {
-        "max_devices": 5,
-        "max_fences": 3,
-        "retention_days": 7,
+        "max_devices": 25,
+        "max_fences": 1000,
+        "retention_days": 30,
         "features": ["map", "devices", "basic_actions", "risk_center"],
-        "label": "Free",
+        "label": "Freemium",
         "price": "0€/mes",
     },
     "pro": {

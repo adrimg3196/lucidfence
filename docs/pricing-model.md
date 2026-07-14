@@ -52,3 +52,9 @@ El core (geofence + glue multi-MDM + dashboard) es commodity; copiarlo competir�
 
 ---
 *Siguiente: ejecutar el refactor a `MDMAdapter` (DevRel) para que el "Community tier" sea realmente multi-MDM.*
+
+---
+
+### Pull-through al SaaS (reconciliación)
+
+El SaaS multi-tenant implementa ya los tiers como **Free / Pro / Enterprise** en `saas/tenant.py` (`PLAN_LIMITS`) y `saas_server.py` (`/api/plan`, `/api/plan/upgrade`). La especificación de monetización *operativa* (flujo de cobro, value metric, SLA, pasarela, enforcement) vive en **[`docs/revenue-model.md`](revenue-model.md)**, que debe ser la fuente de verdad para la landing y el equipo comercial.

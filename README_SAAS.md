@@ -102,6 +102,10 @@ QA automático: `python3 qa_saas.py` (usa http.client directo, sin proxy).
 
 ---
 
+## Modelo de ingresos
+
+La especificación canónica de monetización (Free freemium → Pro gestionado por suscripción → Enterprise on-prem + SLA) está en **[`docs/revenue-model.md`](docs/revenue-model.md)**. Resume el catálogo de planes (`saas/tenant.py` → `PLAN_LIMITS`), el flujo de cobro actual (mock), los puntos de integración con pasarela y el estado de enforcement de límites.
+
 ## Calidad / QA
 
 - `python3 qa_saas.py` → 19/19 PASS (auth, cookies, multi-tenant, RBAC, geofence

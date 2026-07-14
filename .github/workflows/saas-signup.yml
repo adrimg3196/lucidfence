@@ -4,8 +4,14 @@ name: saas-signup
 # El prospecto rellena el formulario de la landing/vitrina -> se abre un Issue
 # pre-rellenado en el repo (sin exponer tokens en el frontend). Este workflow
 # detecta issues con label "signup", parsea el bloque estructurado y crea el
-# tenant en data/cloud_tenants/<id>/data/ via scripts/saas_api_op.py. El
-# engine-cron luego lo publica en la vitrina (<=15 min).
+# tenant en data/cloud_tenants/<id>/data/ via scripts/saas_api_op.py.
+#
+# Para que el SLA issue->vitrina sea DETERMINISTA (no depende de un push
+# concurrente ni de esperar al cron engine-cron de 15 min), este mismo workflow
+# regenera data/cloud_state.json con cloud_publisher.py y lo commitea/pushea
+# inmediatamente tras crear el tenant. El engine-cron sigue corriendo cada 15
+# min para mantener la flota demo viva, pero la publicación del nuevo tenant ya
+# no depende de él.
 #
 # No requiere token del usuario ni del cliente: usa la identidad del repo
 # (GITHUB_TOKEN de Actions, permisos mínimos).
@@ -20,30 +26,59 @@ permissions:
 jobs:
   create-tenant:
     runs-on: ubuntu-latest
+    outputs:
+      tenant_created: ${{ steps.parse.outputs.tenant_created }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Instalar deps
+        run: python -m pip install -r requirements.txt
       - name: Parsear issue y crear tenant
+        id: parse
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           if ! echo "$ISSUE_BODY" | grep -q "lucidfence-signup"; then
             echo "Issue sin bloque de signup; se ignora."
+            echo "tenant_created=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           python scripts/parse_signup_issue.py
+          echo "tenant_created=yes" >> "$GITHUB_OUTPUT"
       - name: Commitear tenant
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           git config user.name "lucidfence-cloud[bot]"
           git config user.email "cloud@lucidfence.local"
           git add data/cloud_tenants
           if git diff --cached --quiet; then
-            echo "Sin cambios"
+            echo "Sin cambios de tenant"
           else
             git commit -m "cloud: tenant desde signup (#$ISSUE_NUMBER)"
+            git pull --rebase --autostash
+            git push
+          fi
+      - name: Regenerar vitrina (cloud_state.json) de forma determinista
+        # No depende del cron engine-cron: publicamos el tenant recién creado
+        # en este mismo run para cumplir el SLA issue->vitrina de forma fiable.
+        if: ${{ steps.parse.outputs.tenant_created == 'yes' }}
+        env:
+          CLOUD_PUBLISH: "1"
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          python cloud_publisher.py
+          git config user.name "lucidfence-cloud[bot]"
+          git config user.email "cloud@lucidfence.local"
+          git add data/cloud_state.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en cloud_state.json"
+          else
+            git commit -m "cloud: publicar vitrina tras signup (#$ISSUE_NUMBER)"
+            git pull --rebase --autostash
             git push
           fi
       - name: Comentar en el issue con el resultado
@@ -51,4 +86,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "✅ Tenant creado. Aparecerá en la vitrina en <=15 min: https://adrimg3196.github.io/lucidfence/cloud.html — busca tu tenant en el selector."
+          gh issue comment "$ISSUE_NUMBER" --body "✅ Tenant creado y publicado en la vitrina en este mismo run (SLA determinista, sin esperar al cron de 15 min): https://adrimg3196.github.io/lucidfence/cloud.html — busca tu tenant en el selector."

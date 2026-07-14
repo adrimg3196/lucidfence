@@ -61,12 +61,22 @@ class _WhHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def _start(handler, port):
-    socketserver.TCPServer.allow_reuse_address = True
-    srv = socketserver.TCPServer(("127.0.0.1", port), handler)
+def _start(handler, port_holder):
+    srv = socketserver.TCPServer(("127.0.0.1", 0), handler)
+    port_holder["port"] = srv.server_address[1]
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     return srv
+
+
+def _stop(srv):
+    # shutdown() stops accept()ing but leaves the listening socket bound
+    # (TIME_WAIT), so a second server on the same port fails with EADDRINUSE
+    # on macOS. server_close() releases the fd so the next test can rebind.
+    try:
+        srv.shutdown()
+    finally:
+        srv.server_close()
 
 
 passed = 0
@@ -90,8 +100,12 @@ def test_simulation_adapter():
 
 
 def test_live_fallback_to_webhook():
-    cmd = _start(_CmdHandler, PORT_CMD)
-    wh = _start(_WhHandler, PORT_WH)
+    cmd_holder = {"port": 0}
+    wh_holder = {"port": 0}
+    cmd = _start(_CmdHandler, cmd_holder)
+    wh = _start(_WhHandler, wh_holder)
+    PORT_CMD = cmd_holder["port"]
+    PORT_WH = wh_holder["port"]
     _WhHandler.received = {}
     try:
         os.environ["APPLIVERY_API_KEY"] = "fake-key"
@@ -117,14 +131,16 @@ def test_live_fallback_to_webhook():
             "webhook payload carries action + device_id",
         )
     finally:
-        cmd.shutdown()
-        wh.shutdown()
+        _stop(cmd)
+        _stop(wh)
         os.environ.pop("APPLIVERY_API_KEY", None)
         os.environ.pop("APPLIVERY_API_BASE", None)
 
 
 def test_live_no_webhook_no_raise():
-    cmd = _start(_CmdHandler, PORT_CMD)
+    cmd_holder = {"port": 0}
+    cmd = _start(_CmdHandler, cmd_holder)
+    PORT_CMD = cmd_holder["port"]
     try:
         os.environ["APPLIVERY_API_KEY"] = "fake-key"
         os.environ["APPLIVERY_API_BASE"] = f"http://127.0.0.1:{PORT_CMD}/v1"
@@ -143,7 +159,7 @@ def test_live_no_webhook_no_raise():
         check(r["ok"] is False, "no-webhook path: ok=False (no raise)")
         check(r.get("delegated") is False, "no-webhook path: not delegated")
     finally:
-        cmd.shutdown()
+        _stop(cmd)
         os.environ.pop("APPLIVERY_API_KEY", None)
         os.environ.pop("APPLIVERY_API_BASE", None)
 
