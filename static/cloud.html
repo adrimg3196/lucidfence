@@ -170,13 +170,32 @@
           `<td>${d.risk_score||0}</td><td>${d.department||""}</td></tr>`);
       });
       const cve = s.cve_summary||{};
-      document.getElementById("cve").innerHTML = cve.apps_total!=null
-        ? `Apps escaneadas: <b>${cve.apps_total}</b> · Vulnerables: <b style="color:var(--red)">${cve.vulnerable_apps||0}</b>`
-        : "No disponible en este ciclo.";
+      if(cve.demo || cve.apps_total!=null){
+        let html = `Apps escaneadas: <b>${cve.apps_total||0}</b> · Vulnerables: <b style="color:var(--red)">${cve.vulnerable_apps||0}</b>`+
+                   ` · Críticas: <b style="color:var(--red)">${cve.critical_cve_apps||0}</b> · Altas: <b style="color:var(--amber)">${cve.high_cve_apps||0}</b>`;
+        if(cve.ejemplos && cve.ejemplos.length){
+          html += `<div style="margin-top:6px">`;
+          cve.ejemplos.forEach(e=>{
+            const col = e.severity==="critical"?"var(--red)":"var(--amber)";
+            html += `<span class="pill" style="background:rgba(255,107,107,.12);color:${col};margin-right:6px">${e.cve} · ${e.app} ${e.version}</span>`;
+          });
+          html += `</div>`;
+        }
+        if(cve.demo) html += ` <span class="meta">(datos demo)</span>`;
+        document.getElementById("cve").innerHTML = html;
+      } else {
+        document.getElementById("cve").innerHTML = "No disponible en este ciclo.";
+      }
       const soar = s.soar||{};
-      document.getElementById("soar").innerHTML = (soar.playbooks&&soar.playbooks.length)
-        ? soar.playbooks.map(p=>p.id).join(", ") + ` · matches: <b>${soar.matched?soar.matched.length:0}</b>`
-        : "Sin playbooks.";
+      if(soar.playbooks && soar.playbooks.length){
+        let html = soar.playbooks.map(p=>p.name||p.id).join("<br>");
+        html += `<div class="meta" style="margin-top:6px">Dispositivos que disparan playbooks: <b>${soar.matched?soar.matched.length:0}</b>`+
+                (soar.matched&&soar.matched.length?` (${soar.matched.slice(0,3).join(", ")}${soar.matched.length>3?"…":""})`:"")+
+                (soar.demo?` · <span class="meta">(datos demo)</span>`:"")+`</div>`;
+        document.getElementById("soar").innerHTML = html;
+      } else {
+        document.getElementById("soar").innerHTML = "Sin playbooks.";
+      }
     }
     load();
     setInterval(load, 60000);

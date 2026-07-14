@@ -1,0 +1,10 @@
+{
+  "t1": {
+    "seconds": 1800,
+    "cycles": 2
+  },
+  "t2": {
+    "seconds": 1800,
+    "cycles": 2
+  }
+}

@@ -153,8 +153,29 @@ def serialize(eng: Engine, org_id: str) -> dict:
         "devices": devices,
         "fences": status.get("fences", []),
         "incidents": status.get("incidents", []),
-        "cve_summary": status.get("cve_summary", {}),
-        "soar": status.get("soar", {}),
+        # En modo simulación el engine no carga feeds externos; inyectamos un
+        # resumen CVE/SOAR de ejemplo determinista para que la vitrina sea
+        # representativa (claramente marcado como demo, no datos de tenant live).
+        "cve_summary": (status.get("cve_summary") if (status.get("cve_summary") or {}).get("vulnerable_apps") else {
+            "demo": True,
+            "apps_total": 3 * max(1, total),
+            "vulnerable_apps": max(1, total // 2),
+            "critical_cve_apps": max(1, total // 3),
+            "high_cve_apps": max(1, total // 2),
+            "ejemplos": [
+                {"app": "Chrome", "version": "120.0.0", "cve": "CVE-2024-1234", "severity": "critical"},
+                {"app": "Zoom", "version": "5.17.0", "cve": "CVE-2024-5678", "severity": "high"},
+            ],
+        }),
+        "soar": status.get("soar") or {
+            "demo": True,
+            "playbooks": [
+                {"id": "quarantine-rooted", "name": "Poner en cuarentena dispositivo rooteado"},
+                {"id": "notify-geo-exit", "name": "Alertar salida de geocerca"},
+                {"id": "patch-cve-critical", "name": "Forzar parche por CVE crítico"},
+            ],
+            "matched": [d["device_id"] for d in devices if d["fence_state"] == "outside" or d["compliant"] is False],
+        },
     }
 
 

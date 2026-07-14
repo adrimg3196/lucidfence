@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-14T10:45:24Z",
+  "generated_at": "2026-07-14T11:33:01Z",
   "mode": "simulation",
   "totals": {
     "devices": 7,
@@ -12,7 +12,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T10:45:23Z",
+      "generated_at": "2026-07-14T11:33:01Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -115,17 +115,54 @@
       ],
       "incidents": [],
       "cve_summary": {
-        "apps_total": 0,
-        "vulnerable_apps": 0,
-        "critical_cve_apps": 0,
-        "high_cve_apps": 0
+        "demo": true,
+        "apps_total": 15,
+        "vulnerable_apps": 2,
+        "critical_cve_apps": 1,
+        "high_cve_apps": 2,
+        "ejemplos": [
+          {
+            "app": "Chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2024-1234",
+            "severity": "critical"
+          },
+          {
+            "app": "Zoom",
+            "version": "5.17.0",
+            "cve": "CVE-2024-5678",
+            "severity": "high"
+          }
+        ]
       },
-      "soar": {},
+      "soar": {
+        "demo": true,
+        "playbooks": [
+          {
+            "id": "quarantine-rooted",
+            "name": "Poner en cuarentena dispositivo rooteado"
+          },
+          {
+            "id": "notify-geo-exit",
+            "name": "Alertar salida de geocerca"
+          },
+          {
+            "id": "patch-cve-critical",
+            "name": "Forzar parche por CVE crítico"
+          }
+        ],
+        "matched": [
+          "dev-002",
+          "dev-003",
+          "dev-004",
+          "dev-005"
+        ]
+      },
       "tenant": "demo"
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T10:45:24Z",
+      "generated_at": "2026-07-14T11:33:01Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -178,12 +215,46 @@
       ],
       "incidents": [],
       "cve_summary": {
-        "apps_total": 0,
-        "vulnerable_apps": 0,
-        "critical_cve_apps": 0,
-        "high_cve_apps": 0
+        "demo": true,
+        "apps_total": 6,
+        "vulnerable_apps": 1,
+        "critical_cve_apps": 1,
+        "high_cve_apps": 1,
+        "ejemplos": [
+          {
+            "app": "Chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2024-1234",
+            "severity": "critical"
+          },
+          {
+            "app": "Zoom",
+            "version": "5.17.0",
+            "cve": "CVE-2024-5678",
+            "severity": "high"
+          }
+        ]
       },
-      "soar": {},
+      "soar": {
+        "demo": true,
+        "playbooks": [
+          {
+            "id": "quarantine-rooted",
+            "name": "Poner en cuarentena dispositivo rooteado"
+          },
+          {
+            "id": "notify-geo-exit",
+            "name": "Alertar salida de geocerca"
+          },
+          {
+            "id": "patch-cve-critical",
+            "name": "Forzar parche por CVE crítico"
+          }
+        ],
+        "matched": [
+          "t2"
+        ]
+      },
       "tenant": "acme-logistics"
     }
   ],
@@ -305,10 +376,47 @@
     }
   ],
   "cve_summary": {
-    "apps_total": 0,
-    "vulnerable_apps": 0,
-    "critical_cve_apps": 0,
-    "high_cve_apps": 0
+    "demo": true,
+    "apps_total": 15,
+    "vulnerable_apps": 2,
+    "critical_cve_apps": 1,
+    "high_cve_apps": 2,
+    "ejemplos": [
+      {
+        "app": "Chrome",
+        "version": "120.0.0",
+        "cve": "CVE-2024-1234",
+        "severity": "critical"
+      },
+      {
+        "app": "Zoom",
+        "version": "5.17.0",
+        "cve": "CVE-2024-5678",
+        "severity": "high"
+      }
+    ]
   },
-  "soar": {}
+  "soar": {
+    "demo": true,
+    "playbooks": [
+      {
+        "id": "quarantine-rooted",
+        "name": "Poner en cuarentena dispositivo rooteado"
+      },
+      {
+        "id": "notify-geo-exit",
+        "name": "Alertar salida de geocerca"
+      },
+      {
+        "id": "patch-cve-critical",
+        "name": "Forzar parche por CVE crítico"
+      }
+    ],
+    "matched": [
+      "dev-002",
+      "dev-003",
+      "dev-004",
+      "dev-005"
+    ]
+  }
 }
