@@ -476,3 +476,5 @@
 {"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:47:57.036237+00:00"}
 {"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T12:49:49.749953+00:00"}
 {"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:49:49.750871+00:00"}
+{"device_id": "dev-1001", "lat": 40.42, "lng": -3.71, "fence_state": "inside", "ts": "2026-07-14T12:52:45.899284+00:00"}
+{"device_id": "dev-1002", "lat": 40.43, "lng": -3.69, "fence_state": "inside", "ts": "2026-07-14T12:52:45.900209+00:00"}

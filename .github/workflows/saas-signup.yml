@@ -1,0 +1,50 @@
+name: saas-signup
+
+# Self-service multi-tenant para LucidFence, 100% autónomo y $0.
+# El prospecto rellena el formulario de la landing/vitrina -> se abre un Issue
+# pre-rellenado en el repo (sin exponer tokens en el frontend). Este workflow
+# detecta issues con label "signup", parsea el bloque estructurado y crea el
+# tenant en data/cloud_tenants/<id>/data/ via scripts/saas_api_op.py. El
+# engine-cron luego lo publica en la vitrina (<=15 min).
+#
+# No requiere token del usuario ni del cliente: usa la identidad del repo
+# (GITHUB_TOKEN de Actions, permisos mínimos).
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  create-tenant:
+    if: contains(github.event.issue.labels.*.name, 'signup')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Parsear issue y crear tenant
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: python scripts/parse_signup_issue.py
+      - name: Commitear tenant
+        run: |
+          git config user.name "lucidfence-cloud[bot]"
+          git config user.email "cloud@lucidfence.local"
+          git add data/cloud_tenants
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+          else
+            git commit -m "cloud: tenant desde signup (#$ISSUE_NUMBER)"
+            git push
+          fi
+      - name: Comentar en el issue con el resultado
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "✅ Tenant creado. Aparecerá en la vitrina en <=15 min: https://adrimg3196.github.io/lucidfence/cloud.html — busca tu tenant en el selector."

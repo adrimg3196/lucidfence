@@ -1,0 +1,14 @@
+{
+  "fences": [
+    {
+      "id": "hq",
+      "name": "HQ",
+      "kind": "circle",
+      "center": {
+        "lat": 40.42,
+        "lng": -3.7
+      },
+      "radius_m": 500
+    }
+  ]
+}
