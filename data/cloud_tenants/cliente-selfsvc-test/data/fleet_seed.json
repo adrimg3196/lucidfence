@@ -1,0 +1,42 @@
+{
+  "devices": [
+    {
+      "id": "d1",
+      "name": "Cliente SelfTest 1",
+      "platform": "android",
+      "waypoints": [
+        {
+          "lat": 40.421,
+          "lng": -3.708
+        }
+      ],
+      "compliant": true,
+      "os_version": null,
+      "manufacturer": null,
+      "model": null,
+      "battery_level": null,
+      "storage_free_gb": null,
+      "storage_total_gb": null,
+      "department": "Logistica"
+    },
+    {
+      "id": "d2",
+      "name": "Cliente SelfTest 2",
+      "platform": "android",
+      "waypoints": [
+        {
+          "lat": 40.423,
+          "lng": -3.7095
+        }
+      ],
+      "compliant": false,
+      "os_version": null,
+      "manufacturer": null,
+      "model": null,
+      "battery_level": null,
+      "storage_free_gb": null,
+      "storage_total_gb": null,
+      "department": "Logistica"
+    }
+  ]
+}
