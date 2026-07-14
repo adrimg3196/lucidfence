@@ -1,10 +1,10 @@
 {
   "d1": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   },
   "d2": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   }
 }

@@ -1,18 +1,18 @@
 {
   "zebra-reparto-01": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   },
   "iphone-ventas-02": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   },
   "ipad-almacen-03": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   },
   "xcover-ops-04": {
-    "seconds": 1800,
-    "cycles": 2
+    "seconds": 9000,
+    "cycles": 10
   }
 }
