@@ -4,12 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LucidFence · Geofencing en Vivo (Cloud)</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root{
       --bg:#08090a; --bg-2:#0c0d0f; --panel:#111214; --panel-2:#16181b;
       --border:#26282c; --fg:#f7f8f8; --muted:#8a8f98;
-      --green:#4cc38a; --amber:#f2c94c; --red:#ff6b6b; --blue:#4ea7fc; --violet:#b18cff;
+      --green:#4cc38a; --amber:#f2c94c; --red:#ff6b6b; --blue:#4ea7fc;
       --accent:#5e6ad5; --radius:8px;
       --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     }
@@ -17,15 +16,15 @@
     body{margin:0;font-family:var(--font);background:var(--bg);color:var(--fg);padding:24px;line-height:1.45}
     h1{font-size:20px;margin:0 0 4px}
     .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
-    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
     .kpi .v{font-size:28px;font-weight:700}
     .kpi .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:900px){.grid{grid-template-columns:1fr}}
     .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
-    .panel h2{font-size:14px;margin:0 0 12px;color:var(--fg)}
-    #map{height:340px;border-radius:var(--radius);border:1px solid var(--border)}
+    .panel h2{font-size:14px;margin:0 0 12px}
+    #map{width:100%;height:340px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-2)}
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
     th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
@@ -49,8 +48,8 @@
 
   <div class="grid">
     <div class="panel">
-      <h2>Mapa de geocercas & dispositivos</h2>
-      <div id="map"></div>
+      <h2>Mapa de geocercas &amp; dispositivos</h2>
+      <svg id="map" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="meta">Círculos = geocercas · pines = dispositivos (verde dentro / rojo fuera).</div>
     </div>
     <div class="panel">
@@ -72,9 +71,17 @@
     <a href="https://github.com/adrimg3196/lucidfence">Despliega LucidFence</a> o pide una demo.
   </p>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json";
+
+    // Proyección simple: bounding box de Madrid centro.
+    const BB = {minLat:40.38, maxLat:40.44, minLng:-3.74, maxLng:-3.68};
+    function proj(lat,lng){
+      const x = (lng-BB.minLng)/(BB.maxLng-BB.minLng)*580+10;
+      const y = (BB.maxLat-lat)/(BB.maxLat-BB.minLat)*320+10;
+      return [x,y];
+    }
+
     async function load(){
       try{
         const r = await fetch(STATE_URL, {cache:"no-store"});
@@ -85,6 +92,7 @@
         document.getElementById("ts").textContent = " (error: "+e.message+")";
       }
     }
+
     function render(s){
       const t = s.totals || {};
       document.getElementById("ts").textContent = " · generado "+ (s.generated_at||"");
@@ -98,16 +106,38 @@
       document.getElementById("kpis").innerHTML = kpis.map(k=>
         `<div class="kpi"><div class="v" style="color:${k[2]}">${k[1]}</div><div class="l">${k[0]}</div></div>`).join("");
 
-      // mapa
-      const map = L.map("map").setView([40.4168,-3.7038],12);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(map);
+      const svg = document.getElementById("map");
+      svg.innerHTML = "";
+      const NS = "http://www.w3.org/2000/svg";
       (s.fences||[]).forEach(f=>{
         if(f.kind==="circle" && f.center){
-          L.circle([f.center.lat,f.center.lng],{radius:f.radius_m||500,color:"#5e6ad5",fillOpacity:.08})
-            .addTo(map).bindPopup(f.name||f.id);
+          const [cx,cy] = proj(f.center.lat,f.center.lng);
+          const r = Math.max(8, (f.radius_m||500)/1200*280);
+          const c = document.createElementNS(NS,"circle");
+          c.setAttribute("cx",cx); c.setAttribute("cy",cy); c.setAttribute("r",r);
+          c.setAttribute("fill","rgba(94,106,213,.10)"); c.setAttribute("stroke","#5e6ad5");
+          c.setAttribute("stroke-width","1.5");
+          svg.appendChild(c);
+          const tx = document.createElementNS(NS,"text");
+          tx.setAttribute("x",cx); tx.setAttribute("y",cy-r-4);
+          tx.setAttribute("fill","#8a8f98"); tx.setAttribute("font-size","10");
+          tx.textContent = f.name||f.id;
+          svg.appendChild(tx);
         }
       });
+      (s.devices||[]).forEach(d=>{
+        if(d.lat==null||d.lng==null) return;
+        const [x,y] = proj(d.lat,d.lng);
+        const color = d.fence_state==="inside"?"#4cc38a":"#ff6b6b";
+        const c = document.createElementNS(NS,"circle");
+        c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6");
+        c.setAttribute("fill",color); c.setAttribute("stroke","#08090a"); c.setAttribute("stroke-width","1.5");
+        const t2 = document.createElementNS(NS,"title");
+        t2.textContent = `${d.name} — ${d.fence_state} — riesgo ${d.risk_score||0}`;
+        c.appendChild(t2);
+        svg.appendChild(c);
+      });
+
       const tb = document.querySelector("#devices tbody");
       tb.innerHTML = "";
       (s.devices||[]).forEach(d=>{
@@ -115,11 +145,6 @@
         const stxt = d.fence_state==="inside"?"dentro":(d.fence_state==="outside"?"fuera":"desconocido");
         const comp = d.compliant===false?"comp-no":"comp-yes";
         const ctxt = d.compliant===false?"no":"sí";
-        if(d.lat!=null && d.lng!=null){
-          const color = st==="in"?"#4cc38a":"#ff6b6b";
-          L.circleMarker([d.lat,d.lng],{radius:7,color,fillColor:color,fillOpacity:.9})
-            .addTo(map).bindPopup(`${d.name}<br>${stxt} · riesgo ${d.risk_score||0}`);
-        }
         tb.insertAdjacentHTML("beforeend",
           `<tr><td class="tag">${d.device_id}</td><td>${d.name||""}</td>`+
           `<td><span class="pill ${st}">${stxt}</span></td>`+
@@ -137,7 +162,7 @@
         : "Sin playbooks.";
     }
     load();
-    setInterval(load, 60000); // refresca cada minuto
+    setInterval(load, 60000);
   </script>
 </body>
 </html>
