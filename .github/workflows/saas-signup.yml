@@ -19,7 +19,6 @@ permissions:
 
 jobs:
   create-tenant:
-    if: contains(github.event.issue.labels.*.name, 'signup')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +29,12 @@ jobs:
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: python scripts/parse_signup_issue.py
+        run: |
+          if ! echo "$ISSUE_BODY" | grep -q "lucidfence-signup"; then
+            echo "Issue sin bloque de signup; se ignora."
+            exit 0
+          fi
+          python scripts/parse_signup_issue.py
       - name: Commitear tenant
         run: |
           git config user.name "lucidfence-cloud[bot]"
