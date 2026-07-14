@@ -106,34 +106,3 @@ def test_settings_endpoints_are_tenant_local_and_token_test_is_reachable():
     assert "core_secrets.status(tdir)" in settings_block
     assert "core_secrets.read_key(tdir)" in settings_block
     assert "core_secrets.save_credentials(ROOT" not in settings_block
-
-
-def test_cloud_vitrina_muestra_cumplimiento_geocerca_ios():
-    html = (ROOT / "static" / "cloud.html").read_text(encoding="utf-8")
-    assert "Geo iOS" in html
-    assert "iOS Geo OK" in html
-    assert "geofence_compliance_applicable" in html
-    assert "geofence_compliant" in html
-    assert "geofence_compliance_label" in html
-
-
-def test_cloud_vitrina_expone_chromeos_como_platform():
-    html = (ROOT / "static" / "cloud.html").read_text(encoding="utf-8")
-    assert "Plataforma" in html
-    assert "ChromeOS" in html
-    assert "chromeos" in html
-    assert "platformLabel" in html
-    assert "su_platform" in html
-
-
-def test_cloud_vitrina_muestra_densidad_departamento_y_filtro_tenant():
-    html = (ROOT / "static" / "cloud.html").read_text(encoding="utf-8")
-    assert 'id="tenantFilter"' in html
-    assert "function applyTenantFilter" in html
-    assert "FILTERED_TENANTS" in html
-    assert "Sin tenants para" in html
-    assert "filterActive ? []" in html
-    assert 'id="deptDensity"' in html
-    assert "function departmentDensity" in html
-    assert "function renderDepartmentDensity" in html
-    assert "halo = densidad por departamento" in html

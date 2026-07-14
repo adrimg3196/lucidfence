@@ -6,8 +6,7 @@ import http.client
 import json
 import time
 
-import os as _os
-HOST, PORT = "127.0.0.1", int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
+HOST, PORT = "127.0.0.1", 8765
 
 
 def req(method, path, body=None, cookie=None):
@@ -37,7 +36,7 @@ def login(email, password):
 
 
 def test_incident_http_lifecycle_and_rbac():
-    suffix = int(time.time_ns())
+    suffix = int(time.time())
     org_name = f"Incident QA {suffix}"
     owner_email = f"incident-owner-{suffix}@acme.test"
     status, signup, _ = req("POST", "/api/auth/signup", {
@@ -90,7 +89,7 @@ def test_incident_http_lifecycle_and_rbac():
 
 
 def test_incident_csv_export():
-    suffix = int(time.time_ns())
+    suffix = int(time.time())
     owner_email = f"export-owner-{suffix}@acme.test"
     status, signup, _ = req("POST", "/api/auth/signup", {
         "email": owner_email, "password": "ownerpass123", "name": "Owner",
@@ -122,7 +121,7 @@ def test_incident_csv_export():
 
 
 def test_incident_analytics_and_webhook_setting():
-    suffix = int(time.time_ns())
+    suffix = int(time.time())
     owner_email = f"an-{suffix}@acme.test"
     status, signup, _ = req("POST", "/api/auth/signup", {
         "email": owner_email, "password": "ownerpass123", "name": "Owner",

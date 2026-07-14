@@ -51,7 +51,6 @@ import sys
 import threading
 import time
 import http.client  # bypass del proxy de entorno (GET a 127.0.0.1 pasa, pero usamos esto por robustez)
-from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -80,21 +79,6 @@ COOKIE_ORG = "gf_org"
 _tenants = TenantStore(ROOT / "data")
 _auth = AuthStore(ROOT / "data")
 _SIMULATION = False
-
-# In-memory abuse guard for the public auth surface. This is intentionally
-# dependency-free (the app is stdlib-first) and conservative: it slows repeated
-# failures per client+email and repeated signup attempts per client. It is a
-# guardrail for internet-facing deployments, not a replacement for an upstream
-# WAF/reverse-proxy rate limit.
-AUTH_FAILURE_WINDOW_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_FAILURE_WINDOW_SECONDS", "900"))
-AUTH_FAILURE_LIMIT = int(os.environ.get("LUCIDFENCE_AUTH_FAILURE_LIMIT", "6"))
-AUTH_LOCKOUT_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_LOCKOUT_SECONDS", "300"))
-AUTH_SIGNUP_WINDOW_SECONDS = int(os.environ.get("LUCIDFENCE_AUTH_SIGNUP_WINDOW_SECONDS", "3600"))
-AUTH_SIGNUP_LIMIT = int(os.environ.get("LUCIDFENCE_AUTH_SIGNUP_LIMIT", "100"))
-_auth_failures: dict[str, deque[float]] = {}
-_auth_lockouts: dict[str, float] = {}
-_signup_attempts: dict[str, deque[float]] = {}
-_auth_rate_lock = threading.Lock()
 
 # Per-org engine cache. Each org gets its own running engine.
 _engines: dict[str, Engine] = {}
@@ -358,106 +342,6 @@ def _host_allowed(handler) -> bool:
     return host == cfg_host.lower()
 
 
-def _client_ip(handler) -> str:
-    """Best-effort client identifier for auth throttling.
-
-    Only trust X-Forwarded-For when the connection came from loopback; this
-    supports Caddy/Fly while preventing arbitrary remote clients from choosing
-    their own bucket.
-    """
-    peer = ""
-    try:
-        peer = (handler.client_address[0] or "").strip()
-    except Exception:
-        peer = ""
-    if peer in ("127.0.0.1", "::1", "localhost"):
-        xff = (handler.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-        if xff:
-            return xff
-    return peer or "unknown"
-
-
-def _auth_throttle_client(handler) -> str:
-    """Client key for auth throttling; direct loopback is local QA/admin.
-
-    Reverse-proxy traffic from loopback with X-Forwarded-For is still throttled
-    by the forwarded public client IP via _client_ip().
-    """
-    client = _client_ip(handler)
-    return "" if client in ("127.0.0.1", "::1", "localhost") else client
-
-
-def _auth_rate_key(handler, email: str = "") -> str:
-    client = _auth_throttle_client(handler)
-    return f"{client}:{(email or '').strip().lower()}" if client else ""
-
-
-def _prune_times(values: deque[float], now: float, window: int) -> None:
-    while values and values[0] <= now - window:
-        values.popleft()
-
-
-def _auth_lockout_remaining(handler, email: str) -> int:
-    key = _auth_rate_key(handler, email)
-    if not key:
-        return 0
-    now = time.time()
-    with _auth_rate_lock:
-        until = _auth_lockouts.get(key, 0)
-        if until <= now:
-            _auth_lockouts.pop(key, None)
-            return 0
-        return max(1, int(until - now))
-
-
-def _record_auth_failure(handler, email: str) -> int:
-    key = _auth_rate_key(handler, email)
-    if not key:
-        return 0
-    now = time.time()
-    with _auth_rate_lock:
-        q = _auth_failures.setdefault(key, deque())
-        _prune_times(q, now, AUTH_FAILURE_WINDOW_SECONDS)
-        q.append(now)
-        if len(q) >= AUTH_FAILURE_LIMIT:
-            until = now + AUTH_LOCKOUT_SECONDS
-            _auth_lockouts[key] = until
-            return max(1, int(until - now))
-    return 0
-
-
-def _record_auth_success(handler, email: str) -> None:
-    key = _auth_rate_key(handler, email)
-    if not key:
-        return
-    with _auth_rate_lock:
-        _auth_failures.pop(key, None)
-        _auth_lockouts.pop(key, None)
-
-
-def _signup_rate_remaining(handler) -> int:
-    key = _auth_throttle_client(handler)
-    if not key:
-        return 0
-    now = time.time()
-    with _auth_rate_lock:
-        q = _signup_attempts.setdefault(key, deque())
-        _prune_times(q, now, AUTH_SIGNUP_WINDOW_SECONDS)
-        if len(q) >= AUTH_SIGNUP_LIMIT:
-            return max(1, int((q[0] + AUTH_SIGNUP_WINDOW_SECONDS) - now))
-        q.append(now)
-    return 0
-
-
-def _send_server_error(handler) -> None:
-    _send_json(handler, {"error": "server_error"}, 500)
-
-
-def _send_rate_limited(handler, message: str, retry_after: int) -> None:
-    _send_json(handler, {"error": message}, 429,
-               headers={"Retry-After": str(max(1, int(retry_after)))})
-
-
 def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7):
     # Accumulate; emitted inside _send_json AFTER send_response (Python 3.9
     # flush-order quirk: send_header before send_response leaks the header first)
@@ -508,7 +392,7 @@ def _safe_webhook_url(url: str):
     return url
 
 
-def _send_json(handler, obj, code=200, headers: dict[str, str] | None = None):
+def _send_json(handler, obj, code=200):
     body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -522,8 +406,6 @@ def _send_json(handler, obj, code=200, headers: dict[str, str] | None = None):
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     )
-    for name, value in (headers or {}).items():
-        handler.send_header(name, value)
     for c in getattr(handler, "_set_cookies", []) or []:
         handler.send_header("Set-Cookie", c)
     handler._set_cookies = []
@@ -540,13 +422,6 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_response(200)
     handler.send_header("Content-Type", content_type)
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("X-Content-Type-Options", "nosniff")
-    handler.send_header("X-Frame-Options", "DENY")
-    handler.send_header(
-        "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-    )
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -566,13 +441,6 @@ def _send_html(handler, html_text: str):
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("X-Content-Type-Options", "nosniff")
-    handler.send_header("X-Frame-Options", "DENY")
-    handler.send_header(
-        "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-    )
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -613,6 +481,7 @@ def _read_body(handler) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+
 def _product_bundle(eng: Engine) -> dict:
     st = eng.status()
     st["stats_history"] = eng.store.stats_history(120)
@@ -635,7 +504,7 @@ class Handler(BaseHTTPRequestHandler):
             import traceback
             print("ROUTE ERROR:", traceback.format_exc())
             try:
-                _send_server_error(self)
+                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
             except Exception:
                 pass
 
@@ -657,21 +526,18 @@ class Handler(BaseHTTPRequestHandler):
             import traceback
             print("ROUTE ERROR:", traceback.format_exc())
             try:
-                _send_server_error(self)
+                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
             except Exception:
                 pass
 
     def do_DELETE(self):
-        if not _host_allowed(self):
-            self.send_error(400, "bad host")
-            return
         try:
             self._route()
         except Exception as e:
             import traceback
             print("ROUTE ERROR:", traceback.format_exc())
             try:
-                _send_server_error(self)
+                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
             except Exception:
                 pass
 
@@ -1337,10 +1203,6 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- auth handlers --------------------------------------------------
     def _signup(self):
-        retry_after = _signup_rate_remaining(self)
-        if retry_after:
-            _send_rate_limited(self, "demasiados registros; inténtalo más tarde", retry_after)
-            return
         body = _read_body(self)
         email = (body.get("email") or "").strip()
         name = (body.get("name") or "").strip()
@@ -1377,19 +1239,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _login(self):
         body = _read_body(self)
-        email = (body.get("email") or "").strip()
-        retry_after = _auth_lockout_remaining(self, email)
-        if retry_after:
-            _send_rate_limited(self, "demasiados intentos; inténtalo más tarde", retry_after)
-            return
-        user = _auth.authenticate(email, body.get("password", ""))
+        user = _auth.authenticate(body.get("email", ""), body.get("password", ""))
         if not user:
-            retry_after = _record_auth_failure(self, email)
-            if retry_after:
-                _send_rate_limited(self, "demasiados intentos; inténtalo más tarde", retry_after)
-                return
             return _send_json(self, {"error": "credenciales inválidas"}, 401)
-        _record_auth_success(self, email)
         token = _auth.create_session(user.id)
         _set_cookie(self, COOKIE_SESSION, token)
         first_org = next(iter(user.org_roles), None)
@@ -1500,14 +1352,13 @@ def main():
     cfg = config_loader.load(ROOT / "config.json")
     global _SIMULATION
     _SIMULATION = (cfg.get("mode") == "simulation")
-    host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")
-    port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
+    host = cfg.get("server", {}).get("host", "127.0.0.1")
+    port = int(cfg.get("server", {}).get("port", 8765))
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] LucidFence SaaS running at http://{host}:{port}")
     print(f"  Multi-tenant local SaaS · mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
     print(f"  Tenants: {len(_tenants.all()) if '_tenants' in globals() else '?'}")
     httpd = ThreadingHTTPServer((host, port), Handler)
-    setattr(httpd, "lucidfence_host", os.environ.get("LUCIDFENCE_PUBLIC_HOST", ""))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

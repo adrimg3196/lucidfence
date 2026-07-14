@@ -8,8 +8,7 @@ import http.client
 import json
 import time
 
-import os as _os
-H, P = _os.environ.get("LUCIDFENCE_HOST", "127.0.0.1"), int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
+H, P = "127.0.0.1", 8765
 
 
 def req(method, path, body=None, headers=None, cookie=None):

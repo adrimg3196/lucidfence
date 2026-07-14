@@ -522,7 +522,14 @@ class Engine:
             if last and (now - last) < self.action_cooldown_seconds:
                 return False
         bucket.add(key)
-        res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
+        if self.adapter is not None:
+            res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
+        else:
+            # Modo simulation/dry-run sin adapter UEM real: la acción se registra
+            # igual (es lo que promete el fallback de route_exit) sin ejecutar
+            # nada externo.
+            res = {"ok": True, "dry_run": True, "simulated": True,
+                   "action": action, "device_id": ds.device_id}
         res["ts"] = now_iso()
         res["fence_id"] = fence_id
         res["trigger"] = trigger
@@ -627,7 +634,8 @@ class Engine:
                 continue
             if act.get("when") not in (None, "on_exit"):
                 continue
-            if self._dedupe_action(ds, act.get("action"), None, "route_exit", f"ruta:{getattr(route, 'id', '')}", "medium", act.get("params", {})):
+            if self._dedupe_action(ds, act.get("action"), f"route:{getattr(route, 'id', '')}",
+                                  "route_exit", f"ruta:{getattr(route, 'id', '')}", "medium", act.get("params", {})):
                 fired.append(self._cycle_actions[-1])
         return fired
 

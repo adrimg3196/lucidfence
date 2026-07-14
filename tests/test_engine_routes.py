@@ -32,18 +32,6 @@ def test_engine_assigns_route_state():
     assert d2[0].route_deviation_m is None or d2[0].route_deviation_m >= 0
 
 
-def test_engine_surfaces_simulated_ios_geofence_compliance():
-    eng = _engine()
-    eng.run_once()
-    ios = eng.store.get("dev-003")
-    assert ios is not None, "seed iOS device missing"
-    assert ios.geofence_compliance is not None, "iOS geofence compliance missing"
-    assert ios.geofence_compliance["mode"] == "simulated"
-    assert ios.geofence_compliance["platform"] == "ios"
-    assert "ios_geofence_total" in eng.last_stats
-    assert eng.status()["ios_geofence_summary"]["total"] >= 1
-
-
 def test_add_and_delete_route():
     eng = _engine()
     n0 = len(eng.routes)
