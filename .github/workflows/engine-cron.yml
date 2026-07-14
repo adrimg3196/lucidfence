@@ -1,18 +1,21 @@
 name: engine-cron
 
-# Engine de LucidFence en cron (gratis, sin servidor always-on).
-# Cada 15 min: instala deps, arranca el SaaS + engine y corre un
-# ciclo on-demand. El engine envia alertas/incidentes via Atomic Mail
-# (requiere secretos ATOMIC_MAIL_API_KEY / ATOMIC_MAIL_USER en Settings).
-# La IA (MoA) es opcional: si no hay MoA local, core.ai hace
-# fallback a texto plano (never raises).
+# Backend serverless de LucidFence en GitHub Actions (gratis, siempre-on vía
+# schedule cada 15 min). Construye la flota demo, corre el engine de geofencing
+# y publica el estado vivo a data/cloud_state.json, que GitHub Pages sirve al
+# dashboard. Soporta workflow_dispatch para forzar un ciclo on-demand.
 on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      cycles:
+        description: "Número de ciclos a correr"
+        required: false
+        default: "1"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   cycle:
@@ -23,16 +26,20 @@ jobs:
         with:
           python-version: "3.11"
       - name: Instalar deps
-        run: |
-          python -m pip install -r requirements.txt
-      - name: Correr ciclo del engine (Atomic Mail + fallback IA)
+        run: python -m pip install -r requirements.txt
+      - name: Correr ciclo y publicar estado
         env:
-          ATOMIC_MAIL_API_KEY: ${{ secrets.ATOMIC_MAIL_API_KEY }}
-          ATOMIC_MAIL_USER: ${{ secrets.ATOMIC_MAIL_USER }}
-          MOA_DRY: "true"
+          CLOUD_PUBLISH: "1"
         run: |
-          python saas_server.py &
-          sleep 4
-          curl -s -X POST http://127.0.0.1:8765/api/run-once || true
-      - name: Resumen
-        run: echo "Ciclo LucidFence completado (ver alertas en Atomic Mail)."
+          python cloud_publisher.py --cycles "${{ github.event.inputs.cycles || '1' }}"
+      - name: Commitear estado al repo (lo sirve Pages)
+        run: |
+          git config user.name "lucidfence-cloud[bot]"
+          git config user.email "cloud@lucidfence.local"
+          git add data/cloud_state.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en cloud_state.json"
+          else
+            git commit -m "cloud: actualizar estado en vivo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push
+          fi

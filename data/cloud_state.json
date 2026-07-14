@@ -1,0 +1,112 @@
+{
+  "service": "lucidfence-cloud",
+  "generated_at": "2026-07-14T10:24:32Z",
+  "org_id": "",
+  "mode": "simulation",
+  "totals": {
+    "devices": 5,
+    "inside": 2,
+    "outside": 3,
+    "non_compliant": 2,
+    "compliance_rate_pct": 60.0
+  },
+  "devices": [
+    {
+      "device_id": "dev-001",
+      "name": "Samsung Tab Active5",
+      "platform": "android",
+      "fence_state": "inside",
+      "compliant": true,
+      "risk_score": 0.0,
+      "battery_level": 88,
+      "department": "Logística",
+      "os_version": "Android 14",
+      "lat": 40.4168,
+      "lng": -3.7038
+    },
+    {
+      "device_id": "dev-002",
+      "name": "iPhone 13 Industrial",
+      "platform": "ios",
+      "fence_state": "inside",
+      "compliant": false,
+      "risk_score": 25.0,
+      "battery_level": 62,
+      "department": "Almacén",
+      "os_version": "iOS 17.4",
+      "lat": 40.42,
+      "lng": -3.71
+    },
+    {
+      "device_id": "dev-003",
+      "name": "Zebra TC52",
+      "platform": "android",
+      "fence_state": "outside",
+      "compliant": false,
+      "risk_score": 78.0,
+      "battery_level": 11,
+      "department": "Reparto",
+      "os_version": "android 12",
+      "lat": 40.41,
+      "lng": -3.695
+    },
+    {
+      "device_id": "dev-004",
+      "name": "iPad Air Field",
+      "platform": "ios",
+      "fence_state": "outside",
+      "compliant": true,
+      "risk_score": 35.0,
+      "battery_level": 95,
+      "department": "Ventas",
+      "os_version": "iOS 16.5",
+      "lat": 40.43,
+      "lng": -3.69
+    },
+    {
+      "device_id": "dev-005",
+      "name": "Samsung XCover Pro",
+      "platform": "android",
+      "fence_state": "outside",
+      "compliant": true,
+      "risk_score": 35.0,
+      "battery_level": 40,
+      "department": "Terreno",
+      "os_version": "Android 13",
+      "lat": 40.405,
+      "lng": -3.715
+    }
+  ],
+  "fences": [
+    {
+      "id": "fence-hq",
+      "name": "Madrid HQ",
+      "type": "circle",
+      "center": {
+        "lat": 40.4168,
+        "lng": -3.7038
+      },
+      "radius_m": 600.0,
+      "actions": []
+    },
+    {
+      "id": "fence-almacen",
+      "name": "Almacén Central",
+      "type": "circle",
+      "center": {
+        "lat": 40.42,
+        "lng": -3.71
+      },
+      "radius_m": 400.0,
+      "actions": []
+    }
+  ],
+  "incidents": [],
+  "cve_summary": {
+    "apps_total": 0,
+    "vulnerable_apps": 0,
+    "critical_cve_apps": 0,
+    "high_cve_apps": 0
+  },
+  "soar": {}
+}
