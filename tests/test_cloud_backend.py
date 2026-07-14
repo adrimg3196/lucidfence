@@ -140,6 +140,8 @@ def test_demo_seed_incluye_chromeos_como_plataforma():
     chromeos = [d for d in mod.DEMO_FLEET if d.get("platform") == "chromeos"]
     assert chromeos, "la vitrina demo debe incluir al menos un dispositivo ChromeOS"
     assert chromeos[0]["os_version"].startswith("ChromeOS")
+    local_seed = json.loads((ROOT / "data" / "fleet_seed.json").read_text(encoding="utf-8"))
+    assert any(d.get("platform") == "chromeos" for d in local_seed["devices"])
     tmp = Path(tempfile.mkdtemp())
     mod._write_demo_seed(tmp / "fleet_seed.json")
     seed = json.loads((tmp / "fleet_seed.json").read_text(encoding="utf-8"))

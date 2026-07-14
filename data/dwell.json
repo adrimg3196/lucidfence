@@ -12,11 +12,11 @@
     "cycles": 5
   },
   "dev-1001": {
-    "seconds": 90000,
-    "cycles": 100
+    "seconds": 90900,
+    "cycles": 101
   },
   "dev-1002": {
-    "seconds": 90000,
-    "cycles": 100
+    "seconds": 90900,
+    "cycles": 101
   }
 }

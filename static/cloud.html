@@ -98,16 +98,11 @@
       <input id="su_name" placeholder="Nombre empresa" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
       <input id="su_dev" placeholder="Nº dispositivos (ej. 3)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
       <input id="su_dept" placeholder="Departamento (ej. Reparto)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-      <select id="su_platform" aria-label="Plataforma del tenant" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-        <option value="android">Android</option>
-        <option value="ios">iOS</option>
-        <option value="chromeos">ChromeOS</option>
-        <option value="windows">Windows</option>
-      </select>
       <select id="su_platform" aria-label="Plataforma principal" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
         <option value="android">Android Enterprise</option>
         <option value="ios">iOS/iPadOS</option>
         <option value="chromeos">ChromeOS</option>
+        <option value="windows">Windows</option>
       </select>
     </div>
     <button onclick="openSignup()" style="margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer">Crear mi tenant →</button>
@@ -124,7 +119,6 @@
       const name = document.getElementById('su_name').value || 'Mi Empresa';
       const n = parseInt(document.getElementById('su_dev').value||'1',10) || 1;
       const dept = document.getElementById('su_dept').value || 'General';
-      const platform = document.getElementById('su_platform').value || 'android';
       const platform = document.getElementById('su_platform').value || 'android';
       if(!id){ alert('Pon un tenant-id (letras/números)'); return; }
       const lat0=40.4210, lng0=-3.7080;

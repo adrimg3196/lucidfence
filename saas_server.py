@@ -434,6 +434,11 @@ def _send_server_error(handler) -> None:
     _send_json(handler, {"error": "server_error"}, 500)
 
 
+def _send_rate_limited(handler, message: str, retry_after: int) -> None:
+    _send_json(handler, {"error": message}, 429,
+               headers={"Retry-After": str(max(1, int(retry_after)))})
+
+
 def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7):
     # Accumulate; emitted inside _send_json AFTER send_response (Python 3.9
     # flush-order quirk: send_header before send_response leaks the header first)
@@ -484,7 +489,7 @@ def _safe_webhook_url(url: str):
     return url
 
 
-def _send_json(handler, obj, code=200):
+def _send_json(handler, obj, code=200, headers: dict[str, str] | None = None):
     body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -498,6 +503,8 @@ def _send_json(handler, obj, code=200):
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     )
+    for name, value in (headers or {}).items():
+        handler.send_header(name, value)
     for c in getattr(handler, "_set_cookies", []) or []:
         handler.send_header("Set-Cookie", c)
     handler._set_cookies = []
@@ -1313,11 +1320,7 @@ class Handler(BaseHTTPRequestHandler):
     def _signup(self):
         retry_after = _signup_rate_remaining(self)
         if retry_after:
-            self.send_response(429)
-            self.send_header("Retry-After", str(retry_after))
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": "demasiados registros; inténtalo más tarde"}).encode("utf-8"))
+            _send_rate_limited(self, "demasiados registros; inténtalo más tarde", retry_after)
             return
         body = _read_body(self)
         email = (body.get("email") or "").strip()
@@ -1358,21 +1361,13 @@ class Handler(BaseHTTPRequestHandler):
         email = (body.get("email") or "").strip()
         retry_after = _auth_lockout_remaining(self, email)
         if retry_after:
-            self.send_response(429)
-            self.send_header("Retry-After", str(retry_after))
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": "demasiados intentos; inténtalo más tarde"}).encode("utf-8"))
+            _send_rate_limited(self, "demasiados intentos; inténtalo más tarde", retry_after)
             return
         user = _auth.authenticate(email, body.get("password", ""))
         if not user:
             retry_after = _record_auth_failure(self, email)
             if retry_after:
-                self.send_response(429)
-                self.send_header("Retry-After", str(retry_after))
-                self.send_header("Content-Type", "application/json; charset=utf-8")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": "demasiados intentos; inténtalo más tarde"}).encode("utf-8"))
+                _send_rate_limited(self, "demasiados intentos; inténtalo más tarde", retry_after)
                 return
             return _send_json(self, {"error": "credenciales inválidas"}, 401)
         _record_auth_success(self, email)
