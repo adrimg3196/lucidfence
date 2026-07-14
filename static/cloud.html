@@ -74,7 +74,7 @@
 
   <script src="/static/vendor/leaflet.js"></script>
   <script>
-    const STATE_URL = "data/cloud_state.json";
+    const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json";
     async function load(){
       try{
         const r = await fetch(STATE_URL, {cache:"no-store"});
