@@ -42,3 +42,7 @@
 {"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:23:31.448577+00:00"}
 {"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:23:31.654428+00:00"}
 {"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:23:31.657468+00:00"}
+{"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:31:28.651425+00:00"}
+{"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:31:28.652624+00:00"}
+{"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:31:28.868194+00:00"}
+{"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:31:28.871559+00:00"}

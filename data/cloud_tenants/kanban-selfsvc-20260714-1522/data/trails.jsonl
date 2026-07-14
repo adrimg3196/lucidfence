@@ -28,3 +28,9 @@
 {"device_id": "zebra-madrid-01", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:23:32.931472+00:00"}
 {"device_id": "iphone-field-02", "lat": 40.4232, "lng": -3.7095, "fence_state": "inside", "ts": "2026-07-14T18:23:32.933723+00:00"}
 {"device_id": "xcover-ops-03", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:23:32.934962+00:00"}
+{"device_id": "zebra-madrid-01", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:31:29.931165+00:00"}
+{"device_id": "iphone-field-02", "lat": 40.4232, "lng": -3.7095, "fence_state": "inside", "ts": "2026-07-14T18:31:29.932433+00:00"}
+{"device_id": "xcover-ops-03", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:31:29.933976+00:00"}
+{"device_id": "zebra-madrid-01", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T18:31:30.149872+00:00"}
+{"device_id": "iphone-field-02", "lat": 40.4232, "lng": -3.7095, "fence_state": "inside", "ts": "2026-07-14T18:31:30.152795+00:00"}
+{"device_id": "xcover-ops-03", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T18:31:30.154070+00:00"}

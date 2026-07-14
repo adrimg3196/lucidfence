@@ -1,14 +1,14 @@
 {
   "zebra-madrid-01": {
-    "seconds": 9000,
-    "cycles": 10
+    "seconds": 10800,
+    "cycles": 12
   },
   "iphone-field-02": {
-    "seconds": 9000,
-    "cycles": 10
+    "seconds": 10800,
+    "cycles": 12
   },
   "xcover-ops-03": {
-    "seconds": 9000,
-    "cycles": 10
+    "seconds": 10800,
+    "cycles": 12
   }
 }
