@@ -4,17 +4,26 @@ const h = (tag, attrs, ...kids) => { const e = document.createElement(tag); for 
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const stateTag = st => st==="inside"?'<span class="tag inside">dentro</span>':st==="outside"?'<span class="tag outside">fuera</span>':'<span class="tag unknown">desconocido</span>';
 const compTag = c => c===false?'<span class="tag nocomp">no conforme</span>':c===true?'<span class="tag inside">conforme</span>':'<span class="tag unknown">—</span>';
+const iosGeoTag = d => {
+  const g = d && d.geofence_compliance;
+  if(!g || String(g.platform||"").toLowerCase()!=="ios") return '<span class="tag unknown">—</span>';
+  return g.compliant === true
+    ? '<span class="tag inside" title="'+esc(g.policy_name||'iOS geofence')+'">iOS geocerca OK</span>'
+    : '<span class="tag nocomp" title="'+esc((g.policy_name||'iOS geofence')+' · '+(g.evidence||''))+'">iOS fuera/no cumple</span>';
+};
 
 // ---------- OVERVIEW ----------
 GFViews.overview = async (root, S, API, toast) => {
   const [st, prod] = await Promise.all([API("/api/status"), API("/api/risk")]);
   const sm = prod.summary || {};
+  const iosGeo = st.ios_geofence_summary || {};
   const kpis = [
     ["Dispositivos", st.device_count||0],
     ["Dentro", st.inside_count||0],
     ["Fuera", st.outside_count||0],
     ["Desconocidos", st.unknown_count||0],
     ["No conformes", sm.noncompliant||0],
+    ["iOS geocerca", iosGeo.total ? `${iosGeo.compliant}/${iosGeo.total}` : 0],
     ["Geovallas", (st.fences||[]).length],
   ];
   root.innerHTML = "";
@@ -56,7 +65,7 @@ GFViews.devices = async (root, S, API, toast) => {
   const tb = h("div",{class:"card"}, h("div",{class:"hd"}, h("h3","",["Flota ("+ (devs.length||0) +")"])));
   const body = h("div",{class:"bd",style:"overflow:auto"});
   const table = h("table",{class:"table"});
-  table.append(h("thead",{}, h("tr",{}, ...["Dispositivo","Estado","Conformidad","Última act.","Acciones"].map(c=>h("th","",[c])))));
+  table.append(h("thead",{}, h("tr",{}, ...["Dispositivo","Estado","Conformidad","iOS geocerca","Última act.","Acciones"].map(c=>h("th","",[c])))));
   const tbody = h("tbody",{});
   (devs||[]).forEach(d => {
     const tr = h("tr",{});
@@ -64,6 +73,7 @@ GFViews.devices = async (root, S, API, toast) => {
       h("td",{}, h("div",{style:"display:flex;align-items:center;gap:10px"}, h("div",{class:"av",style:"background:linear-gradient(135deg,#2563EB,#7C3AED)"},[esc((d.name||"?").slice(0,2).toUpperCase())]), h("div",{}, h("b","",[esc(d.name)]), h("div",{style:"font-size:11px;color:var(--muted-fg)"},[esc(d.id)])))),
       h("td",{html:stateTag(d.fence_state)}),
       h("td",{html:compTag(d.compliant)}),
+      h("td",{html:iosGeoTag(d)}),
       h("td",{style:"color:var(--muted-fg);font-size:12px"},[(d.last_update||"").replace("T"," ").slice(0,19)]),
       h("td",{}, h("button",{class:"btn",style:"height:30px;font-size:12px",onclick:"GF.goView(\"map\")"},["Ver en mapa"]))
     );

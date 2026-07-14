@@ -92,6 +92,18 @@
       "department": "Ventas",
       "enrolled_at": "2025-06-21T09:00:00Z",
       "device_tag": "SAL-IPD-003",
+      "geofence_compliance": {
+        "policy_id": "ios-showroom-sales-v1",
+        "policy_name": "iOS Showroom Sales geofence",
+        "required": true,
+        "compliant": false,
+        "state": "outside_required_zone",
+        "supervised": true,
+        "ade_enrolled": true,
+        "ddm_status": "simulated",
+        "last_checkin": "2026-07-14T08:00:00Z",
+        "evidence": "Seed simulado: iPad de showroom fuera de su geocerca comercial."
+      },
       "waypoints": [
         { "lat": 40.3900, "lng": -3.7400 },
         { "lat": 40.3880, "lng": -3.7420 },
@@ -170,6 +182,38 @@
         { "name": "WhatsApp", "version": "2.24" },
         { "name": "Slack", "version": "4.31" },
         { "name": "Outlook", "version": "16.0" }
+      ]
+    },
+    {
+      "id": "dev-006",
+      "name": "Chromebook Kiosco F6",
+      "platform": "chromeos",
+      "status": "active",
+      "compliant": true,
+      "country": "ES",
+      "city": "Madrid",
+      "ip": "10.0.0.26",
+      "os_version": "ChromeOS 126",
+      "model": "Chromebook Enterprise",
+      "manufacturer": "Google",
+      "serial_number": "CHR-ENT-006",
+      "battery_level": 76,
+      "battery_state": "discharging",
+      "storage_total_gb": 64.0,
+      "storage_free_gb": 42.0,
+      "carrier": "WiFi",
+      "assigned_user": "Kiosco Frontline",
+      "department": "Kioscos",
+      "enrolled_at": "2026-02-10T08:00:00Z",
+      "device_tag": "KIO-CHR-006",
+      "waypoints": [
+        { "lat": 40.4145, "lng": -3.6995 },
+        { "lat": 40.4160, "lng": -3.7010 },
+        { "lat": 40.4135, "lng": -3.6980 }
+      ],
+      "apps": [
+        { "name": "Chrome", "version": "126.0.0" },
+        { "name": "Google Meet", "version": "web" }
       ]
     }
   ]

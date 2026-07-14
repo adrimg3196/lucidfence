@@ -90,13 +90,22 @@ class Engine:
         )
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
-        # Nutrir CVEs desde feed NVD vivo (si existe y es reciente). Best-effort:
-        # nunca rompe el arranque si la red/cache falla.
+        # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
+        # arranque si la red/cache falla. Por defecto solo carga el cache local;
+        # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
+        # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
         try:
-            from core.cve_feed_nvd import load_nvd_feed_into_cve
-            n = load_nvd_feed_into_cve()
-            if n:
-                self.logger and self.logger.info(f"CVE feed NVD cargado: {n} entradas")
+            from core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
+            cve_feed_path = config.get("cve_feed_path") or DEFAULT_OUT
+            if config.get("cve_feed_sync"):
+                sync_nvd_feed(
+                    apps=config.get("cve_feed_apps"),
+                    out_path=cve_feed_path,
+                    per_app=int(config.get("cve_feed_per_app", 5)),
+                    timeout=int(config.get("cve_feed_timeout", 30)),
+                    sleep_s=float(config.get("cve_feed_sleep_s", 0.4)),
+                )
+            load_nvd_feed_into_cve(cve_feed_path)
         except Exception:
             pass
         pol_path = config.get("policies_path", Path(self.data_dir) / "policies.json")
@@ -337,7 +346,13 @@ class Engine:
                     last_checkin=rep.last_checkin or rep.last_seen,
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
+                    geofence_compliance=rep.geofence_compliance,
                 )
+                geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
+                if callable(geo_snap):
+                    snap = geo_snap(rep, fence_state=fence_state, fence_id=inside_fence)
+                    if isinstance(snap, dict):
+                        ds.geofence_compliance = snap
                 # --- MOAT: riesgo compuesto + políticas ---
                 risk_ctx = {
                     "hour": self._ctx_hour(),
@@ -752,6 +767,8 @@ class Engine:
         high = sum(1 for s in states.values() if s.risk_severity == "high")
         off_route = sum(1 for s in states.values() if s.route_state == "off_route")
         on_route = sum(1 for s in states.values() if s.route_state == "on_route")
+        ios_geo_total = sum(1 for s in states.values() if (s.geofence_compliance or {}).get("platform") == "ios")
+        ios_geo_ok = sum(1 for s in states.values() if (s.geofence_compliance or {}).get("platform") == "ios" and (s.geofence_compliance or {}).get("compliant") is True)
         return {
             "cycle": self.cycle_count,
             "ts": self.last_run,
@@ -771,6 +788,9 @@ class Engine:
             "routes": len(self.routes),
             "routes_on_route": on_route,
             "routes_off_route": off_route,
+            "ios_geofence_total": ios_geo_total,
+            "ios_geofence_compliant": ios_geo_ok,
+            "ios_geofence_noncompliant": max(ios_geo_total - ios_geo_ok, 0),
         }
 
     # ---- loop ------------------------------------------------------------
@@ -848,6 +868,20 @@ class Engine:
             ],
             "stats_history": self.store.stats_history(120),
             "cve_summary": self._cve_summary(),
+            "ios_geofence_summary": self._ios_geofence_summary(),
+        }
+
+    def _ios_geofence_summary(self) -> dict:
+        devices = [s for s in self.store.snapshot().values()
+                   if (s.geofence_compliance or {}).get("platform") == "ios"]
+        compliant = sum(1 for s in devices if (s.geofence_compliance or {}).get("compliant") is True)
+        noncompliant = len(devices) - compliant
+        return {
+            "total": len(devices),
+            "compliant": compliant,
+            "noncompliant": noncompliant,
+            "percent": round((compliant / len(devices) * 100), 1) if devices else 0,
+            "mode": "simulated" if devices else None,
         }
 
     def _cve_summary(self) -> dict:

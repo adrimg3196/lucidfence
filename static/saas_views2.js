@@ -38,15 +38,16 @@ v2.policies = async (root, S, API, toast) => {
 
 // ---------- COMPLIANCE ----------
 v2.compliance = async (root, S, API, toast) => {
-  const [c, a] = await Promise.all([API("/api/compliance"), API("/api/analytics")]);
+  const [c, a, st] = await Promise.all([API("/api/compliance"), API("/api/analytics"), API("/api/status")]);
+  const iosGeo = st.ios_geofence_summary || {};
   root.innerHTML = "";
   const kpis = h("div",{class:"kpis"}, ...[
     ["Conformidad", (c.compliance_percent||0)+"%"],
     ["Dentro", (c.state_distribution||{}).inside||0],
     ["Fuera", (c.state_distribution||{}).outside||0],
     ["Desconocidos", (c.state_distribution||{}).unknown||0],
+    ["iOS geocerca", iosGeo.total ? `${iosGeo.compliant}/${iosGeo.total}` : 0],
     ["Tendencia 7d", "—"],
-    ["Desviación", "—"],
   ].map(([l,v])=>h("div",{class:"kpi"}, h("div",{class:"label"},l), h("div",{class:"val"},String(v)))));
   root.append(kpis);
   const card = h("div",{class:"card"}, h("div",{class:"hd"}, h("h3","",["Serie de conformidad"])));

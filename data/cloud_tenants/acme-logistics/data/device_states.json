@@ -11,7 +11,7 @@
     "country": null,
     "city": null,
     "ip": null,
-    "last_seen": "2026-07-14T12:49:42Z",
+    "last_seen": "2026-07-14T15:25:47Z",
     "fence_id": "acme-hq",
     "inside_fence": "acme-hq",
     "fence_state": "inside",
@@ -21,7 +21,7 @@
     "route_id": null,
     "route_state": "unassigned",
     "route_deviation_m": null,
-    "last_report_ts": "2026-07-14T12:49:42.026311+00:00",
+    "last_report_ts": "2026-07-14T15:25:47.561784+00:00",
     "apps": [],
     "os_version": "Android 14",
     "model": "XCover",
@@ -35,9 +35,10 @@
     "carrier": "Movistar",
     "assigned_user": "Camion 01",
     "department": "Reparto",
-    "last_checkin": "2026-07-14T12:49:42Z",
+    "last_checkin": "2026-07-14T15:25:47Z",
     "enrolled_at": "2026-01-01T00:00:00Z",
-    "device_tag": "t1"
+    "device_tag": "t1",
+    "geofence_compliance": null
   },
   {
     "device_id": "t2",
@@ -51,7 +52,7 @@
     "country": null,
     "city": null,
     "ip": null,
-    "last_seen": "2026-07-14T12:49:42Z",
+    "last_seen": "2026-07-14T15:25:47Z",
     "fence_id": null,
     "inside_fence": null,
     "fence_state": "outside",
@@ -61,7 +62,7 @@
     "route_id": null,
     "route_state": "unassigned",
     "route_deviation_m": null,
-    "last_report_ts": "2026-07-14T12:49:42.027595+00:00",
+    "last_report_ts": "2026-07-14T15:25:47.562744+00:00",
     "apps": [],
     "os_version": "Android 13",
     "model": "TC52",
@@ -75,8 +76,9 @@
     "carrier": "Movistar",
     "assigned_user": "Camion 02",
     "department": "Reparto",
-    "last_checkin": "2026-07-14T12:49:42Z",
+    "last_checkin": "2026-07-14T15:25:47Z",
     "enrolled_at": "2026-01-01T00:00:00Z",
-    "device_tag": "t2"
+    "device_tag": "t2",
+    "geofence_compliance": null
   }
 ]

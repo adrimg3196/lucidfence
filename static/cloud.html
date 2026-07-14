@@ -17,7 +17,8 @@
     h1{font-size:20px;margin:0 0 4px}
     .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
     .bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
-    select{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
+    select,input{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
+    input::placeholder{color:var(--muted)}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
     .kpi .v{font-size:28px;font-weight:700}
@@ -31,6 +32,8 @@
     th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
     th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
     .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+    .plat{background:rgba(78,167,252,.12);color:var(--blue)}
+    .plat.chromeos{background:rgba(76,195,138,.14);color:var(--green)}
     .in{background:rgba(76,195,138,.14);color:var(--green)}
     .out{background:rgba(255,107,107,.14);color:var(--red)}
     .unk{background:rgba(138,143,152,.14);color:var(--muted)}
@@ -38,6 +41,13 @@
     .comp-yes{background:rgba(76,195,138,.14);color:var(--green)}
     .meta{color:var(--muted);font-size:12px;margin-top:8px}
     .tag{color:var(--blue)}
+    .density-list{display:grid;gap:10px}
+    .density-row{display:grid;grid-template-columns:minmax(90px,1fr) 3fr auto;gap:10px;align-items:center;font-size:12px}
+    .density-row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .density-track{height:8px;border-radius:999px;background:var(--bg-2);border:1px solid var(--border);overflow:hidden}
+    .density-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--red));opacity:.9}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;margin-top:8px}
+    .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:-1px}
     a{color:var(--accent)}
   </style>
 </head>
@@ -49,6 +59,7 @@
   <div class="bar">
     <label class="meta" for="tenantSel">Tenant:</label>
     <select id="tenantSel" onchange="renderTenant(parseInt(this.value))"></select>
+    <input id="tenantFilter" placeholder="Filtrar tenants…" oninput="applyTenantFilter(this.value)" aria-label="Filtrar tenants">
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -57,12 +68,13 @@
     <div class="panel">
       <h2>Mapa de geocercas &amp; dispositivos</h2>
       <svg id="map" viewBox="0 0 600 340" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="meta">Círculos = geocercas · pines = dispositivos (verde dentro / rojo fuera).</div>
+      <div class="meta">Círculos = geocercas · halo = densidad por departamento · pines = dispositivos (verde dentro / rojo fuera).</div>
+      <div class="legend"><span><span class="dot" style="background:rgba(78,167,252,.55)"></span>Baja concentración</span><span><span class="dot" style="background:rgba(255,107,107,.65)"></span>Alta / más riesgo</span></div>
     </div>
     <div class="panel">
       <h2>Flota</h2>
       <table id="devices">
-        <thead><tr><th>ID</th><th>Nombre</th><th>Estado</th><th>Conforme</th><th>Riesgo</th><th>Depto</th></tr></thead>
+        <thead><tr><th>ID</th><th>Nombre</th><th>Plataforma</th><th>Estado</th><th>Conforme</th><th>Geo iOS</th><th>Riesgo</th><th>Depto</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -74,6 +86,11 @@
   </div>
 
   <div class="panel" style="margin-top:16px">
+    <h2>Densidad de dispositivos por departamento</h2>
+    <div id="deptDensity" class="density-list meta">—</div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
     <h2>Registrar mi tenant (self-service, $0)</h2>
     <p class="meta">Rellena y se abrirá un issue en el repo; en ≤15 min tu tenant aparece en el selector de arriba. Sin tarjeta, sin servidores propios.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">
@@ -81,6 +98,17 @@
       <input id="su_name" placeholder="Nombre empresa" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
       <input id="su_dev" placeholder="Nº dispositivos (ej. 3)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
       <input id="su_dept" placeholder="Departamento (ej. Reparto)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
+      <select id="su_platform" aria-label="Plataforma del tenant" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
+        <option value="android">Android</option>
+        <option value="ios">iOS</option>
+        <option value="chromeos">ChromeOS</option>
+        <option value="windows">Windows</option>
+      </select>
+      <select id="su_platform" aria-label="Plataforma principal" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
+        <option value="android">Android Enterprise</option>
+        <option value="ios">iOS/iPadOS</option>
+        <option value="chromeos">ChromeOS</option>
+      </select>
     </div>
     <button onclick="openSignup()" style="margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer">Crear mi tenant →</button>
   </div>
@@ -96,13 +124,15 @@
       const name = document.getElementById('su_name').value || 'Mi Empresa';
       const n = parseInt(document.getElementById('su_dev').value||'1',10) || 1;
       const dept = document.getElementById('su_dept').value || 'General';
+      const platform = document.getElementById('su_platform').value || 'android';
+      const platform = document.getElementById('su_platform').value || 'android';
       if(!id){ alert('Pon un tenant-id (letras/números)'); return; }
       const lat0=40.4210, lng0=-3.7080;
       const fleet=[]; const fences=[{id:'hq',name:'Sede',kind:'circle',center:{lat:lat0,lng:lng0},radius_m:500}];
       for(let i=0;i<n;i++){
         const lat=lat0 + (i*0.002);
         const lng=lng0 + (i*0.0015);
-        fleet.push({id:'d'+(i+1),name:name+' '+(i+1),platform:'android',lat:lat,lng:lng,
+        fleet.push({id:'d'+(i+1),name:name+' '+(i+1),platform:platform,lat:lat,lng:lng,
           compliant: i%2===0, department: dept});
       }
       const body =
@@ -124,6 +154,21 @@
     }
 
     let CURRENT = null;
+    let TENANTS = [];
+    let FILTERED_TENANTS = [];
+
+    function esc(v){
+      return String(v == null ? "" : v).replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[ch]));
+    }
+
+    function tenantName(t, i){
+      return t.tenant || t.org_id || ("tenant"+i);
+    }
+
+    function platformLabel(p){
+      const key = String(p||"unknown").toLowerCase();
+      return ({android:"Android", ios:"iOS", ipados:"iPadOS", chromeos:"ChromeOS", windows:"Windows", macos:"macOS"})[key] || key;
+    }
 
     async function load(){
       try{
@@ -139,10 +184,9 @@
     function render(s){
       const tenants = (s.tenants && s.tenants.length) ? s.tenants : [s];
       CURRENT = s;
+      TENANTS = tenants;
       document.getElementById("ts").textContent = " · generado " + (s.generated_at||"");
-      const sel = document.getElementById("tenantSel");
-      sel.innerHTML = tenants.map((t,i)=>
-        `<option value="${i}">${t.tenant||("tenant"+i)} — ${(t.totals?t.totals.devices:0)} dev</option>`).join("");
+      applyTenantFilter(document.getElementById("tenantFilter").value || "");
       const agg = s.totals || (tenants[0] && tenants[0].totals) || {};
       const kpis = [
         ["Dispositivos", agg.devices||0, ""],
@@ -150,21 +194,105 @@
         ["Fuera", agg.outside||0, "var(--red)"],
         ["No conformes", agg.non_compliant||0, "var(--amber)"],
         ["Compliance", (agg.compliance_rate_pct||0)+"%", "var(--blue)"],
+        ["iOS Geo OK", (agg.ios_geofence_compliance_rate_pct||0)+"%", "var(--green)"],
+        ["ChromeOS", ((agg.platform_counts&&agg.platform_counts.chromeos)||agg.chromeos_devices||0), "var(--green)"],
       ];
       document.getElementById("kpis").innerHTML = kpis.map(k=>
         `<div class="kpi"><div class="v" style="color:${k[2]}">${k[1]}</div><div class="l">${k[0]}</div></div>`).join("");
-      renderTenant(0);
+    }
+
+    function applyTenantFilter(q){
+      const needle = (q||"").trim().toLowerCase();
+      const filterActive = !!needle;
+      FILTERED_TENANTS = TENANTS.map((t,i)=>({t,i})).filter(({t,i})=>{
+        const label = tenantName(t,i) + " " + (t.org_id||"");
+        return !needle || label.toLowerCase().includes(needle);
+      });
+      if(!FILTERED_TENANTS.length && TENANTS.length && !filterActive){
+        FILTERED_TENANTS = TENANTS.map((t,i)=>({t,i}));
+      }
+      const sel = document.getElementById("tenantSel");
+      if(!FILTERED_TENANTS.length){
+        sel.innerHTML = `<option value="0">Sin tenants para "${esc(q)}"</option>`;
+        document.getElementById("deptDensity").innerHTML = `Sin tenants para "${esc(q)}".`;
+        document.querySelector("#devices tbody").innerHTML = "";
+        document.getElementById("map").innerHTML = "";
+        return;
+      }
+      sel.innerHTML = FILTERED_TENANTS.map(({t,i},pos)=>
+        `<option value="${pos}">${esc(tenantName(t,i))} — ${((t.totals&&t.totals.devices)||0)} dev</option>`).join("");
+      if(CURRENT) renderTenant(0);
+    }
+
+    function departmentDensity(devices){
+      const groups = new Map();
+      (devices||[]).forEach(d=>{
+        const dept = d.department || "Sin departamento";
+        if(!groups.has(dept)) groups.set(dept, {dept, count:0, inside:0, outside:0, nonCompliant:0, risk:0, lat:0, lng:0, geo:0});
+        const g = groups.get(dept);
+        g.count += 1;
+        if(d.fence_state === "inside") g.inside += 1;
+        if(d.fence_state === "outside") g.outside += 1;
+        if(d.compliant === false) g.nonCompliant += 1;
+        g.risk += Number(d.risk_score||0);
+        if(d.lat != null && d.lng != null){ g.lat += Number(d.lat); g.lng += Number(d.lng); g.geo += 1; }
+      });
+      return Array.from(groups.values()).map(g=>({
+        ...g,
+        avgRisk: g.count ? Math.round(g.risk/g.count) : 0,
+        lat: g.geo ? g.lat/g.geo : null,
+        lng: g.geo ? g.lng/g.geo : null,
+      })).sort((a,b)=>b.count-a.count || b.avgRisk-a.avgRisk || a.dept.localeCompare(b.dept));
+    }
+
+    function renderDepartmentDensity(s, svg, NS){
+      const density = departmentDensity(s.devices||[]);
+      const max = Math.max(1, ...density.map(g=>g.count));
+      density.forEach(g=>{
+        if(g.lat == null || g.lng == null) return;
+        const [x,y] = proj(g.lat,g.lng);
+        const ratio = g.count / max;
+        const risk = Math.min(1, g.avgRisk / 100);
+        const r = 14 + ratio * 34;
+        const color = risk > .45 || g.outside > g.inside ? "255,107,107" : "78,167,252";
+        const halo = document.createElementNS(NS,"circle");
+        halo.setAttribute("cx",x); halo.setAttribute("cy",y); halo.setAttribute("r",r.toFixed(1));
+        halo.setAttribute("fill",`rgba(${color},${(0.16 + ratio*.22).toFixed(2)})`);
+        halo.setAttribute("stroke",`rgba(${color},.75)`);
+        halo.setAttribute("stroke-width","1");
+        const title = document.createElementNS(NS,"title");
+        title.textContent = `${g.dept}: ${g.count} dispositivos · fuera ${g.outside} · riesgo medio ${g.avgRisk}`;
+        halo.appendChild(title);
+        svg.appendChild(halo);
+      });
+      const el = document.getElementById("deptDensity");
+      if(!density.length){ el.innerHTML = "Sin dispositivos con departamento."; return; }
+      el.innerHTML = density.map(g=>{
+        const pct = Math.round((g.count/max)*100);
+        return `<div class="density-row"><span class="name">${esc(g.dept)}</span>`+
+          `<span class="density-track"><span class="density-fill" style="width:${pct}%"></span></span>`+
+          `<span>${g.count} dev · ${g.outside} fuera · riesgo ${g.avgRisk}</span></div>`;
+      }).join("");
     }
 
     function renderTenant(idx){
       if(!CURRENT) return;
-      const tenants = (CURRENT.tenants && CURRENT.tenants.length) ? CURRENT.tenants : [CURRENT];
+      const filterActive = (document.getElementById("tenantFilter").value||"").trim().length > 0;
+      const tenants = FILTERED_TENANTS.length ? FILTERED_TENANTS.map(x=>x.t) : (filterActive ? [] : ((CURRENT.tenants && CURRENT.tenants.length) ? CURRENT.tenants : [CURRENT]));
       const s = tenants[idx] || tenants[0];
       const svg = document.getElementById("map");
       svg.innerHTML = "";
+      if(!s){
+        document.querySelector("#devices tbody").innerHTML = "";
+        document.getElementById("deptDensity").innerHTML = "Sin tenants que coincidan con el filtro.";
+        document.getElementById("cve").innerHTML = "—";
+        document.getElementById("soar").innerHTML = "—";
+        return;
+      }
       const NS = "http://www.w3.org/2000/svg";
+      renderDepartmentDensity(s, svg, NS);
       (s.fences||[]).forEach(f=>{
-        if(f.kind==="circle" && f.center){
+        if((f.kind==="circle" || f.type==="circle") && f.center){
           const [cx,cy] = proj(f.center.lat,f.center.lng);
           const r = Math.max(8, (f.radius_m||500)/1200*280);
           const c = document.createElementNS(NS,"circle");
@@ -187,7 +315,7 @@
         c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6");
         c.setAttribute("fill",color); c.setAttribute("stroke","#08090a"); c.setAttribute("stroke-width","1.5");
         const t2 = document.createElementNS(NS,"title");
-        t2.textContent = `${d.name} — ${d.fence_state} — riesgo ${d.risk_score||0}`;
+        t2.textContent = `${d.name} — ${d.department||"Sin departamento"} — ${d.fence_state} — riesgo ${d.risk_score||0}`;
         c.appendChild(t2);
         svg.appendChild(c);
       });
@@ -198,11 +326,17 @@
         const stxt = d.fence_state==="inside"?"dentro":(d.fence_state==="outside"?"fuera":"desconocido");
         const comp = d.compliant===false?"comp-no":"comp-yes";
         const ctxt = d.compliant===false?"no":"sí";
+        const platform = (d.platform||"unknown").toLowerCase();
+        const geoApplicable = d.geofence_compliance_applicable===true;
+        const geoClass = !geoApplicable || d.geofence_compliant==null ? "unk" : (d.geofence_compliant ? "comp-yes" : "comp-no");
+        const geoText = !geoApplicable ? "—" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
         tb.insertAdjacentHTML("beforeend",
-          `<tr><td class="tag">${d.device_id}</td><td>${d.name||""}</td>`+
+          `<tr><td class="tag">${esc(d.device_id)}</td><td>${esc(d.name||"")}</td>`+
+          `<td><span class="pill plat ${esc(platform)}">${esc(platformLabel(platform))}</span></td>`+
           `<td><span class="pill ${st}">${stxt}</span></td>`+
           `<td><span class="pill ${comp}">${ctxt}</span></td>`+
-          `<td>${d.risk_score||0}</td><td>${d.department||""}</td></tr>`);
+          `<td><span class="pill ${geoClass}" title="${esc(d.geofence_compliance_label||"")}">${geoText}</span></td>`+
+          `<td>${d.risk_score||0}</td><td>${esc(d.department||"")}</td></tr>`);
       });
       const cve = s.cve_summary||{};
       if(cve.demo || cve.apps_total!=null){

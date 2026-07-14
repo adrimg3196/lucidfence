@@ -81,6 +81,7 @@ def _nvd_to_feed_entry(cve_item: dict) -> dict:
     sev, score = _cvss_severity(cve_item)
     return {
         "id": cid,
+        "source": "NVD",
         "severity": sev,
         "score": score,
         "title": desc[:140],
@@ -163,6 +164,7 @@ def load_nvd_feed_into_cve(out_path: str = DEFAULT_OUT) -> int:
                 continue
             cve._FEED[app].append({
                 "id": e.get("id"),
+                "source": e.get("source") or data.get("source") or "NVD",
                 "severity": e.get("severity", "medium"),
                 "score": e.get("score", 0),
                 "title": e.get("title", ""),

@@ -14,6 +14,7 @@ from core.adapters.simulation import SimulationAdapter
 from core.adapters.applivery import AppliveryAdapter
 from core.adapters.intune import IntuneAdapter
 from core.adapters.jamf import JamfAdapter
+from core.adapters.ios_geofence import is_ios_device, ios_geofence_compliance
 
 # Acciones UEM válidas (compartidas por todos los adapters).
 VALID_ACTIONS = {
@@ -64,6 +65,8 @@ __all__ = [
     "AppliveryAdapter",
     "IntuneAdapter",
     "JamfAdapter",
+    "is_ios_device",
+    "ios_geofence_compliance",
     "VALID_ACTIONS",
     "ADAPTER_REGISTRY",
     "build_adapter",

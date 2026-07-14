@@ -54,6 +54,7 @@ class DeviceState:
     last_checkin: Optional[str] = None        # last successful MDM check-in (ISO)
     enrolled_at: Optional[str] = None         # enrollment date (ISO)
     device_tag: Optional[str] = None          # free-text asset tag / label
+    geofence_compliance: Optional[dict] = None  # simulated/live iOS geofence posture
 
     def to_dict(self) -> dict:
         return asdict(self)

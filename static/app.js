@@ -359,6 +359,14 @@ function verifiedBadge(verified, opts={}){
   const txt = verified ? (opts.short?"✓ Verificado":"✓ Verificado (señal real)") : (opts.short?"⚠ No verif.":"⚠ Sin señal / no verificado");
   return `<span class="tag ${cls}" title="${verified?'Riesgo respaldado por señales reales (reasons no vacío)':'Sin señal que respalde el score'}"><span class="d"></span>${txt}</span>`;
 }
+function iosGeofenceBadge(d, opts={}){
+  const g = d && d.geofence_compliance;
+  if(!g || (g.platform||"").toLowerCase()!=="ios") return opts.empty ? `<span class="sub">—</span>` : "";
+  const ok = g.compliant === true;
+  const txt = ok ? "iOS geocerca OK" : "iOS fuera/no cumple";
+  const title = [g.policy_name, g.state, g.evidence].filter(Boolean).join(" · ");
+  return `<span class="tag ${ok?'in':'nocomp'}" title="${esc(title)}"><span class="d"></span>${txt}</span>`;
+}
 function reasonsSummary(risk, max=1){
   if(!risk || !risk.reasons || !risk.reasons.length) return '<span class="sub">sin razones registradas</span>';
   const items = risk.reasons.slice(0, max).map(x=>esc(x));
@@ -445,6 +453,7 @@ function renderOverview(){
   const devs = st.devices||[];
   const inside = st.inside_count||0, outside = st.outside_count||0, unknown = st.unknown_count||0;
   const noncomp = st.noncompliant||0;
+  const iosGeo = st.ios_geofence_summary || {};
   const total = devs.length || (inside+outside+unknown) || 1;
   const compPct = Math.round((total-noncomp)/total*100);
   const events = st.recent_events||[];
@@ -463,6 +472,7 @@ function renderOverview(){
       ${kpiCard("Acciones", (st.actions_this_cycle||actions.length||0), "acc", I.act)}
       ${kpiCard("Apps CVE", (st.cve_summary?.vulnerable_apps||0), (st.cve_summary?.critical_cve_apps||0)?"bad":"ok", I.shield)}
       ${kpiCard("CVE críticos", (st.cve_summary?.critical_cve_apps||0), (st.cve_summary?.critical_cve_apps||0)?"bad":"ok", I.alert)}
+      ${kpiCard("iOS geocerca", (iosGeo.total?`${iosGeo.compliant}/${iosGeo.total}`:"0"), (iosGeo.noncompliant||0)?"bad":"ok", I.shield)}
     </div>
     <div class="grid-main">
       <div class="card">
@@ -652,7 +662,7 @@ function renderDevices(){
     </div>
     <div class="card"><table class="tt"><thead><tr>
       <th class="sort" data-s="name">Dispositivo</th><th class="sort" data-s="platform">Plataforma</th>
-      <th class="sort" data-s="fence_state">Estado</th><th class="sort" data-s="compliant">Conformidad</th>
+      <th class="sort" data-s="fence_state">Estado</th><th class="sort" data-s="compliant">Conformidad</th><th>iOS geocerca</th>
       <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Verif.</th><th></th>
     </tr></thead><tbody id="devBody"></tbody></table></div>`;
   $$("#devFilters .chip").forEach(c=>c.onclick=()=>{
@@ -682,7 +692,7 @@ function renderDeviceRows(){
   };
   devs.sort(sorters[App.devSort]||sorters.name);
   const tb = $("#devBody");
-  if(!devs.length){ tb.innerHTML = `<tr><td colspan="8">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
+  if(!devs.length){ tb.innerHTML = `<tr><td colspan="9">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
   tb.innerHTML="";
   devs.forEach(d=>{
     const state = d.fence_state||"unknown";
@@ -702,6 +712,7 @@ function renderDeviceRows(){
       <td><span class="plat">${platformIcon(d.platform)} ${esc(d.platform||"—")}</span></td>
       <td><span class="tag ${tagCls}"><span class="d"></span>${state==="inside"?"Dentro":state==="outside"?"Fuera":"Desconocido"}</span></td>
       <td>${d.compliant===false?`<span class="tag nocomp"><span class="d"></span>Incumple</span>`:`<div style="display:flex;align-items:center;gap:8px"><div class="cbar ${cbCls}"><i style="width:${compPct}%"></i></div><span class="mono">${compPct}%</span></div>`}</td>
+      <td>${iosGeofenceBadge(d, {empty:true})}</td>
       <td class="mono">${esc(d.city||d.country|| (d.lat!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
       <td class="mono">${fmt.ago(d.last_seen)}</td>
       <td>${verifiedCell}</td>
@@ -723,6 +734,7 @@ async function openDeviceModal(id){
   const rows = [
     ["Plataforma", d.platform||"—"], ["Estado geovalla", state],
     ["Conformidad", d.compliant===false?"Incumple":(d.compliance_pct!=null?d.compliance_pct+"%":"OK")],
+    ["Cumplimiento iOS geocerca", d.geofence_compliance ? ((d.geofence_compliance.compliant?"OK":"Incumple") + " · " + (d.geofence_compliance.policy_name||"política iOS")) : "—"],
     ["Ubicación", d.lat!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],

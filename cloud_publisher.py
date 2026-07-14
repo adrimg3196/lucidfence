@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 from saas.tenant import TenantStore  # noqa: E402
 from core.engine import Engine  # noqa: E402
 from core.location_source import SimulationLocationSource, LocationReport  # noqa: E402
+from core.adapters import ios_geofence_compliance  # noqa: E402
 
 
 # Flota simulada representativa (dispositivos frontline multi-plataforma).
@@ -39,28 +40,52 @@ DEMO_FLEET = [
      "lat": 40.4168, "lng": -3.7038, "os_version": "Android 14",
      "manufacturer": "Samsung", "model": "SM-G906B", "battery_level": 88,
      "compliant": True, "encryption_enabled": True, "rooted": False,
-     "storage_free_gb": 48, "storage_total_gb": 64, "department": "Logística"},
+     "storage_free_gb": 48, "storage_total_gb": 64, "department": "Logística",
+     "apps": [{"name": "google chrome", "version": "120.0.0"}, {"name": "slack", "version": "4.37.0"}]},
     {"device_id": "dev-002", "name": "iPhone 13 Industrial", "platform": "ios",
      "lat": 40.4200, "lng": -3.7100, "os_version": "iOS 17.4",
      "manufacturer": "Apple", "model": "iPhone13,3", "battery_level": 62,
      "compliant": False, "encryption_enabled": True, "rooted": False,
-     "storage_free_gb": 30, "storage_total_gb": 128, "department": "Almacén"},
+     "storage_free_gb": 30, "storage_total_gb": 128, "department": "Almacén",
+     "apps": [{"name": "zoom", "version": "5.17.0"}, {"name": "whatsapp", "version": "2.24.1"}]},
     {"device_id": "dev-003", "name": "Zebra TC52", "platform": "android",
      "lat": 40.4100, "lng": -3.6950, "os_version": "android 12",
      "manufacturer": "Zebra", "model": "TC52", "battery_level": 11,
      "compliant": False, "encryption_enabled": False, "rooted": True,
-     "storage_free_gb": 2, "storage_total_gb": 16, "department": "Reparto"},
+     "storage_free_gb": 2, "storage_total_gb": 16, "department": "Reparto",
+     "apps": [{"name": "adobe reader", "version": "23.001"}, {"name": "openvpn", "version": "2.6.8"}]},
     {"device_id": "dev-004", "name": "iPad Air Field", "platform": "ios",
      "lat": 40.4300, "lng": -3.6900, "os_version": "iOS 16.5",
      "manufacturer": "Apple", "model": "iPad13,1", "battery_level": 95,
      "compliant": True, "encryption_enabled": True, "rooted": False,
-     "storage_free_gb": 64, "storage_total_gb": 64, "department": "Ventas"},
+     "storage_free_gb": 64, "storage_total_gb": 64, "department": "Ventas",
+     "apps": [{"name": "microsoft outlook", "version": "16.0"}, {"name": "microsoft teams", "version": "24124"}]},
     {"device_id": "dev-005", "name": "Samsung XCover Pro", "platform": "android",
      "lat": 40.4050, "lng": -3.7150, "os_version": "Android 13",
      "manufacturer": "Samsung", "model": "SM-G715", "battery_level": 40,
      "compliant": True, "encryption_enabled": True, "rooted": False,
-     "storage_free_gb": 20, "storage_total_gb": 64, "department": "Terreno"},
+     "storage_free_gb": 20, "storage_total_gb": 64, "department": "Terreno",
+     "apps": [{"name": "filezilla", "version": "3.66"}, {"name": "winrar", "version": "6.22"}]},
+    {"device_id": "dev-006", "name": "Chromebook Frontline Kiosk", "platform": "chromeos",
+     "lat": 40.4145, "lng": -3.6995, "os_version": "ChromeOS 126",
+     "manufacturer": "Google", "model": "Chromebook Enterprise", "battery_level": 76,
+     "compliant": True, "encryption_enabled": True, "rooted": False,
+     "storage_free_gb": 42, "storage_total_gb": 64, "department": "Kioscos",
+     "apps": [{"name": "google chrome", "version": "126.0.0"}, {"name": "google meet", "version": "web"}]},
 ]
+
+
+def _demo_cve_app_names() -> list[str]:
+    """Keywords NVD para las apps instaladas en la flota demo."""
+    names: list[str] = []
+    seen: set[str] = set()
+    for dev in DEMO_FLEET:
+        for app in dev.get("apps", []):
+            name = (app.get("name") or "").strip().lower()
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+    return names
 
 
 def _write_demo_seed(seed_path: Path):
@@ -74,7 +99,7 @@ def _write_demo_seed(seed_path: Path):
          "storage_free_gb": d["storage_free_gb"], "storage_total_gb": d["storage_total_gb"],
          "department": d["department"],
          "rooted": d.get("rooted", False), "encryption_enabled": d["encryption_enabled"],
-         "os_outdated": d.get("os_outdated", False)}
+         "os_outdated": d.get("os_outdated", False), "apps": list(d.get("apps", []))}
         for d in DEMO_FLEET
     ]}
     seed_path.write_text(json.dumps(seed, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -110,6 +135,15 @@ def build_demo_engine(workdir: Path) -> Engine:
         "policies_path": str(tdir / "policies.json"),
         "action_cooldown_seconds": 3600,
         "incident_webhook_url": "",
+        # La vitrina cloud sí tiene red: refresca el cache NVD best-effort antes
+        # de arrancar el engine. Si NVD cae, core/cve_feed_nvd.py deja intacto el
+        # ultimo feed bueno y serialize() mantiene fallback demo si no hay señal.
+        "cve_feed_sync": True,
+        "cve_feed_path": str(tdir / "cve_feed_nvd.json"),
+        "cve_feed_apps": _demo_cve_app_names(),
+        "cve_feed_per_app": int(os.environ.get("LUCIDFENCE_NVD_PER_APP", "3")),
+        "cve_feed_timeout": int(os.environ.get("LUCIDFENCE_NVD_TIMEOUT", "12")),
+        "cve_feed_sleep_s": float(os.environ.get("LUCIDFENCE_NVD_SLEEP", "0.2")),
     }
     return Engine(cfg)
 
@@ -119,13 +153,16 @@ def serialize(eng: Engine, org_id: str) -> dict:
     snap = list(eng.store.snapshot().values())
     devices = []
     for s in snap:
-        d = getattr(s, "__dict__", {})
+        geo = ios_geofence_compliance(s)
         devices.append({
             "device_id": getattr(s, "device_id", ""),
             "name": getattr(s, "name", ""),
             "platform": getattr(s, "platform", ""),
             "fence_state": getattr(s, "fence_state", "unknown"),
             "compliant": getattr(s, "compliant", None),
+            "geofence_compliance_applicable": geo["geofence_compliance_applicable"],
+            "geofence_compliant": geo["geofence_compliant"],
+            "geofence_compliance_label": geo["geofence_compliance_label"],
             "risk_score": getattr(s, "risk_score", 0),
             "battery_level": getattr(s, "battery_level", None),
             "department": getattr(s, "department", ""),
@@ -136,8 +173,17 @@ def serialize(eng: Engine, org_id: str) -> dict:
     inside = sum(1 for d in devices if d["fence_state"] == "inside")
     outside = sum(1 for d in devices if d["fence_state"] == "outside")
     noncompliant = sum(1 for d in devices if d["compliant"] is False)
+    ios_geo = [d for d in devices if d.get("geofence_compliance_applicable")]
+    ios_geo_ok = sum(1 for d in ios_geo if d.get("geofence_compliant") is True)
+    ios_geo_bad = sum(1 for d in ios_geo if d.get("geofence_compliant") is False)
+    ios_geo_unknown = sum(1 for d in ios_geo if d.get("geofence_compliant") is None)
     total = len(devices)
     compliance_rate = round(100.0 * (total - noncompliant) / total, 1) if total else 0.0
+    ios_geo_rate = round(100.0 * ios_geo_ok / len(ios_geo), 1) if ios_geo else 0.0
+    platform_counts: dict[str, int] = {}
+    for d in devices:
+        plat = (d.get("platform") or "unknown").lower()
+        platform_counts[plat] = platform_counts.get(plat, 0) + 1
     return {
         "service": "lucidfence-cloud",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -149,14 +195,21 @@ def serialize(eng: Engine, org_id: str) -> dict:
             "outside": outside,
             "non_compliant": noncompliant,
             "compliance_rate_pct": compliance_rate,
+            "ios_devices": len(ios_geo),
+            "ios_geofence_compliant": ios_geo_ok,
+            "ios_geofence_non_compliant": ios_geo_bad,
+            "ios_geofence_unknown": ios_geo_unknown,
+            "ios_geofence_compliance_rate_pct": ios_geo_rate,
+            "platform_counts": platform_counts,
+            "chromeos_devices": platform_counts.get("chromeos", 0),
         },
         "devices": devices,
         "fences": status.get("fences", []),
         "incidents": status.get("incidents", []),
-        # En modo simulación el engine no carga feeds externos; inyectamos un
-        # resumen CVE/SOAR de ejemplo determinista para que la vitrina sea
-        # representativa (claramente marcado como demo, no datos de tenant live).
-        "cve_summary": _demo_cve_summary(status.get("cve_summary"), total),
+        # Preferir el resumen CVE real producido por el engine (CVE_DB + feed NVD
+        # cacheado/refrescado). Solo si no hay apps vulnerables se usa fallback
+        # demo claramente marcado.
+        "cve_summary": _cve_summary_for_cloud(status, total),
         "soar": status.get("soar") or {
             "demo": True,
             "playbooks": [
@@ -167,6 +220,42 @@ def serialize(eng: Engine, org_id: str) -> dict:
             "matched": [d["device_id"] for d in devices if d["fence_state"] == "outside" or d["compliant"] is False],
         },
     }
+
+
+def _cve_summary_for_cloud(status: dict, total: int) -> dict:
+    """Resumen CVE para la vitrina: real si el engine produjo señal, demo si no."""
+    real = dict((status or {}).get("cve_summary") or {})
+    if real.get("vulnerable_apps"):
+        real["demo"] = False
+        real["source"] = "engine-cve-feed"
+        real["ejemplos"] = _cve_examples_from_status(status)
+        return real
+    return _demo_cve_summary(real, total)
+
+
+def _cve_examples_from_status(status: dict, limit: int = 4) -> list[dict]:
+    examples: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for dev in (status or {}).get("devices", []):
+        for app in dev.get("apps") or []:
+            app_name = app.get("name") or app.get("bundle_id") or "app"
+            version = app.get("version") or ""
+            for cve in app.get("cves") or []:
+                cid = cve.get("id") or cve.get("cve") or "CVE-UNKNOWN"
+                key = (app_name.lower(), cid)
+                if key in seen:
+                    continue
+                seen.add(key)
+                examples.append({
+                    "app": app_name,
+                    "version": version,
+                    "cve": cid,
+                    "source": cve.get("source") or "local",
+                    "severity": (cve.get("severity") or "medium").lower(),
+                })
+                if len(examples) >= limit:
+                    return examples
+    return examples
 
 
 def _demo_cve_summary(real: dict, total: int) -> dict:
@@ -242,12 +331,27 @@ def main():
     noncompliant = sum(1 for d in all_devices if d["compliant"] is False)
     inside = sum(1 for d in all_devices if d["fence_state"] == "inside")
     outside = sum(1 for d in all_devices if d["fence_state"] == "outside")
+    ios_geo = [d for d in all_devices if d.get("geofence_compliance_applicable")]
+    ios_geo_ok = sum(1 for d in ios_geo if d.get("geofence_compliant") is True)
+    ios_geo_bad = sum(1 for d in ios_geo if d.get("geofence_compliant") is False)
+    ios_geo_unknown = sum(1 for d in ios_geo if d.get("geofence_compliant") is None)
+    platform_counts: dict[str, int] = {}
+    for d in all_devices:
+        plat = (d.get("platform") or "unknown").lower()
+        platform_counts[plat] = platform_counts.get(plat, 0) + 1
     agg = {
         "devices": total,
         "inside": inside,
         "outside": outside,
         "non_compliant": noncompliant,
         "compliance_rate_pct": round(100.0 * (total - noncompliant) / total, 1) if total else 0.0,
+        "ios_devices": len(ios_geo),
+        "ios_geofence_compliant": ios_geo_ok,
+        "ios_geofence_non_compliant": ios_geo_bad,
+        "ios_geofence_unknown": ios_geo_unknown,
+        "ios_geofence_compliance_rate_pct": round(100.0 * ios_geo_ok / len(ios_geo), 1) if ios_geo else 0.0,
+        "platform_counts": platform_counts,
+        "chromeos_devices": platform_counts.get("chromeos", 0),
     }
 
     payload = {

@@ -4,12 +4,14 @@
 # always-on, con su propia base de datos y sin enviar nada a terceros.
 # No cuesta nada al proveedor: corre en la infra del cliente.
 #
-# Uso:
+# Uso local seguro:
 #   docker compose up -d
 #   → LucidFence en http://localhost:8765  (dashboard + API + engine)
 #
-# Para exponerlo a la red de la empresa, poner delante un reverse proxy
-# (nginx/caddy) con TLS. La data persiste en el volumen ./data.
+# Uso internet-facing (TLS obligatorio, sin exponer el backend en claro):
+#   LUCIDFENCE_PUBLIC_HOST=lucidfence.example.com docker compose --profile internet-facing up -d
+# El perfil internet-facing levanta Caddy en :80/:443 y mantiene LucidFence solo
+# en la red interna de Docker. La data persiste en el volumen ./data.
 
 services:
   lucidfence:
@@ -17,10 +19,13 @@ services:
     container_name: lucidfence
     restart: unless-stopped
     ports:
-      - "8765:8765"
+      - "127.0.0.1:${LUCIDFENCE_PORT:-8765}:8765"
     environment:
       - MOA_PORT=8085
       - LUCIDFENCE_PORT=8765
+      - LUCIDFENCE_HOST=0.0.0.0
+      - LUCIDFENCE_TLS=${LUCIDFENCE_TLS:-0}
+      - LUCIDFENCE_PUBLIC_HOST=${LUCIDFENCE_PUBLIC_HOST:-}
       # El cliente puede desactivar la IA local si no la usa:
       # - ENABLE_MOA=false
     volumes:
@@ -31,3 +36,24 @@ services:
         limits:
           memory: 512M
           cpus: "1.0"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: lucidfence-tls
+    restart: unless-stopped
+    profiles: ["internet-facing"]
+    depends_on:
+      - lucidfence
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - LUCIDFENCE_PUBLIC_HOST=${LUCIDFENCE_PUBLIC_HOST:?define un FQDN público para TLS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

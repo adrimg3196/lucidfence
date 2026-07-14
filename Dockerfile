@@ -21,7 +21,9 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     MOA_PORT=8085 \
-    LUCIDFENCE_PORT=8765
+    LUCIDFENCE_PORT=8765 \
+    LUCIDFENCE_HOST=0.0.0.0 \
+    LUCIDFENCE_TLS=1
 
 WORKDIR /app
 
@@ -31,8 +33,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requerimientos primero para aprovechar la cache de capas.
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock /app/
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Codigo fuente.
 COPY . /app

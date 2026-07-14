@@ -1,0 +1,13 @@
+# LucidFence locked dependencies — install with: pip install --require-hashes -r requirements.lock
+# Regenerated 2026-07-14 from PyPI wheels for Python 3.11/Linux and macOS.
+requests==2.32.5 \
+    --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6
+certifi==2026.6.17 \
+    --hash=sha256:2227dcbaafe0d2f59279d1762ddddc37783ed4354594f194ffc31d20f41fc3db
+charset-normalizer==3.4.9 \
+    --hash=sha256:04ce310cb89c15df659582aee80a0603788732a5e017d5bd5c81158106ce249c \
+    --hash=sha256:253a4a220747e8b5faf57ec320c4f5efb0cef05f647420bf267143ec15dba10a
+idna==3.18 \
+    --hash=sha256:7f952cbe720b688055e3f87de14f5c3e5fdaa8bc3928985c4077ca689de849a2
+urllib3==2.6.3 \
+    --hash=sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4

@@ -80,6 +80,7 @@ class LocationReport:
     last_checkin: Optional[str] = None
     enrolled_at: Optional[str] = None
     device_tag: Optional[str] = None
+    geofence_compliance: Optional[dict] = None
 
 
 class LiveLocationSource:
@@ -373,9 +374,11 @@ class SimulationLocationSource:
             # Inventory defaults so the MDM/UEM asset view is always populated,
             # even when a (legacy) seed omits the new fields.
             os_default = {"android": "Android 13", "ios": "iOS 17.4",
-                           "windows": "Windows 11 23H2", "macos": "macOS 14"}.get(plat, "Desconocido")
+                           "windows": "Windows 11 23H2", "macos": "macOS 14",
+                           "chromeos": "ChromeOS 126"}.get(plat, "Desconocido")
             model_default = {"android": "Dispositivo Android", "ios": "iPhone",
-                              "windows": "PC Windows", "macos": "Mac"}.get(plat, "Dispositivo")
+                              "windows": "PC Windows", "macos": "Mac",
+                              "chromeos": "Chromebook Enterprise"}.get(plat, "Dispositivo")
             out.append(LocationReport(
                 device_id=dev.get("id", ""),
                 name=dev.get("name", "unknown"),
@@ -408,6 +411,7 @@ class SimulationLocationSource:
                 last_checkin=dev.get("last_checkin"),
                 enrolled_at=dev.get("enrolled_at") or "2026-01-01T00:00:00Z",
                 device_tag=dev.get("device_tag") or dev.get("id"),
+                geofence_compliance=dev.get("geofence_compliance") if plat == "ios" else None,
             ))
         return out
 

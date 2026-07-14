@@ -8,3 +8,9 @@
 {"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T12:41:28.288084+00:00"}
 {"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T12:49:42.026995+00:00"}
 {"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T12:49:42.028572+00:00"}
+{"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T15:24:56.140472+00:00"}
+{"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T15:24:56.141807+00:00"}
+{"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T15:25:43.721356+00:00"}
+{"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T15:25:43.722464+00:00"}
+{"device_id": "t1", "lat": 40.421, "lng": -3.708, "fence_state": "inside", "ts": "2026-07-14T15:25:47.562395+00:00"}
+{"device_id": "t2", "lat": 40.43, "lng": -3.69, "fence_state": "outside", "ts": "2026-07-14T15:25:47.563477+00:00"}

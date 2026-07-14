@@ -14,6 +14,7 @@ sys.path.insert(0, ".")
 from core.adapters import (
     MDMAdapter, SimulationAdapter, AppliveryAdapter, IntuneAdapter,
     JamfAdapter, VALID_ACTIONS, ADAPTER_REGISTRY, build_adapter,
+    is_ios_device, ios_geofence_compliance,
 )
 from core.actions import LiveAdapter  # alias histórico
 
@@ -91,6 +92,21 @@ def test_registry_discoverable():
 
 def test_liveadapter_alias():
     check(LiveAdapter is AppliveryAdapter, "LiveAdapter === AppliveryAdapter (compat)")
+
+
+def test_ios_geofence_compliance_adapter():
+    ios_inside = {"device_id": "ios-1", "platform": "ios", "fence_state": "inside"}
+    ios_outside = {"device_id": "ios-2", "platform": "iPadOS", "fence_state": "outside"}
+    android_inside = {"device_id": "and-1", "platform": "android", "fence_state": "inside"}
+    check(is_ios_device(ios_inside), "detecta iOS")
+    check(is_ios_device(ios_outside), "detecta iPadOS")
+    check(not is_ios_device(android_inside), "android no es iOS")
+    check(ios_geofence_compliance(ios_inside)["geofence_compliant"] is True,
+          "iOS dentro de geocerca cumple")
+    check(ios_geofence_compliance(ios_outside)["geofence_compliant"] is False,
+          "iOS fuera de geocerca no cumple")
+    check(ios_geofence_compliance(android_inside)["geofence_compliance_applicable"] is False,
+          "no aplica a no-iOS")
 
 
 if __name__ == "__main__":
