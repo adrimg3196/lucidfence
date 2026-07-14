@@ -12,6 +12,7 @@ Runs locally, forever, on the configured interval (default 15 min).
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -72,7 +73,8 @@ class Engine:
         # digest). Opt-in per tenant: requires atomicmail config in integration.
         self.mailbox = None
         self._wire_atomicmail(config)
-        self.fences_path = Path(config["fences_path"])
+        _data_dir = config.get("data_dir", "data")
+        self.fences_path = Path(config.get("fences_path", os.path.join(_data_dir, "fences.json")))
         self.fences = load_fences(self.fences_path)
         self.fence_by_id = fence_index(self.fences)
         self.source = build_location_source(

@@ -78,6 +78,14 @@ COOKIE_ORG = "gf_org"
 # Global stores (single instance, local-only SaaS).
 _tenants = TenantStore(ROOT / "data")
 _auth = AuthStore(ROOT / "data")
+# Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
+# configuracion manual (ciso@acme.test / demo1234). Idempotente.
+try:
+    if _auth.get_by_email("ciso@acme.test") is None and _tenants.data_dir("acme-logistics").exists():
+        _auth.create_user("ciso@acme.test", "CISCO Acme (demo)", "demo1234",
+                          "acme-logistics", "owner")
+except Exception:
+    pass
 _SIMULATION = False
 
 # Per-org engine cache. Each org gets its own running engine.
