@@ -1,0 +1,33 @@
+# LucidFence — instalación local para clientes (100% soberano, $0)
+#
+# El cliente corre esto en su propia máquina/servidor y obtiene LucidFence
+# always-on, con su propia base de datos y sin enviar nada a terceros.
+# No cuesta nada al proveedor: corre en la infra del cliente.
+#
+# Uso:
+#   docker compose up -d
+#   → LucidFence en http://localhost:8765  (dashboard + API + engine)
+#
+# Para exponerlo a la red de la empresa, poner delante un reverse proxy
+# (nginx/caddy) con TLS. La data persiste en el volumen ./data.
+
+services:
+  lucidfence:
+    build: .
+    container_name: lucidfence
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - MOA_PORT=8085
+      - LUCIDFENCE_PORT=8765
+      # El cliente puede desactivar la IA local si no la usa:
+      # - ENABLE_MOA=false
+    volumes:
+      - ./data:/app/data
+    # Límites suaves para no consumir recursos del cliente:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
