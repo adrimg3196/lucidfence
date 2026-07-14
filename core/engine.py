@@ -76,8 +76,12 @@ class Engine:
         _data_dir = config.get("data_dir", "data")
         _default_fences = config.get("fences_path")
         if _default_fences is None:
-            _seed = config.get("sim_seed_path") or os.path.join(_data_dir, "fleet_seed.json")
-            _default_fences = os.path.join(os.path.dirname(os.path.abspath(_seed)), "fences.json")
+            _seed = config.get("sim_seed_path")
+            if _seed:
+                _default_fences = os.path.join(os.path.dirname(os.path.abspath(_seed)), "fences.json")
+            else:
+                # Repo root fences.json (sembrado por el server en modo live/demo).
+                _default_fences = "fences.json"
         self.fences_path = Path(_default_fences)
         self.fences = load_fences(self.fences_path)
         self.fence_by_id = fence_index(self.fences)
