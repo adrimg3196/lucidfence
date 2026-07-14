@@ -1,0 +1,54 @@
+name: saas-api
+
+# API serverless de LucidFence sobre GitHub Actions.
+# El agente (o un usuario autenticado) dispara estas operaciones vía
+# `gh workflow run saas-api` y el workflow escribe el estado del tenant en
+# data/cloud_tenants/<id>/data/*.json. El engine-cron luego procesa esos
+# tenants y los publica en la vitrina cloud (cloud.html).
+#
+# Esto da un SaaS multi-tenant real, persistido en el repo, $0, fuera de
+# cualquier máquina local. Las operaciones on-demand las orquesta el agente.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "create_tenant | add_fence | remove_tenant"
+        required: true
+        default: "create_tenant"
+      tenant_id:
+        description: "ID del tenant (slug)"
+        required: false
+        default: ""
+      payload:
+        description: "JSON con los datos (flota/geocercas)"
+        required: false
+        default: "{}"
+
+permissions:
+  contents: write
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Ejecutar operación
+        env:
+          ACTION: ${{ github.event.inputs.action }}
+          TENANT_ID: ${{ github.event.inputs.tenant_id }}
+          PAYLOAD: ${{ github.event.inputs.payload }}
+        run: python scripts/saas_api_op.py
+      - name: Commitear cambios
+        run: |
+          git config user.name "lucidfence-cloud[bot]"
+          git config user.email "cloud@lucidfence.local"
+          git add data/cloud_tenants
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+          else
+            git commit -m "cloud: operación $ACTION ($TENANT_ID)"
+            git push
+          fi

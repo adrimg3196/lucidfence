@@ -15,7 +15,9 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:var(--font);background:var(--bg);color:var(--fg);padding:24px;line-height:1.45}
     h1{font-size:20px;margin:0 0 4px}
-    .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+    .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+    .bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+    select{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
     .kpi .v{font-size:28px;font-weight:700}
@@ -41,8 +43,13 @@
 </head>
 <body>
   <h1>LucidFence · Geofencing UEM/MDM en vivo</h1>
-  <div class="sub">Vitrina cloud-serverless ($0 · GitHub Actions + Pages). Estado generado por el engine en la nube cada 15 min.
+  <div class="sub">Vitrina cloud-serverless multi-tenant ($0 · GitHub Actions + Pages). Estado generado por el engine en la nube cada 15 min.
     <span id="ts" class="meta"></span></div>
+
+  <div class="bar">
+    <label class="meta" for="tenantSel">Tenant:</label>
+    <select id="tenantSel" onchange="renderTenant(parseInt(this.value))"></select>
+  </div>
 
   <div class="kpis" id="kpis"></div>
 
@@ -74,13 +81,14 @@
   <script>
     const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json";
 
-    // Proyección simple: bounding box de Madrid centro.
     const BB = {minLat:40.38, maxLat:40.44, minLng:-3.74, maxLng:-3.68};
     function proj(lat,lng){
       const x = (lng-BB.minLng)/(BB.maxLng-BB.minLng)*580+10;
       const y = (BB.maxLat-lat)/(BB.maxLat-BB.minLat)*320+10;
       return [x,y];
     }
+
+    let CURRENT = null;
 
     async function load(){
       try{
@@ -94,18 +102,29 @@
     }
 
     function render(s){
-      const t = s.totals || {};
-      document.getElementById("ts").textContent = " · generado "+ (s.generated_at||"");
+      const tenants = (s.tenants && s.tenants.length) ? s.tenants : [s];
+      CURRENT = s;
+      document.getElementById("ts").textContent = " · generado " + (s.generated_at||"");
+      const sel = document.getElementById("tenantSel");
+      sel.innerHTML = tenants.map((t,i)=>
+        `<option value="${i}">${t.tenant||("tenant"+i)} — ${(t.totals?t.totals.devices:0)} dev</option>`).join("");
+      const agg = s.totals || (tenants[0] && tenants[0].totals) || {};
       const kpis = [
-        ["Dispositivos", t.devices||0, ""],
-        ["Dentro", t.inside||0, "var(--green)"],
-        ["Fuera", t.outside||0, "var(--red)"],
-        ["No conformes", t.non_compliant||0, "var(--amber)"],
-        ["Compliance", (t.compliance_rate_pct||0)+"%", "var(--blue)"],
+        ["Dispositivos", agg.devices||0, ""],
+        ["Dentro", agg.inside||0, "var(--green)"],
+        ["Fuera", agg.outside||0, "var(--red)"],
+        ["No conformes", agg.non_compliant||0, "var(--amber)"],
+        ["Compliance", (agg.compliance_rate_pct||0)+"%", "var(--blue)"],
       ];
       document.getElementById("kpis").innerHTML = kpis.map(k=>
         `<div class="kpi"><div class="v" style="color:${k[2]}">${k[1]}</div><div class="l">${k[0]}</div></div>`).join("");
+      renderTenant(0);
+    }
 
+    function renderTenant(idx){
+      if(!CURRENT) return;
+      const tenants = (CURRENT.tenants && CURRENT.tenants.length) ? CURRENT.tenants : [CURRENT];
+      const s = tenants[idx] || tenants[0];
       const svg = document.getElementById("map");
       svg.innerHTML = "";
       const NS = "http://www.w3.org/2000/svg";
@@ -137,7 +156,6 @@
         c.appendChild(t2);
         svg.appendChild(c);
       });
-
       const tb = document.querySelector("#devices tbody");
       tb.innerHTML = "";
       (s.devices||[]).forEach(d=>{
@@ -151,7 +169,6 @@
           `<td><span class="pill ${comp}">${ctxt}</span></td>`+
           `<td>${d.risk_score||0}</td><td>${d.department||""}</td></tr>`);
       });
-
       const cve = s.cve_summary||{};
       document.getElementById("cve").innerHTML = cve.apps_total!=null
         ? `Apps escaneadas: <b>${cve.apps_total}</b> · Vulnerables: <b style="color:var(--red)">${cve.vulnerable_apps||0}</b>`

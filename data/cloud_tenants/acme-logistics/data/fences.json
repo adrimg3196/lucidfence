@@ -1,0 +1,14 @@
+{
+  "fences": [
+    {
+      "id": "acme-hq",
+      "name": "Acme HQ",
+      "kind": "circle",
+      "center": {
+        "lat": 40.421,
+        "lng": -3.708
+      },
+      "radius_m": 500
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "devices": [
+    {
+      "id": "t1",
+      "name": "Camion 01",
+      "platform": "android",
+      "waypoints": [
+        {
+          "lat": 40.421,
+          "lng": -3.708
+        }
+      ],
+      "compliant": true,
+      "os_version": "Android 14",
+      "manufacturer": "Samsung",
+      "model": "XCover",
+      "battery_level": 80,
+      "storage_free_gb": 40,
+      "storage_total_gb": 64,
+      "department": "Reparto"
+    },
+    {
+      "id": "t2",
+      "name": "Camion 02",
+      "platform": "android",
+      "waypoints": [
+        {
+          "lat": 40.43,
+          "lng": -3.69
+        }
+      ],
+      "compliant": false,
+      "os_version": "Android 13",
+      "manufacturer": "Zebra",
+      "model": "TC52",
+      "battery_level": 20,
+      "storage_free_gb": 2,
+      "storage_total_gb": 16,
+      "department": "Reparto"
+    }
+  ]
+}

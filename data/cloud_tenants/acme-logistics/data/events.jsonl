@@ -1,0 +1,2 @@
+{"ts": "2026-07-14T10:44:56.612499+00:00", "device_id": "t1", "device_name": "Camion 01", "from": "none:unknown", "to": "acme-hq:inside"}
+{"ts": "2026-07-14T10:44:56.613266+00:00", "device_id": "t2", "device_name": "Camion 02", "from": "none:unknown", "to": "None:outside"}

@@ -164,18 +164,81 @@ def main():
     ap.add_argument("--out", default="data/cloud_state.json")
     args = ap.parse_args()
 
+    # 1) Tenant demo determinista (siempre presente, flota fija).
     workdir = Path(tempfile.mkdtemp(prefix="lucidfence-cloud-"))
-    eng = build_demo_engine(workdir)
-    for i in range(max(1, args.cycles)):
-        eng.run_once()
+    demo_eng = build_demo_engine(workdir)
+    for _ in range(max(1, args.cycles)):
+        demo_eng.run_once()
         time.sleep(0.3)
-    payload = serialize(eng, eng.org_id)
+    demo_payload = serialize(demo_eng, demo_eng.org_id)
+    demo_payload["tenant"] = "demo"
+
+    # 2) Tenants de la nube persistidos en el repo (creados vía saas-api.yml /
+    #    agente). Directorio dedicado data/cloud_tenants/ para no mezclar con la
+    #    basura de tenants de tests en data/tenants/. Cada uno tiene
+    #    data/cloud_tenants/<id>/data/{fleet_seed,fences}.json
+    tenants_payload = []
+    repo_tenants = Path("data/cloud_tenants")
+    if repo_tenants.exists():
+        for tdir in sorted(repo_tenants.iterdir()):
+            tdata = tdir / "data"
+            if not tdata.is_dir():
+                continue
+            seed = tdata / "fleet_seed.json"
+            fences = tdata / "fences.json"
+            if not (seed.exists() and fences.exists()):
+                continue
+            try:
+                cfg = {
+                    "mode": "simulation", "autostart": False,
+                    "data_dir": str(tdata), "org_id": tdir.name,
+                    "sim_seed_path": str(seed),
+                    "fences_path": str(fences),
+                    "routes_path": str(tdata / "routes.json"),
+                    "policies_path": str(tdata / "policies.json"),
+                    "action_cooldown_seconds": 3600, "incident_webhook_url": "",
+                }
+                eng = Engine(cfg)
+                for _ in range(max(1, args.cycles)):
+                    eng.run_once()
+                    time.sleep(0.2)
+                p = serialize(eng, tdir.name)
+                p["tenant"] = tdir.name
+                tenants_payload.append(p)
+            except Exception as exc:  # never fatal: one bad tenant shouldn't kill the run
+                print(f"  [warn] tenant {tdir.name} omitido: {type(exc).__name__}: {exc}")
+
+    # 3) Agregado global.
+    all_devices = demo_payload["devices"] + [d for t in tenants_payload for d in t["devices"]]
+    total = len(all_devices)
+    noncompliant = sum(1 for d in all_devices if d["compliant"] is False)
+    inside = sum(1 for d in all_devices if d["fence_state"] == "inside")
+    outside = sum(1 for d in all_devices if d["fence_state"] == "outside")
+    agg = {
+        "devices": total,
+        "inside": inside,
+        "outside": outside,
+        "non_compliant": noncompliant,
+        "compliance_rate_pct": round(100.0 * (total - noncompliant) / total, 1) if total else 0.0,
+    }
+
+    payload = {
+        "service": "lucidfence-cloud",
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "mode": "simulation",
+        "totals": agg,
+        "tenants": [demo_payload] + tenants_payload,
+        "devices": all_devices,
+        "fences": demo_payload["fences"],
+        "cve_summary": demo_payload.get("cve_summary", {}),
+        "soar": demo_payload.get("soar", {}),
+    }
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"cloud_state escrito: {out} ({payload['totals']['devices']} dispositivos, "
-          f"compliance={payload['totals']['compliance_rate_pct']}%)")
+    print(f"cloud_state escrito: {out} ({agg['devices']} dispositivos en "
+          f"{len(tenants_payload)+1} tenants, compliance={agg['compliance_rate_pct']}%)")
 
 
 if __name__ == "__main__":

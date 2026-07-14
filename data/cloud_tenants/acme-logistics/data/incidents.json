@@ -1,0 +1,36 @@
+[
+  {
+    "id": "inc-outside-t2",
+    "type": "geofence_exit",
+    "severity": "critical",
+    "status": "open",
+    "title": "Camion 02 está fuera de geovalla",
+    "device_id": "t2",
+    "device_name": "Camion 02",
+    "recommendation": "Validar ubicación reciente, contactar propietario y ejecutar acción UEM si procede.",
+    "first_seen": "2026-07-14T10:44:56.613266+00:00",
+    "last_seen": "2026-07-14T10:44:56Z",
+    "count": 1,
+    "assignee": null,
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "timeline": []
+  },
+  {
+    "id": "inc-noncompliant-t2",
+    "type": "device_non_compliant",
+    "severity": "high",
+    "status": "open",
+    "title": "Camion 02 no cumple la política UEM",
+    "device_id": "t2",
+    "device_name": "Camion 02",
+    "recommendation": "Revisar compliance, localizar el dispositivo y aplicar playbook de remediación.",
+    "first_seen": "2026-07-14T10:44:56.613266+00:00",
+    "last_seen": "2026-07-14T10:44:56Z",
+    "count": 1,
+    "assignee": null,
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "timeline": []
+  }
+]
