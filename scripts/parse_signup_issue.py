@@ -51,6 +51,20 @@ def parse_block(body: str):
 
 def main():
     body = os.environ.get("ISSUE_BODY", "")
+    # GitHub Actions puede entregar ISSUE_BODY vacío cuando el cuerpo del issue
+    # es multilínea/comillas (escapado roto en `env:`). En ese caso, leemos el
+    # body fresco desde la API del repo (sin tokens del usuario).
+    if not body and os.environ.get("ISSUE_NUMBER"):
+        import subprocess
+        try:
+            out = subprocess.run(
+                ["gh", "issue", "view", os.environ["ISSUE_NUMBER"], "--json", "body",
+                 "--jq", ".body"],
+                capture_output=True, text=True, check=True,
+            )
+            body = out.stdout
+        except Exception as ex:
+            print(f"No se pudo leer el body del issue vía gh: {ex}")
     if not body:
         print("ISSUE_BODY vacío")
         sys.exit(1)
