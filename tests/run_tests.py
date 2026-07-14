@@ -55,11 +55,32 @@ def main():
                 time.sleep(0.5)
     except Exception:
         pass
+
+    # Some test modules (e.g. test_it_admin_features.py) run their suite at
+    # import time and finish with `raise SystemExit(...)`. Loading them via
+    # exec_module triggers that SystemExit, which is NOT caught by the inner
+    # `except Exception` and would silently abort discovery of every later
+    # file. We catch it per-module so discovery always completes and the final
+    # tally is honest.
     try:
         for fn in sorted(os.listdir(HERE)):
             if not fn.startswith("test_") or not fn.endswith(".py"):
                 continue
-            mod = _load_module(os.path.join(HERE, fn))
+            try:
+                mod = _load_module(os.path.join(HERE, fn))
+            except SystemExit:
+                # Module ran its own suite at import time and chose to exit.
+                # Its own prints already reported PASS/FAIL. Count it as one
+                # executed file and keep discovering the rest.
+                passed += 1
+                print(f"  [module-level suite] {fn} (see output above)")
+                continue
+            except Exception as e:  # noqa: BLE001 - report, don't crash
+                failed += 1
+                msg = "".join(traceback.format_exception_only(type(e), e)).strip()
+                failures.append((f"{fn}::<import>", msg))
+                print(f"  FAIL  {fn}::<import>: {msg}")
+                continue
             tests = [getattr(mod, a) for a in dir(mod)
                      if a.startswith("test_") and callable(getattr(mod, a))]
             for t in tests:

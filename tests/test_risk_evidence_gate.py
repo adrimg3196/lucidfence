@@ -49,10 +49,10 @@ def test_inside_compliant_low_risk():
 def test_posture_signals_contribute():
     eng = _eng()
     d = {"device_id": "d3", "compliant": False, "fence_id": "f1",
-         "rooted": True, "os_outdated": True,
+         "rooted": True,
          "storage_free_gb": 1, "storage_total_gb": 64,  # disk_low
          "battery_level": 10,                            # battery_critical
-         "os_version": "android 12",                      # os_unpatched
+         "os_version": "android 12",                     # os_unpatched
          "encryption_enabled": False}                     # encryption_off
     r = eng.evaluate(d, "inside", {"hour": 12})
     joined = " ".join(r["reasons"]).lower()

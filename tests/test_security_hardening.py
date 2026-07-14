@@ -63,30 +63,30 @@ def test_read_body_rejects_non_object_json():
 
 def test_webhook_non_2xx_is_not_treated_as_delegated():
     from core.actions import LiveAdapter
+    import core.adapters.applivery as P
 
     class _Resp:
         status_code = 500
-        text = "boom"
+        def text(self):
+            return "boom"
 
     class _Sess:
         def post(self, *a, **k):
             return _Resp()
-
-    adapter = LiveAdapter(org_id="org-test", endpoint_template="",
-                          webhook_url="http://127.0.0.1:1/hook", api_key="x")
 
     class _Dev:
         device_id = "dev-1"
         name = "d"
         platform = "android"
 
-    import core.actions as A
-    orig = A.requests
+    adapter = LiveAdapter(org_id="org-test", endpoint_template="",
+                          webhook_url="http://127.0.0.1:1/hook", api_key="x")
+    orig = P.requests
     try:
-        A.requests = _Sess()
+        P.requests = _Sess()
         res = adapter._delegate_webhook(_Dev(), "wipe", {}, reason="test")
     finally:
-        A.requests = orig
-    assert res["delegated"] is False
-    assert res.get("attempted") is True
+        P.requests = orig
+    assert res["delegated"] is False, res
+    assert res.get("attempted") is True, res
 

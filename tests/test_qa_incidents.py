@@ -30,7 +30,9 @@ def req(method, path, body=None, cookie=None):
 def login(email, password):
     status, body, cookie = req("POST", "/api/auth/login", {"email": email, "password": password})
     assert status == 200 and body.get("ok"), body
-    return (cookie or "").split(";")[0]
+    # Preserve ALL set-cookie parts (gf_session AND gf_org) so downstream
+    # org-scoped endpoints (e.g. /api/run-once) resolve the active org.
+    return cookie or ""
 
 
 def test_incident_http_lifecycle_and_rbac():
@@ -95,8 +97,16 @@ def test_incident_csv_export():
     })
     assert status == 200 and signup.get("ok"), signup
     owner = login(owner_email, "ownerpass123")
-    # derive incidents for this org so the export has rows
-    req("POST", "/api/run-once", cookie=owner)
+    # derive incidents for this org so the export has rows.
+    # The engine may be mid-cycle (autostart) right after signup; retry the
+    # on-demand cycle a few times until it actually runs.
+    for _ in range(5):
+        st, body, _ = req("POST", "/api/run-once", cookie=owner)
+        if body.get("ok"):
+            break
+        time.sleep(2)
+    # give the cycle a moment to persist incidents
+    time.sleep(2)
     c = http.client.HTTPConnection(HOST, PORT, timeout=10)
     c.request("GET", "/api/incidents/export?format=csv", headers={"Cookie": owner})
     r = c.getresponse()

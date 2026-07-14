@@ -5,7 +5,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_incident_operations_view_is_wired():
-    html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    # The command center SPA is dashboard.html (and saas.html), not the
+    # marketing landing index.html. Assert against the real SPA shell.
+    html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     assert 'id="view-incidents"' in html
     assert 'id:"incidents"' in js
@@ -59,7 +61,9 @@ def test_local_dashboard_requires_real_authentication_no_demo_shortcut():
 
 
 def test_command_center_uses_reicon_for_ui_icons():
-    html = (ROOT / "static" / "index.html").read_text(encoding="utf-8")
+    # The command center SPA is served from dashboard.html (and saas.html),
+    # not the marketing landing index.html. Assert against the real SPA shell.
+    html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     assert html.index("/static/reicon-data.js") < html.index("/static/reicon.js") < html.index("/static/app.js")
     assert "data:image/svg" not in html

@@ -54,7 +54,7 @@ def _login(email, password):
 
 def test_workflows_e2e():
     # owner from seed (ciso@acme.test / [REDACTED])
-    owner_ck = _login("ciso@acme.test", "[REDACTED]")
+    owner_ck = _login("ciso@acme.test", "demo1234")
 
     # GET /api/workflows (200 + templates + catalog)
     st, body, _ = req("GET", "/api/workflows", headers={}, cookie=owner_ck)

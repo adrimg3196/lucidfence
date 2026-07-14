@@ -1,0 +1,38 @@
+# .dockerignore — lo que NO va al build de la imagen Fly.io.
+# Excluimos runtime, credenciales y .git (el build remoto de Fly no
+# necesita el historial). INCLUIMOS moa/ (se copia aparte para el build).
+
+.git
+.gitignore
+.skills-refs
+.venv
+venv
+env
+node_modules
+__pycache__
+*.pyc
+.pytest_cache
+
+# Datos de runtime / secretos (nunca en la imagen)
+data
+*.local.json
+config.json
+.env
+.env.*
+logs
+*.log
+
+# Build output
+dist
+build
+*.tar.gz
+
+# Docs / CI (no necesarios en runtime)
+docs
+.github
+ISSUE_TEMPLATE
+PULL_REQUEST_TEMPLATE.md
+
+# El dashboard estatico va dentro de /app/static ya (se copia con COPY .)
+# moa/ se incluye explicitamente (no se ignora).
+!moa

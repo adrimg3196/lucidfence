@@ -11,34 +11,45 @@ import time
 H, P = "127.0.0.1", 8765
 
 
-def req(method, path, cookie=None):
+def req(method, path, body=None, headers=None, cookie=None):
     c = http.client.HTTPConnection(H, P, timeout=10)
-    headers = {"Content-Type": "application/json"}
+    h = dict(headers or {})
+    h["Content-Type"] = "application/json"
     if cookie:
-        headers["Cookie"] = cookie
-    c.request(method, path, headers=headers)
+        h["Cookie"] = cookie
+    data = json.dumps(body).encode() if body is not None else None
+    c.request(method, path, body=data, headers=h)
     r = c.getresponse()
     raw = r.read().decode("utf-8", "replace")
     try:
-        body = json.loads(raw) if raw else {}
+        body_out = json.loads(raw) if raw else {}
     except Exception:
-        body = {"raw": raw}
-    return r.status, body, r.getheader("Set-Cookie")
+        body_out = {"raw": raw}
+    return r.status, body_out, r.getheader("Set-Cookie")
 
 
 def demo_cookie():
-    _, _, ck = req("POST", "/api/auth/demo")
-    if not ck:
-        raise RuntimeError("no Set-Cookie from /api/auth/demo")
-    for part in ck.split(","):
+    # Real multi-tenant signup (no demo shortcut) + one engine cycle so the
+    # fleet is populated with CVE/SOAR state.
+    suffix = int(time.time() * 1000)
+    email = f"soarqa-{suffix}@acme.test"
+    _, body, ck = req("POST", "/api/auth/signup", {
+        "email": email, "password": "SoarQa12345", "name": "SOAR QA",
+        "org_name": f"SOAR QA {suffix}", "plan": "pro",
+    })
+    if not body.get("ok"):
+        raise RuntimeError(f"signup failed: {body}")
+    import re as _re
+    cookie = ck
+    for part in (ck or "").split(","):
         part = part.strip()
         if part.startswith("gf_session="):
             token = part.split(";", 1)[0].split("=", 1)[1]
-            return f"gf_session={token}"
-    if "gf_session=" in ck:
-        token = ck.split("gf_session=", 1)[1].split(";", 1)[0]
-        return f"gf_session={token}"
-    raise RuntimeError(f"gf_session not found in Set-Cookie: {ck!r}")
+            cookie = f"gf_session={token}"
+            break
+    if "gf_session=" not in (cookie or ""):
+        raise RuntimeError(f"gf_session not found in Set-Cookie: {ck!r}")
+    return cookie
 
 
 def test_soar_and_cve_endpoints():

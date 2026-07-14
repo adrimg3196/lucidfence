@@ -59,7 +59,7 @@ def login(email, pw):
 def test_e2e():
     # ============ PART A: HTTP endpoints + RBAC ============
     print("== Part A: HTTP ==")
-    h = login("ciso@acme.test", "[REDACTED]")
+    h = login("ciso@acme.test", "demo1234")
     for ep in ["/api/routes", "/api/status", "/api/risk", "/api/devices"]:
         st, _, _ = req("GET", ep, h=h)
         check(st == 200, f"GET {ep} -> 200 (owner)")
