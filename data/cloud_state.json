@@ -1,20 +1,20 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-14T18:23:33Z",
+  "generated_at": "2026-07-14T18:28:31Z",
   "mode": "simulation",
   "totals": {
-    "devices": 18,
-    "inside": 12,
+    "devices": 19,
+    "inside": 13,
     "outside": 6,
     "non_compliant": 6,
-    "compliance_rate_pct": 66.7,
+    "compliance_rate_pct": 68.4,
     "ios_devices": 5,
     "ios_geofence_compliant": 4,
     "ios_geofence_non_compliant": 1,
     "ios_geofence_unknown": 0,
     "ios_geofence_compliance_rate_pct": 80.0,
     "platform_counts": {
-      "android": 12,
+      "android": 13,
       "ios": 5,
       "chromeos": 1
     },
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:31Z",
+      "generated_at": "2026-07-14T18:28:29Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -54,7 +54,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 88,
           "department": "Logística",
           "os_version": "Android 14",
@@ -70,7 +70,7 @@
           "geofence_compliance_applicable": true,
           "geofence_compliant": true,
           "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 35.0,
+          "risk_score": 25.0,
           "battery_level": 62,
           "department": "Almacén",
           "os_version": "iOS 17.4",
@@ -86,7 +86,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 88.0,
+          "risk_score": 78.0,
           "battery_level": 11,
           "department": "Reparto",
           "os_version": "android 12",
@@ -102,7 +102,7 @@
           "geofence_compliance_applicable": true,
           "geofence_compliant": false,
           "geofence_compliance_label": "fuera de geocerca",
-          "risk_score": 45.0,
+          "risk_score": 35.0,
           "battery_level": 95,
           "department": "Ventas",
           "os_version": "iOS 16.5",
@@ -118,7 +118,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 45.0,
+          "risk_score": 35.0,
           "battery_level": 40,
           "department": "Terreno",
           "os_version": "Android 13",
@@ -134,7 +134,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 76,
           "department": "Kioscos",
           "os_version": "ChromeOS 126",
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 9,
+        "vulnerable_apps": 12,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:31Z",
+      "generated_at": "2026-07-14T18:28:30Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -261,7 +261,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 80,
           "department": "Reparto",
           "os_version": "Android 14",
@@ -277,7 +277,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 70.0,
+          "risk_score": 60.0,
           "battery_level": 20,
           "department": "Reparto",
           "os_version": "Android 13",
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:32Z",
+      "generated_at": "2026-07-14T18:28:30Z",
       "org_id": "cliente-selfsvc-test",
       "mode": "simulation",
       "totals": {
@@ -373,7 +373,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 100,
           "department": "Logistica",
           "os_version": "Android 13",
@@ -389,7 +389,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 35.0,
+          "risk_score": 25.0,
           "battery_level": 100,
           "department": "Logistica",
           "os_version": "Android 13",
@@ -456,7 +456,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:32Z",
+      "generated_at": "2026-07-14T18:28:30Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -485,7 +485,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 100,
           "department": "Reparto",
           "os_version": "Android 13",
@@ -550,7 +550,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:33Z",
+      "generated_at": "2026-07-14T18:28:30Z",
       "org_id": "kanban-selfsvc-20260714-1522",
       "mode": "simulation",
       "totals": {
@@ -580,7 +580,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 100,
           "department": "Reparto",
           "os_version": "Android 13",
@@ -596,7 +596,7 @@
           "geofence_compliance_applicable": true,
           "geofence_compliant": true,
           "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 35.0,
+          "risk_score": 25.0,
           "battery_level": 100,
           "department": "Ventas",
           "os_version": "iOS 17.4",
@@ -612,7 +612,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 45.0,
+          "risk_score": 35.0,
           "battery_level": 100,
           "department": "Operaciones",
           "os_version": "Android 13",
@@ -680,7 +680,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T18:23:33Z",
+      "generated_at": "2026-07-14T18:28:30Z",
       "org_id": "kanban-t314a3b3a-20260714-1524",
       "mode": "simulation",
       "totals": {
@@ -710,7 +710,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 100,
           "department": "Reparto",
           "os_version": "Android 13",
@@ -726,7 +726,7 @@
           "geofence_compliance_applicable": true,
           "geofence_compliant": true,
           "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 35.0,
+          "risk_score": 25.0,
           "battery_level": 100,
           "department": "Ventas",
           "os_version": "iOS 17.4",
@@ -742,7 +742,7 @@
           "geofence_compliance_applicable": true,
           "geofence_compliant": true,
           "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 10.0,
+          "risk_score": 0.0,
           "battery_level": 100,
           "department": "Almacén",
           "os_version": "iOS 17.4",
@@ -758,7 +758,7 @@
           "geofence_compliance_applicable": false,
           "geofence_compliant": null,
           "geofence_compliance_label": "no aplica",
-          "risk_score": 45.0,
+          "risk_score": 35.0,
           "battery_level": 100,
           "department": "Operaciones",
           "os_version": "Android 13",
@@ -823,6 +823,100 @@
         ]
       },
       "tenant": "kanban-t314a3b3a-20260714-1524"
+    },
+    {
+      "service": "lucidfence-cloud",
+      "generated_at": "2026-07-14T18:28:31Z",
+      "org_id": "qa-autonomo-53693",
+      "mode": "simulation",
+      "totals": {
+        "devices": 1,
+        "inside": 1,
+        "outside": 0,
+        "non_compliant": 0,
+        "compliance_rate_pct": 100.0,
+        "ios_devices": 0,
+        "ios_geofence_compliant": 0,
+        "ios_geofence_non_compliant": 0,
+        "ios_geofence_unknown": 0,
+        "ios_geofence_compliance_rate_pct": 0.0,
+        "platform_counts": {
+          "android": 1
+        },
+        "chromeos_devices": 0
+      },
+      "devices": [
+        {
+          "device_id": "d1",
+          "name": "Dispositivo demo",
+          "platform": "android",
+          "fence_state": "inside",
+          "compliant": true,
+          "geofence_compliance_applicable": false,
+          "geofence_compliant": null,
+          "geofence_compliance_label": "no aplica",
+          "risk_score": 0.0,
+          "battery_level": 100,
+          "department": "General",
+          "os_version": "Android 13",
+          "lat": 40.421,
+          "lng": -3.708
+        }
+      ],
+      "fences": [
+        {
+          "id": "hq",
+          "name": "Sede",
+          "type": "circle",
+          "center": {
+            "lat": 40.421,
+            "lng": -3.708
+          },
+          "radius_m": 500.0,
+          "actions": []
+        }
+      ],
+      "incidents": [],
+      "cve_summary": {
+        "demo": true,
+        "apps_total": 3,
+        "vulnerable_apps": 1,
+        "critical_cve_apps": 1,
+        "high_cve_apps": 1,
+        "ejemplos": [
+          {
+            "app": "Chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2024-1234",
+            "severity": "critical"
+          },
+          {
+            "app": "Zoom",
+            "version": "5.17.0",
+            "cve": "CVE-2024-5678",
+            "severity": "high"
+          }
+        ]
+      },
+      "soar": {
+        "demo": true,
+        "playbooks": [
+          {
+            "id": "quarantine-rooted",
+            "name": "Poner en cuarentena dispositivo rooteado"
+          },
+          {
+            "id": "notify-geo-exit",
+            "name": "Alertar salida de geocerca"
+          },
+          {
+            "id": "patch-cve-critical",
+            "name": "Forzar parche por CVE crítico"
+          }
+        ],
+        "matched": []
+      },
+      "tenant": "qa-autonomo-53693"
     }
   ],
   "devices": [
@@ -835,7 +929,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 88,
       "department": "Logística",
       "os_version": "Android 14",
@@ -851,7 +945,7 @@
       "geofence_compliance_applicable": true,
       "geofence_compliant": true,
       "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 35.0,
+      "risk_score": 25.0,
       "battery_level": 62,
       "department": "Almacén",
       "os_version": "iOS 17.4",
@@ -867,7 +961,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 88.0,
+      "risk_score": 78.0,
       "battery_level": 11,
       "department": "Reparto",
       "os_version": "android 12",
@@ -883,7 +977,7 @@
       "geofence_compliance_applicable": true,
       "geofence_compliant": false,
       "geofence_compliance_label": "fuera de geocerca",
-      "risk_score": 45.0,
+      "risk_score": 35.0,
       "battery_level": 95,
       "department": "Ventas",
       "os_version": "iOS 16.5",
@@ -899,7 +993,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 45.0,
+      "risk_score": 35.0,
       "battery_level": 40,
       "department": "Terreno",
       "os_version": "Android 13",
@@ -915,7 +1009,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 76,
       "department": "Kioscos",
       "os_version": "ChromeOS 126",
@@ -931,7 +1025,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 80,
       "department": "Reparto",
       "os_version": "Android 14",
@@ -947,7 +1041,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 70.0,
+      "risk_score": 60.0,
       "battery_level": 20,
       "department": "Reparto",
       "os_version": "Android 13",
@@ -963,7 +1057,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 100,
       "department": "Logistica",
       "os_version": "Android 13",
@@ -979,7 +1073,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 35.0,
+      "risk_score": 25.0,
       "battery_level": 100,
       "department": "Logistica",
       "os_version": "Android 13",
@@ -995,7 +1089,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 100,
       "department": "Reparto",
       "os_version": "Android 13",
@@ -1011,7 +1105,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 100,
       "department": "Reparto",
       "os_version": "Android 13",
@@ -1027,7 +1121,7 @@
       "geofence_compliance_applicable": true,
       "geofence_compliant": true,
       "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 35.0,
+      "risk_score": 25.0,
       "battery_level": 100,
       "department": "Ventas",
       "os_version": "iOS 17.4",
@@ -1043,7 +1137,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 45.0,
+      "risk_score": 35.0,
       "battery_level": 100,
       "department": "Operaciones",
       "os_version": "Android 13",
@@ -1059,7 +1153,7 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 100,
       "department": "Reparto",
       "os_version": "Android 13",
@@ -1075,7 +1169,7 @@
       "geofence_compliance_applicable": true,
       "geofence_compliant": true,
       "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 35.0,
+      "risk_score": 25.0,
       "battery_level": 100,
       "department": "Ventas",
       "os_version": "iOS 17.4",
@@ -1091,7 +1185,7 @@
       "geofence_compliance_applicable": true,
       "geofence_compliant": true,
       "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 10.0,
+      "risk_score": 0.0,
       "battery_level": 100,
       "department": "Almacén",
       "os_version": "iOS 17.4",
@@ -1107,12 +1201,28 @@
       "geofence_compliance_applicable": false,
       "geofence_compliant": null,
       "geofence_compliance_label": "no aplica",
-      "risk_score": 45.0,
+      "risk_score": 35.0,
       "battery_level": 100,
       "department": "Operaciones",
       "os_version": "Android 13",
       "lat": 40.43,
       "lng": -3.69
+    },
+    {
+      "device_id": "d1",
+      "name": "Dispositivo demo",
+      "platform": "android",
+      "fence_state": "inside",
+      "compliant": true,
+      "geofence_compliance_applicable": false,
+      "geofence_compliant": null,
+      "geofence_compliance_label": "no aplica",
+      "risk_score": 0.0,
+      "battery_level": 100,
+      "department": "General",
+      "os_version": "Android 13",
+      "lat": 40.421,
+      "lng": -3.708
     }
   ],
   "fences": [
@@ -1141,7 +1251,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 9,
+    "vulnerable_apps": 12,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
