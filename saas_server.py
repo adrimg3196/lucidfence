@@ -271,11 +271,10 @@ def user_from_request(handler) -> Optional[dict]:
             u = _auth.get(sess["user_id"])
             if u and u.active:
                 return u.to_public()
-    # No anonymous fallback. The local dashboard obtains a real, RBAC-scoped
-    # session via the loopback-only POST /api/auth/demo endpoint; every API call
-    # still requires that session cookie. This closes the simulation-mode auth
-    # bypass where any unauthenticated request was silently treated as the demo
-    # owner.
+    # No anonymous fallback. La dashboard local obtiene una sesión real con
+    # RBAC vía /api/auth/login; toda llamada API requiere esa cookie de sesión.
+    # (No hay endpoint demo: un request no autenticado nunca se trata como
+    # owner del demo — vé test_frontend_contract seguridad.)
     return None
 
 

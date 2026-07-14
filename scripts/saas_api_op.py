@@ -39,10 +39,14 @@ def create_tenant(tid: str, payload: dict):
     tdir.mkdir(parents=True, exist_ok=True)
     fleet = payload.get("fleet", [])
     fences = payload.get("fences", [])
+    # Coordenada de respaldo: el centro de la primera geocerca, o (0,0).
+    fb = (fences[0].get("center", {}) if fences else {})
+    fb_lat = fb.get("lat", 0.0)
+    fb_lng = fb.get("lng", 0.0)
     seed = {"devices": [
         {"id": d.get("id", f"dev-{i}"), "name": d.get("name", f"Device {i}"),
          "platform": (d.get("platform") or "android").lower(),
-         "waypoints": [{"lat": d["lat"], "lng": d["lng"]}],
+         "waypoints": [{"lat": d.get("lat", fb_lat), "lng": d.get("lng", fb_lng)}],
          "compliant": d.get("compliant"),
          "os_version": d.get("os_version"), "manufacturer": d.get("manufacturer"),
          "model": d.get("model"), "battery_level": d.get("battery_level"),
