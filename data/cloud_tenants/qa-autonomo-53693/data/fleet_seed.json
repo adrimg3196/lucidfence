@@ -1,0 +1,23 @@
+{
+  "devices": [
+    {
+      "id": "d1",
+      "name": "Dispositivo demo",
+      "platform": "android",
+      "waypoints": [
+        {
+          "lat": 40.421,
+          "lng": -3.708
+        }
+      ],
+      "compliant": true,
+      "os_version": null,
+      "manufacturer": null,
+      "model": null,
+      "battery_level": null,
+      "storage_free_gb": null,
+      "storage_total_gb": null,
+      "department": "General"
+    }
+  ]
+}
