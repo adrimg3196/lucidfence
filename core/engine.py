@@ -74,7 +74,11 @@ class Engine:
         self.mailbox = None
         self._wire_atomicmail(config)
         _data_dir = config.get("data_dir", "data")
-        self.fences_path = Path(config.get("fences_path", os.path.join(_data_dir, "fences.json")))
+        _default_fences = config.get("fences_path")
+        if _default_fences is None:
+            _seed = config.get("sim_seed_path") or os.path.join(_data_dir, "fleet_seed.json")
+            _default_fences = os.path.join(os.path.dirname(os.path.abspath(_seed)), "fences.json")
+        self.fences_path = Path(_default_fences)
         self.fences = load_fences(self.fences_path)
         self.fence_by_id = fence_index(self.fences)
         self.source = build_location_source(

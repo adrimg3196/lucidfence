@@ -79,11 +79,19 @@ COOKIE_ORG = "gf_org"
 _tenants = TenantStore(ROOT / "data")
 _auth = AuthStore(ROOT / "data")
 # Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
-# configuracion manual (ciso@acme.test / demo1234). Idempotente.
+# configuracion manual (ciso@acme.test / demo1234). Idempotente: si el
+# usuario ya existe, no hace nada. Si el tenant demo no existe, lo crea.
 try:
-    if _auth.get_by_email("ciso@acme.test") is None and _tenants.data_dir("acme-logistics").exists():
+    if _auth.get_by_email("ciso@acme.test") is None:
+        _demo_org = None
+        for o in _tenants.all():
+            if o.slug == "acme-logistics":
+                _demo_org = o
+                break
+        if _demo_org is None:
+            _demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed", "free")
         _auth.create_user("ciso@acme.test", "CISCO Acme (demo)", "demo1234",
-                          "acme-logistics", "owner")
+                          _demo_org.id, "owner")
 except Exception:
     pass
 _SIMULATION = False
