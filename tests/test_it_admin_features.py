@@ -11,7 +11,8 @@ import json, http.client, time, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-HOST, PORT = "127.0.0.1", 8765
+import os as _os
+HOST, PORT = "127.0.0.1", int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
 SUFFIX = str(time.time_ns())
 OWNER = f"itadmin-{SUFFIX}@acme.test"
 VIEWER = f"viewer-{SUFFIX}@acme.test"

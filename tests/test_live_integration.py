@@ -17,11 +17,23 @@ Run:  python3 tests/test_live_integration.py
 import json
 import os
 import sys
+import socket
 import threading
 import atexit
 import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _next_free_port():
+    """Allocate an unused TCP port (bind to 0) so concurrent test runners
+    never collide on a fixed :8799."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+    finally:
+        s.close()
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from core.engine import Engine
@@ -31,6 +43,10 @@ from types import SimpleNamespace
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT, ".env")
+# Ephemeral port so concurrent runners (several kanban workers on one box)
+# never collide on a fixed :8799. The mock base URL is derived from this.
+_MOCK_PORT = int(os.environ.get("LUCIDFENCE_LIVE_MOCK_PORT", "0")) or (8799 if os.environ.get("LUCIDFENCE_LIVE_MOCK_FIXED") else _next_free_port())
+MOCK_BASE = f"http://127.0.0.1:{_MOCK_PORT}/v1"
 # Preserve the operator's real .env (may hold a live Applivery token + workspace).
 # Tests rewrite .env with mock values; we restore the original at process exit so
 # production is never left pointing at "org-test". Works under the test runner too.
@@ -92,7 +108,7 @@ class MockHandler(BaseHTTPRequestHandler):
                      "status": "active", "is_compliant": True,
                      "last_location": {"latitude": 40.43, "longitude": -3.69, "accuracy": 20}},
                 ]},
-                link='<http://127.0.0.1:8799/v1/organizations/org-test/mdm/devices?page=2>; rel="next"',
+                link=f'<{MOCK_BASE}/organizations/org-test/mdm/devices?page=2>; rel="next"',
             )
             return
         self._send(404, {"status": False, "error": {"code": 1002, "message": "Route not found"}})
@@ -111,7 +127,8 @@ class MockHandler(BaseHTTPRequestHandler):
 
 
 def _start_mock():
-    srv = HTTPServer(("127.0.0.1", 8799), MockHandler)
+    HTTPServer.allow_reuse_address = True
+    srv = HTTPServer(("127.0.0.1", _MOCK_PORT), MockHandler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 
@@ -120,7 +137,22 @@ def _ensure_mock():
     global _MOCK
     if _MOCK is None:
         _MOCK = _start_mock()
+        # Always tear the mock down on process exit, whether this module runs
+        # via __main__ or is loaded by the test runner (which only runs the
+        # import path). Prevents a leaked mock from squatting the port across
+        # concurrent runners.
+        atexit.register(_shutdown_mock)
     return _MOCK
+
+
+def _shutdown_mock():
+    global _MOCK
+    if _MOCK is not None:
+        try:
+            _MOCK.shutdown()
+        except Exception:
+            pass
+        _MOCK = None
 
 
 def _write_env(key, org):
@@ -132,7 +164,7 @@ def _write_env(key, org):
 
 
 def _engine_for_live():
-    os.environ["APPLIVERY_API_BASE"] = "http://127.0.0.1:8799/v1"
+    os.environ["APPLIVERY_API_BASE"] = MOCK_BASE
     cfg = load_config(os.path.join(ROOT, "config.json"))
     cfg["mode"] = "live"
     cfg["dry_run"] = True
@@ -181,7 +213,7 @@ def test_live_command_body_shape():
     """LiveAdapter POSTs to /organizations/.../commands with dual auth."""
     _ensure_mock()
     os.environ.pop("APPLIVERY_API_KEY", None)
-    os.environ["APPLIVERY_API_BASE"] = "http://127.0.0.1:8799/v1"
+    os.environ["APPLIVERY_API_BASE"] = MOCK_BASE
     _write_env("valid-token", "org-test")
     adapter = LiveAdapter("org-test", "/organizations/{org_id}/mdm/devices/{device_id}/commands")
     result = adapter.execute(

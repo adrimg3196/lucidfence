@@ -9,7 +9,8 @@ import sys
 import time
 import urllib.parse
 
-HOST, PORT = "127.0.0.1", 8765
+import os as _os
+HOST, PORT = "127.0.0.1", int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
 
 
 def req(method, path, body=None, headers=None, cookie=None):
@@ -102,7 +103,7 @@ def test_workflows_e2e():
     # RBAC: a viewer cannot write workflows.
     # Secure pattern: the owner INVITES the viewer (public signup can no longer
     # self-join an existing org). Then the viewer logs in with the temp password.
-    vemail = f"viewerqa{int(time.time())}@acme.test"
+    vemail = f"viewerqa{int(time.time_ns())}@acme.test"
     _, inv, _ = req("POST", "/api/users", {
         "email": vemail, "name": "V", "role": "viewer"}, cookie=owner_ck)
     assert inv.get("ok"), f"viewer invite failed: {inv}"

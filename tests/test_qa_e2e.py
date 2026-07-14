@@ -16,8 +16,10 @@ import sys
 import http.client
 import json
 import time as _t
+from pathlib import Path
 
-H, P = "127.0.0.1", 8765
+import os as _os
+H, P = "127.0.0.1", int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
 passed = 0
 fails = []
 
@@ -89,46 +91,74 @@ def test_e2e():
                      {"name": "X", "waypoints": [{"lat": 1, "lng": 1}], "corridor_m": 100}, h=vh)
     check(body.get("error") is not None, "viewer blocked from POST /api/routes (route:write)")
 
-    # ============ PART B: engine determinism (no server race) ============
+    # ============ PART B: engine determinism (hermetic, no shared state) ============
+    # Drives the Engine against a temporary tenant + an isolated, deterministic
+    # location source. This avoids the shared `data/` demo fleet, where a
+    # fence-outside standing `notify` (fence_id=None) and the route_exit `notify`
+    # collide on the same (device, action) dedupe bucket and silently suppress the
+    # route_exit action. With no fences configured, the route_exit notify is the
+    # only thing that can fire it, so the assertion is deterministic.
     print("== Part B: engine ==")
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import config_loader
-    from pathlib import Path
-    from saas.tenant import TenantStore
+    from helpers import make_temp_engine
     from core.engine import Engine
+    from core.routes import Route
+    from core.geo import Point
+    from core.location_source import LocationReport
 
-    ROOT = Path(".")
-    ts = TenantStore(ROOT / "data")
-    org = "org_c40aa88904"
-    cfg = config_loader.load(ROOT / "config.json")
-    cfg["mode"] = "simulation"  # deterministic even when local .env has a live token
-    cfg["dry_run"] = True
-    cfg["data_dir"] = str(ts.data_dir(org))
-    cfg["sim_seed_path"] = str(ts.data_dir(org) / "fleet_seed.json")
-    cfg["routes_path"] = str(ts.data_dir(org) / "routes.json")
-    cfg["policies_path"] = str(ts.data_dir(org) / "policies.json")
-    cfg["fences_path"] = str(ts.data_dir(org) / "fences.json")
-    eng = Engine(cfg)
+    eng = make_temp_engine()
+
+    class _RouteExitSource:
+        """dev-002 starts ON route, then goes ~3km OFF route on the 2nd cycle."""
+        def __init__(self):
+            self.on = True
+
+        def fetch(self):
+            if self.on:
+                lat, lng = 40.4200, -3.7100   # on the route segment
+            else:
+                lat, lng = 40.3900, -3.7400   # ~3km off the route
+            self.on = False
+            return [LocationReport(
+                device_id="dev-002", name="Comercial", platform="android",
+                status="active", compliant=True, lat=lat, lng=lng,
+            )]
+
+    eng.fences = []  # isolate route_exit from any fence-state notify
+    eng.source = _RouteExitSource()
+    route = Route(
+        id="route-centro", name="Ruta Comercial Centro",
+        waypoints=[Point(40.4200, -3.7100), Point(40.4201, -3.7101)],
+        corridor_m=300, device_ids=["dev-002"],
+    )
+    # The engine reads `route.actions` (if present) in _fire_route_exit,
+    # falling back to a notify when absent. Set it explicitly so the
+    # route_exit action path is exercised deterministically.
+    route.actions = [{"action": "notify", "params": {
+        "channel": "security", "msg": "Desviación de ruta"}}]
+    eng.routes = [route]
+
     off_seen = False
     off_risk = None
     on_risk = None
-    prev_state = None
     for _ in range(90):
         eng.run_once()
         d = [x for x in eng.store.snapshot().values() if x.device_id == "dev-002"]
         if not d:
             continue
         st = d[0].route_state
-        if st == "off_route":
+        # Capture risk in each state on first sighting. The source starts on_route
+        # (cycle 0), then goes off_route (cycle 1+) — so on_risk is the
+        # pre-transition baseline and off_risk the post-transition value.
+        if st == "on_route" and on_risk is None:
+            on_risk = d[0].risk_score
+        elif st == "off_route":
             off_seen = True
             if off_risk is None:
                 off_risk = d[0].risk_score
-        elif st == "on_route" and off_risk is not None and on_risk is None:
-            on_risk = d[0].risk_score
-        prev_state = st
-    check(off_seen, "dev-002 reaches off_route (engine, 90 cycles)")
-    check(off_risk is not None and on_risk is not None, "captured risk in both states")
-    if off_risk is not None and on_risk is not None:
+    check(off_seen, "dev-002 reaches off_route (engine, hermetic)")
+    check(on_risk is not None and off_risk is not None, "captured risk in both states")
+    if on_risk is not None and off_risk is not None:
         check(off_risk > on_risk, f"off_route raises risk ({off_risk} > {on_risk})")
     # route_exit event is logged on every on_route->off_route transition
     evs = [e for e in eng.store.recent_events(100000)

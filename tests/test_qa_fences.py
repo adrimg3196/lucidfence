@@ -3,7 +3,9 @@ import http.client
 import json
 import time
 
-HOST, PORT = "127.0.0.1", 8765
+import os as _os
+HOST = _os.environ.get("LUCIDFENCE_HOST", "127.0.0.1")
+PORT = int(_os.environ.get("LUCIDFENCE_PORT", "8765"))
 
 
 def req(method, path, body=None, cookie=None):
@@ -42,7 +44,7 @@ def invite_viewer(owner_cookie, email):
 
 
 def test_geofence_crud_is_tenant_isolated_and_rbac_protected():
-    suffix = int(time.time())
+    suffix = int(time.time_ns())
     owner, signed = signup(f"fence-owner-{suffix}@test.local", "ownerpass123", f"Fence Org {suffix}")
     payload = {
         "name": "Almacén Norte", "type": "circle",
