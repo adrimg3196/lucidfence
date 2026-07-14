@@ -1,0 +1,18 @@
+{
+  "zebra-reparto-01": {
+    "seconds": 900,
+    "cycles": 1
+  },
+  "iphone-ventas-02": {
+    "seconds": 900,
+    "cycles": 1
+  },
+  "ipad-almacen-03": {
+    "seconds": 900,
+    "cycles": 1
+  },
+  "xcover-ops-04": {
+    "seconds": 900,
+    "cycles": 1
+  }
+}

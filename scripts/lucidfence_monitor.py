@@ -61,7 +61,10 @@ class Incident:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Health-check LucidFence + auto-kanban.")
     parser.add_argument("--root", default=os.environ.get("LUCIDFENCE_ROOT", str(DEFAULT_ROOT)))
-    parser.add_argument("--board", default=os.environ.get("LUCIDFENCE_BOARD", DEFAULT_BOARD))
+    # No usamos HERMES_KANBAN_BOARD como default: cuando el monitor se valida
+    # desde un worker de otro board (p.ej. uem-ops), debe seguir creando fixes
+    # en el board canónico de LucidFence salvo override explícito.
+    parser.add_argument("--board", default=os.getenv("LUCIDFENCE_BOARD", DEFAULT_BOARD))
     parser.add_argument("--vitrina-url", default=os.environ.get("LUCIDFENCE_VITRINA_URL", DEFAULT_VITRINA_URL))
     parser.add_argument("--test-command", default=os.environ.get("LUCIDFENCE_TEST_COMMAND", DEFAULT_TEST_COMMAND))
     parser.add_argument("--min-tests", type=int, default=int(os.environ.get("LUCIDFENCE_MIN_TESTS", DEFAULT_MIN_TESTS)))
