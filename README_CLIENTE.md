@@ -4,7 +4,7 @@ Centro de mando local de geofencing, riesgo y acciones para flotas UEM/MDM.
 
 ## 1. Descargar e instalar
 
-1. Abre [la última release](https://github.com/adrimg3196/lucidfence/releases/latest).
+1. Abre [LucidFence Desktop Preview 1](https://github.com/adrimg3196/lucidfence/releases/tag/v1.2.0-desktop-preview.1).
 2. Descarga `LucidFence-1.2.0-arm64.dmg` (Mac Apple Silicon M1 o posterior, macOS 14 o posterior).
 3. Abre el DMG y arrastra **LucidFence** a **Applications**.
 4. Primera apertura: clic derecho sobre LucidFence → **Abrir**.

@@ -7,7 +7,7 @@ que dependen de la configuración y disponibilidad de sus proveedores. $0, sin s
 
 ## Opción A — App de escritorio macOS (recomendada para usuarios)
 
-1. En un Mac Apple Silicon (M1 o posterior) con macOS 14 o posterior, descarga `LucidFence-1.2.0-arm64.dmg` desde [la última release](https://github.com/adrimg3196/lucidfence/releases/latest).
+1. En un Mac Apple Silicon (M1 o posterior) con macOS 14 o posterior, descarga `LucidFence-1.2.0-arm64.dmg` desde [LucidFence Desktop Preview 1](https://github.com/adrimg3196/lucidfence/releases/tag/v1.2.0-desktop-preview.1).
 2. Abre el DMG y arrastra LucidFence a Applications.
 3. Primera apertura: clic derecho → **Abrir**.
 

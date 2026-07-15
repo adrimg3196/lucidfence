@@ -8,11 +8,11 @@
 
 LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Se ejecuta en tu Mac o servidor Linux; no exige una cuenta de LucidFence, una nube propia ni una suscripción.
 
-## Descargar la app de escritorio (recomendado)
+## Descargar la app de escritorio — Preview comunitaria
 
 Para un Mac con Apple Silicon (M1 o posterior) y macOS 14 o posterior:
 
-1. Abre **[Releases → Latest](https://github.com/adrimg3196/lucidfence/releases/latest)**.
+1. Abre **[LucidFence Desktop Preview 1](https://github.com/adrimg3196/lucidfence/releases/tag/v1.2.0-desktop-preview.1)**.
 2. Descarga `LucidFence-1.2.0-arm64.dmg`.
 3. Abre el DMG y arrastra **LucidFence** a **Applications**.
 4. En el primer inicio, haz clic derecho sobre LucidFence → **Abrir**. Después se abre normalmente desde Launchpad o Finder.

@@ -17,7 +17,7 @@ LucidFence Desktop es la distribución recomendada para usuarios de Mac que no q
 
 ## Instalar
 
-1. Descarga el DMG desde [la última release](https://github.com/adrimg3196/lucidfence/releases/latest).
+1. Descarga el DMG desde [LucidFence Desktop Preview 1](https://github.com/adrimg3196/lucidfence/releases/tag/v1.2.0-desktop-preview.1).
 2. Abre el DMG.
 3. Arrastra `LucidFence.app` al alias `Applications`.
 4. Primera apertura de la build comunitaria: clic derecho → **Abrir**.
