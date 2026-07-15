@@ -46,6 +46,7 @@ def test_read_body_rejects_non_object_json():
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "saas_server", Path(__file__).resolve().parent.parent / "saas_server.py")
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
@@ -59,6 +60,40 @@ def test_read_body_rejects_non_object_json():
     assert _body(json.dumps(42)) == {}
     assert _body("{ not json") == {}
     assert _body(json.dumps({"email": "a@b.c"})) == {"email": "a@b.c"}
+
+
+def test_soar_webhook_hmac_requires_valid_signature_and_fresh_timestamp():
+    import hashlib
+    import hmac
+    import json
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "saas_server", Path(__file__).resolve().parent.parent / "saas_server.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    raw = json.dumps({"device_id": "dev-1", "action": "lock"}, separators=(",", ":")).encode()
+    secret = "super-secret-soar-key"
+    ts = "2000"
+    sig = hmac.new(secret.encode(), ts.encode() + b"." + raw, hashlib.sha256).hexdigest()
+    headers = {
+        "X-LucidFence-Timestamp": ts,
+        "X-LucidFence-Signature": f"sha256={sig}",
+    }
+
+    assert mod._verify_soar_webhook_hmac(raw, headers, secret, now=2001)[0]
+
+    tampered = raw.replace(b"lock", b"wipe")
+    ok, reason = mod._verify_soar_webhook_hmac(tampered, headers, secret, now=2001)
+    assert ok is False and reason == "invalid signature"
+
+    ok, reason = mod._verify_soar_webhook_hmac(raw, headers, secret, now=2601)
+    assert ok is False and reason == "timestamp outside replay window"
+
+    ok, reason = mod._verify_soar_webhook_hmac(raw, {"X-LucidFence-Timestamp": ts}, secret, now=2001)
+    assert ok is False and reason == "missing signature"
 
 
 def test_webhook_non_2xx_is_not_treated_as_delegated():

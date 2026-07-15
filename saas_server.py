@@ -45,6 +45,8 @@ Static dashboard served at /.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import sys
@@ -173,6 +175,73 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
     os.chmod(tmp, 0o600)
     tmp.replace(path)
     os.chmod(path, 0o600)
+
+
+def _tenant_runtime(tdir: Path) -> dict:
+    try:
+        data = json.loads((tdir / "integration.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _masked_secret(secret: str) -> str:
+    secret = secret or ""
+    if not secret:
+        return ""
+    if len(secret) <= 8:
+        return "*" * len(secret)
+    return "*" * (len(secret) - 4) + secret[-4:]
+
+
+def _header(headers, name: str) -> str:
+    for key in (name, name.lower(), name.upper()):
+        try:
+            value = headers.get(key)
+        except Exception:
+            value = None
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def _verify_soar_webhook_hmac(raw_body: bytes, headers, secret: str,
+                              now: float | None = None,
+                              tolerance_seconds: int = 300) -> tuple[bool, str]:
+    """Validate inbound SOAR webhook HMAC with timestamp anti-replay.
+
+    Contract: X-LucidFence-Timestamp contains unix seconds and
+    X-LucidFence-Signature (or X-Hub-Signature-256) contains the hex HMAC-SHA256
+    of ``<timestamp>.<raw_body>`` using the tenant's SOAR webhook secret.
+    Accepted signature wrappers: ``sha256=<hex>`` or ``v1=<hex>``.
+    """
+    if not secret:
+        return False, "soar webhook secret not configured"
+    ts = _header(headers, "X-LucidFence-Timestamp")
+    if not ts:
+        return False, "missing timestamp"
+    try:
+        ts_float = float(ts)
+    except (TypeError, ValueError):
+        return False, "invalid timestamp"
+    now = time.time() if now is None else now
+    if abs(now - ts_float) > tolerance_seconds:
+        return False, "timestamp outside replay window"
+    signature = _header(headers, "X-LucidFence-Signature") or _header(headers, "X-Hub-Signature-256")
+    if not signature:
+        return False, "missing signature"
+    if "=" in signature:
+        algo, _, signature = signature.partition("=")
+        if algo not in ("sha256", "v1"):
+            return False, "unsupported signature algorithm"
+    signature = signature.strip().lower()
+    if len(signature) != 64:
+        return False, "invalid signature length"
+    signed = ts.encode("utf-8") + b"." + (raw_body or b"")
+    expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return False, "invalid signature"
+    return True, "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -603,6 +672,39 @@ class Handler(BaseHTTPRequestHandler):
             return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
+        # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
+        # External SOAR tools cannot hold a browser session cookie. This endpoint
+        # is intentionally before `require(self)`, but every request must carry a
+        # tenant-scoped HMAC signature over the exact raw body + timestamp.
+        if route.startswith("/api/soar/webhook/") and method == "POST":
+            org_id = route[len("/api/soar/webhook/"):].strip("/")
+            if not org_id or _tenants.get(org_id) is None:
+                return _send_json(self, {"ok": False, "error": "tenant no encontrado"}, 404)
+            tdir = _tenants.data_dir(org_id)
+            runtime = _tenant_runtime(tdir)
+            secret = (runtime.get("soar_webhook_secret")
+                      or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET") or "")
+            raw = getattr(self, "_preread_body", b"") or b""
+            ok, reason = _verify_soar_webhook_hmac(raw, self.headers, secret)
+            if not ok:
+                return _send_json(self, {"ok": False, "error": reason}, 401)
+            body = _read_body(self)
+            device_id = (body.get("device_id") or body.get("deviceId") or "").strip()
+            action = (body.get("action") or "").strip().lower()
+            params = body.get("params")
+            if not isinstance(params, dict):
+                params = {}
+            if not device_id or not action:
+                return _send_json(self, {"ok": False, "error": "device_id y action son obligatorios"}, 400)
+            eng = engine_for(org_id)
+            dev = eng.store.get(device_id)
+            if dev is None:
+                return _send_json(self, {"ok": False, "error": "dispositivo no encontrado"}, 404)
+            result = eng.run_command(dev, action, params, operator="soar:webhook")
+            result["soar_webhook"] = True
+            return _send_json(self, {"ok": bool(result.get("ok") or result.get("delegated") or result.get("dry_run")),
+                                     "result": result})
+
         # everything else needs a session
         guarded = require(self)
         if guarded is None:
@@ -864,6 +966,10 @@ class Handler(BaseHTTPRequestHandler):
             st["mode"] = eng.config.get("mode")
             st["dry_run"] = eng.config.get("dry_run")
             st["masked_key"] = core_secrets.mask_key(tdir)
+            runtime = _tenant_runtime(tdir)
+            st["soar_webhook_hmac_configured"] = bool(runtime.get("soar_webhook_secret")
+                                                      or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
+            st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
         if route == "/api/settings" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
@@ -923,6 +1029,28 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             return _send_json(self, {"ok": True, "configured": bool(url)})
+        if route == "/api/settings/soar-webhook-secret" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            secret = (body.get("secret") or "").strip()
+            if secret and len(secret) < 16:
+                return _send_json(self, {"ok": False, "error": "secret demasiado corto (mínimo 16 caracteres)"}, 400)
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            if secret:
+                runtime["soar_webhook_secret"] = secret
+            else:
+                runtime.pop("soar_webhook_secret", None)
+            tmp = tdir / "integration.json.tmp"
+            tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+            os.chmod(tmp, 0o600)
+            tmp.replace(tdir / "integration.json")
+            os.chmod(tdir / "integration.json", 0o600)
+            return _send_json(self, {"ok": True,
+                                     "configured": bool(secret),
+                                     "webhook_path": f"/api/soar/webhook/{org}",
+                                     "signature": "HMAC-SHA256 over '<timestamp>.<raw_body>'"})
 
         # ---- Configurable threshold alerts (MDM/UEM alerting) -----------
         if route == "/api/alerts" and method == "GET":
@@ -1369,7 +1497,7 @@ def main():
     global _SIMULATION
     _SIMULATION = (cfg.get("mode") == "simulation")
     host = cfg.get("server", {}).get("host", "127.0.0.1")
-    port = int(cfg.get("server", {}).get("port", 8765))
+    port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] LucidFence SaaS running at http://{host}:{port}")
     print(f"  Multi-tenant local SaaS · mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")

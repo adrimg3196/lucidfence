@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""LucidFence CLI — producto soberano de geofencing UEM/MDM (100% local, $0).
+
+Uso:
+    lucidfence serve                 # arranca el server en :8765 (on-prem)
+    lucidfence serve --port 9000     # puerto configurable
+    lucidfence install                # instalación asistida (equivale a install.sh)
+    lucidfence --version              # versión instalada
+
+El server corre EN TU MÁQUINA. Tus dispositivos, geocercas, riesgos y CVE
+se calculan aquí. Nada se envía a terceros.
+"""
+import argparse
+import os
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+VERSION = "1.0.0"
+
+
+def cmd_serve(args):
+    port = args.port
+    os.environ["LUCIDFENCE_PORT"] = str(port)
+    server = os.path.join(ROOT, "saas_server.py")
+    if not os.path.exists(server):
+        print("ERROR: no se encuentra saas_server.py (clona el repo completo).", file=sys.stderr)
+        return 1
+    print(f"== LucidFence arrancado en http://localhost:{port} ==")
+    print("   Tus datos permanecen en esta máquina. Nada se envía a terceros.")
+    env = dict(os.environ)
+    env["LUCIDFENCE_PORT"] = str(port)
+    try:
+        subprocess.run([sys.executable, server], check=True, env=env)
+    except KeyboardInterrupt:
+        print("\n== LucidFence detenido ==")
+    return 0
+
+
+def cmd_install(args):
+    script = os.path.join(ROOT, "install.sh")
+    if not os.path.exists(script):
+        print("ERROR: no se encuentra install.sh.", file=sys.stderr)
+        return 1
+    env = dict(os.environ)
+    if args.port:
+        env["LUCIDFENCE_PORT"] = str(args.port)
+    return subprocess.call(["bash", script], env=env)
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="lucidfence", description="Geofencing soberano UEM/MDM ($0, on-prem)")
+    ap.add_argument("--version", action="version", version=f"lucidfence {VERSION}")
+    sub = ap.add_subparsers(dest="cmd")
+
+    s_serve = sub.add_parser("serve", help="arranca el server local (on-prem)")
+    s_serve.add_argument("--port", type=int, default=int(os.environ.get("LUCIDFENCE_PORT", "8765")),
+                         help="puerto (def: 8765 o $LUCIDFENCE_PORT)")
+    s_serve.set_defaults(func=cmd_serve)
+
+    s_install = sub.add_parser("install", help="instalación asistida")
+    s_install.add_argument("--port", type=int, default=None, help="puerto")
+    s_install.set_defaults(func=cmd_install)
+
+    args = ap.parse_args()
+    if not getattr(args, "cmd", None):
+        ap.print_help()
+        return 0
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
