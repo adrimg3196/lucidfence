@@ -433,10 +433,17 @@ def _host_allowed(handler) -> bool:
     return host == cfg_host.lower()
 
 
+def _bound_host(handler) -> str:
+    address = getattr(getattr(handler, "server", None), "server_address", None)
+    if isinstance(address, tuple) and address:
+        return str(address[0]).strip().lower()
+    return ""
+
+
 def _gateway_allowed(handler) -> bool:
     """Allow anonymous OpenAI-compatible traffic only on a loopback bind."""
     loopback = {"127.0.0.1", "localhost", "::1"}
-    bound = os.environ.get("LUCIDFENCE_HOST", "127.0.0.1").strip().lower()
+    bound = _bound_host(handler)
     client = (handler.client_address[0] if handler.client_address else "").lower()
     if bound in loopback and client in loopback:
         return True
@@ -1531,7 +1538,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _demo_login(self):
         """One-click onboarding, available only on a loopback-bound app."""
-        bound_host = os.environ.get("LUCIDFENCE_HOST", "127.0.0.1").strip().lower()
+        bound_host = _bound_host(self)
         loopback_hosts = {"127.0.0.1", "localhost", "::1"}
         client_host = (self.client_address[0] if self.client_address else "").lower()
         if (bound_host not in loopback_hosts or client_host not in loopback_hosts):

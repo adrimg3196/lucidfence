@@ -10,6 +10,7 @@ const App = {
   aiProviders: [],     // /api/ai/providers
   view: "overview",
   devFilter: "all",
+  mapFilter: "all",
   devSearch: "",
   devSort: "name",
   map: null, mapMarkers: {}, trailLayer: null, complianceChart: null,
@@ -493,7 +494,7 @@ function renderOverview(){
       <div class="card">
         <div class="hd"><h3>Mapa de flota en vivo</h3><div class="grow"></div>
           <span class="tag ${inside>=outside?'in':'out'}"><span class="d"></span>${inside} dentro · ${outside} fuera</span></div>
-        <div class="map-wrap"><div id="map"></div>
+        <div class="map-wrap"><div id="overviewMap" class="map-canvas"></div>
           <div class="map-legend"><div class="it"><span class="sw" style="background:var(--green)"></span>Dentro</div>
             <div class="it"><span class="sw" style="background:var(--blue)"></span>Fuera</div>
             <div class="it"><span class="sw" style="background:var(--amber)"></span>Desconocido</div></div>
@@ -536,7 +537,7 @@ function renderOverview(){
   renderDonut($("#compDonut"), compPct, total-noncomp, total);
   renderComplianceChart(st);
   renderEventList($("#ovEvents"), events.slice(0,8));
-  initMap(devs);
+  initMap(devs, "overviewMap");
 }
 function openAiFromOverview(){ goView("ai"); }
 
@@ -607,30 +608,30 @@ function renderMapView(){
   const st = App.status; if(!st) return;
   $("#view-map").innerHTML = `
     <div class="toolbar"><div class="filters" id="mapFilters">
-      <span class="chip active" data-f="all">Todos</span>
-      <span class="chip" data-f="inside">Dentro</span>
-      <span class="chip" data-f="outside">Fuera</span>
-      <span class="chip" data-f="unknown">Desconocidos</span>
+      <span class="chip${App.mapFilter==="all"?" active":""}" data-f="all">Todos</span>
+      <span class="chip${App.mapFilter==="inside"?" active":""}" data-f="inside">Dentro</span>
+      <span class="chip${App.mapFilter==="outside"?" active":""}" data-f="outside">Fuera</span>
+      <span class="chip${App.mapFilter==="unknown"?" active":""}" data-f="unknown">Desconocidos</span>
     </div><div class="grow"></div>
       <button class="btn sm" onclick="recenterMap()">Centrar</button></div>
-    <div class="card"><div class="map-wrap"><div id="map"></div>
+    <div class="card"><div class="map-wrap"><div id="fleetMap" class="map-canvas"></div>
       <div class="map-legend"><div class="it"><span class="sw" style="background:var(--green)"></span>Dentro</div>
       <div class="it"><span class="sw" style="background:var(--blue)"></span>Fuera</div>
       <div class="it"><span class="sw" style="background:var(--amber)"></span>Desconocido</div></div></div></div>`;
   $$("#mapFilters .chip").forEach(c=>c.onclick=()=>{
     $$("#mapFilters .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active");
-    drawMapMarkers(App.status.devices||[], c.dataset.f);
+    App.mapFilter=c.dataset.f; drawMapMarkers(App.status.devices||[], App.mapFilter);
   });
-  initMap(App.status.devices||[]);
+  initMap(App.status.devices||[], "fleetMap");
 }
 function recenterMap(){ if(App.map) App.map.setView([40.42,-3.70], 6); }
 
 /* ---------- MAP engine (Leaflet) ---------- */
-function initMap(devs){
+function initMap(devs, targetId){
   if(typeof L === "undefined") return;
-  const node = $("#map"); if(!node) return;
-  // renderOverview replaces #map on every refresh. A Leaflet instance bound
-  // to the old detached node is unusable even though no exception is raised.
+  const node=document.getElementById(targetId); if(!node) return;
+  // Each view owns a distinct map node. Rebuild when navigation or refresh
+  // replaces the currently bound container.
   if(App.map && App.map.getContainer() !== node){
     App.map.remove();
     App.map=null; App.mapMarkers={}; App.trailLayer=null;
@@ -638,8 +639,7 @@ function initMap(devs){
   if(!App.map){
     App.map = L.map(node, {zoomControl:true, attributionControl:false}).setView([40.42,-3.70], 6);
     // Single vendored vector basemap: no tile provider, tracking or network.
-    L.imageOverlay("static/vendor/offline-map.svg", [[-85,-180],[85,180]], {opacity:.72, interactive:false}).addTo(App.map);
-    L.imageOverlay("static/vendor/offline-iberia.svg", [[35.5,-10],[44,4.5]], {opacity:.96, interactive:false}).addTo(App.map);
+    L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(App.map);
     App.trailLayer = L.layerGroup().addTo(App.map);
     const settleMap = (attempt=0)=>{
       if(!App.map || App.map.getContainer()!==node) return;
@@ -652,7 +652,7 @@ function initMap(devs){
     };
     requestAnimationFrame(()=>requestAnimationFrame(()=>settleMap()));
   }
-  drawMapMarkers(devs, App.devFilter);
+  drawMapMarkers(devs, App.mapFilter);
 }
 function drawMapMarkers(devs, filter){
   if(!App.map) return;

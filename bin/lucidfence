@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import signal
 import subprocess
@@ -20,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from core.app_paths import ensure_data_dir  # noqa: E402
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
@@ -59,11 +60,26 @@ def _healthy(host: str, port: int, timeout: float = 0.8) -> bool:
         return False
 
 
-def _read_pid() -> Optional[int]:
+def _read_pid_record() -> dict:
     try:
-        return int(_pid_file().read_text().strip())
+        raw = _pid_file().read_text().strip()
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict) and int(data.get("pid", 0)) > 0:
+                return data
+            if isinstance(data, int) and data > 0:
+                return {"pid": data, "legacy": True}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            # Backward compatibility with the plain integer used by 1.1.0.
+            return {"pid": int(raw), "legacy": True}
     except (OSError, ValueError):
-        return None
+        pass
+    return {}
+
+
+def _read_pid() -> Optional[int]:
+    pid = _read_pid_record().get("pid")
+    return int(pid) if pid else None
 
 
 def _pid_alive(pid: Optional[int]) -> bool:
@@ -74,6 +90,59 @@ def _pid_alive(pid: Optional[int]) -> bool:
         return True
     except OSError:
         return False
+
+
+def _process_command(pid: int) -> str:
+    """Return the live process command on macOS/Linux, or empty on failure."""
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            text=True, capture_output=True, timeout=2, check=False,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _owned_process(record: dict) -> bool:
+    """Prove that a PID belongs to this installed LucidFence server."""
+    try:
+        pid = int(record.get("pid", 0))
+    except (TypeError, ValueError):
+        return False
+    if not _pid_alive(pid):
+        return False
+    server = str((ROOT / "saas_server.py").resolve())
+    recorded_server = str(record.get("server") or server)
+    return recorded_server == server and server in _process_command(pid)
+
+
+def _write_pid_record(process: subprocess.Popen, host: str, port: int) -> None:
+    record = {
+        "pid": process.pid,
+        "server": str((ROOT / "saas_server.py").resolve()),
+        "host": host,
+        "port": port,
+        "started_at": time.time(),
+    }
+    _pid_file().write_text(json.dumps(record, separators=(",", ":")) + "\n")
+    try:
+        _pid_file().chmod(0o600)
+    except OSError:
+        pass
+
+
+def _rollback_start(process: subprocess.Popen) -> None:
+    """Terminate a failed child and remove only its own PID record."""
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=3)
+    if _read_pid() == process.pid:
+        _pid_file().unlink(missing_ok=True)
 
 
 def _server_env(host: str, port: int) -> dict[str, str]:
@@ -121,11 +190,7 @@ def cmd_start(args) -> int:
         start_new_session=True,
     )
     log_handle.close()
-    _pid_file().write_text(f"{process.pid}\n")
-    try:
-        _pid_file().chmod(0o600)
-    except OSError:
-        pass
+    _write_pid_record(process, host, port)
 
     for _ in range(60):
         if _healthy(host, port):
@@ -140,15 +205,21 @@ def cmd_start(args) -> int:
         time.sleep(0.25)
 
     print(f"ERROR: LucidFence no arrancó. Revisa {log_path}", file=sys.stderr)
+    _rollback_start(process)
     return 1
 
 
 def cmd_stop(args) -> int:
-    pid = _read_pid()
+    record = _read_pid_record()
+    pid = record.get("pid")
     if not _pid_alive(pid):
         _pid_file().unlink(missing_ok=True)
         print("LucidFence ya estaba detenido.")
         return 0
+    if not _owned_process(record):
+        _pid_file().unlink(missing_ok=True)
+        print(f"ERROR: el PID {pid} no pertenece a esta instalación de LucidFence; no se enviaron señales.", file=sys.stderr)
+        return 1
     assert pid is not None
     os.kill(pid, signal.SIGTERM)
     for _ in range(40):
@@ -162,18 +233,21 @@ def cmd_stop(args) -> int:
 
 
 def cmd_restart(args) -> int:
-    cmd_stop(args)
+    stopped = cmd_stop(args)
+    if stopped:
+        return stopped
     return cmd_start(args)
 
 
 def cmd_status(args) -> int:
     host, port = _host(args.host), _port(args.port)
-    pid = _read_pid()
+    record = _read_pid_record()
+    pid = record.get("pid")
     healthy = _healthy(host, port)
     state = "activo" if healthy else "detenido"
     print(f"LucidFence: {state}")
     print(f"URL: {_url(host, port)}")
-    print(f"PID: {pid if _pid_alive(pid) else '—'}")
+    print(f"PID: {pid if _owned_process(record) else '—'}")
     print(f"Datos: {_runtime_dir()}")
     print(f"Log: {_log_file()}")
     return 0 if healthy else 1
