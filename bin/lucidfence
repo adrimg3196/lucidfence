@@ -1,73 +1,275 @@
 #!/usr/bin/env python3
-"""LucidFence CLI — producto soberano de geofencing UEM/MDM (100% local, $0).
+"""LucidFence CLI — local-first geofencing control plane for macOS and Linux."""
+from __future__ import annotations
 
-Uso:
-    lucidfence serve                 # arranca el server en :8765 (on-prem)
-    lucidfence serve --port 9000     # puerto configurable
-    lucidfence install                # instalación asistida (equivale a install.sh)
-    lucidfence --version              # versión instalada
-
-El server corre EN TU MÁQUINA. Tus dispositivos, geocercas, riesgos y CVE
-se calculan aquí. Nada se envía a terceros.
-"""
 import argparse
 import os
+import signal
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
+import webbrowser
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Optional
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "1.0.0"
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from core.app_paths import ensure_data_dir  # noqa: E402
+
+VERSION = "1.1.0"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 8765
 
 
-def cmd_serve(args):
-    port = args.port
-    os.environ["LUCIDFENCE_PORT"] = str(port)
-    server = os.path.join(ROOT, "saas_server.py")
-    if not os.path.exists(server):
-        print("ERROR: no se encuentra saas_server.py (clona el repo completo).", file=sys.stderr)
-        return 1
-    print(f"== LucidFence arrancado en http://localhost:{port} ==")
-    print("   Tus datos permanecen en esta máquina. Nada se envía a terceros.")
-    env = dict(os.environ)
-    env["LUCIDFENCE_PORT"] = str(port)
+def _host(value: Optional[str] = None) -> str:
+    return value or os.environ.get("LUCIDFENCE_HOST", DEFAULT_HOST)
+
+
+def _port(value: Optional[int] = None) -> int:
+    return int(value or os.environ.get("LUCIDFENCE_PORT", DEFAULT_PORT))
+
+
+def _runtime_dir() -> Path:
+    return ensure_data_dir()
+
+
+def _pid_file() -> Path:
+    return _runtime_dir() / "lucidfence.pid"
+
+
+def _log_file() -> Path:
+    return _runtime_dir() / "lucidfence.log"
+
+
+def _url(host: str, port: int) -> str:
+    public_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    return f"http://{public_host}:{port}"
+
+
+def _healthy(host: str, port: int, timeout: float = 0.8) -> bool:
     try:
-        subprocess.run([sys.executable, server], check=True, env=env)
-    except KeyboardInterrupt:
-        print("\n== LucidFence detenido ==")
+        with urllib.request.urlopen(_url(host, port) + "/", timeout=timeout) as response:
+            body = response.read(4096)
+            return response.status == 200 and b"LucidFence" in body
+    except (OSError, urllib.error.URLError, TimeoutError):
+        return False
+
+
+def _read_pid() -> Optional[int]:
+    try:
+        return int(_pid_file().read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _pid_alive(pid: Optional[int]) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _server_env(host: str, port: int) -> dict[str, str]:
+    env = dict(os.environ)
+    env.update({
+        "LUCIDFENCE_HOST": host,
+        "LUCIDFENCE_PORT": str(port),
+        "LUCIDFENCE_DATA_DIR": str(_runtime_dir()),
+        "PYTHONUNBUFFERED": "1",
+    })
+    return env
+
+
+def cmd_serve(args) -> int:
+    host, port = _host(args.host), _port(args.port)
+    server = ROOT / "saas_server.py"
+    if not server.is_file():
+        print(f"ERROR: instalación incompleta; falta {server}", file=sys.stderr)
+        return 2
+    print(f"LucidFence · app local · {_url(host, port)}")
+    print(f"Datos: {_runtime_dir()}")
+    os.execve(sys.executable, [sys.executable, str(server)], _server_env(host, port))
     return 0
 
 
-def cmd_install(args):
-    script = os.path.join(ROOT, "install.sh")
-    if not os.path.exists(script):
-        print("ERROR: no se encuentra install.sh.", file=sys.stderr)
-        return 1
-    env = dict(os.environ)
-    if args.port:
-        env["LUCIDFENCE_PORT"] = str(args.port)
-    return subprocess.call(["bash", script], env=env)
-
-
-def main():
-    ap = argparse.ArgumentParser(prog="lucidfence", description="Geofencing soberano UEM/MDM ($0, on-prem)")
-    ap.add_argument("--version", action="version", version=f"lucidfence {VERSION}")
-    sub = ap.add_subparsers(dest="cmd")
-
-    s_serve = sub.add_parser("serve", help="arranca el server local (on-prem)")
-    s_serve.add_argument("--port", type=int, default=int(os.environ.get("LUCIDFENCE_PORT", "8765")),
-                         help="puerto (def: 8765 o $LUCIDFENCE_PORT)")
-    s_serve.set_defaults(func=cmd_serve)
-
-    s_install = sub.add_parser("install", help="instalación asistida")
-    s_install.add_argument("--port", type=int, default=None, help="puerto")
-    s_install.set_defaults(func=cmd_install)
-
-    args = ap.parse_args()
-    if not getattr(args, "cmd", None):
-        ap.print_help()
+def cmd_start(args) -> int:
+    host, port = _host(args.host), _port(args.port)
+    url = _url(host, port)
+    if _healthy(host, port):
+        print(f"LucidFence ya está activo: {url}")
+        if args.open_browser:
+            webbrowser.open(url)
         return 0
-    return args.func(args)
+
+    runtime = _runtime_dir()
+    log_path = _log_file()
+    log_handle = log_path.open("ab", buffering=0)
+    process = subprocess.Popen(
+        [sys.executable, str(ROOT / "saas_server.py")],
+        env=_server_env(host, port),
+        stdin=subprocess.DEVNULL,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        close_fds=True,
+        start_new_session=True,
+    )
+    log_handle.close()
+    _pid_file().write_text(f"{process.pid}\n")
+    try:
+        _pid_file().chmod(0o600)
+    except OSError:
+        pass
+
+    for _ in range(60):
+        if _healthy(host, port):
+            print(f"LucidFence iniciado: {url}")
+            print(f"Datos: {runtime}")
+            print(f"Log: {log_path}")
+            if args.open_browser:
+                webbrowser.open(url)
+            return 0
+        if process.poll() is not None:
+            break
+        time.sleep(0.25)
+
+    print(f"ERROR: LucidFence no arrancó. Revisa {log_path}", file=sys.stderr)
+    return 1
+
+
+def cmd_stop(args) -> int:
+    pid = _read_pid()
+    if not _pid_alive(pid):
+        _pid_file().unlink(missing_ok=True)
+        print("LucidFence ya estaba detenido.")
+        return 0
+    assert pid is not None
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(40):
+        if not _pid_alive(pid):
+            _pid_file().unlink(missing_ok=True)
+            print("LucidFence detenido.")
+            return 0
+        time.sleep(0.1)
+    print(f"ERROR: el proceso {pid} no respondió a SIGTERM.", file=sys.stderr)
+    return 1
+
+
+def cmd_restart(args) -> int:
+    cmd_stop(args)
+    return cmd_start(args)
+
+
+def cmd_status(args) -> int:
+    host, port = _host(args.host), _port(args.port)
+    pid = _read_pid()
+    healthy = _healthy(host, port)
+    state = "activo" if healthy else "detenido"
+    print(f"LucidFence: {state}")
+    print(f"URL: {_url(host, port)}")
+    print(f"PID: {pid if _pid_alive(pid) else '—'}")
+    print(f"Datos: {_runtime_dir()}")
+    print(f"Log: {_log_file()}")
+    return 0 if healthy else 1
+
+
+def cmd_open(args) -> int:
+    host, port = _host(args.host), _port(args.port)
+    if not _healthy(host, port):
+        rc = cmd_start(SimpleNamespace(host=host, port=port, open_browser=False))
+        if rc:
+            return rc
+    webbrowser.open(_url(host, port))
+    return 0
+
+
+def cmd_mcp(_args) -> int:
+    server = ROOT / "mcp" / "lucidfence_mcp.py"
+    if not server.is_file():
+        print(f"ERROR: instalación incompleta; falta {server}", file=sys.stderr)
+        return 2
+    os.execve(sys.executable, [sys.executable, str(server)], dict(os.environ))
+    return 0
+
+
+def cmd_doctor(args) -> int:
+    host, port = _host(args.host), _port(args.port)
+    checks = [
+        ("Python >= 3.9", sys.version_info >= (3, 9), sys.version.split()[0]),
+        ("Servidor instalado", (ROOT / "saas_server.py").is_file(), str(ROOT / "saas_server.py")),
+        ("Dashboard instalado", (ROOT / "static" / "dashboard.html").is_file(), str(ROOT / "static" / "dashboard.html")),
+        ("MCP local instalado", (ROOT / "mcp" / "lucidfence_mcp.py").is_file(), str(ROOT / "mcp" / "lucidfence_mcp.py")),
+        ("Directorio de datos", _runtime_dir().is_dir() and os.access(_runtime_dir(), os.W_OK), str(_runtime_dir())),
+        ("Servicio HTTP", _healthy(host, port), _url(host, port)),
+    ]
+    failed = False
+    for label, ok, detail in checks:
+        failed = failed or not ok
+        print(f"{'PASS' if ok else 'INFO'}  {label}: {detail}")
+    return 1 if failed and not all(ok for _, ok, _ in checks[:4]) else 0
+
+
+def _common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--host", default=None, help=f"interfaz de escucha (por defecto {DEFAULT_HOST})")
+    parser.add_argument("--port", type=int, default=None, help=f"puerto (por defecto {DEFAULT_PORT})")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="lucidfence",
+        description="Geofencing y riesgo UEM/MDM, gratis y completamente local.",
+    )
+    parser.add_argument("--version", action="version", version=f"lucidfence {VERSION}")
+    sub = parser.add_subparsers(dest="command")
+
+    serve = sub.add_parser("serve", help="ejecuta el servidor en primer plano")
+    _common(serve)
+    serve.set_defaults(func=cmd_serve)
+
+    start = sub.add_parser("start", help="inicia la app en segundo plano")
+    _common(start)
+    start.add_argument("--no-open", dest="open_browser", action="store_false", help="no abrir el navegador")
+    start.set_defaults(func=cmd_start, open_browser=True)
+
+    stop = sub.add_parser("stop", help="detiene la instancia gestionada por la CLI")
+    _common(stop)
+    stop.set_defaults(func=cmd_stop)
+
+    restart = sub.add_parser("restart", help="reinicia la app")
+    _common(restart)
+    restart.add_argument("--no-open", dest="open_browser", action="store_false")
+    restart.set_defaults(func=cmd_restart, open_browser=True)
+
+    status = sub.add_parser("status", help="muestra salud, PID y rutas locales")
+    _common(status)
+    status.set_defaults(func=cmd_status)
+
+    open_cmd = sub.add_parser("open", help="abre el dashboard; inicia la app si hace falta")
+    _common(open_cmd)
+    open_cmd.set_defaults(func=cmd_open)
+
+    doctor = sub.add_parser("doctor", help="diagnostica la instalación local")
+    _common(doctor)
+    doctor.set_defaults(func=cmd_doctor)
+
+    mcp = sub.add_parser("mcp", help="ejecuta el MCP local read-only por stdio")
+    mcp.set_defaults(func=cmd_mcp)
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not args.command:
+        args = parser.parse_args(["start"])
+    return int(args.func(args))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

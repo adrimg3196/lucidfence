@@ -1,10 +1,9 @@
 """IA bridge for LucidFence — consume the local MoA server (127.0.0.1:8085).
 
-This is the brain behind "todo impulsado por IA": the engine uses MoA to
-write incident narratives, digest summaries, alert blurbs and support replies.
-MoA is the 100%-local Mixture-of-Agents we already built under /Users/adri/moa
-(OpenAI-compatible server). When MoA is unreachable, every helper degrades
-gracefully to a plain, deterministic text so the product NEVER breaks.
+Optional local AI integration for incident narratives and digest summaries.
+It consumes any OpenAI-compatible MoA server configured on the loopback
+interface. When that service is absent, every helper degrades gracefully to
+deterministic text and the core geofencing product remains fully functional.
 
 Endpoints used (OpenAI-compatible):
   POST http://127.0.0.1:8085/v1/chat/completions
@@ -21,12 +20,13 @@ from __future__ import annotations
 
 import json
 import http.client
+import os
 import socket
 from typing import Optional
 
-MOA_HOST = "127.0.0.1"
-MOA_PORT = 8085
-MOA_TIMEOUT = 25.0
+MOA_HOST = os.environ.get("LUCIDFENCE_MOA_HOST", "127.0.0.1")
+MOA_PORT = int(os.environ.get("LUCIDFENCE_MOA_PORT", "8085"))
+MOA_TIMEOUT = float(os.environ.get("LUCIDFENCE_MOA_TIMEOUT", "25"))
 
 
 def _post(messages: list, *, dry: bool = True, rounds: int = 2,

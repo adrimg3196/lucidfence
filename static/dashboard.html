@@ -161,6 +161,7 @@
 
   /* ---------- MAP ---------- */
   #map{width:100%;height:440px;border-radius:0}
+  .leaflet-container{background:#0c1218}
   .map-wrap{position:relative}
   .map-legend{position:absolute;left:12px;bottom:12px;z-index:500;background:color-mix(in srgb,var(--panel) 92%,transparent);
     border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--muted);display:flex;gap:14px;backdrop-filter:blur(6px)}
@@ -338,6 +339,10 @@
   .field label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:6px}
   .input{width:100%;height:38px;padding:0 12px;font-size:13px;background:var(--bg-2);color:var(--fg);border:1px solid var(--border);border-radius:8px;transition:.12s;font-family:var(--font)}
   .input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .input-wrap{position:relative;width:100%}
+  .input-wrap .input{width:100%;padding-right:70px}
+  .input-wrap .toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--accent);font:inherit;font-size:11px;font-weight:600;cursor:pointer;padding:5px 7px;border-radius:5px}
+  .input-wrap .toggle:hover{background:var(--accent-soft)}
   textarea.input{height:auto;padding:10px 12px;line-height:1.5;resize:vertical;min-height:80px}
   .sel{width:100%;height:38px;padding:0 12px;font-size:13px;background:var(--bg-2);color:var(--fg);border:1px solid var(--border);border-radius:8px;font-family:var(--font);appearance:none}
   .sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
@@ -457,12 +462,12 @@
     <div style="margin-top:14px">
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:8px">Comandos remotos (MDM/UEM)</div>
         <div class="row gap wrap" id="mCmd">
-          <button class="btn sm" data-cmd="lock">🔒 Bloquear</button>
-          <button class="btn sm" data-cmd="wipe">⚠️ Borrar</button>
-          <button class="btn sm" data-cmd="locate">📍 Localizar</button>
-          <button class="btn sm" data-cmd="reboot">🔄 Reiniciar</button>
-          <button class="btn sm" data-cmd="clear_passcode">🔑 Reset PIN</button>
-          <button class="btn sm" data-cmd="message">💬 Mensaje</button>
+          <button class="btn sm" data-cmd="lock"><span data-reicon="lock" data-size="14"></span>Bloquear</button>
+          <button class="btn sm" data-cmd="wipe"><span data-reicon="trash-2" data-size="14"></span>Borrar</button>
+          <button class="btn sm" data-cmd="locate"><span data-reicon="map-pin" data-size="14"></span>Localizar</button>
+          <button class="btn sm" data-cmd="reboot"><span data-reicon="rotate-cw" data-size="14"></span>Reiniciar</button>
+          <button class="btn sm" data-cmd="clear_passcode"><span data-reicon="key-round" data-size="14"></span>Reset PIN</button>
+          <button class="btn sm" data-cmd="message"><span data-reicon="message-square" data-size="14"></span>Mensaje</button>
         </div>
       </div>
       <div style="margin-top:14px;font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Apps instaladas · CVE</div>

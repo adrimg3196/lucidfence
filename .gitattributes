@@ -5,7 +5,7 @@
 # Desarrollo interno de la empresa (no del cliente)
 KANBAN.md                export-ignore
 ROADMAP_Q3_2026.md      export-ignore
-mcp/                     export-ignore
+mcp/applivery_mcp.py    export-ignore
 skills/                  export-ignore
 agents/                  export-ignore
 gtm/                     export-ignore
@@ -13,6 +13,14 @@ docs/                    export-ignore
 references/              export-ignore
 Formula/                 export-ignore
 data/cloud_tenants/      export-ignore
+data/actions_log.jsonl   export-ignore
+data/cloud_state.json    export-ignore
+data/device_states.json  export-ignore
+data/dwell.json          export-ignore
+data/events.jsonl        export-ignore
+data/stats_history.jsonl export-ignore
+data/traction_history.json export-ignore
+data/trails.jsonl        export-ignore
 
 # Deploy nuestro (no del cliente)
 fly.toml                 export-ignore

@@ -1,185 +1,139 @@
-# LucidFence · Command Center
+# LucidFence
 
-> **Geofencing que no exfiltrra. Riesgo que se explica.**
+> Geofencing y riesgo explicable para flotas UEM/MDM. Open source, gratuito y local-first.
 
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Multi-MDM](https://img.shields.io/badge/MDM-Applivery%20%7C%20Intune%20%7C%20Jamf-9cf)](core/adapters/ADAPTER.md)
-[![Local-first](https://img.shields.io/badge/architecture-100%25%20local-blue)](saas_server.py)
+[![macOS + Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue.svg)](bin/lucidfence)
+[![Local-first](https://img.shields.io/badge/data-local--first-5e6ad5.svg)](docs/LOCAL_APP.md)
 
-Local-first **UEM Risk & Geofence Control Plane** que convierte la geolocalización de tu flota móvil en **riesgo explicable** (score 0-100 **con su razón**) y acciones automáticas — **agnóstico a tu MDM** vía adapters.
+LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Se ejecuta en tu Mac o servidor Linux; no exige una cuenta de LucidFence, una nube propia ni una suscripción.
 
-- 🛡️ **Soberanía / local-first**: la ubicación y los datos de tu flota **no salen de tu infraestructura**. El único egress es el que TÚ configuras: tu MDM (Applivery/Intune/Jamf) y el feed de CVEs de NVD (read-only de vulnerabilidades). Sin CDNs de terceros en el dashboard (100% local).
-- 🧠 **Risk Engine explicable**: cada dispositivo recibe un score 0-100 **con la razón** — nunca un número mágico
-- 🔌 **Multi-MDM**: Applivery (live) + Intune/Jamf (mock incluidos) + la comunidad añade el resto
-- 📊 **Dashboard**: geovallas, inventario IT, comandos remotos, alertas, CVE/SOAR
-- ✅ **Evidence gate**: un hallazgo de riesgo solo cuenta si está respaldado por señales reales (anti-overclaim)
+## Instalar con Homebrew
 
----
-
-## El moat (por qué existe LucidFence)
-
-Los MDM nativos (Intune, Jamf, Applivery, SOTI, Workspace ONE) hacen **geofencing commodity**: te dicen "está dentro/fuera" y mandan la ubicación de tu flota a **su** nube. No correlacionan riesgo, no explican el porqué, y tu soberanía de datos se la quedan ellos.
-
-**LucidFence invierte la premisa:**
-
-| | MDM nativo | LucidFence |
-|---|---|---|
-| Geofencing | ✅ commodity | ✅ |
-| **Riesgo explicable** (0-100 **+ razón**) | ❌ caja negra | ✅ score + `reasons` |
-| **Sin exfiltrar ubicación** | ❌ (cloud del vendor) | ✅ local-first (egress solo a tu MDM + feed NVD read-only) |
-| Agnóstico a MDM | ❌ atado al tuyo | ✅ vía adapters |
-| SOAR + CVE en vivo + comandos on-demand | parcial | ✅ |
-
-El moat no es el geofencing (eso lo tiene cualquiera). Es el **Risk Engine explicable + soberanía de datos**. Un CISO puede pedir "¿por qué este dispositivo es crítico?" y LucidFence responde con la señal concreta (disco casi lleno, sin cifrar, fuera de geovalla, SO sin parchear) — no un número opaco.
-
----
-
-## Risk Engine explicable (cómo funciona)
-
-Cada evaluación producida por `core/policies.py` devuelve:
-
-```json
-{
-  "device_id": "movil-e9",
-  "risk_score": 100.0,
-  "severity": "critical",
-  "reasons": ["ubicación fuera de geovalla", "almacenamiento sin cifrar", "SO sin parchear de seguridad"],
-  "provenance": "tool",
-  "verified": true
-}
-```
-
-- `reasons`: la justificación legible por humano de cada punto de riesgo.
-- `provenance`: `tool` (respaldado por señales) · `none` · `context`.
-- `verified`: `true` **solo si el score tiene razón**. Un score > 0 sin señal se marca `verified:false` (salvaguarda anti-hallucinación — honest by construction).
-
-Esto es el patrón *evidence gate* que usan los harness de red-teaming de élite: **un claim no es válido sin provenancia**.
-
----
-
-## Quickstart (1 comando)
+Funciona con Homebrew en macOS y Linux:
 
 ```bash
-brew install adrimg3196/lucidfence/lucidfence
-lucidfence serve
+brew tap adrimg3196/lucidfence
+brew install lucidfence
+lucidfence
 ```
 
-Abre **http://127.0.0.1:8765** — no hay registro en nuestra nube: el dashboard
-abre una demo local de un clic y tus datos viven en tu máquina.
+`lucidfence` inicia el servicio local y abre automáticamente:
 
-### Desde código fuente
+```text
+http://127.0.0.1:8765
+```
+
+El primer arranque carga una flota de demostración local. No necesitas credenciales para evaluar todas las funciones principales.
+
+## CLI
 
 ```bash
-git clone https://github.com/adrimg3196/lucidfence.git && cd lucidfence
-pip install -r requirements.txt
-./start_all.sh
+lucidfence                 # iniciar y abrir la interfaz
+lucidfence start           # iniciar en segundo plano
+lucidfence open            # abrir; inicia si hace falta
+lucidfence status          # salud, PID, datos y log
+lucidfence restart         # reiniciar limpiamente
+lucidfence stop            # detener solo la instancia gestionada
+lucidfence serve           # primer plano; ideal para servidores/systemd
+lucidfence doctor          # diagnóstico de instalación
+lucidfence mcp             # MCP local read-only por stdio
+lucidfence --version
 ```
 
-El dashboard arranca con una flota demo (5 dispositivos, riesgo, geovallas). MoA (IA) corre en :8085.
+Puerto personalizado:
 
-> Sin claves de IA: MoA funciona en modo demo. Para IA real, añade una clave en `moa/.env`.
-
-### Modo live (con tu MDM real)
-
-En **Ajustes**, pega tu token de UEM (p.ej. `APPLIVERY_API_KEY`). El producto pasa de simulación a **live** y lee la ubicación real de tu flota.
-
----
-
-## Adapters MDM (la superficie de contribución)
-
-El producto es agnóstico al MDM. Cada conector implementa la interfaz `MDMAdapter`:
-
-| Adapter | Estado | Modo |
-|---------|--------|------|
-| `simulation` | ✅ incluido | demo 100% local |
-| `applivery` | ✅ live | lee ubicación + delega comandos vía webhook |
-| `intune` | 🟡 mock | listo para live vía Enterprise on-prem (Graph) |
-| `jamf` | 🟡 mock | listo para live vía Enterprise on-prem (Pro API) |
-
-¿Tu MDM no está? Es un **PR de fin de semana**: copia `core/adapters/applivery.py`, implementa `MDMAdapter` (ver `core/adapters/ADAPTER.md`), añade tests contra mock, abre PR. CI obligatorio + badge **verified**.
-
-➡️ **Adapter Bounty Sprint + Hall of Fame**: los primeros adapters verificados de los MDMs más pedidos entran al Hall of Fame del README y su autor se vuelve *Adapter Maintainer*.
-
----
-
-## Arquitectura (100% open source)
-
+```bash
+lucidfence start --port 9000
 ```
+
+Servidor Linux accesible en la red — hazlo solo detrás de tu firewall/reverse proxy:
+
+```bash
+lucidfence serve --host 0.0.0.0 --port 8765
+```
+
+## Dónde están los datos
+
+LucidFence nunca escribe datos mutables dentro del repositorio ni del Cellar de Homebrew:
+
+- macOS: `~/Library/Application Support/LucidFence`
+- Linux: `${XDG_STATE_HOME:-~/.local/state}/lucidfence`
+- Override: `LUCIDFENCE_DATA_DIR=/ruta/propia`
+
+Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails, logs y PID. Los permisos del directorio se restringen al usuario.
+
+## Qué incluye
+
+- Geovallas circulares y poligonales.
+- Rutas y detección de desvíos.
+- Inventario y postura de dispositivos.
+- Risk Engine 0–100 con `reasons`, `provenance` y evidence gate.
+- Incidentes, lifecycle y auditoría.
+- Workflows y acciones UEM con cooldown para acciones destructivas.
+- CVE + EPSS y playbooks SOAR declarativos.
+- Alertas, export CSV/HTML y digest.
+- RBAC local y aislamiento por organización.
+- Dashboard local sin CDN, telemetría ni frontend cloud.
+- Adapters: simulación, Applivery live y bases extensibles para Intune/Jamf.
+- IA opcional BYO API/modelo (OpenAI, Ollama, LM Studio, Nous Portal o compatible).
+- Gateway local OpenAI-compatible y MCP read-only incluidos.
+
+## Arquitectura
+
+```text
 lucidfence/
-├── core/
-│   ├── engine.py          # ciclo de geofencing + Risk Engine (moat)
-│   ├── policies.py        # Risk Engine explicable + device posture + evidence gate
-│   ├── adapters/          # MDMAdapter: simulation / applivery / intune / jamf
-│   │   ├── base.py        # interfaz congelada MDMAdapter
-│   │   └── ADAPTER.md     # guía de contribución
-│   ├── cve_feed_nvd.py    # sync de CVEs en vivo desde NVD (red local)
-│   ├── actions.py         # façade sobre core/adapters
-│   ├── export.py          # CSV / HTML audit
-│   └── ...
-├── saas_server.py         # dashboard local (http.server, sin deps)
-├── static/                # SPA del dashboard (vanilla JS)
-├── skills/                # Agent Skills installables
-├── .claude-plugin/        # manifest de plugin (installable)
-├── tests/                 # 87 tests + adapters + evidence gate
-└── docs/                  # GTM: marketing-copy, community, launch
+├── bin/lucidfence          # lifecycle portable macOS/Linux
+├── saas_server.py          # servidor HTTP local
+├── core/                   # geofencing, riesgo, CVE, SOAR, adapters
+├── mcp/lucidfence_mcp.py   # MCP local read-only
+├── saas/                   # auth local, RBAC y aislamiento
+├── static/                 # interfaz local, assets vendorizados
+├── data/                   # seeds públicos read-only del paquete
+├── Formula/lucidfence.rb   # Homebrew
+└── tests/                  # suite stdlib
 ```
 
-**Licencia Apache-2.0 — 100% gratis, sin planes ni suscripciones.** Geofencing soberano, multi-MDM, dashboard, comandos remotos, alertas, export, adapters y Risk Engine explicable. Sin cuenta, sin telemetría, sin coste.
+La capa histórica se sigue llamando `saas/` internamente por compatibilidad, pero no implica un servicio cloud: es la capa local de usuarios, organizaciones y RBAC.
 
----
+## Integrar un MDM
 
-## Seguridad
+Desde la interfaz, abre **Ajustes** y configura el adapter y sus credenciales. Los secretos se almacenan en el directorio local de la organización, nunca en el frontend ni en Git.
 
-Auditado con lente CISO:
-- Tokens de sesión `os.urandom(32)` + TTL server-side; passwords PBKDF2-HMAC-SHA256 salteados (100k rounds).
-- RBAC capability-based en ~30 endpoints; escalación cross-tenant cerrada (403).
-- Path traversal bloqueado en `/static/`; XSS stored escapado; command injection imposible (action whitelist).
-- **0 secretos en el repo.** Los datos de runtime (`data/_users.json`, `data/_sessions.json`, tenants) están en `.gitignore` y se escriben con `chmod 600`.
+Para contribuir un adapter, implementa `MDMAdapter` siguiendo [`core/adapters/ADAPTER.md`](core/adapters/ADAPTER.md) y añade pruebas offline.
 
----
+## AI opcional y MCP
 
-## Contribuir
+La aplicación funciona sin modelo. En **Ajustes → Proveedor AI opcional** puedes conectar cualquier endpoint OpenAI-compatible y probarlo antes de guardar. La clave queda en el directorio tenant-local con modo `0600`.
 
-1. Lee `CONTRIBUTING.md` (cómo crear adapters, Bounty Sprint).
-2. Fork → branch `feature/<adapter-tu-mdm>` → PR con tests contra mock.
-3. CI (`.github/workflows/ci.yml`) corre `tests/run_tests.py` + `node --check static/app.js`.
+- Gateway: `POST http://127.0.0.1:8765/v1/chat/completions`
+- MCP: `lucidfence mcp`
+- Guía completa: [`docs/AI_AND_MCP.md`](docs/AI_AND_MCP.md)
 
-Plantillas en `.github/ISSUE_TEMPLATE/` y `.github/PULL_REQUEST_TEMPLATE.md`.
+## Desarrollo
 
----
+```bash
+git clone https://github.com/adrimg3196/lucidfence.git
+cd lucidfence
+python3 -m pip install -r requirements.txt
+python3 tests/run_tests.py
+python3 bin/lucidfence start --no-open
+```
 
-## Comunidad — Adapter Bounty Sprint 🏆
+La suite debe terminar con un resumen explícito y cero fallos. El proyecto usa Python 3.9+ y evita frameworks web.
 
-LucidFence es multi-MDM **porque la comunidad lo alimenta**. El producto es agnóstico al MDM vía la interfaz `MDMAdapter` (`core/adapters/base.py`). Hoy: `simulation` + `applivery` (live) + `intune`/`jamf` (mock).
+## Seguridad y privacidad
 
-**Buscamos adapters live de:** Intune (#1), Jamf (#2), y cualquier otro MDM (SOTI, Workspace ONE, Mosyle, Kandji…).
+- Escucha en `127.0.0.1` por defecto.
+- Sin telemetría ni cuenta remota.
+- Secretos y sesiones locales con permisos restringidos.
+- RBAC capability-based y aislamiento de tenants.
+- Path traversal bloqueado en estáticos.
+- Acciones UEM validadas contra allowlist y cooldown persistente.
+- Un riesgo positivo sin evidencia se marca `verified: false`.
 
-### Reconocimiento (Hall of Fame)
-- El primer PR verificado de cada MDM entra al **Hall of Fame** de este README + rol de *Adapter Maintainer*.
-- Bounties para adapters de MDM y para señales de riesgo verificadas por CISOs.
-
-### Cómo participar
-1. Fork → branch `feature/<adapter-tu-mdm>`.
-2. Implementa `MDMAdapter` (ver `core/adapters/ADAPTER.md`) contra mock.
-3. Tests en `tests/test_adapters_contrib.py` (sin credenciales reales).
-4. PR → CI obligatorio (`tests/run_tests.py` + `node --check`) → badge **verified**.
-
-Issues del sprint: [#1 Intune](https://github.com/adrimg3196/lucidfence/issues/1) · [#2 Jamf](https://github.com/adrimg3196/lucidfence/issues/2) · [#3 Sprint meta](https://github.com/adrimg3196/lucidfence/issues/3).
-
-Copy de lanzamiento (thread X, LinkedIn, contributors) en [`docs/launch-copy/`](docs/launch-copy/).
-
----
+Consulta [`SECURITY.md`](SECURITY.md) si está disponible o abre un security advisory privado en GitHub para reportar una vulnerabilidad.
 
 ## Licencia
 
-Core: **Apache-2.0** (ver `LICENSE`). Módulo Enterprise on-prem: propietario, disponible vía licencia.
-
----
-
-## Estado
-
-- ✅ 87 tests PASS (core + IT + SaaS)
-- ✅ Risk Engine explicable + evidence gate (anti-overclaim): el score 0-100 lleva `reasons` y `verified`
-- ✅ 4 adapters (simulation/applivery/intune/jamf)
-- ✅ Dashboard 100% local (sin CDNs de terceros): risk score + evidence gate visibles en el modal de dispositivo
-- ⚠️ Live real de Intune/Jamf pendiente de Enterprise on-prem (hoy mock + webhook)
+Todo el producto distribuido en este repositorio se publica bajo **Apache License 2.0**. Uso personal, comercial, modificación y redistribución permitidos conforme a la licencia.

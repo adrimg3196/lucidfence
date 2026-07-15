@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" role="img" aria-label="Mapa mundial vectorial offline">
+  <defs>
+    <linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#111820"/><stop offset="1" stop-color="#0c1117"/>
+    </linearGradient>
+    <pattern id="grid" width="88.89" height="67.06" patternUnits="userSpaceOnUse">
+      <path d="M88.89 0H0V67.06" fill="none" stroke="#33404d" stroke-width="1" opacity=".32"/>
+    </pattern>
+    <filter id="soft"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+  <rect width="1600" height="760" fill="url(#ocean)"/>
+  <rect width="1600" height="760" fill="url(#grid)"/>
+  <g fill="#222d37" stroke="#53616e" stroke-width="2" stroke-linejoin="round">
+    <!-- North America -->
+    <path d="M80 156l52-62 105-35 92 18 67 55 91 17 58 70-30 62-64 31-34 74-71 8-47-48-91-19-49-63-63-29z"/>
+    <path d="M354 384l46 9 32 52-22 52-35-20-17-53z"/>
+    <!-- South America -->
+    <path d="M426 451l72-20 64 35 31 73-25 102-48 80-34-20-14-104-39-67z"/>
+    <!-- Greenland -->
+    <path d="M486 44l91-31 64 44-27 89-73 16-58-48z"/>
+    <!-- Europe -->
+    <path d="M742 171l57-42 69 8 36 36 58-3 53 39-33 40-66 1-27 36-57-11-38 24-43-36-47-16z"/>
+    <!-- Africa -->
+    <path d="M759 294l76-31 88 23 47 68-25 101-67 128-58-50-21-105-59-75z"/>
+    <!-- Asia -->
+    <path d="M925 154l73-59 120-23 126 34 109 81 109 21 53 65-70 47-81-15-53 49-82-4-55-61-95 21-55-47-78-16z"/>
+    <!-- India / SE Asia -->
+    <path d="M1082 310l64 15 38 87-44 66-45-71-38-47z"/>
+    <path d="M1212 367l65 21 41 65-29 31-44-47z"/>
+    <!-- Japan -->
+    <path d="M1425 281l13 20-12 50-11-17z"/>
+    <!-- Australia -->
+    <path d="M1274 531l83-50 99 31 31 73-58 76-100-5-66-66z"/>
+    <!-- New Zealand -->
+    <path d="M1502 636l17 25-21 41-10-22z"/>
+  </g>
+  <g fill="none" stroke="#6e7e8c" stroke-width="1.25" opacity=".62">
+    <!-- Europe / Mediterranean regional detail -->
+    <path d="M765 210l37 12 25-33 31 24 31-40M802 222l-9 42 30 22M827 189l-7-35M858 213l16 58M889 173l18 40 42 9M750 247l34-7"/>
+    <!-- Iberian peninsula emphasis -->
+    <path d="M774 239l31-8 18 20-12 29-31-2-18-19z" stroke="#8d9ba8" stroke-width="2"/>
+    <!-- Africa detail -->
+    <path d="M797 354l72-11 72 18M821 428l113 6M866 287l12 246"/>
+    <!-- Americas detail -->
+    <path d="M172 185l102 25 87-61M211 327l89-65 116 19M467 471l70 75M479 590l83 19"/>
+    <!-- Asia detail -->
+    <path d="M1022 197l129 38 124-54M1137 117l36 193M1251 146l29 158M1336 213l-41 93"/>
+    <path d="M1306 552l114 75M1350 492l-7 164"/>
+  </g>
+  <g fill="#8fa0ae" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" opacity=".58" letter-spacing="2">
+    <text x="220" y="236">NORTEAMÉRICA</text><text x="455" y="555">SUDAMÉRICA</text>
+    <text x="808" y="202">EUROPA</text><text x="823" y="402">ÁFRICA</text>
+    <text x="1140" y="212">ASIA</text><text x="1324" y="575">OCEANÍA</text>
+  </g>
+  <circle cx="787" cy="211" r="18" fill="#5e6ad5" opacity=".09" filter="url(#soft)"/>
+</svg>

@@ -48,6 +48,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import mimetypes
 import os
 import sys
 import threading
@@ -69,17 +70,22 @@ from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.engine import Engine
 from core.product import build_product
 from core import secrets as core_secrets
+from core import ai_provider
 from core import workflows as WF  # workflows module (templates + custom builder)
 from core.actions import VALID_ACTIONS
 from core.alerts import ALERT_TYPES, CHANNELS, ALERT_TYPE_LABELS
+from core.app_paths import ensure_data_dir
 
 STATIC = ROOT / "static"
+TEMPLATE_DATA = ROOT / "data"
+DATA_ROOT = ensure_data_dir()
 COOKIE_SESSION = "gf_session"
 COOKIE_ORG = "gf_org"
 
-# Global stores (single instance, local-only SaaS).
-_tenants = TenantStore(ROOT / "data")
-_auth = AuthStore(ROOT / "data")
+# Global stores for the local app. Runtime data never lives in Homebrew's
+# Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
+_tenants = TenantStore(DATA_ROOT)
+_auth = AuthStore(DATA_ROOT)
 # Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
 # configuracion manual (ciso@acme.test / demo1234). Idempotente: si el
 # usuario ya existe, no hace nada. Si el tenant demo no existe, lo crea.
@@ -291,7 +297,7 @@ def engine_for(org_id: str) -> Engine:
         # seed per-tenant defaults once so each org starts with the demo data
         # but remains isolated afterwards (this is what makes it a real SaaS)
         for name in ("routes.json", "policies.json", "fleet_seed.json", "fences.json", "device_overrides.json"):
-            src = (ROOT / "fences.json") if name == "fences.json" else (ROOT / "data" / name)
+            src = (ROOT / "fences.json") if name == "fences.json" else (TEMPLATE_DATA / name)
             dst = tdir / name
             if src.exists() and not dst.exists():
                 try:
@@ -328,7 +334,7 @@ def reload_engine(org_id: str) -> Engine:
         tdir = _tenants.data_dir(org_id)
         cfg["data_dir"] = str(tdir)
         for name in ("routes.json", "policies.json", "fleet_seed.json", "fences.json", "device_overrides.json"):
-            src = (ROOT / "fences.json") if name == "fences.json" else (ROOT / "data" / name)
+            src = (ROOT / "fences.json") if name == "fences.json" else (TEMPLATE_DATA / name)
             dst = tdir / name
             if src.exists() and not dst.exists():
                 try:
@@ -425,6 +431,29 @@ def _host_allowed(handler) -> bool:
     except Exception:
         cfg_host = ""
     return host == cfg_host.lower()
+
+
+def _gateway_allowed(handler) -> bool:
+    """Allow anonymous OpenAI-compatible traffic only on a loopback bind."""
+    loopback = {"127.0.0.1", "localhost", "::1"}
+    bound = os.environ.get("LUCIDFENCE_HOST", "127.0.0.1").strip().lower()
+    client = (handler.client_address[0] if handler.client_address else "").lower()
+    if bound in loopback and client in loopback:
+        return True
+    expected = os.environ.get("LUCIDFENCE_GATEWAY_TOKEN", "")
+    supplied = handler.headers.get("Authorization", "")
+    return len(expected) >= 16 and hmac.compare_digest(supplied, "Bearer " + expected)
+
+
+def _gateway_tenant(handler):
+    """Resolve an explicit org, otherwise the first org with AI configured."""
+    requested = (handler.headers.get("X-LucidFence-Org", "") or "").strip()
+    if requested and _tenants.get(requested):
+        return requested
+    for item in _tenants.all():
+        if ai_provider.status(_tenants.data_dir(item.id)).get("configured"):
+            return item.id
+    return None
 
 
 def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7):
@@ -720,21 +749,19 @@ class Handler(BaseHTTPRequestHandler):
         method = self.command
 
         # static
-        if route in ("/", "/index.html", "/landing", "/landing.html"):
-            _send_file(self, STATIC / "index.html", "text/html; charset=utf-8")
-            return
-        if route in ("/app", "/app/", "/dashboard", "/dashboard.html"):
+        if route in ("/", "/app", "/app/", "/dashboard", "/dashboard.html"):
             _send_file(self, STATIC / "dashboard.html", "text/html; charset=utf-8")
+            return
+        if route in ("/about", "/index.html", "/landing", "/landing.html"):
+            _send_file(self, STATIC / "index.html", "text/html; charset=utf-8")
             return
         if route.startswith("/static/"):
             rel = route[len("/static/"):]
             p = (STATIC / rel).resolve()
             if p.is_relative_to(STATIC):
-                ct = "text/html"
+                ct = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
                 if p.suffix == ".js":
                     ct = "application/javascript"
-                elif p.suffix == ".css":
-                    ct = "text/css"
                 _send_file(self, p, ct)
             else:
                 self.send_error(404)
@@ -793,6 +820,22 @@ class Handler(BaseHTTPRequestHandler):
             result["soar_webhook"] = True
             return _send_json(self, {"ok": bool(result.get("ok") or result.get("delegated") or result.get("dry_run")),
                                      "result": result})
+
+        # ---- Local OpenAI-compatible gateway (headless clients / MCP) ----
+        if route == "/v1/chat/completions" and method == "POST":
+            if not _gateway_allowed(self):
+                return _send_json(self, {"error": {"message": "gateway bearer token requerido", "type": "authentication_error"}}, 401)
+            org_id = _gateway_tenant(self)
+            if not org_id:
+                return _send_json(self, {"error": {"message": "no hay proveedor AI configurado", "type": "provider_not_configured"}}, 503)
+            body = _read_body(self)
+            messages = body.get("messages") if isinstance(body, dict) else None
+            if not isinstance(messages, list) or not messages:
+                return _send_json(self, {"error": {"message": "messages debe ser una lista no vacía", "type": "invalid_request_error"}}, 400)
+            result = ai_provider.chat(_tenants.data_dir(org_id), messages, body)
+            if not result.get("ok"):
+                return _send_json(self, {"error": {"message": result.get("error", "provider error"), "type": "provider_error"}}, int(result.get("status") or 502))
+            return _send_json(self, result["response"])
 
         # everything else needs a session
         guarded = require(self)
@@ -1065,7 +1108,10 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             body = _read_body(self)
             tdir = _tenants.data_dir(org)
-            res = core_secrets.save_credentials(tdir, body.get("api_key"), body.get("org_id"))
+            requested_key = body.get("api_key")
+            if not (requested_key or "").strip() and core_secrets.read_key(tdir):
+                requested_key = None
+            res = core_secrets.save_credentials(tdir, requested_key, body.get("org_id"))
             if not res.get("ok"):
                 return _send_json(self, {"ok": False, "error": res.get("error")}, 400)
             new_mode = body.get("mode") or ("live" if res.get("configured") else "simulation")
@@ -1370,46 +1416,44 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_html(self, EXP.export_inventory_html(devs, org, _summary(devs)))
             return _send_csv(self, "inventario_uem.csv", EXP.export_inventory_csv(devs))
 
-        # ---- IA / MoA (proxy local a http://127.0.0.1:8085) -------------
-        if route == "/api/ai/providers" and method == "GET":
-            data = _ai_get("http://127.0.0.1:8085/api/providers")
-            status = _ai_get("http://127.0.0.1:8085/api/status")
-            return _send_json(self, {
-                "online": data is not None,
-                "providers": data or [],
-                "status": status or {},
-            })
-        if route == "/api/ai" and method == "POST":
+        # ---- Optional BYO AI provider (tenant-local, OpenAI-compatible) ----
+        if route in ("/api/ai/providers", "/api/ai/settings") and method == "GET":
+            ai_status = ai_provider.status(_tenants.data_dir(org))
+            if route == "/api/ai/providers":
+                provider_row = []
+                if ai_status.get("configured"):
+                    provider_row = [{"name": ai_status.get("provider"), "model": ai_status.get("model"), "available": True}]
+                return _send_json(self, {"online": ai_status.get("configured", False),
+                                         "providers": provider_row, "status": ai_status})
+            return _send_json(self, ai_status)
+        if route == "/api/ai/settings" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            result = ai_provider.save(_tenants.data_dir(org), _read_body(self))
+            return _send_json(self, result, 200 if result.get("ok") else 400)
+        if route == "/api/ai/test" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
             body = _read_body(self)
-            # Construye el payload para el servidor MoA (OpenAI-compatible).
-            # Por defecto dry-run para que funcione sin API keys; el usuario
-            # puede forzar real con moa_dry=false en el body.
-            payload = {
-                "messages": body.get("messages", []),
-                "moa_ref": body.get("moa_ref"),
-                "moa_agg": body.get("moa_agg"),
-                "moa_rounds": int(body.get("moa_rounds", 2) or 2),
-                "moa_agg_mode": body.get("moa_agg_mode", "synthesize"),
-                "moa_dry": bool(body.get("moa_dry", True)),
-                "moa_roles": body.get("moa_roles"),
-                "stream": False,
-            }
-            resp = _ai_post("http://127.0.0.1:8085/v1/chat/completions", payload)
-            if resp is None:
-                return _send_json(self, {"ok": False,
-                    "error": "El motor MoA no está disponible. Arranca /Users/adri/moa/server.py (puerto 8085)."}, 503)
-            text = resp.get("choices", [{}])[0].get("message", {}).get("content", "")
-            moa = resp.get("moa", {})
-            return _send_json(self, {
-                "ok": True,
-                "text": text,
-                "agg_used": moa.get("agg_used"),
-                "ref_used": moa.get("ref_used"),
-                "rounds": moa.get("rounds"),
-                "tokens": moa.get("tokens"),
-                "cost": moa.get("cost"),
-                "history": moa.get("history"),
-            })
+            # Test unsaved fields in a secure temporary directory; never mutate
+            # tenant configuration until the operator presses Save.
+            if any(k in body for k in ("base_url", "model", "api_key")):
+                result = ai_provider.test_values(body)
+            else:
+                result = ai_provider.test_connection(_tenants.data_dir(org))
+            return _send_json(self, result, 200 if result.get("ok") else 502)
+        if route in ("/api/ai", "/api/ai/chat") and method == "POST":
+            body = _read_body(self)
+            messages = body.get("messages") if isinstance(body, dict) else None
+            if not isinstance(messages, list) or not messages:
+                return _send_json(self, {"ok": False, "error": "messages debe ser una lista no vacía"}, 400)
+            result = ai_provider.chat(_tenants.data_dir(org), messages, body)
+            if not result.get("ok"):
+                return _send_json(self, result, int(result.get("status") or 502))
+            cfg = ai_provider.status(_tenants.data_dir(org))
+            return _send_json(self, {"ok": True, "text": result.get("text"),
+                                     "provider": cfg.get("provider"), "model": cfg.get("model"),
+                                     "response": result.get("response")})
 
         # ---- IA: borrador de respuesta de soporte (todo impulsado por IA) --
         if route == "/api/ai/support" and method == "POST":
@@ -1486,13 +1530,14 @@ class Handler(BaseHTTPRequestHandler):
                           "orgs": [o.to_dict() for o in _tenants.list_for_user(user.id)]})
 
     def _demo_login(self):
-        """One-click local onboarding: create/reuse demo org and open a session.
+        """One-click onboarding, available only on a loopback-bound app."""
+        bound_host = os.environ.get("LUCIDFENCE_HOST", "127.0.0.1").strip().lower()
+        loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+        client_host = (self.client_address[0] if self.client_address else "").lower()
+        if (bound_host not in loopback_hosts or client_host not in loopback_hosts):
+            if os.environ.get("LUCIDFENCE_ALLOW_REMOTE_DEMO_LOGIN") != "1":
+                return _send_json(self, {"error": "demo login solo disponible en loopback"}, 403)
 
-        LucidFence is installed on the customer's own machine; the fastest path
-        must be "run server -> dashboard alive" without asking for a cloud
-        signup. This endpoint keeps the demo credential server-side instead of
-        exposing it in the browser bundle.
-        """
         email = "ciso@acme.test"
         user = _auth.get_by_email(email)
         if user is None:
@@ -1630,9 +1675,9 @@ def main():
     host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")
     port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] LucidFence SaaS running at http://{host}:{port}")
-    print(f"  Multi-tenant local SaaS · mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
-    print(f"  Tenants: {len(_tenants.all()) if '_tenants' in globals() else '?'}")
+    print(f"[{ts}] LucidFence local app running at http://{host}:{port}")
+    print(f"  mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
+    print(f"  data={DATA_ROOT}")
     httpd = ThreadingHTTPServer((host, port), Handler)
     try:
         httpd.serve_forever()

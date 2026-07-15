@@ -108,10 +108,23 @@ async function api(path, opts={}){
 // fetch. NUNCA guardamos ni hardcodeamos tokens/secrets en el cliente.
 async function ensureAuth(){
   try{
-    const me = await api("/api/auth/me");
+    // Local-app bootstrap: first inspect the HttpOnly session directly. If it
+    // does not exist, ask the loopback-only demo endpoint for one and retry.
+    let response = await fetch("/api/auth/me", {credentials:"same-origin"});
+    if(response.status === 401){
+      const demo = await fetch("/api/auth/demo", {
+        method:"POST", credentials:"same-origin",
+        headers:{"Content-Type":"application/json"}, body:"{}"
+      });
+      if(!demo.ok) throw new Error("demo local no disponible");
+      response = await fetch("/api/auth/me", {credentials:"same-origin"});
+    }
+    if(!response.ok) throw new Error("no autenticado");
+    const me = await response.json();
     App.user = me.user; App.orgs = me.orgs||[];
-    await refreshOrg();      // rellena App.org (nombre/plan) y la UI lateral
+    await refreshOrg();
     updateUserUI();
+    hideAuthModal();
     return true;
   }catch(e){
     showAuthModal();
@@ -204,7 +217,7 @@ const NAV = [
   {id:"devices",    label:"Dispositivos",icon:"devices"},
   {id:"inventory",  label:"Inventario",  icon:"box"},
   {id:"riesgo",     label:"Riesgo",       icon:"shield-alert"},
-  {id:"ai",         label:"IA · MoA",    icon:"cpu"},
+  {id:"ai",         label:"AI opcional",  icon:"cpu"},
   {id:"events",     label:"Eventos",     icon:"calendar"},
   {id:"incidents",  label:"Incidentes",  icon:"alert-triangle2"},
   {id:"soar",       label:"SOAR · CVE",  icon:"shield-alert"},
@@ -354,7 +367,7 @@ function severityLabel(s){ return ({low:"Bajo",medium:"Medio",high:"Alto",critic
 function verifiedBadge(verified, opts={}){
   // verified=true => señal real (verde); false => sin señal / no verificado (ámbar)
   const cls = verified ? "in" : "unk";
-  const txt = verified ? (opts.short?"✓ Verificado":"✓ Verificado (señal real)") : (opts.short?"⚠ No verif.":"⚠ Sin señal / no verificado");
+  const txt = verified ? (opts.short?"Verificado":"Verificado · señal real") : (opts.short?"No verif.":"Sin señal · no verificado");
   return `<span class="tag ${cls}" title="${verified?'Riesgo respaldado por señales reales (reasons no vacío)':'Sin señal que respalde el score'}"><span class="d"></span>${txt}</span>`;
 }
 function iosGeofenceBadge(d, opts={}){
@@ -449,8 +462,12 @@ const I = {
 function renderOverview(){
   const st = App.status; if(!st) return;
   const devs = st.devices||[];
-  const inside = st.inside_count||0, outside = st.outside_count||0, unknown = st.unknown_count||0;
-  const noncomp = st.noncompliant||0;
+  // One snapshot, one truth: never mix counters from a concurrent engine tick
+  // with the device array rendered on this frame.
+  const inside = devs.filter(d=>(d.fence_state||"unknown")==="inside").length;
+  const outside = devs.filter(d=>(d.fence_state||"unknown")==="outside").length;
+  const unknown = devs.length-inside-outside;
+  const noncomp = devs.filter(d=>d.compliant===false).length;
   const iosGeo = st.ios_geofence_summary || {};
   const total = devs.length || (inside+outside+unknown) || 1;
   const compPct = Math.round((total-noncomp)/total*100);
@@ -612,11 +629,28 @@ function recenterMap(){ if(App.map) App.map.setView([40.42,-3.70], 6); }
 function initMap(devs){
   if(typeof L === "undefined") return;
   const node = $("#map"); if(!node) return;
+  // renderOverview replaces #map on every refresh. A Leaflet instance bound
+  // to the old detached node is unusable even though no exception is raised.
+  if(App.map && App.map.getContainer() !== node){
+    App.map.remove();
+    App.map=null; App.mapMarkers={}; App.trailLayer=null;
+  }
   if(!App.map){
     App.map = L.map(node, {zoomControl:true, attributionControl:false}).setView([40.42,-3.70], 6);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(App.map);
+    // Single vendored vector basemap: no tile provider, tracking or network.
+    L.imageOverlay("static/vendor/offline-map.svg", [[-85,-180],[85,180]], {opacity:.72, interactive:false}).addTo(App.map);
+    L.imageOverlay("static/vendor/offline-iberia.svg", [[35.5,-10],[44,4.5]], {opacity:.96, interactive:false}).addTo(App.map);
     App.trailLayer = L.layerGroup().addTo(App.map);
-    setTimeout(()=>App.map.invalidateSize(), 60);
+    const settleMap = (attempt=0)=>{
+      if(!App.map || App.map.getContainer()!==node) return;
+      const box=node.getBoundingClientRect();
+      if(box.width>0 && box.height>0){
+        App.map.invalidateSize({pan:false,animate:false});
+        return;
+      }
+      if(attempt<12) setTimeout(()=>settleMap(attempt+1), 50);
+    };
+    requestAnimationFrame(()=>requestAnimationFrame(()=>settleMap()));
   }
   drawMapMarkers(devs, App.devFilter);
 }
@@ -625,11 +659,21 @@ function drawMapMarkers(devs, filter){
   Object.values(App.mapMarkers).forEach(m=>App.map.removeLayer(m)); App.mapMarkers={};
   App.trailLayer.clearLayers();
   const colorFor = (s)=> s==="inside"?"#4cc38a": s==="outside"?"#4ea7fc":"#f2c94c";
+  const collisions = new Map();
   (devs||[]).forEach(d=>{
     if(filter && filter!=="all" && (d.fence_state||"unknown")!==filter) return;
     const lat=d.lat, lng=d.lng; if(lat==null||lng==null) return;
     const col = colorFor(d.fence_state||"unknown");
-    const m = L.circleMarker([lat,lng], {radius:7, color:col, weight:2, fillColor:col, fillOpacity:.8});
+    // Devices may report the exact same site coordinate. Spread only their
+    // visual marker in a tiny deterministic ring; popup/trail retain truth.
+    const collisionKey = `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`;
+    const collisionIndex = collisions.get(collisionKey)||0;
+    collisions.set(collisionKey, collisionIndex+1);
+    const angle = collisionIndex*2.399963;
+    const radius = collisionIndex ? .035*Math.ceil(collisionIndex/6) : 0;
+    const markerLat = Number(lat)+Math.sin(angle)*radius;
+    const markerLng = Number(lng)+Math.cos(angle)*radius;
+    const m = L.circleMarker([markerLat,markerLng], {radius:7, color:col, weight:2, fillColor:col, fillOpacity:.8});
     m.bindPopup(`<b>${esc(d.name)}</b><br><span style="font-size:11px;color:#888">${esc(d.platform||"")} · ${(d.fence_state||"unknown")}</span>`);
     m.on("click", ()=>openDeviceModal(d.device_id));
     m.addTo(App.map); App.mapMarkers[d.device_id]=m;
@@ -1185,40 +1229,60 @@ function openWorkflowModal(){
    ============================================================ */
 async function renderSettings(){
   $("#view-settings").innerHTML = `
-    <div class="card" style="max-width:680px"><div class="hd"><h3>Configuración de integración</h3></div>
-      <div class="bd" id="setBody"><div class="sk" style="height:200px"></div></div></div>`;
-  let s={};
-  try{ s = await api("/api/settings/status"); }catch(e){}
+    <div class="view-head"><div><h2>Conectores locales</h2><div class="sub">LucidFence funciona en Demo sin credenciales. Activa solo los servicios que quieras conectar.</div></div></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start">
+      <div class="card"><div class="hd"><h3>Fuente UEM / MDM</h3><div class="grow"></div><span class="tag in"><span class="d"></span>tenant-local</span></div>
+        <div class="bd" id="setBody"><div class="sk" style="height:260px"></div></div></div>
+      <div class="card"><div class="hd"><h3>Proveedor AI opcional</h3><div class="grow"></div><span class="tag unk"><span class="d"></span>BYO API</span></div>
+        <div class="bd" id="aiSetBody"><div class="sk" style="height:260px"></div></div></div>
+    </div>`;
+  let s={}, ai={};
+  try{ [s,ai] = await Promise.all([api("/api/settings/status"), api("/api/ai/settings")]); }catch(e){}
   const mode = s.mode||"simulation";
   $("#setBody").innerHTML = `
-    <div class="switch-row"><div style="flex:1"><div class="lab">Modo</div><div class="ds">Live conecta con Applivery UEM real · Demo usa datos simulados.</div></div>
-      <div class="seg" id="modeSeg"><button data-m="live" class="${mode==='live'?'active':''}">Live</button><button data-m="simulation" class="${mode==='simulation'?'active':''}">Demo</button></div></div>
-    <div class="field"><label>Token de Applivery (Bearer)</label><div class="input-wrap"><input class="input" id="sKey" type="password" placeholder="••••••" value=""><button class="toggle" onclick="toggleShow('sKey',this)">Ver</button></div>
-      <div class="help">${s.configured? "Actualmente configurado: <b>"+(s.masked_key||"")+"</b>":"No configurado"}</div></div>
-    <div class="field"><label>Organization ID</label><input class="input" id="sOrg" placeholder="692f26…" value="${esc(s.org_id||"")}"></div>
-    <div class="switch-row"><div style="flex:1"><div class="lab">Dry-run</div><div class="ds">No ejecuta acciones reales sobre los dispositivos.</div></div>
-      <div class="switch ${s.dry_run?'on':''}" id="sDry"></div></div>
-    <button class="btn outline" id="sTest">Probar conexión</button>
-    <button class="btn primary" id="sSave" style="margin-left:8px">Guardar</button>
+    <div class="field"><label>Conector</label><select class="input" id="sProvider">
+      <option value="simulation" ${mode==='simulation'?'selected':''}>Demo local · sin claves</option>
+      <option value="applivery" ${mode==='live'?'selected':''}>Applivery UEM</option>
+      <option value="intune" disabled>Microsoft Intune · preview del adapter</option>
+      <option value="jamf" disabled>Jamf Pro · preview del adapter</option>
+    </select><div class="help">Intune y Jamf están en el SDK comunitario, pero el inventario live aún no se activa para no prometer una integración incompleta.</div></div>
+    <div id="uemFields">
+      <div class="field"><label>Token de Applivery (Bearer)</label><div class="input-wrap"><input class="input" id="sKey" type="password" placeholder="${s.configured?'Dejar vacío para conservar':'Pega el token aquí'}"><button class="toggle" onclick="toggleShow('sKey',this)">Ver</button></div>
+        <div class="help">${s.configured?"Configurado: <b>"+esc(s.masked_key||"")+"</b>":"No configurado"}</div></div>
+      <div class="field"><label>Organization / Workspace ID</label><input class="input" id="sOrg" placeholder="org_…" value="${esc(s.org_id||"")}"></div>
+    </div>
+    <div class="switch-row"><div style="flex:1"><div class="lab">Dry-run</div><div class="ds">Recomendado: calcula y audita sin ejecutar comandos reales.</div></div><div class="switch ${s.dry_run?'on':''}" id="sDry"></div></div>
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn outline" id="sTest">Probar conexión</button><button class="btn primary" id="sSave">Guardar UEM</button></div>
     <div id="sResult" class="test-result" style="margin-top:14px"></div>`;
-  $$("#modeSeg button").forEach(b=>b.onclick=()=>{
-    $$("#modeSeg button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
-  });
+  const syncUemFields=()=>{ $("#uemFields").style.display=$("#sProvider").value==='applivery'?'block':'none'; $("#sTest").style.display=$("#sProvider").value==='applivery'?'inline-flex':'none'; };
+  $("#sProvider").onchange=syncUemFields; syncUemFields();
   $("#sDry").onclick=()=>$("#sDry").classList.toggle("on");
-  $("#sTest").onclick = async ()=>{
-    const r = await api("/api/settings/test", {method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({api_key:$("#sKey").value})});
-    const res = $("#sResult");
-    if(r.ok){ res.className="test-result ok show"; res.textContent="Conexión correcta ("+(r.device_count||0)+" dispositivos)."; }
-    else { res.className="test-result bad show"; res.textContent=r.error||"Fallo de conexión"; }
+  $("#sTest").onclick=async()=>{
+    const r=await api("/api/settings/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:$("#sKey").value})});
+    const out=$("#sResult"); out.className="test-result "+(r.ok?"ok show":"bad show"); out.textContent=r.message||(r.ok?"Conexión verificada.":r.error||"Fallo de conexión");
   };
-  $("#sSave").onclick = async ()=>{
-    const mode = $("#modeSeg button.active").dataset.m;
-    const r = await api("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({api_key:$("#sKey").value, org_id:$("#sOrg").value, mode, dry_run:$("#sDry").classList.contains("on")})});
-    if(r.ok){ toast("Guardado", "Modo "+mode, "ok"); refresh(false); }
-    else toast("Error", r.error||"", "bad");
+  $("#sSave").onclick=async()=>{
+    const provider=$("#sProvider").value, live=provider==='applivery';
+    const payload={api_key:live?$("#sKey").value:null,org_id:live?$("#sOrg").value:null,mode:live?'live':'simulation',dry_run:$("#sDry").classList.contains("on")};
+    const r=await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(r.ok){toast("UEM guardado",live?"Applivery":"Demo local","ok");refresh(false);}else toast("Error",r.error||"","bad");
   };
+
+  const presets=ai.presets||[];
+  $("#aiSetBody").innerHTML=`
+    <div class="switch-row"><div style="flex:1"><div class="lab">Habilitar AI</div><div class="ds">Opcional. La clave se guarda localmente con permisos 0600.</div></div><div class="switch ${ai.enabled?'on':''}" id="aiEnabled"></div></div>
+    <div class="field"><label>Preset</label><select class="input" id="aiPreset">${presets.map(p=>`<option value="${esc(p.id)}" data-url="${esc(p.base_url||'')}" ${p.id===ai.provider?'selected':''}>${esc(p.name)}</option>`).join("")}</select></div>
+    <div class="field"><label>Base URL OpenAI-compatible</label><input class="input mono" id="aiBase" value="${esc(ai.base_url||'')}" placeholder="http://127.0.0.1:11434/v1"></div>
+    <div class="field"><label>Modelo</label><input class="input mono" id="aiModel" value="${esc(ai.model||'')}" placeholder="gpt-4.1-mini, llama3.2…"></div>
+    <div class="field"><label>API key <span class="sub">(opcional para modelos locales)</span></label><div class="input-wrap"><input class="input" id="aiKey" type="password" placeholder="${ai.key_configured?'Dejar vacío para conservar':'sk-…'}"><button class="toggle" onclick="toggleShow('aiKey',this)">Ver</button></div><div class="help">${ai.key_configured?'Configurada: <b>'+esc(ai.masked_key||'')+'</b>':'Sin clave configurada'}</div></div>
+    <div style="display:flex;gap:8px"><button class="btn outline" id="aiTest">Probar modelo</button><button class="btn primary" id="aiSave">Guardar AI</button></div>
+    <div id="aiResult" class="test-result" style="margin-top:14px"></div>
+    <div class="help" style="margin-top:14px">Gateway local: <code>http://127.0.0.1:8765/v1/chat/completions</code> · MCP: <code>lucidfence mcp</code></div>`;
+  $("#aiEnabled").onclick=()=>$("#aiEnabled").classList.toggle("on");
+  $("#aiPreset").onchange=()=>{const o=$("#aiPreset").selectedOptions[0];if(o.dataset.url)$("#aiBase").value=o.dataset.url;if(o.value==='disabled')$("#aiEnabled").classList.remove("on");};
+  const aiPayload=()=>({enabled:$("#aiEnabled").classList.contains("on"),provider:$("#aiPreset").value,base_url:$("#aiBase").value,model:$("#aiModel").value,api_key:$("#aiKey").value});
+  $("#aiSave").onclick=async()=>{const r=await api("/api/ai/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});if(r.ok){toast("AI guardada",r.enabled?r.model:"Desactivada","ok");renderSettings();}else toast("Error",r.error||"","bad");};
+  $("#aiTest").onclick=async()=>{const r=await api("/api/ai/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});const out=$("#aiResult");out.className="test-result "+(r.ok?"ok show":"bad show");out.textContent=r.ok?`Conexión correcta · ${(r.models||[]).slice(0,3).join(', ')||'endpoint activo'}`:(r.error||"Fallo de conexión");};
 }
 function toggleShow(id, btn){ const i=$("#"+id); if(i.type==="password"){i.type="text";btn.textContent="Ocultar";} else {i.type="password";btn.textContent="Ver";} }
 
@@ -1232,7 +1296,8 @@ async function loadAiProviders(){
     const box = $("#aiProv"); if(box){
       if(!data.online){
         box.innerHTML = `<div class="empty">${reicon("signal", {size:36})}
-          <div class="t">Motor MoA no disponible</div><div class="s">Arranca /Users/adri/moa/server.py en el puerto 8085 para habilitar la IA.</div></div>`;
+          <div class="t">AI opcional no configurada</div><div class="s">Conecta OpenAI, Ollama, LM Studio, Nous Portal u otro endpoint compatible cuando quieras.</div>
+          <button class="btn primary" style="margin-top:12px" onclick="goView('settings')">Configurar proveedor</button></div>`;
       } else {
         box.innerHTML = App.aiProviders.map(p=>`<div class="prov"><span class="st ${p.available?'on':'warn'}"></span>
           <div><div class="nm">${esc(p.name)}</div></div><span class="md">${esc(p.model||"")}</span></div>`).join("")
@@ -1243,14 +1308,12 @@ async function loadAiProviders(){
 }
 async function renderAI(){
   $("#view-ai").innerHTML = `
-    <div class="toolbar"><div class="grow"></div>
-      <div class="seg" id="aiMode"><button data-d="true" class="active">Demo (sin claves)</button><button data-d="false">Real (MoA)</button></div>
-    </div>
+    <div class="toolbar"><span class="sub">BYO model · los datos solo se envían al endpoint que configures</span><div class="grow"></div><button class="btn outline" onclick="goView('settings')">Configurar AI</button></div>
     <div class="ai-wrap">
       <div class="chat">
         <div class="hd"><div class="ic" style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--violet),var(--accent));display:grid;place-items:center;color:#fff">${I.bolt}</div>
-          <h3>IA de Flota · Mixture-of-Agents</h3><div class="grow"></div>
-          <span class="tag in"><span class="d"></span>local</span></div>
+          <h3>Analista AI de flota</h3><div class="grow"></div>
+          <span class="tag unk"><span class="d"></span>opcional</span></div>
         <div class="msgs" id="aiMsgs"></div>
         <div class="composer">
           <textarea id="aiInput" placeholder="Pregunta sobre tu flota… (ej: ¿qué dispositivos están fuera de su geovalla y por qué?)"></textarea>
@@ -1259,17 +1322,12 @@ async function renderAI(){
       </div>
       <div class="providers" id="aiProv"><div class="sk" style="height:20px"></div></div>
     </div>`;
-  $$("#aiMode button").forEach(b=>b.onclick=()=>{
-    $$("#aiMode button").forEach(x=>x.classList.remove("active")); b.classList.add("active");
-    App.aiDry = b.dataset.d==="true";
-  });
-  App.aiDry = true;
   $("#aiSend").onclick = sendAi;
   $("#aiInput").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendAi(); } });
   loadAiProviders();
   // saludo inicial
   if(!$("#aiMsgs").children.length){
-    addAiMsg("ai", "Hola. Soy tu analista de flota multi-modelo (Mixture-of-Agents, 100% local). Tengo visibilidad de tu flota en vivo. Pregúntame sobre conformidad, rutas, incidentes o pide un resumen ejecutivo.", null);
+    addAiMsg("ai", "La IA es opcional. Si configuras un endpoint OpenAI-compatible, puedo analizar conformidad, rutas e incidentes con el contexto de esta flota. LucidFence funciona igualmente sin modelo.", null);
   }
 }
 function addAiMsg(role, text, meta){
@@ -1277,8 +1335,8 @@ function addAiMsg(role, text, meta){
   const m = el("div", "msg "+role);
   const av = role==="user"? avatarText(App.org&&App.org.org?App.org.org.name:"U") : "AI";
   let metaHtml = "";
-  if(meta && (meta.agg_used||meta.ref_used)){
-    metaHtml = `<div class="meta">MoA · agregador ${esc(meta.agg_used||"—")} · ${esc((meta.ref_used||[]).join(", ")||"—")} · ${meta.rounds||1} capa(s)</div>`;
+  if(meta && (meta.provider||meta.model)){
+    metaHtml = `<div class="meta">${esc(meta.provider||"OpenAI-compatible")} · ${esc(meta.model||"modelo configurado")}</div>`;
   }
   m.innerHTML = `<div class="av2">${av}</div><div><div class="bubble">${esc(text)}</div>${metaHtml}</div>`;
   box.appendChild(m); box.scrollTop = box.scrollHeight;
@@ -1298,13 +1356,12 @@ async function sendAi(){
     {role:"user", content:q},
   ];
   try{
-    const r = await api("/api/ai", {method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({messages, moa_dry: App.aiDry!==false, moa_rounds:2, moa_agg_mode:"synthesize"})});
+    const r = await api("/api/ai/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({messages})});
     typing.remove();
-    if(r.ok){ addAiMsg("ai", r.text||"(sin respuesta)", {agg_used:r.agg_used, ref_used:r.ref_used, rounds:r.rounds}); }
-    else { typing.remove(); addAiMsg("ai", "No pude obtener respuesta: "+(r.error||""), null); }
+    if(r.ok){ addAiMsg("ai", r.text||"(sin respuesta)", {provider:r.provider, model:r.model}); }
+    else { addAiMsg("ai", "AI no disponible: "+(r.error||"configura un proveedor en Ajustes"), null); }
   }catch(e){
-    typing.remove(); addAiMsg("ai", "Error de conexión con el motor MoA: "+e.message, null);
+    typing.remove(); addAiMsg("ai", "Error de conexión con el proveedor AI: "+e.message, null);
   }
 }
 function buildFleetContext(st){
@@ -1369,7 +1426,7 @@ function renderGoals(){
       <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--muted)">
         <span>Real: <b style="color:var(--fg)">${g.real}${g.unit==="%"?"%":(" "+g.unit)}</b></span>
         <span>Objetivo: <b style="color:var(--fg)">${g.target}${g.unit==="%"?"%":(" "+g.unit)}</b></span>
-        <span style="color:${met?'var(--green)':'var(--amber)'};font-weight:600">${met?'✓ Cumplido':'En progreso'}</span>
+        <span style="color:${met?'var(--green)':'var(--amber)'};font-weight:600">${met?'Cumplido':'En progreso'}</span>
       </div>
     </div>`;
   }).join("");

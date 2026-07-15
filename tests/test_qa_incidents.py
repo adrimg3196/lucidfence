@@ -45,9 +45,9 @@ def test_incident_http_lifecycle_and_rbac():
     })
     assert status == 200 and signup.get("ok"), signup
     org_id = signup["org"]["id"]
-    from pathlib import Path
     from core.incidents import IncidentStore
-    fixture = IncidentStore(Path("data") / "tenants" / org_id / "data")
+    from core.app_paths import data_dir
+    fixture = IncidentStore(data_dir() / "tenants" / org_id / "data")
     fixture.merge([{
         "id": "inc-qa-1", "type": "geofence_exit", "severity": "high",
         "status": "open", "title": "Incidente QA", "device_id": "dev-qa",
