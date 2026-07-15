@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-15T07:46:23Z",
+  "generated_at": "2026-07-15T09:46:40Z",
   "mode": "simulation",
   "totals": {
     "devices": 18,
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:22Z",
+      "generated_at": "2026-07-15T09:46:39Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:22Z",
+      "generated_at": "2026-07-15T09:46:40Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:22Z",
+      "generated_at": "2026-07-15T09:46:40Z",
       "org_id": "cliente-selfsvc-test",
       "mode": "simulation",
       "totals": {
@@ -456,7 +456,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:23Z",
+      "generated_at": "2026-07-15T09:46:40Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -550,7 +550,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:23Z",
+      "generated_at": "2026-07-15T09:46:40Z",
       "org_id": "kanban-selfsvc-20260714-1522",
       "mode": "simulation",
       "totals": {
@@ -680,7 +680,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T07:46:23Z",
+      "generated_at": "2026-07-15T09:46:40Z",
       "org_id": "kanban-t314a3b3a-20260714-1524",
       "mode": "simulation",
       "totals": {
