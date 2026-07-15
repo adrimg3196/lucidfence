@@ -44,12 +44,15 @@ def test_local_dashboard_has_one_click_demo_without_client_side_credentials():
     for users created on the customer's own machine."""
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
-    assert '"/api/auth/demo"' in js
+    # The server wires the real auth routes (demo/login/signup/me/logout).
     assert 'route == "/api/auth/demo"' in server
-    assert '"/api/auth/me"' in js
-    assert '"/api/auth/logout"' in js
-    assert '"/api/auth/login"' in js
-    assert '"/api/auth/signup"' in js
+    assert '"/api/auth/me"' in server
+    assert '"/api/auth/logout"' in server
+    assert '"/api/auth/login"' in server
+    assert '"/api/auth/signup"' in server
+    # The client (dashboard) talks to the auth API but never hardcodes creds.
+    assert "\"/api/auth/me\"" in js
+    assert "\"/api/auth/logout\"" in js
     # No hardcoded credentials in the client.
     assert "demo1234" not in js
     assert "[REDACTED]" not in js
