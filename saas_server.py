@@ -567,7 +567,7 @@ def _welcome_email_text(name: str, org) -> str:
         "2) Geocercas: crea tu primera geocerca crítica (almacén, tienda, ruta o zona de riesgo) y asigna dispositivos piloto.",
         "3) Incidencias: abre Riesgo/Incidencias, fuerza un ciclo y revisa evidencias, severidad y acciones sugeridas antes de pasar a live.",
         "",
-        "Tip: empieza con el tier Freemium y un piloto de 5 dispositivos; cuando veas señal, conecta Applivery/UEM en Ajustes.",
+        "Tip: empieza con el tier gratis y un piloto de 5 dispositivos; cuando veas señal, conecta Applivery/UEM en Ajustes.",
         "",
         "Descarga gratis y docs: https://github.com/adrimg3196/lucidfence",
         "",
@@ -1508,10 +1508,14 @@ class Handler(BaseHTTPRequestHandler):
             _tenants._save()
         else:
             first_org = next(iter(user.org_roles), None)
-            if not first_org or _tenants.get(first_org) is None:
+            current_org = _tenants.get(first_org) if first_org else None
+            if current_org is None:
                 demo_org = _tenants.create("Acme Logistics (demo)", user.id, "free")
                 _auth.add_org_role(user.id, demo_org.id, "owner")
                 user = _auth.get(user.id) or user
+            elif current_org.owner_id != user.id:
+                current_org.owner_id = user.id
+                _tenants._save()
         token = _auth.create_session(user.id)
         _set_cookie(self, COOKIE_SESSION, token)
         first_org = next(iter(user.org_roles), None)

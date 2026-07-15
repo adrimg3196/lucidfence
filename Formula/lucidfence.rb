@@ -2,7 +2,7 @@ class Lucidfence < Formula
   desc "Geofencing soberano para UEM/MDM (on-prem, $0, sin datos en la nube)"
   homepage "https://github.com/adrimg3196/lucidfence"
   url "https://github.com/adrimg3196/lucidfence/releases/download/v1.0.2/lucidfence-1.0.2.tar.gz"
-  sha256 "REEMPLAZAR_POR_SHA_V102"
+  sha256 "5dc320e010938695cb85d98dbf0017fe7815c67216b5d004effb1a1477b4408a"
   license "Apache-2.0"
 
   depends_on "python@3.11"
