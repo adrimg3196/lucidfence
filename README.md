@@ -8,9 +8,24 @@
 
 LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Se ejecuta en tu Mac o servidor Linux; no exige una cuenta de LucidFence, una nube propia ni una suscripción.
 
-## Instalar con Homebrew
+## Descargar la app de escritorio (recomendado)
 
-Funciona con Homebrew en macOS y Linux:
+Para un Mac con Apple Silicon (M1 o posterior) y macOS 14 o posterior:
+
+1. Abre **[Releases → Latest](https://github.com/adrimg3196/lucidfence/releases/latest)**.
+2. Descarga `LucidFence-1.2.0-arm64.dmg`.
+3. Abre el DMG y arrastra **LucidFence** a **Applications**.
+4. En el primer inicio, haz clic derecho sobre LucidFence → **Abrir**. Después se abre normalmente desde Launchpad o Finder.
+
+La app es autónoma: incluye su backend y abre LucidFence en una ventana nativa de macOS. No requiere Terminal, Homebrew, Python, cuenta cloud ni suscripción. Sus datos permanecen en `~/Library/Application Support/LucidFence`.
+
+> La build comunitaria actual usa firma ad-hoc. El clic derecho del primer inicio es necesario hasta que el proyecto disponga de certificado Apple Developer ID y notarización.
+
+El primer arranque carga una flota de demostración local. No necesitas credenciales para evaluar las funciones incluidas en Demo; UEM live, IA y email son conectores opcionales y requieren su propia configuración.
+
+## Homebrew y Linux (alternativa técnica)
+
+Para automatización, servidores o usuarios de CLI:
 
 ```bash
 brew tap adrimg3196/lucidfence
@@ -18,13 +33,7 @@ brew install lucidfence
 lucidfence
 ```
 
-`lucidfence` inicia el servicio local y abre automáticamente:
-
-```text
-http://127.0.0.1:8765
-```
-
-El primer arranque carga una flota de demostración local. No necesitas credenciales para evaluar todas las funciones principales.
+`lucidfence` inicia el servicio local en `http://127.0.0.1:8765` y abre el navegador.
 
 ## CLI
 
@@ -90,6 +99,7 @@ lucidfence/
 ├── saas/                   # auth local, RBAC y aislamiento
 ├── static/                 # interfaz local, assets vendorizados
 ├── data/                   # seeds públicos read-only del paquete
+├── macos/                   # app Swift/WebKit + builder PyInstaller/DMG
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
 ```

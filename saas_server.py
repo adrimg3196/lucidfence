@@ -78,6 +78,7 @@ from core.app_paths import ensure_data_dir
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
+CONFIG_FILE = ROOT / os.environ.get("LUCIDFENCE_CONFIG_FILE", "config.json")
 DATA_ROOT = ensure_data_dir()
 COOKIE_SESSION = "gf_session"
 COOKIE_ORG = "gf_org"
@@ -286,24 +287,44 @@ def _ai_post(url: str, payload: dict):
     return None
 
 
+_REQUIRED_TENANT_SEEDS = ("routes.json", "policies.json", "fleet_seed.json", "fences.json")
+_OPTIONAL_TENANT_SEEDS = ("device_overrides.json",)
+
+
+def _seed_tenant_defaults(tdir: Path) -> None:
+    """Copy immutable packaged templates into a new tenant data directory."""
+    tdir.mkdir(parents=True, exist_ok=True)
+    for name in (*_REQUIRED_TENANT_SEEDS, *_OPTIONAL_TENANT_SEEDS):
+        src = TEMPLATE_DATA / name
+        dst = tdir / name
+        if dst.exists():
+            continue
+        if not src.is_file():
+            if name in _REQUIRED_TENANT_SEEDS:
+                raise FileNotFoundError(f"LucidFence package is missing required seed: {src}")
+            continue
+        raw = src.read_text(encoding="utf-8")
+        json.loads(raw)
+        temp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+        try:
+            temp.write_text(raw, encoding="utf-8")
+            os.chmod(temp, 0o600)
+            os.replace(temp, dst)
+        finally:
+            temp.unlink(missing_ok=True)
+
+
 def engine_for(org_id: str) -> Engine:
     with _engines_lock:
         if org_id in _engines:
             return _engines[org_id]
-        cfg = config_loader.load(ROOT / "config.json")
+        cfg = config_loader.load(CONFIG_FILE)
         # point data dir at the tenant's isolated directory
         tdir = _tenants.data_dir(org_id)
         cfg["data_dir"] = str(tdir)
         # seed per-tenant defaults once so each org starts with the demo data
         # but remains isolated afterwards (this is what makes it a real SaaS)
-        for name in ("routes.json", "policies.json", "fleet_seed.json", "fences.json", "device_overrides.json"):
-            src = (ROOT / "fences.json") if name == "fences.json" else (TEMPLATE_DATA / name)
-            dst = tdir / name
-            if src.exists() and not dst.exists():
-                try:
-                    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-                except Exception:
-                    pass
+        _seed_tenant_defaults(tdir)
         cfg["fences_path"] = str(tdir / "fences.json")
         cfg["routes_path"] = str(tdir / "routes.json")
         cfg["policies_path"] = str(tdir / "policies.json")
@@ -330,17 +351,10 @@ def reload_engine(org_id: str) -> Engine:
                 old.stop()
             except Exception:
                 pass
-        cfg = config_loader.load(ROOT / "config.json")
+        cfg = config_loader.load(CONFIG_FILE)
         tdir = _tenants.data_dir(org_id)
         cfg["data_dir"] = str(tdir)
-        for name in ("routes.json", "policies.json", "fleet_seed.json", "fences.json", "device_overrides.json"):
-            src = (ROOT / "fences.json") if name == "fences.json" else (TEMPLATE_DATA / name)
-            dst = tdir / name
-            if src.exists() and not dst.exists():
-                try:
-                    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-                except Exception:
-                    pass
+        _seed_tenant_defaults(tdir)
         cfg["fences_path"] = str(tdir / "fences.json")
         cfg["routes_path"] = str(tdir / "routes.json")
         cfg["policies_path"] = str(tdir / "policies.json")
@@ -793,6 +807,7 @@ class Handler(BaseHTTPRequestHandler):
         # ---- Healthcheck sin auth (para monitoreo externo / start_all.sh) ----
         if route == "/api/health" and method == "GET":
             return _send_json(self, {"status": "ok", "service": "lucidfence",
+                                     "desktop_nonce": os.environ.get("LUCIDFENCE_DESKTOP_NONCE", ""),
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
         # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
@@ -1675,8 +1690,36 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
 
+def _start_parent_watchdog() -> None:
+    """Exit a desktop backend if its launcher disappears abnormally."""
+    raw = os.environ.get("LUCIDFENCE_PARENT_PID", "").strip()
+    if not raw:
+        return
+    try:
+        parent_pid = int(raw)
+    except ValueError:
+        raise RuntimeError("LUCIDFENCE_PARENT_PID must be numeric")
+    if parent_pid <= 1:
+        raise RuntimeError("LUCIDFENCE_PARENT_PID must identify a user process")
+
+    def watch() -> None:
+        while True:
+            time.sleep(0.5)
+            if os.getppid() != parent_pid:
+                os._exit(0)
+            try:
+                os.kill(parent_pid, 0)
+            except ProcessLookupError:
+                os._exit(0)
+            except PermissionError:
+                os._exit(0)
+
+    threading.Thread(target=watch, name="desktop-parent-watchdog", daemon=True).start()
+
+
 def main():
-    cfg = config_loader.load(ROOT / "config.json")
+    _start_parent_watchdog()
+    cfg = config_loader.load(CONFIG_FILE)
     global _SIMULATION
     _SIMULATION = (cfg.get("mode") == "simulation")
     host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")

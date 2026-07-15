@@ -1,0 +1,21 @@
+{
+  "mode": "simulation",
+  "interval_seconds": 900,
+  "dry_run": true,
+  "action_cooldown_seconds": 3600,
+  "data_dir": "data",
+  "fences_path": "fences.json",
+  "routes_path": "routes.json",
+  "sim_seed_path": "data/fleet_seed.json",
+  "applivery": {
+    "org_id": "YOUR_ORG_ID"
+  },
+  "uem": {
+    "action_endpoint_template": "/organizations/{org_id}/mdm/devices/{device_id}/commands",
+    "remediation_webhook_url": ""
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765
+  }
+}

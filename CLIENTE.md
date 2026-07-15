@@ -1,28 +1,26 @@
 # LucidFence para clientes — Instalación 100% local y soberana
 
-LucidFence es geofencing UEM/MDM que **no depende de nadie**: lo instalas en tu
-propia infra (portátil, servidor de la empresa, VM) y corre always-on. Tus datos
-y tu base de tenants viven en tu máquina. $0, sin suscripciones.
+LucidFence es geofencing UEM/MDM local-first: se instala en tu propia infra
+(portátil, servidor de la empresa o VM) y mantiene tenants y datos en tu máquina.
+La Demo funciona sin nube obligatoria; UEM live, IA y email son conectores opcionales
+que dependen de la configuración y disponibilidad de sus proveedores. $0, sin suscripción de LucidFence.
 
-## Opción A — Homebrew (1 comando, recomendado en macOS/Linux con brew)
+## Opción A — App de escritorio macOS (recomendada para usuarios)
+
+1. En un Mac Apple Silicon (M1 o posterior) con macOS 14 o posterior, descarga `LucidFence-1.2.0-arm64.dmg` desde [la última release](https://github.com/adrimg3196/lucidfence/releases/latest).
+2. Abre el DMG y arrastra LucidFence a Applications.
+3. Primera apertura: clic derecho → **Abrir**.
+
+La app incluye backend, Python y dependencias; no requiere Terminal ni Homebrew. Abre el Command Center en una ventana nativa y mantiene los datos en `~/Library/Application Support/LucidFence`.
+
+## Opción B — Homebrew (macOS/Linux técnico)
 
 ```bash
 brew install adrimg3196/lucidfence/lucidfence
-lucidfence serve
+lucidfence
 ```
 
-Abre `http://localhost:8765`. El dashboard entra en demo local automáticamente;
-no hay registro en nuestra nube ni tenant remoto.
-
-Si tu Homebrew no resuelve taps de 3 partes:
-
-```bash
-brew tap adrimg3196/lucidfence
-brew install lucidfence
-lucidfence serve
-```
-
-## Opción B — Con Docker (recomendado para servidores)
+## Opción C — Con Docker (servidores)
 
 ```bash
 git clone https://github.com/adrimg3196/lucidfence.git
@@ -34,7 +32,7 @@ LucidFence queda en `http://localhost:8765`, 24/7, con su propia base de datos
 en `./data`.
 
 Para exponerlo a la red de la empresa: poner delante un reverse proxy
-(nnginx/caddy) con TLS. Ejemplo mínimo con Caddy:
+(nginx/Caddy) con TLS. Ejemplo mínimo con Caddy:
 
 ```
 lucidfence.empresa.com {
@@ -42,7 +40,7 @@ lucidfence.empresa.com {
 }
 ```
 
-## Opción C — Sin Docker (Python directo)
+## Opción D — Sin Docker (Python directo)
 
 ```bash
 git clone https://github.com/adrimg3196/lucidfence.git
@@ -63,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/adrimg3196/lucidfence/main/install.
 - **Motor de riesgo** por dispositivo (rooted, SO desactualizado, batería, cifrado).
 - **CVE/SOAR**: escaneo de apps de la flota y playbooks de remediación.
 - **Multi-tenant** con whitelabel por cliente.
-- **IA local (MoA)**: asistente OpenAI-compatible 100% en tu máquina, sin APIs externas.
+- **IA opcional**: proveedor OpenAI-compatible configurado por el usuario; puede apuntar a un modelo local como MoA o a una API externa.
 - **Email soberano** vía Atomic Mail Agentic (opcional, sin SMTP propio).
 
 ## Siempre-on

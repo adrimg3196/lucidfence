@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from core.app_paths import ensure_data_dir  # noqa: E402
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 

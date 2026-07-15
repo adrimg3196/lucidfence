@@ -1,0 +1,14 @@
+{
+  "fences": [
+    {
+      "id": "demo-hq",
+      "name": "Demo HQ · Madrid",
+      "kind": "circle",
+      "center": {
+        "lat": 40.421,
+        "lng": -3.708
+      },
+      "radius_m": 500
+    }
+  ]
+}

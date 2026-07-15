@@ -37,6 +37,7 @@ qa_saas.py               export-ignore
 
 # Build nuestro
 build.sh                 export-ignore
+macos/                   export-ignore
 artifact.tar              export-ignore
 
 # Metadatos

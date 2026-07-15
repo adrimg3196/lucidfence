@@ -1277,7 +1277,7 @@ async function renderSettings(){
     <div class="field"><label>API key <span class="sub">(opcional para modelos locales)</span></label><div class="input-wrap"><input class="input" id="aiKey" type="password" placeholder="${ai.key_configured?'Dejar vacío para conservar':'sk-…'}"><button class="toggle" onclick="toggleShow('aiKey',this)">Ver</button></div><div class="help">${ai.key_configured?'Configurada: <b>'+esc(ai.masked_key||'')+'</b>':'Sin clave configurada'}</div></div>
     <div style="display:flex;gap:8px"><button class="btn outline" id="aiTest">Probar modelo</button><button class="btn primary" id="aiSave">Guardar AI</button></div>
     <div id="aiResult" class="test-result" style="margin-top:14px"></div>
-    <div class="help" style="margin-top:14px">Gateway local: <code>http://127.0.0.1:8765/v1/chat/completions</code> · MCP: <code>lucidfence mcp</code></div>`;
+    <div class="help" style="margin-top:14px">Gateway local: <code>${esc(window.location.origin)}/v1/chat/completions</code> · MCP: <code>lucidfence mcp</code></div>`;
   $("#aiEnabled").onclick=()=>$("#aiEnabled").classList.toggle("on");
   $("#aiPreset").onchange=()=>{const o=$("#aiPreset").selectedOptions[0];if(o.dataset.url)$("#aiBase").value=o.dataset.url;if(o.value==='disabled')$("#aiEnabled").classList.remove("on");};
   const aiPayload=()=>({enabled:$("#aiEnabled").classList.contains("on"),provider:$("#aiPreset").value,base_url:$("#aiBase").value,model:$("#aiModel").value,api_key:$("#aiKey").value});

@@ -38,7 +38,7 @@ def test_cli_version_and_managed_lifecycle():
     cli = ROOT / "bin" / "lucidfence"
     version = subprocess.run([sys.executable, str(cli), "--version"], capture_output=True, text=True)
     assert version.returncode == 0
-    assert version.stdout.strip() == "lucidfence 1.1.1"
+    assert version.stdout.strip() == "lucidfence 1.2.0"
 
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
