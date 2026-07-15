@@ -100,8 +100,7 @@
   .side-foot{margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel)}
   .side-foot .row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
   .side-foot .row b{color:var(--fg-2);font-weight:600;margin-left:auto;font-variant-numeric:tabular-nums}
-  .side-foot .plan{display:flex;align-items:center;gap:7px;margin-bottom:8px}
-  .side-foot .plan .p{font-size:12px;font-weight:600}
+  .side-foot .org{display:flex;align-items:center;gap:7px;margin-bottom:8px}
   .pill{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 6px;border-radius:5px;
     background:var(--accent-soft);color:var(--accent)}
   html[data-theme="light"] .pill{color:var(--accent)}
@@ -395,8 +394,7 @@
       <nav class="nav" id="nav"></nav>
       <div class="spacer"></div>
       <div class="side-foot">
-        <div class="plan"><span class="p">Plan</span><span class="pill" id="planPill">Free</span>
-          <b id="orgName" style="margin-left:auto;font-size:11px"></b></div>
+        <div class="row"><b id="orgName" style="font-size:11px"></b></div>
         <div class="row" id="sideUser" style="display:none;align-items:center;gap:8px;margin-bottom:8px">
           <div class="av" id="sideAv" style="width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:var(--accent)">?</div>
           <div style="min-width:0;flex:1">

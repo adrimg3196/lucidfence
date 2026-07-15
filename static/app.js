@@ -122,7 +122,6 @@ async function refreshOrg(){
   try{ const o = await api("/api/org"); App.org = o; }catch(e){}
   if(App.org && App.org.org){
     $("#orgName").textContent = App.org.org.name||"";
-    if(App.org.org.plan) $("#planPill").textContent = String(App.org.org.plan).toUpperCase();
   }
 }
 function updateUserUI(){
@@ -187,7 +186,7 @@ async function logout(){
   App.user=null; App.orgs=null; App.org=null; App._riskMap=null; App._started=false;
   stopPolling();
   const su = $("#sideUser"); if(su) su.style.display="none";
-  $("#orgName").textContent=""; $("#planPill").textContent="FREE";
+  $("#orgName").textContent="";
   ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
   showAuthModal();
 }
@@ -275,7 +274,6 @@ async function refresh(initial){
     // dict de límites). Corregimos para no mostrar [object Object].
     if(org && org.org){
       $("#orgName").textContent = org.org.name||"";
-      if(org.org.plan) $("#planPill").textContent = String(org.org.plan).toUpperCase();
     }
     updateSync(st, before);
     // pull open-incident count for the sidebar badge (best-effort)
