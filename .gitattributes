@@ -1,0 +1,35 @@
+# .gitattributes — lo que se EXCLUYE del release de cliente (brew install / tarball).
+# El repo mantiene estos archivos para nuestro desarrollo; el cliente NO los baja.
+# git archive respeta export-ignore al generar el tarball del release.
+
+# Desarrollo interno de la empresa (no del cliente)
+KANBAN.md                export-ignore
+ROADMAP_Q3_2026.md      export-ignore
+mcp/                     export-ignore
+skills/                  export-ignore
+agents/                  export-ignore
+gtm/                     export-ignore
+docs/                    export-ignore
+references/              export-ignore
+Formula/                 export-ignore
+data/cloud_tenants/      export-ignore
+
+# Deploy nuestro (no del cliente)
+fly.toml                 export-ignore
+deploy_fly.sh            export-ignore
+.start_all.sh            export-ignore
+start_all.sh             export-ignore
+start_local.sh           export-ignore
+docker_start.sh          export-ignore
+geofence_daily_report.sh export-ignore
+
+# Tests / QA internos (el cliente no los corre)
+tests/                   export-ignore
+qa_saas.py               export-ignore
+
+# Build nuestro
+build.sh                 export-ignore
+artifact.tar              export-ignore
+
+# Metadatos
+.github/                 export-ignore

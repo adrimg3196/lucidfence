@@ -104,25 +104,11 @@ class User:
 def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
     if salt is None:
         salt = os.urandom(16).hex()
-    # Pure-python PBKDF2-HMAC-SHA256 (100k rounds). We avoid hashlib.scrypt /
-    # hashlib.pbkdf2_hmac because some macOS system Pythons lack the OpenSSL
-    # bindings. This is a dependency-free, timing-safe-enough KDF for a local SaaS.
-    dk = _pbkdf2_sha256(password.encode("utf-8"), salt.encode("utf-8"), 100000, 64)
+    # stdlib PBKDF2-HMAC-SHA256 (100k rounds). Standard, audited KDF.
+    # (Replaces a hand-rolled HMAC loop — same on-disk format: pw_hash.hex+pw_salt.)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
+                                bytes.fromhex(salt), 100000, 64)
     return dk.hex(), salt
-
-
-def _pbkdf2_sha256(password: bytes, salt: bytes, rounds: int, dklen: int) -> bytes:
-    import struct
-    blocks = (dklen + 31) // 32
-    out = b""
-    for i in range(1, blocks + 1):
-        u = hmac.new(password, salt + struct.pack(">I", i), hashlib.sha256).digest()
-        res = u
-        for _ in range(1, rounds):
-            u = hmac.new(password, u, hashlib.sha256).digest()
-            res = bytes(a ^ b for a, b in zip(res, u))
-        out += res
-    return out[:dklen]
 
 
 def verify_password(password: str, pw_hash: str, pw_salt: str) -> bool:
