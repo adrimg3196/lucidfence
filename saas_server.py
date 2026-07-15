@@ -542,6 +542,93 @@ def _summary(devices: list[dict]) -> dict:
     }
 
 
+def _atomicmail_username_for_org(org) -> str:
+    """Return a stable Atomic Mail username candidate for one local org."""
+    raw = "".join(ch for ch in (getattr(org, "slug", "") or "lucidfence") if ch.isalnum())
+    raw = (raw or "lucidfence").lower()
+    suffix = (getattr(org, "id", "") or "local")[-4:].lower()
+    username = f"lf{raw[:15]}{suffix}"
+    if len(username) < 5:
+        username = (username + "local")[:5]
+    return username[:21]
+
+
+def _welcome_email_text(name: str, org) -> str:
+    who = (name or "equipo").strip()
+    org_name = getattr(org, "name", "tu organización")
+    return "\n".join([
+        f"Hola {who},",
+        "",
+        f"Bienvenido a LucidFence para {org_name}.",
+        "LucidFence corre 100% local/on-prem: no tienes que registrar nada en una nube de LucidFence.",
+        "",
+        "3 pasos para activar valor hoy:",
+        "1) Arrancar: instala/actualiza y levanta el panel local con `brew install adrimg3196/lucidfence/lucidfence` y `lucidfence serve`.",
+        "2) Geocercas: crea tu primera geocerca crítica (almacén, tienda, ruta o zona de riesgo) y asigna dispositivos piloto.",
+        "3) Incidencias: abre Riesgo/Incidencias, fuerza un ciclo y revisa evidencias, severidad y acciones sugeridas antes de pasar a live.",
+        "",
+        "Tip: empieza con el tier Freemium y un piloto de 5 dispositivos; cuando veas señal, conecta Applivery/UEM en Ajustes.",
+        "",
+        "Descarga gratis y docs: https://github.com/adrimg3196/lucidfence",
+        "",
+        "— LucidFence",
+    ])
+
+
+def _test_or_placeholder_email(email: str) -> bool:
+    domain = (email.rsplit("@", 1)[-1] if "@" in email else "").lower()
+    return domain.endswith(".test") or domain.endswith(".local") or domain in {"example.com", "example.org", "example.net"}
+
+
+def _send_signup_welcome_email(email: str, name: str, org) -> dict:
+    """Best-effort Atomic Mail welcome for a newly-created local tenant.
+
+    The product remains sovereign/local: this sends from the customer's own
+    local instance via Atomic Mail and never requires a LucidFence cloud signup.
+    It is deliberately non-fatal: signup must succeed even if mail/network is
+    unavailable. Test/placeholder domains are skipped to keep CI hermetic.
+    """
+    email = (email or "").strip()
+    if not email or "@" not in email:
+        return {"attempted": False, "sent": False, "reason": "email_invalido"}
+    if _test_or_placeholder_email(email):
+        return {"attempted": False, "sent": False, "reason": "destinatario_test"}
+    try:
+        from core.atomicmail_client import build_tenant_mailbox
+        tdir = _tenants.data_dir(org.id)
+        runtime = _tenant_runtime(tdir)
+        am = runtime.get("atomicmail") or {}
+        username = (am.get("username") or os.environ.get("LUCIDFENCE_WELCOME_ATOMICMAIL_USERNAME")
+                    or _atomicmail_username_for_org(org)).strip()
+        api_key = (am.get("api_key") or os.environ.get("LUCIDFENCE_WELCOME_ATOMICMAIL_API_KEY") or "").strip()
+        wl = runtime.get("whitelabel") or {}
+        inbox_domain = (wl.get("domain") or "").strip() or None
+        mb = build_tenant_mailbox(tdir, username=username or None, api_key=api_key or None,
+                                  inbox_domain=inbox_domain)
+        subject = "[LucidFence] Bienvenido: 3 pasos para activar valor hoy"
+        ok = mb.send(to=email, subject=subject, text=_welcome_email_text(name, org))
+        status = {"attempted": True, "sent": bool(ok), "inbox": mb.status().get("inbox")}
+        if ok:
+            saved_key = mb.persist_api_key()
+            if saved_key:
+                new_am = dict(am)
+                new_am.update({"username": username, "api_key": saved_key,
+                               "digest_email_to": am.get("digest_email_to") or email})
+                _save_tenant_integration(
+                    tdir,
+                    runtime.get("mode", "simulation"),
+                    bool(runtime.get("dry_run", True)),
+                    incident_webhook_url=runtime.get("incident_webhook_url", ""),
+                    atomicmail=new_am,
+                    whitelabel=wl if wl else None,
+                )
+        else:
+            status["last_error"] = mb.status().get("last_error")
+        return status
+    except Exception as exc:  # noqa: BLE001 - welcome email must never break signup
+        return {"attempted": True, "sent": False, "reason": f"{type(exc).__name__}: {exc}"}
+
+
 def _read_body(handler) -> dict:
     raw = getattr(handler, "_preread_body", None)
     if raw is None:
@@ -656,6 +743,8 @@ class Handler(BaseHTTPRequestHandler):
         # ---- auth ----
         if route == "/api/auth/signup" and method == "POST":
             return self._signup()
+        if route == "/api/auth/demo" and method == "POST":
+            return self._demo_login()
         if route == "/api/auth/login" and method == "POST":
             return self._login()
         if route == "/api/auth/logout" and method == "POST":
@@ -1378,8 +1467,10 @@ class Handler(BaseHTTPRequestHandler):
         token = _auth.create_session(user.id)
         _set_cookie(self, COOKIE_SESSION, token)
         _set_cookie(self, COOKIE_ORG, org.id)
+        welcome_email = _send_signup_welcome_email(email, name or email, org)
         _send_json(self, {"ok": True, "token": token, "user": user.to_public(),
-                          "org": org.to_dict(), "plan": PLAN_LIMITS.get(org.plan)})
+                          "org": org.to_dict(), "plan": PLAN_LIMITS.get(org.plan),
+                          "welcome_email": welcome_email})
 
     def _login(self):
         body = _read_body(self)
@@ -1393,6 +1484,42 @@ class Handler(BaseHTTPRequestHandler):
             _set_cookie(self, COOKIE_ORG, first_org)
         _send_json(self, {"ok": True, "token": token, "user": user.to_public(),
                           "orgs": [o.to_dict() for o in _tenants.list_for_user(user.id)]})
+
+    def _demo_login(self):
+        """One-click local onboarding: create/reuse demo org and open a session.
+
+        LucidFence is installed on the customer's own machine; the fastest path
+        must be "run server -> dashboard alive" without asking for a cloud
+        signup. This endpoint keeps the demo credential server-side instead of
+        exposing it in the browser bundle.
+        """
+        email = "ciso@acme.test"
+        user = _auth.get_by_email(email)
+        if user is None:
+            demo_org = None
+            for org in _tenants.all():
+                if org.slug == "acme-logistics":
+                    demo_org = org
+                    break
+            if demo_org is None:
+                demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed", "free")
+            user = _auth.create_user(email, "CISO Acme (demo)", "demo1234", demo_org.id, "owner")
+            demo_org.owner_id = user.id
+            _tenants._save()
+        else:
+            first_org = next(iter(user.org_roles), None)
+            if not first_org or _tenants.get(first_org) is None:
+                demo_org = _tenants.create("Acme Logistics (demo)", user.id, "free")
+                _auth.add_org_role(user.id, demo_org.id, "owner")
+                user = _auth.get(user.id) or user
+        token = _auth.create_session(user.id)
+        _set_cookie(self, COOKIE_SESSION, token)
+        first_org = next(iter(user.org_roles), None)
+        if first_org:
+            _set_cookie(self, COOKIE_ORG, first_org)
+        return _send_json(self, {"ok": True, "token": token, "user": user.to_public(),
+                                 "orgs": [o.to_dict() for o in _tenants.list_for_user(user.id)],
+                                 "message": "demo local lista"})
 
     def _logout(self):
         token = _cookie(self, COOKIE_SESSION)
@@ -1496,7 +1623,7 @@ def main():
     cfg = config_loader.load(ROOT / "config.json")
     global _SIMULATION
     _SIMULATION = (cfg.get("mode") == "simulation")
-    host = cfg.get("server", {}).get("host", "127.0.0.1")
+    host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")
     port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] LucidFence SaaS running at http://{host}:{port}")

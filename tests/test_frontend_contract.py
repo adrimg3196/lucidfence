@@ -38,26 +38,21 @@ def test_risk_engine_explicable_is_wired_in_ui():
     assert "no verificado" in js or "Sin señal" in js
 
 
-def test_local_dashboard_requires_real_authentication_no_demo_shortcut():
-    """G1: the dashboard must use the REAL multi-tenant SaaS auth
-    (signup/login via /api/auth/*), never a passwordless demo shortcut.
-    A demo login would let anyone into any tenant on localhost."""
-    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+def test_local_dashboard_has_one_click_demo_without_client_side_credentials():
+    """G1: local-first onboarding must be one click without exposing a
+    hardcoded password in the browser bundle. Real login/signup remains wired
+    for users created on the customer's own machine."""
+    js = (ROOT / "static" / "saas.js").read_text(encoding="utf-8")
     server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
-    # No demo shortcut left in the client or the server.
-    assert 'fetch("/api/auth/demo"' not in js
-    assert 'route == "/api/auth/demo"' not in server
-    # Real auth flow is wired: ensureAuth -> /api/auth/me,
-    # submitAuth -> /api/auth/{login,signup}, logout -> /api/auth/logout.
-    assert "async function ensureAuth" in js
-    assert "async function submitAuth" in js
-    assert "async function logout" in js
+    assert '"/api/auth/demo"' in js
+    assert 'route == "/api/auth/demo"' in server
     assert '"/api/auth/me"' in js
     assert '"/api/auth/logout"' in js
-    # login + signup are reached (tab-driven; no demo).
-    assert "login" in js and "signup" in js
+    assert '"/api/auth/login"' in js
+    assert '"/api/auth/signup"' in js
     # No hardcoded credentials in the client.
     assert "demo1234" not in js
+    assert "[REDACTED]" not in js
 
 
 def test_command_center_uses_reicon_for_ui_icons():

@@ -1,0 +1,10 @@
+{
+  "release_downloads": 10,
+  "repo_clones_week": 166,
+  "measured_at": "2026-07-15",
+  "source": {
+    "release_downloads": "GitHub Releases API: repos/adrimg3196/lucidfence/releases, suma de download_count de assets v1.x",
+    "repo_clones_week": "GitHub Traffic API: repos/adrimg3196/lucidfence/traffic/clones, suma de uniques de la última ventana disponible"
+  },
+  "model": "LucidFence es local/on-prem: la tracción se mide por descargas y clones, no por signups ni tenants en una nube propia."
+}

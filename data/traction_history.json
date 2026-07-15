@@ -1,7 +1,208 @@
 {
   "last": {
-    "signups": 4,
-    "tenants": 5,
-    "date": "2026-07-14"
+    "date": "2026-07-15",
+    "iso_week": "2026-W29",
+    "repo": "adrimg3196/lucidfence",
+    "release_downloads_total": 9,
+    "release_count": 3,
+    "release_assets": [
+      {
+        "tag": "v1.0.0",
+        "name": "lucidfence-1.0.0.tar.gz",
+        "download_count": 6,
+        "published_at": "2026-07-15T11:25:52Z"
+      },
+      {
+        "tag": "v1.0.0",
+        "name": "lucidfence-1.0.0.tar.gz",
+        "download_count": 3,
+        "published_at": "2026-07-15T10:55:58Z"
+      },
+      {
+        "tag": "v1.0.1",
+        "name": "lucidfence-1.0.1.tar.gz",
+        "download_count": 0,
+        "published_at": "2026-07-15T12:52:13Z"
+      }
+    ],
+    "clone_count_14d": 616,
+    "unique_cloners_14d": 153,
+    "clone_daily": [
+      {
+        "timestamp": "2026-07-01T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-02T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-03T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-04T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-05T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-06T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-07T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-08T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-09T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-10T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-11T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-12T00:00:00Z",
+        "count": 0,
+        "uniques": 0
+      },
+      {
+        "timestamp": "2026-07-13T00:00:00Z",
+        "count": 170,
+        "uniques": 48
+      },
+      {
+        "timestamp": "2026-07-14T00:00:00Z",
+        "count": 446,
+        "uniques": 118
+      }
+    ],
+    "warnings": []
+  },
+  "snapshots": {
+    "2026-W29": {
+      "date": "2026-07-15",
+      "iso_week": "2026-W29",
+      "repo": "adrimg3196/lucidfence",
+      "release_downloads_total": 9,
+      "release_count": 3,
+      "release_assets": [
+        {
+          "tag": "v1.0.0",
+          "name": "lucidfence-1.0.0.tar.gz",
+          "download_count": 6,
+          "published_at": "2026-07-15T11:25:52Z"
+        },
+        {
+          "tag": "v1.0.0",
+          "name": "lucidfence-1.0.0.tar.gz",
+          "download_count": 3,
+          "published_at": "2026-07-15T10:55:58Z"
+        },
+        {
+          "tag": "v1.0.1",
+          "name": "lucidfence-1.0.1.tar.gz",
+          "download_count": 0,
+          "published_at": "2026-07-15T12:52:13Z"
+        }
+      ],
+      "clone_count_14d": 616,
+      "unique_cloners_14d": 153,
+      "clone_daily": [
+        {
+          "timestamp": "2026-07-01T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-02T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-03T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-04T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-05T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-06T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-07T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-08T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-09T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-10T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-11T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-12T00:00:00Z",
+          "count": 0,
+          "uniques": 0
+        },
+        {
+          "timestamp": "2026-07-13T00:00:00Z",
+          "count": 170,
+          "uniques": 48
+        },
+        {
+          "timestamp": "2026-07-14T00:00:00Z",
+          "count": 446,
+          "uniques": 118
+        }
+      ],
+      "warnings": []
+    }
   }
 }

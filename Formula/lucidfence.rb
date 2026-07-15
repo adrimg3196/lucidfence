@@ -1,8 +1,8 @@
 class Lucidfence < Formula
   desc "Geofencing soberano para UEM/MDM (on-prem, $0, sin datos en la nube)"
   homepage "https://github.com/adrimg3196/lucidfence"
-  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.0.0/lucidfence-1.0.0.tar.gz"
-  sha256 "83f3672de9d2b00bac3d85d861964e1ee21065bb8ffebff9c1a69d0a31bf88a5"
+  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.0.2/lucidfence-1.0.2.tar.gz"
+  sha256 "REEMPLAZAR_POR_SHA_V102"
   license "Apache-2.0"
 
   depends_on "python@3.11"
@@ -17,6 +17,18 @@ class Lucidfence < Formula
 
     # requirements.lock para instalacion con hashes (modo Python directo).
     # El modo Docker es opcional; aqui dejamos el stack Python listo.
+  end
+
+  def post_install
+    # Copia la .app nativa a ~/Applications para que el usuario la tenga
+    # en el Launchpad (launcher arranca el server y abre el navegador).
+    app = libexec/"macos/LucidFence.app"
+    if app.exist?
+      dest = Path("#{Dir.home}/Applications/LucidFence.app")
+      dest.parent.mkpath
+      rm_rf dest if dest.exist?
+      cp_r app, dest
+    end
   end
 
   service do

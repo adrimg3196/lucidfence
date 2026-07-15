@@ -60,12 +60,22 @@ Esto es el patrón *evidence gate* que usan los harness de red-teaming de élite
 ## Quickstart (1 comando)
 
 ```bash
+brew install adrimg3196/lucidfence/lucidfence
+lucidfence serve
+```
+
+Abre **http://127.0.0.1:8765** — no hay registro en nuestra nube: el dashboard
+abre una demo local de un clic y tus datos viven en tu máquina.
+
+### Desde código fuente
+
+```bash
 git clone https://github.com/adrimg3196/lucidfence.git && cd lucidfence
 pip install -r requirements.txt
 ./start_all.sh
 ```
 
-Abre **http://127.0.0.1:8765** — el dashboard arranca con una flota demo (5 dispositivos, riesgo, geovallas). MoA (IA) corre en :8085.
+El dashboard arranca con una flota demo (5 dispositivos, riesgo, geovallas). MoA (IA) corre en :8085.
 
 > Sin claves de IA: MoA funciona en modo demo. Para IA real, añade una clave en `moa/.env`.
 

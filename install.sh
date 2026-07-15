@@ -19,6 +19,21 @@ REPO="adrimg3196/lucidfence"
 REPO_URL="https://github.com/$REPO.git"
 PUBLIC_HOST="${LUCIDFENCE_PUBLIC_HOST:-}"
 
+assert_secure_repo_url() {
+  case "$REPO_URL" in
+    https://github.com/$REPO.git) return 0 ;;
+  esac
+  echo "ERROR: REPO_URL debe usar HTTPS hacia github.com/$REPO.git; no se permiten transportes no verificados." >&2
+  exit 1
+}
+
+verify_locked_deps() {
+  if [ ! -s requirements.lock ] || ! grep -q -- '--hash=sha256:' requirements.lock; then
+    echo "ERROR: requirements.lock falta o no contiene hashes sha256; abortando instalación." >&2
+    exit 1
+  fi
+}
+
 inside_repo() {
   [ -f saas_server.py ] && [ -f requirements.lock ] && [ -f docker-compose.yml ]
 }
@@ -34,7 +49,9 @@ ensure_repo_checkout() {
   target="lucidfence-tmp"
   echo "   Clonando repo completo $REPO…"
   rm -rf "$target"
-  git clone --depth=1 "$REPO_URL" "$target"
+  assert_secure_repo_url
+  git -c http.sslVerify=true -c protocol.file.allow=never -c protocol.ext.allow=never \
+    clone --depth=1 --filter=blob:none "$REPO_URL" "$target"
   cd "$target"
 }
 
@@ -44,6 +61,7 @@ echo "   Puerto: $PORT"
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   echo "== Docker detectado: levantando stack con docker compose =="
   ensure_repo_checkout
+  verify_locked_deps
   mkdir -p data
   if [ -n "$PUBLIC_HOST" ]; then
     echo "   Internet-facing: activando reverse proxy TLS para $PUBLIC_HOST"
@@ -65,8 +83,9 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 ensure_repo_checkout
+verify_locked_deps
 
-echo "   Instalando dependencias (requirements.txt)…"
+echo "   Instalando dependencias verificadas (requirements.lock)…"
 python3 -m pip install -q --require-hashes -r requirements.lock
 
 mkdir -p data

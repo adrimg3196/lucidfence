@@ -1,0 +1,68 @@
+#!/bin/bash
+# LucidFence launcher (.app wrapper) — arranca el server on-prem y abre el dashboard.
+# $0 = this script path inside the .app bundle.
+set -u
+
+APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+RES="$APP_DIR/Resources"
+PORT_FILE="$HOME/.lucidfence_launcher_port"
+
+# Start the LucidFence server (installed by `brew install lucidfence`).
+# Falls back to a local checkout if brew is not on PATH.
+LUCIDFENCE_BIN="$(command -v lucidfence || true)"
+if [ -z "$LUCIDFENCE_BIN" ]; then
+  # try common brew prefix
+  for p in /opt/homebrew/bin/lucidfence /usr/local/bin/lucidfence; do
+    [ -x "$p" ] && LUCIDFENCE_BIN="$p" && break
+  done
+fi
+
+cleanup() {
+  # Kill the server we started so we never leave a zombie (user rule).
+  # The real process is `python3 saas_server.py` (spawned by the
+  # `lucidfence serve` wrapper via nohup); pkill by name of the
+  # wrapper misses the child. Kill by the real process and by port.
+  pkill -f "saas_server.py" 2>/dev/null || true
+  pkill -f "lucidfence serve" 2>/dev/null || true
+  # Best-effort by port (lsof may be absent on default macOS PATH).
+  if [ -n "${PORT:-}" ] && command -v lsof >/dev/null 2>&1; then
+    lsof -ti ":$PORT" 2>/dev/null | xargs -r kill 2>/dev/null || true
+    sleep 1
+    lsof -ti ":$PORT" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  fi
+  sleep 1
+  pkill -9 -f "saas_server.py" 2>/dev/null || true
+  if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+    kill "$SERVER_PID" 2>/dev/null
+    sleep 1
+    kill -9 "$SERVER_PID" 2>/dev/null || true
+  fi
+  rm -f "${PORT_FILE:-}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+PORT="${LUCIDFENCE_PORT:-8765}"
+
+if [ -z "$LUCIDFENCE_BIN" ]; then
+  # Last-resort: tell the user what to do.
+  osascript -e 'display dialog "LucidFence no encontro el comando `lucidfence`.\n\nInstala con: brew install adrimg3196/lucidfence/lucidfence" buttons {"OK"} default button 1 with icon caution' 2>/dev/null || true
+  exit 1
+fi
+
+# Launch server in background, detached from the app process.
+LUCIDFENCE_PORT="$PORT" nohup "$LUCIDFENCE_BIN" serve >"$HOME/.lucidfence_server.log" 2>&1 &
+SERVER_PID=$!
+echo "$SERVER_PID" > "$PORT_FILE"
+
+# Wait for the server to come up, then open the browser (best-effort).
+for i in $(seq 1 30); do
+  if curl -s -o /dev/null "http://127.0.0.1:$PORT/"; then break; fi
+  sleep 1
+done
+
+# Open the dashboard. Best-effort: on headless/CI this may fail — that
+# must NOT kill the server we just started.
+open "http://127.0.0.1:$PORT/" 2>/dev/null || true
+
+# Keep the .app alive while the server runs (closing the app triggers cleanup).
+wait "$SERVER_PID" 2>/dev/null || true

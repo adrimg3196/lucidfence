@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LucidFence · SaaS</title>
+  <title>LucidFence · Dashboard local</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
@@ -118,10 +118,11 @@
   <!-- AUTH SCREEN -->
   <div id="authScreen" class="auth hidden">
     <div class="auth-box">
-      <div class="brand" style="padding:0 0 16px"><div class="logo">G</div><div><b>LucidFence</b><small style="display:block;color:var(--muted-fg);font-size:11px">Command Center SaaS</small></div></div>
+      <div class="brand" style="padding:0 0 16px"><div class="logo">G</div><div><b>LucidFence</b><small style="display:block;color:var(--muted-fg);font-size:11px">Command Center local</small></div></div>
+      <p style="margin:0 0 18px;color:var(--muted-fg);font-size:12.5px">Arranca en modo demo automáticamente. Si ya has creado usuarios locales en esta máquina, entra con tus credenciales.</p>
       <div class="switch-tab">
         <button id="tabLogin" class="active">Iniciar sesión</button>
-        <button id="tabSignup">Crear cuenta</button>
+        <button id="tabSignup">Crear usuario local</button>
       </div>
       <form id="authForm">
         <div id="signupFields" class="hidden">
@@ -131,9 +132,9 @@
         <div class="field"><label>Email</label><input class="input" id="email" type="email" placeholder="tu@empresa.com"></div>
         <div class="field"><label>Contraseña</label><input class="input" id="password" type="password" placeholder="≥ 8 caracteres"></div>
         <div id="planField" class="field hidden">
-          <label>Plan (mock)</label>
+          <label>Plan local (sin pago)</label>
           <div class="plan-grid">
-            <div class="plan" data-plan="free"><h4>Free</h4><div class="price">0€/mes</div><ul><li>5 dispositivos</li><li>3 geovallas</li></ul></div>
+            <div class="plan" data-plan="free"><h4>Freemium</h4><div class="price">0€/mes</div><ul><li>5 dispositivos</li><li>3 geovallas</li></ul></div>
             <div class="plan active" data-plan="pro"><h4>Pro</h4><div class="price">49€/mes</div><ul><li>250 dispositivos</li><li>Risk + Policies</li></ul></div>
             <div class="plan" data-plan="enterprise"><h4>Enterprise</h4><div class="price">Bajo demanda</div><ul><li>Ilimitado</li><li>Audit log</li></ul></div>
           </div>
@@ -141,14 +142,14 @@
         <button class="btn primary" id="authSubmit" type="button" style="width:100%;justify-content:center;height:42px">Iniciar sesión</button>
         <div id="authError" class="bad" style="color:var(--error);font-size:12.5px;margin-top:10px;display:none"></div>
       </form>
-      <p style="margin-top:16px;font-size:11.5px;color:var(--muted-fg);text-align:center">100% local · tus datos no salen de esta máquina</p>
+      <p style="margin-top:16px;font-size:11.5px;color:var(--muted-fg);text-align:center">100% local · sin signup cloud · tus datos no salen de esta máquina</p>
     </div>
   </div>
 
   <!-- APP SHELL -->
   <div id="appShell" class="app hidden">
     <aside class="side">
-      <div class="brand"><div class="logo">G</div><div><b>LucidFence</b><small style="display:block;color:var(--muted-fg);font-size:11px">SaaS local</small></div></div>
+      <div class="brand"><div class="logo">G</div><div><b>LucidFence</b><small style="display:block;color:var(--muted-fg);font-size:11px">On-prem local</small></div></div>
       <nav class="nav" id="nav">
         <a class="active" data-view="overview">Resumen</a>
         <a data-view="map">Mapa en vivo</a>

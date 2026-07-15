@@ -99,4 +99,4 @@ Freemium (0 €, self-hosted)  ──limit 25 dev──▶  Pro (2 €/dev/mes, 
 ```
 
 Canal de cobro: Stripe (suscripción recurrente) para Pro; contrato + transferencia para Enterprise.
-Self-service: el formulario de signup captura email → oportunidad CRM en el board (tarjeta Growth).
+Self-service Freemium: descarga directa (`brew install adrimg3196/lucidfence/lucidfence` o release v1.0.1) → el cliente corre LucidFence en su infraestructura. Tracción = descargas del release + clones del repo, no signups ni tenants nuestros.

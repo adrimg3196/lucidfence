@@ -4,7 +4,25 @@ LucidFence es geofencing UEM/MDM que **no depende de nadie**: lo instalas en tu
 propia infra (portátil, servidor de la empresa, VM) y corre always-on. Tus datos
 y tu base de tenants viven en tu máquina. $0, sin suscripciones.
 
-## Opción A — Con Docker (recomendado para servidores)
+## Opción A — Homebrew (1 comando, recomendado en macOS/Linux con brew)
+
+```bash
+brew install adrimg3196/lucidfence/lucidfence
+lucidfence serve
+```
+
+Abre `http://localhost:8765`. El dashboard entra en demo local automáticamente;
+no hay registro en nuestra nube ni tenant remoto.
+
+Si tu Homebrew no resuelve taps de 3 partes:
+
+```bash
+brew tap adrimg3196/lucidfence
+brew install lucidfence
+lucidfence serve
+```
+
+## Opción B — Con Docker (recomendado para servidores)
 
 ```bash
 git clone https://github.com/adrimg3196/lucidfence.git
@@ -24,7 +42,7 @@ lucidfence.empresa.com {
 }
 ```
 
-## Opción B — Sin Docker (Python directo)
+## Opción C — Sin Docker (Python directo)
 
 ```bash
 git clone https://github.com/adrimg3196/lucidfence.git

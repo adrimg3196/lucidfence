@@ -22,7 +22,9 @@
       credentials: "same-origin",
       headers: Object.assign({ "Content-Type": "application/json" }, headers || {}),
     };
-    if (body !== undefined && body !== null) init.body = JSON.stringify(body);
+    if (body !== undefined && body !== null) {
+      init.body = (typeof body === "string" || body instanceof String) ? String(body) : JSON.stringify(body);
+    }
     return fetch(path, init)
       .then(r => r.json()
         .then(d => Object.assign({ ok: r.ok, status: r.status }, d))
@@ -137,12 +139,12 @@
       err.style.display = "none";
       if (!email || !password) { err.textContent = "Email y contraseña requeridos"; err.style.display = "block"; return; }
       let res;
-      if (mode === "login") res = await API("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      if (mode === "login") res = await API("/api/auth/login", { method: "POST", body: { email, password } });
       else {
         const name = document.getElementById("name").value.trim();
         const orgName = document.getElementById("orgName").value.trim();
         if (!name || !orgName) { err.textContent = "Nombre y organización requeridos"; err.style.display = "block"; return; }
-        res = await API("/api/auth/signup", { method: "POST", body: JSON.stringify({ email, password, name, org_name: orgName, plan: selectedPlan }) });
+        res = await API("/api/auth/signup", { method: "POST", body: { email, password, name, org_name: orgName, plan: selectedPlan } });
       }
       if (res.error) { err.textContent = res.error; err.style.display = "block"; return; }
       await bootstrap();
@@ -156,9 +158,9 @@
   async function bootstrap() {
     let me = await API("/api/auth/me");
     if (!me.user) {
-      // Auto-login con la cuenta demo (producto 100% local: sin fricción de login).
-      await API("/api/auth/login", { method: "POST",
-        body: JSON.stringify({ email: "ciso@acme.test", password: "[REDACTED]" }) });
+      // Auto-login con la cuenta demo local (producto 100% local: sin fricción
+      // de signup ni credenciales cloud). El backend mantiene la credencial.
+      await API("/api/auth/demo", { method: "POST" });
       me = await API("/api/auth/me");
     }
     if (!me.user) { showAuth(); return; }
