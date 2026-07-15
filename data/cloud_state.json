@@ -1,21 +1,21 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-15T09:46:40Z",
+  "generated_at": "2026-07-15T10:59:17Z",
   "mode": "simulation",
   "totals": {
-    "devices": 18,
-    "inside": 12,
-    "outside": 6,
-    "non_compliant": 6,
+    "devices": 9,
+    "inside": 5,
+    "outside": 4,
+    "non_compliant": 3,
     "compliance_rate_pct": 66.7,
-    "ios_devices": 5,
-    "ios_geofence_compliant": 4,
+    "ios_devices": 2,
+    "ios_geofence_compliant": 1,
     "ios_geofence_non_compliant": 1,
     "ios_geofence_unknown": 0,
-    "ios_geofence_compliance_rate_pct": 80.0,
+    "ios_geofence_compliance_rate_pct": 50.0,
     "platform_counts": {
-      "android": 12,
-      "ios": 5,
+      "android": 6,
+      "ios": 2,
       "chromeos": 1
     },
     "chromeos_devices": 1
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:39Z",
+      "generated_at": "2026-07-15T10:59:16Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 12,
+        "vulnerable_apps": 11,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:40Z",
+      "generated_at": "2026-07-15T10:59:17Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,119 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:40Z",
-      "org_id": "cliente-selfsvc-test",
-      "mode": "simulation",
-      "totals": {
-        "devices": 2,
-        "inside": 2,
-        "outside": 0,
-        "non_compliant": 1,
-        "compliance_rate_pct": 50.0,
-        "ios_devices": 0,
-        "ios_geofence_compliant": 0,
-        "ios_geofence_non_compliant": 0,
-        "ios_geofence_unknown": 0,
-        "ios_geofence_compliance_rate_pct": 0.0,
-        "platform_counts": {
-          "android": 2
-        },
-        "chromeos_devices": 0
-      },
-      "devices": [
-        {
-          "device_id": "d1",
-          "name": "Cliente SelfTest 1",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 0.0,
-          "battery_level": 100,
-          "department": "Logistica",
-          "os_version": "Android 13",
-          "lat": 40.421,
-          "lng": -3.708
-        },
-        {
-          "device_id": "d2",
-          "name": "Cliente SelfTest 2",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": false,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 25.0,
-          "battery_level": 100,
-          "department": "Logistica",
-          "os_version": "Android 13",
-          "lat": 40.423,
-          "lng": -3.7095
-        }
-      ],
-      "fences": [
-        {
-          "id": "hq",
-          "name": "Sede",
-          "type": "circle",
-          "center": {
-            "lat": 40.421,
-            "lng": -3.708
-          },
-          "radius_m": 500.0,
-          "actions": []
-        }
-      ],
-      "incidents": [],
-      "cve_summary": {
-        "demo": true,
-        "apps_total": 6,
-        "vulnerable_apps": 1,
-        "critical_cve_apps": 1,
-        "high_cve_apps": 1,
-        "ejemplos": [
-          {
-            "app": "Chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2024-1234",
-            "severity": "critical"
-          },
-          {
-            "app": "Zoom",
-            "version": "5.17.0",
-            "cve": "CVE-2024-5678",
-            "severity": "high"
-          }
-        ]
-      },
-      "soar": {
-        "demo": true,
-        "playbooks": [
-          {
-            "id": "quarantine-rooted",
-            "name": "Poner en cuarentena dispositivo rooteado"
-          },
-          {
-            "id": "notify-geo-exit",
-            "name": "Alertar salida de geocerca"
-          },
-          {
-            "id": "patch-cve-critical",
-            "name": "Forzar parche por CVE crítico"
-          }
-        ],
-        "matched": [
-          "d2"
-        ]
-      },
-      "tenant": "cliente-selfsvc-test"
-    },
-    {
-      "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:40Z",
+      "generated_at": "2026-07-15T10:59:17Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -547,282 +435,6 @@
         "matched": []
       },
       "tenant": "empresa-demo-xyz"
-    },
-    {
-      "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:40Z",
-      "org_id": "kanban-selfsvc-20260714-1522",
-      "mode": "simulation",
-      "totals": {
-        "devices": 3,
-        "inside": 2,
-        "outside": 1,
-        "non_compliant": 1,
-        "compliance_rate_pct": 66.7,
-        "ios_devices": 1,
-        "ios_geofence_compliant": 1,
-        "ios_geofence_non_compliant": 0,
-        "ios_geofence_unknown": 0,
-        "ios_geofence_compliance_rate_pct": 100.0,
-        "platform_counts": {
-          "android": 2,
-          "ios": 1
-        },
-        "chromeos_devices": 0
-      },
-      "devices": [
-        {
-          "device_id": "zebra-madrid-01",
-          "name": "Zebra TC58 Ruta Norte",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 0.0,
-          "battery_level": 100,
-          "department": "Reparto",
-          "os_version": "Android 13",
-          "lat": 40.421,
-          "lng": -3.708
-        },
-        {
-          "device_id": "iphone-field-02",
-          "name": "iPhone Field Ventas 02",
-          "platform": "ios",
-          "fence_state": "inside",
-          "compliant": false,
-          "geofence_compliance_applicable": true,
-          "geofence_compliant": true,
-          "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 25.0,
-          "battery_level": 100,
-          "department": "Ventas",
-          "os_version": "iOS 17.4",
-          "lat": 40.4232,
-          "lng": -3.7095
-        },
-        {
-          "device_id": "xcover-ops-03",
-          "name": "Samsung XCover Ops 03",
-          "platform": "android",
-          "fence_state": "outside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 35.0,
-          "battery_level": 100,
-          "department": "Operaciones",
-          "os_version": "Android 13",
-          "lat": 40.43,
-          "lng": -3.69
-        }
-      ],
-      "fences": [
-        {
-          "id": "madrid-hq",
-          "name": "Madrid HQ",
-          "type": "circle",
-          "center": {
-            "lat": 40.421,
-            "lng": -3.708
-          },
-          "radius_m": 500.0,
-          "actions": []
-        }
-      ],
-      "incidents": [],
-      "cve_summary": {
-        "demo": true,
-        "apps_total": 9,
-        "vulnerable_apps": 1,
-        "critical_cve_apps": 1,
-        "high_cve_apps": 1,
-        "ejemplos": [
-          {
-            "app": "Chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2024-1234",
-            "severity": "critical"
-          },
-          {
-            "app": "Zoom",
-            "version": "5.17.0",
-            "cve": "CVE-2024-5678",
-            "severity": "high"
-          }
-        ]
-      },
-      "soar": {
-        "demo": true,
-        "playbooks": [
-          {
-            "id": "quarantine-rooted",
-            "name": "Poner en cuarentena dispositivo rooteado"
-          },
-          {
-            "id": "notify-geo-exit",
-            "name": "Alertar salida de geocerca"
-          },
-          {
-            "id": "patch-cve-critical",
-            "name": "Forzar parche por CVE crítico"
-          }
-        ],
-        "matched": [
-          "iphone-field-02",
-          "xcover-ops-03"
-        ]
-      },
-      "tenant": "kanban-selfsvc-20260714-1522"
-    },
-    {
-      "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T09:46:40Z",
-      "org_id": "kanban-t314a3b3a-20260714-1524",
-      "mode": "simulation",
-      "totals": {
-        "devices": 4,
-        "inside": 3,
-        "outside": 1,
-        "non_compliant": 1,
-        "compliance_rate_pct": 75.0,
-        "ios_devices": 2,
-        "ios_geofence_compliant": 2,
-        "ios_geofence_non_compliant": 0,
-        "ios_geofence_unknown": 0,
-        "ios_geofence_compliance_rate_pct": 100.0,
-        "platform_counts": {
-          "android": 2,
-          "ios": 2
-        },
-        "chromeos_devices": 0
-      },
-      "devices": [
-        {
-          "device_id": "zebra-reparto-01",
-          "name": "Zebra TC58 Reparto 01",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 0.0,
-          "battery_level": 100,
-          "department": "Reparto",
-          "os_version": "Android 13",
-          "lat": 40.421,
-          "lng": -3.708
-        },
-        {
-          "device_id": "iphone-ventas-02",
-          "name": "iPhone 15 Field Ventas 02",
-          "platform": "ios",
-          "fence_state": "inside",
-          "compliant": false,
-          "geofence_compliance_applicable": true,
-          "geofence_compliant": true,
-          "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 25.0,
-          "battery_level": 100,
-          "department": "Ventas",
-          "os_version": "iOS 17.4",
-          "lat": 40.4232,
-          "lng": -3.7095
-        },
-        {
-          "device_id": "ipad-almacen-03",
-          "name": "iPad Air Almacén 03",
-          "platform": "ios",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": true,
-          "geofence_compliant": true,
-          "geofence_compliance_label": "dentro de geocerca",
-          "risk_score": 0.0,
-          "battery_level": 100,
-          "department": "Almacén",
-          "os_version": "iOS 17.4",
-          "lat": 40.4194,
-          "lng": -3.7112
-        },
-        {
-          "device_id": "xcover-ops-04",
-          "name": "Samsung XCover Ops 04",
-          "platform": "android",
-          "fence_state": "outside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 35.0,
-          "battery_level": 100,
-          "department": "Operaciones",
-          "os_version": "Android 13",
-          "lat": 40.43,
-          "lng": -3.69
-        }
-      ],
-      "fences": [
-        {
-          "id": "madrid-hq",
-          "name": "Madrid HQ",
-          "type": "circle",
-          "center": {
-            "lat": 40.421,
-            "lng": -3.708
-          },
-          "radius_m": 500.0,
-          "actions": []
-        }
-      ],
-      "incidents": [],
-      "cve_summary": {
-        "demo": true,
-        "apps_total": 12,
-        "vulnerable_apps": 2,
-        "critical_cve_apps": 1,
-        "high_cve_apps": 2,
-        "ejemplos": [
-          {
-            "app": "Chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2024-1234",
-            "severity": "critical"
-          },
-          {
-            "app": "Zoom",
-            "version": "5.17.0",
-            "cve": "CVE-2024-5678",
-            "severity": "high"
-          }
-        ]
-      },
-      "soar": {
-        "demo": true,
-        "playbooks": [
-          {
-            "id": "quarantine-rooted",
-            "name": "Poner en cuarentena dispositivo rooteado"
-          },
-          {
-            "id": "notify-geo-exit",
-            "name": "Alertar salida de geocerca"
-          },
-          {
-            "id": "patch-cve-critical",
-            "name": "Forzar parche por CVE crítico"
-          }
-        ],
-        "matched": [
-          "iphone-ventas-02",
-          "xcover-ops-04"
-        ]
-      },
-      "tenant": "kanban-t314a3b3a-20260714-1524"
     }
   ],
   "devices": [
@@ -956,38 +568,6 @@
     },
     {
       "device_id": "d1",
-      "name": "Cliente SelfTest 1",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 0.0,
-      "battery_level": 100,
-      "department": "Logistica",
-      "os_version": "Android 13",
-      "lat": 40.421,
-      "lng": -3.708
-    },
-    {
-      "device_id": "d2",
-      "name": "Cliente SelfTest 2",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": false,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 25.0,
-      "battery_level": 100,
-      "department": "Logistica",
-      "os_version": "Android 13",
-      "lat": 40.423,
-      "lng": -3.7095
-    },
-    {
-      "device_id": "d1",
       "name": "Camion 1",
       "platform": "android",
       "fence_state": "inside",
@@ -1001,118 +581,6 @@
       "os_version": "Android 13",
       "lat": 40.42,
       "lng": -3.7
-    },
-    {
-      "device_id": "zebra-madrid-01",
-      "name": "Zebra TC58 Ruta Norte",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 0.0,
-      "battery_level": 100,
-      "department": "Reparto",
-      "os_version": "Android 13",
-      "lat": 40.421,
-      "lng": -3.708
-    },
-    {
-      "device_id": "iphone-field-02",
-      "name": "iPhone Field Ventas 02",
-      "platform": "ios",
-      "fence_state": "inside",
-      "compliant": false,
-      "geofence_compliance_applicable": true,
-      "geofence_compliant": true,
-      "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 25.0,
-      "battery_level": 100,
-      "department": "Ventas",
-      "os_version": "iOS 17.4",
-      "lat": 40.4232,
-      "lng": -3.7095
-    },
-    {
-      "device_id": "xcover-ops-03",
-      "name": "Samsung XCover Ops 03",
-      "platform": "android",
-      "fence_state": "outside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 35.0,
-      "battery_level": 100,
-      "department": "Operaciones",
-      "os_version": "Android 13",
-      "lat": 40.43,
-      "lng": -3.69
-    },
-    {
-      "device_id": "zebra-reparto-01",
-      "name": "Zebra TC58 Reparto 01",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 0.0,
-      "battery_level": 100,
-      "department": "Reparto",
-      "os_version": "Android 13",
-      "lat": 40.421,
-      "lng": -3.708
-    },
-    {
-      "device_id": "iphone-ventas-02",
-      "name": "iPhone 15 Field Ventas 02",
-      "platform": "ios",
-      "fence_state": "inside",
-      "compliant": false,
-      "geofence_compliance_applicable": true,
-      "geofence_compliant": true,
-      "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 25.0,
-      "battery_level": 100,
-      "department": "Ventas",
-      "os_version": "iOS 17.4",
-      "lat": 40.4232,
-      "lng": -3.7095
-    },
-    {
-      "device_id": "ipad-almacen-03",
-      "name": "iPad Air Almacén 03",
-      "platform": "ios",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": true,
-      "geofence_compliant": true,
-      "geofence_compliance_label": "dentro de geocerca",
-      "risk_score": 0.0,
-      "battery_level": 100,
-      "department": "Almacén",
-      "os_version": "iOS 17.4",
-      "lat": 40.4194,
-      "lng": -3.7112
-    },
-    {
-      "device_id": "xcover-ops-04",
-      "name": "Samsung XCover Ops 04",
-      "platform": "android",
-      "fence_state": "outside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 35.0,
-      "battery_level": 100,
-      "department": "Operaciones",
-      "os_version": "Android 13",
-      "lat": 40.43,
-      "lng": -3.69
     }
   ],
   "fences": [
@@ -1141,7 +609,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 12,
+    "vulnerable_apps": 11,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,

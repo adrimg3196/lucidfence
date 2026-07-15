@@ -91,51 +91,19 @@
   </div>
 
   <div class="panel" style="margin-top:16px">
-    <h2>Registrar mi tenant (self-service, $0)</h2>
-    <p class="meta">Rellena y se abrirá un issue en el repo; en ≤15 min tu tenant aparece en el selector de arriba. Sin tarjeta, sin servidores propios.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px">
-      <input id="su_id" placeholder="tenant-id (ej. mi-empresa)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-      <input id="su_name" placeholder="Nombre empresa" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-      <input id="su_dev" placeholder="Nº dispositivos (ej. 3)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-      <input id="su_dept" placeholder="Departamento (ej. Reparto)" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-      <select id="su_platform" aria-label="Plataforma principal" style="padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2);color:var(--fg);font-family:inherit">
-        <option value="android">Android Enterprise</option>
-        <option value="ios">iOS/iPadOS</option>
-        <option value="chromeos">ChromeOS</option>
-        <option value="windows">Windows</option>
-      </select>
+    <h2>Descarga LucidFence (gratis, on-prem, $0)</h2>
+    <p class="meta">Tu geofencing corre en <b>tu</b> máquina. Tus dispositivos, geocercas, riesgos y CVE se calculan ahí. Nada se envía a nuestra infra. Instala en un comando:</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <code style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2)">brew install adrimg3196/lucidfence</code>
+      <a href="https://github.com/adrimg3196/lucidfence/releases/download/v1.0.0/lucidfence-1.0.0.tar.gz" style="padding:8px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Descargar v1.0.0</a>
+      <a href="https://github.com/adrimg3196/lucidfence" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;color:var(--fg);text-decoration:none">Ver repo</a>
     </div>
-    <button onclick="openSignup()" style="margin-top:10px;padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer">Crear mi tenant →</button>
+    <p class="meta" style="margin-top:10px">Tras instalar: <code style="padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg-2)">lucidfence serve</code> y abre <code style="padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg-2)">http://localhost:8765</code>. La demo de arriba es datos de ejemplo; la tuya vive en tu infra.</p>
   </div>
 
   <p class="meta" style="margin-top:20px">
-    ¿Quieres tu propio tenant multi-device con remediación real vía Applivery/Intune/Jamf?
-    <a href="https://github.com/adrimg3196/lucidfence">Despliega LucidFence</a> o pide una demo.
+    ¿Quieres ver la demo multi-tenant en vivo? La vitrina de arriba se regenera en la nube cada 15 min con datos de ejemplo. Para tu flota real, <b>descarga e instala</b> — no necesitas registrart2e con nosotros.
   </p>
-
-  <script>
-    function openSignup(){
-      const id = (document.getElementById('su_id').value||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,'-');
-      const name = document.getElementById('su_name').value || 'Mi Empresa';
-      const n = parseInt(document.getElementById('su_dev').value||'1',10) || 1;
-      const dept = document.getElementById('su_dept').value || 'General';
-      const platform = document.getElementById('su_platform').value || 'android';
-      if(!id){ alert('Pon un tenant-id (letras/números)'); return; }
-      const lat0=40.4210, lng0=-3.7080;
-      const fleet=[]; const fences=[{id:'hq',name:'Sede',kind:'circle',center:{lat:lat0,lng:lng0},radius_m:500}];
-      for(let i=0;i<n;i++){
-        const lat=lat0 + (i*0.002);
-        const lng=lng0 + (i*0.0015);
-        fleet.push({id:'d'+(i+1),name:name+' '+(i+1),platform:platform,lat:lat,lng:lng,
-          compliant: i%2===0, department: dept});
-      }
-      const body =
-"Solicitud de tenant LucidFence (self-service).\n\n<!-- lucidfence-signup -->\ntenant_id: "+id+"\nfleet: "+JSON.stringify(fleet)+"\nfences: "+JSON.stringify(fences)+"\n<!-- /lucidfence-signup -->\n\nEmpresa: "+name;
-      const url = 'https://github.com/adrimg3196/lucidfence/issues/new?title='+
-        encodeURIComponent('Signup tenant: '+id)+'&labels=signup&body='+encodeURIComponent(body);
-      window.open(url,'_blank');
-    }
-  </script>
 
   <script>
     const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json";
