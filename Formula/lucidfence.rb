@@ -3,8 +3,8 @@ class Lucidfence < Formula
 
   desc "Open-source local geofencing and explainable UEM/MDM risk control"
   homepage "https://github.com/adrimg3196/lucidfence"
-  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.1.0/lucidfence-1.1.0.tar.gz"
-  sha256 "b413636af9d153ccd4220c36c150db21abe161e5b4b2f4ace6cf5ece375f89e4"
+  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.1.1/lucidfence-1.1.1.tar.gz"
+  sha256 "244dab396c6fdbb3a560e074f513d3ed2de37fb27e890440a8b2fc3b75af7152"
   license "Apache-2.0"
 
   depends_on "python@3.11"
@@ -75,7 +75,7 @@ class Lucidfence < Formula
     page = shell_output("curl -fsS http://127.0.0.1:#{port}/")
     assert_match "LucidFence", page
     assert_match "Command Center", page
-    assert_match "lucidfence 1.1.0", shell_output("#{bin}/lucidfence --version")
+    assert_match "lucidfence 1.1.1", shell_output("#{bin}/lucidfence --version")
   ensure
     Process.kill("TERM", pid) if pid
   end
