@@ -81,13 +81,13 @@ def test_route_form_sends_backend_supported_geometry():
     assert "corridor_m" in js
 
 
-def test_saas_loads_and_applies_real_reicon_library():
-    html = (ROOT / "static" / "saas.html").read_text(encoding="utf-8")
-    js = (ROOT / "static" / "saas.js").read_text(encoding="utf-8")
+def test_dashboard_loads_and_applies_real_reicon_library():
+    html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     data = (ROOT / "static" / "reicon-data.js").read_text(encoding="utf-8")
-    assert html.index("/static/reicon-data.js") < html.index("/static/reicon.js") < html.index("/static/saas.js")
+    assert html.index("static/reicon-data.js") < html.index("static/reicon.js") < html.index("static/app.js")
     assert "window.REICON_DATA" in data and '"shield-check"' in data
-    for view in ("overview", "map", "devices", "routes", "workflows", "risk", "policies", "compliance", "billing", "users", "settings"):
+    for view in ("overview", "map", "devices", "routes", "workflows", "risk", "settings"):
         assert view in js, f"missing Reicon mapping for {view}"
     assert "decorateIcons" in js and "MutationObserver" in js
 
