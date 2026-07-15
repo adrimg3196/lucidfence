@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_incident_operations_view_is_wired():
-    # The command center SPA is dashboard.html (and saas.html), not the
+    # The command center SPA is dashboard.html, not the
     # marketing landing index.html. Assert against the real SPA shell.
     html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
@@ -42,7 +42,7 @@ def test_local_dashboard_has_one_click_demo_without_client_side_credentials():
     """G1: local-first onboarding must be one click without exposing a
     hardcoded password in the browser bundle. Real login/signup remains wired
     for users created on the customer's own machine."""
-    js = (ROOT / "static" / "saas.js").read_text(encoding="utf-8")
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
     assert '"/api/auth/demo"' in js
     assert 'route == "/api/auth/demo"' in server
@@ -56,7 +56,7 @@ def test_local_dashboard_has_one_click_demo_without_client_side_credentials():
 
 
 def test_command_center_uses_reicon_for_ui_icons():
-    # The command center SPA is served from dashboard.html (and saas.html),
+    # The command center SPA is served from dashboard.html,
     # not the marketing landing index.html. Assert against the real SPA shell.
     html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
