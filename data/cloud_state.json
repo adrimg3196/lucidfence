@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-14T23:09:28Z",
+  "generated_at": "2026-07-15T00:02:52Z",
   "mode": "simulation",
   "totals": {
     "devices": 18,
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:27Z",
+      "generated_at": "2026-07-15T00:02:51Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 11,
+        "vulnerable_apps": 12,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:27Z",
+      "generated_at": "2026-07-15T00:02:51Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:27Z",
+      "generated_at": "2026-07-15T00:02:52Z",
       "org_id": "cliente-selfsvc-test",
       "mode": "simulation",
       "totals": {
@@ -456,7 +456,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:27Z",
+      "generated_at": "2026-07-15T00:02:52Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -550,7 +550,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:27Z",
+      "generated_at": "2026-07-15T00:02:52Z",
       "org_id": "kanban-selfsvc-20260714-1522",
       "mode": "simulation",
       "totals": {
@@ -680,7 +680,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-14T23:09:28Z",
+      "generated_at": "2026-07-15T00:02:52Z",
       "org_id": "kanban-t314a3b3a-20260714-1524",
       "mode": "simulation",
       "totals": {
@@ -1141,7 +1141,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 11,
+    "vulnerable_apps": 12,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
