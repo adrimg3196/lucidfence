@@ -1,12 +1,12 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-15T13:08:42Z",
+  "generated_at": "2026-07-15T16:07:32Z",
   "mode": "simulation",
   "totals": {
-    "devices": 12,
-    "inside": 7,
-    "outside": 5,
-    "non_compliant": 4,
+    "devices": 9,
+    "inside": 5,
+    "outside": 4,
+    "non_compliant": 3,
     "compliance_rate_pct": 66.7,
     "ios_devices": 2,
     "ios_geofence_compliant": 1,
@@ -14,7 +14,7 @@
     "ios_geofence_unknown": 0,
     "ios_geofence_compliance_rate_pct": 50.0,
     "platform_counts": {
-      "android": 9,
+      "android": 6,
       "ios": 2,
       "chromeos": 1
     },
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T13:08:41Z",
+      "generated_at": "2026-07-15T16:07:32Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 11,
+        "vulnerable_apps": 12,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T13:08:41Z",
+      "generated_at": "2026-07-15T16:07:32Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T13:08:42Z",
+      "generated_at": "2026-07-15T16:07:32Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -435,134 +435,6 @@
         "matched": []
       },
       "tenant": "empresa-demo-xyz"
-    },
-    {
-      "service": "lucidfence-cloud",
-      "generated_at": "2026-07-15T13:08:42Z",
-      "org_id": "qa-autonomo-53693",
-      "mode": "simulation",
-      "totals": {
-        "devices": 3,
-        "inside": 2,
-        "outside": 1,
-        "non_compliant": 1,
-        "compliance_rate_pct": 66.7,
-        "ios_devices": 0,
-        "ios_geofence_compliant": 0,
-        "ios_geofence_non_compliant": 0,
-        "ios_geofence_unknown": 0,
-        "ios_geofence_compliance_rate_pct": 0.0,
-        "platform_counts": {
-          "android": 3
-        },
-        "chromeos_devices": 0
-      },
-      "devices": [
-        {
-          "device_id": "qa-auto-rider-01",
-          "name": "Reparto Android 01",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 0.0,
-          "battery_level": 91,
-          "department": "Reparto",
-          "os_version": "Android 14",
-          "lat": 40.4168,
-          "lng": -3.7038
-        },
-        {
-          "device_id": "qa-auto-rider-02",
-          "name": "Reparto Android 02",
-          "platform": "android",
-          "fence_state": "outside",
-          "compliant": false,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 60.0,
-          "battery_level": 27,
-          "department": "Reparto",
-          "os_version": "Android 13",
-          "lat": 40.41,
-          "lng": -3.695
-        },
-        {
-          "device_id": "qa-auto-rider-03",
-          "name": "Reparto Android 03",
-          "platform": "android",
-          "fence_state": "inside",
-          "compliant": true,
-          "geofence_compliance_applicable": false,
-          "geofence_compliant": null,
-          "geofence_compliance_label": "no aplica",
-          "risk_score": 0.0,
-          "battery_level": 76,
-          "department": "Reparto",
-          "os_version": "Android 14",
-          "lat": 40.42,
-          "lng": -3.71
-        }
-      ],
-      "fences": [
-        {
-          "id": "qa-autonomo-reparto-madrid",
-          "name": "Zona reparto Madrid",
-          "type": "circle",
-          "center": {
-            "lat": 40.4168,
-            "lng": -3.7038
-          },
-          "radius_m": 900.0,
-          "actions": []
-        }
-      ],
-      "incidents": [],
-      "cve_summary": {
-        "demo": true,
-        "apps_total": 9,
-        "vulnerable_apps": 1,
-        "critical_cve_apps": 1,
-        "high_cve_apps": 1,
-        "ejemplos": [
-          {
-            "app": "Chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2024-1234",
-            "severity": "critical"
-          },
-          {
-            "app": "Zoom",
-            "version": "5.17.0",
-            "cve": "CVE-2024-5678",
-            "severity": "high"
-          }
-        ]
-      },
-      "soar": {
-        "demo": true,
-        "playbooks": [
-          {
-            "id": "quarantine-rooted",
-            "name": "Poner en cuarentena dispositivo rooteado"
-          },
-          {
-            "id": "notify-geo-exit",
-            "name": "Alertar salida de geocerca"
-          },
-          {
-            "id": "patch-cve-critical",
-            "name": "Forzar parche por CVE crítico"
-          }
-        ],
-        "matched": [
-          "qa-auto-rider-02"
-        ]
-      },
-      "tenant": "qa-autonomo-53693"
     }
   ],
   "devices": [
@@ -709,54 +581,6 @@
       "os_version": "Android 13",
       "lat": 40.42,
       "lng": -3.7
-    },
-    {
-      "device_id": "qa-auto-rider-01",
-      "name": "Reparto Android 01",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 0.0,
-      "battery_level": 91,
-      "department": "Reparto",
-      "os_version": "Android 14",
-      "lat": 40.4168,
-      "lng": -3.7038
-    },
-    {
-      "device_id": "qa-auto-rider-02",
-      "name": "Reparto Android 02",
-      "platform": "android",
-      "fence_state": "outside",
-      "compliant": false,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 60.0,
-      "battery_level": 27,
-      "department": "Reparto",
-      "os_version": "Android 13",
-      "lat": 40.41,
-      "lng": -3.695
-    },
-    {
-      "device_id": "qa-auto-rider-03",
-      "name": "Reparto Android 03",
-      "platform": "android",
-      "fence_state": "inside",
-      "compliant": true,
-      "geofence_compliance_applicable": false,
-      "geofence_compliant": null,
-      "geofence_compliance_label": "no aplica",
-      "risk_score": 0.0,
-      "battery_level": 76,
-      "department": "Reparto",
-      "os_version": "Android 14",
-      "lat": 40.42,
-      "lng": -3.71
     }
   ],
   "fences": [
@@ -785,7 +609,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 11,
+    "vulnerable_apps": 12,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
