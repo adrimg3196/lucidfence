@@ -4,7 +4,7 @@ class Lucidfence < Formula
   desc "Open-source local geofencing and explainable UEM/MDM risk control"
   homepage "https://github.com/adrimg3196/lucidfence"
   url "https://github.com/adrimg3196/lucidfence/releases/download/v1.1.0/lucidfence-1.1.0.tar.gz"
-  sha256 "RELEASE_SHA256"
+  sha256 "b413636af9d153ccd4220c36c150db21abe161e5b4b2f4ace6cf5ece375f89e4"
   license "Apache-2.0"
 
   depends_on "python@3.11"
