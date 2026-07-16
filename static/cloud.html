@@ -18,6 +18,8 @@
     .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
     .bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
     select,input{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
+    .btn{background:var(--accent);color:#fff;border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none}
+    .btn:hover{filter:brightness(1.08)}
     input::placeholder{color:var(--muted)}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
@@ -60,6 +62,7 @@
     <label class="meta" for="tenantSel">Tenant:</label>
     <select id="tenantSel" onchange="renderTenant(parseInt(this.value))"></select>
     <input id="tenantFilter" placeholder="Filtrar tenants…" oninput="applyTenantFilter(this.value)" aria-label="Filtrar tenants">
+    <button class="btn" type="button" onclick="downloadTenantCompliancePdf()">Descargar reporte PDF</button>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -122,6 +125,70 @@
 
     function esc(v){
       return String(v == null ? "" : v).replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[ch]));
+    }
+
+    function pdfSafe(v, max){
+      let s = String(v == null ? "" : v).replace(/[\r\n]+/g, " ").replace(/[áÁ]/g,"a").replace(/[éÉ]/g,"e").replace(/[íÍ]/g,"i").replace(/[óÓ]/g,"o").replace(/[úÚüÜ]/g,"u").replace(/[ñÑ]/g,"n").replace(/[—·]/g,"-");
+      s = s.replace(/[\\()]/g, ch => "\\"+ch);
+      if(max && s.length > max) s = s.slice(0, max-3) + "...";
+      return s;
+    }
+
+    function simplePdf(lines){
+      let y = 790;
+      const streamLines = ["BT", "/F1 11 Tf"];
+      lines.slice(0,48).forEach((line, i)=>{
+        const size = i === 0 ? 16 : 11;
+        streamLines.push(`/F1 ${size} Tf`);
+        streamLines.push(`1 0 0 1 50 ${y} Tm (${pdfSafe(line)}) Tj`);
+        y -= i === 0 ? 18 : 14;
+      });
+      streamLines.push("ET");
+      const stream = streamLines.join("\n");
+      const objs = [
+        "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+        `5 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`,
+      ];
+      let out = "%PDF-1.4\n";
+      const offsets = [0];
+      objs.forEach(o=>{ offsets.push(out.length); out += o; });
+      const xref = out.length;
+      out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n`;
+      offsets.slice(1).forEach(off=>{ out += `${String(off).padStart(10,"0")} 00000 n \n`; });
+      out += `trailer\n<< /Size ${objs.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+      return out;
+    }
+
+    function downloadTenantCompliancePdf(){
+      const sel = document.getElementById("tenantSel");
+      const selected = FILTERED_TENANTS[parseInt(sel.value || "0")] || FILTERED_TENANTS[0];
+      const s = selected ? selected.t : ((CURRENT && CURRENT.tenants && CURRENT.tenants[0]) || CURRENT || {});
+      const devices = s.devices || [];
+      const totals = s.totals || {};
+      const lines = [
+        "LucidFence - Reporte de conformidad",
+        `Tenant: ${tenantName(s, selected ? selected.i : 0)}`,
+        `Generado: ${(CURRENT && CURRENT.generated_at) || new Date().toISOString()}`,
+        "",
+        `Dispositivos: ${totals.devices || devices.length || 0}`,
+        `Dentro: ${totals.inside || 0}`,
+        `Fuera: ${totals.outside || 0}`,
+        `No conformes: ${totals.non_compliant || devices.filter(d=>d.compliant===false).length}`,
+        `Compliance: ${totals.compliance_rate_pct || 0}%`,
+        "",
+        "Dispositivo | Plataforma | Estado | Conforme | Riesgo",
+        ...devices.slice(0,34).map(d=>`${pdfSafe(d.name || d.device_id,24)} | ${pdfSafe(platformLabel(d.platform),11)} | ${pdfSafe(d.fence_state || "-",11)} | ${d.compliant===false?"NO":"SI"} | ${d.risk_score || 0}`),
+      ];
+      if(devices.length > 34) lines.push(`... ${devices.length - 34} dispositivos mas`);
+      const blob = new Blob([simplePdf(lines)], {type:"application/pdf"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "reporte_conformidad_lucidfence.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
     }
 
     function tenantName(t, i){

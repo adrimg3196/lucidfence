@@ -571,6 +571,16 @@ def _send_csv(handler, filename: str, csv_text: str):
     handler.wfile.write(body)
 
 
+def _send_pdf(handler, filename: str, pdf_bytes: bytes):
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/pdf")
+    handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+    handler.send_header("Content-Length", str(len(pdf_bytes)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.end_headers()
+    handler.wfile.write(pdf_bytes)
+
+
 def _send_html(handler, html_text: str):
     body = html_text.encode("utf-8")
     handler.send_response(200)
@@ -1428,6 +1438,9 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_csv(self, "acciones_uem.csv", EXP.export_actions_csv(actions))
             if kind == "compliance":
                 devs = [s.to_dict() for s in eng.store.snapshot().values()]
+                if fmt == "pdf":
+                    return _send_pdf(self, "reporte_conformidad.pdf",
+                                     EXP.export_compliance_pdf(devs, org, _summary(devs)))
                 if fmt == "html":
                     return _send_html(self, EXP.export_inventory_html(devs, org,
                         _summary(devs)))

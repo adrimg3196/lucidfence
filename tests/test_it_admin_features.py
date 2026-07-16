@@ -3,7 +3,7 @@
   - Inventory enrichment (DeviceState fields populated by simulation)
   - On-demand remote commands (POST /api/devices/<id>/command)
   - Configurable threshold alerts (CRUD + evaluation)
-  - Bulk export (CSV + print-ready HTML)
+  - Bulk export (CSV + print-ready HTML + compliance PDF)
 
 Uses raw http.client (bypasses any env proxy that eats POSTs to localhost).
 """
@@ -11,7 +11,7 @@ import json, http.client, time, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 SUFFIX = str(time.time_ns())
 OWNER = f"itadmin-{SUFFIX}@acme.test"
 VIEWER = f"viewer-{SUFFIX}@acme.test"
@@ -122,6 +122,8 @@ for kind in ["inventory", "actions", "compliance"]:
     check(f"export {kind} csv", s == 200, f"http={s}")
 s, hdr, _ = call("GET", f"/api/export?kind=inventory&format=html", cookies=ck)
 check("export inventory html", s == 200, f"http={s}")
+s, pdf, _ = call("GET", f"/api/export?kind=compliance&format=pdf", cookies=ck)
+check("export compliance pdf", s == 200 and str(pdf.get("_raw", "")).startswith("%PDF-1.4"), f"http={s}")
 # viewer cannot export (report:export)
 s, r, _ = call("GET", "/api/export?kind=inventory&format=csv", cookies=vck)
 check("viewer blocked from export", s == 403, f"http={s}")

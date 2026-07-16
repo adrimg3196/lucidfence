@@ -2,8 +2,8 @@
 
 Generates:
   - CSV exports (real RFC-4180) for inventory, actions log, and compliance.
-  - A print-ready HTML report (the browser's "Print -> Save as PDF" produces a
-    real PDF with zero external dependencies).
+  - A print-ready HTML report.
+  - A small native PDF compliance report with zero external dependencies.
 
 Everything is local; no network, no third-party libraries.
 """
@@ -92,6 +92,47 @@ def export_compliance_csv(devices: list[dict]) -> str:
     return to_csv(headers, rows)
 
 
+def export_compliance_pdf(devices: list[dict], org_name: str = "",
+                          summary: dict | None = None) -> bytes:
+    """Return a compact, valid PDF 1.4 compliance report.
+
+    The project is intentionally stdlib-first, so this avoids ReportLab/weasyprint
+    while still giving the dashboard a direct ``application/pdf`` download.
+    """
+    now = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    s = summary or {}
+    total = s.get("total", len(devices))
+    compliant = s.get("compliant", "—")
+    noncompliant = s.get("noncompliant", "—")
+    outside = s.get("outside", "—")
+    high_risk = s.get("high_risk", "—")
+    lines = [
+        "LucidFence - Reporte de conformidad",
+        f"Organizacion: {org_name or 'local'}",
+        f"Generado: {now}",
+        "",
+        f"Total dispositivos: {total}",
+        f"Conformes: {compliant}",
+        f"Incumplen: {noncompliant}",
+        f"Fuera de perimetro: {outside}",
+        f"Riesgo alto: {high_risk}",
+        "",
+        "Dispositivo | Plataforma | Geovalla | Cumple | Riesgo",
+    ]
+    for d in devices[:34]:
+        comp = "SI" if d.get("compliant") is True else ("NO" if d.get("compliant") is False else "?")
+        lines.append(" | ".join([
+            _pdf_text(d.get("name") or d.get("device_id") or "—", 24),
+            _pdf_text(d.get("platform") or "—", 11),
+            _pdf_text(d.get("fence_state") or "—", 11),
+            comp,
+            _pdf_text(d.get("risk_score") if d.get("risk_score") is not None else "—", 6),
+        ]))
+    if len(devices) > 34:
+        lines.append(f"... {len(devices) - 34} dispositivos mas en CSV/HTML")
+    return _simple_pdf(lines)
+
+
 # --------------------------------------------------------- print-ready HTML
 def export_inventory_html(devices: list[dict], org_name: str = "",
                           summary: dict | None = None) -> str:
@@ -157,3 +198,51 @@ def _h(v) -> str:
         return ""
     s = str(v)
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _pdf_text(value: Any, max_len: int | None = None) -> str:
+    text = "" if value is None else str(value)
+    text = " ".join(text.replace("\r", " ").replace("\n", " ").split())
+    table = str.maketrans({
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+        "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U",
+        "ñ": "n", "Ñ": "N", "ü": "u", "Ü": "U", "·": "-", "—": "-", "…": "...",
+    })
+    text = text.translate(table)
+    if max_len and len(text) > max_len:
+        text = text[:max_len - 1] + "…"
+    return text
+
+
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _simple_pdf(lines: list[str]) -> bytes:
+    y = 790
+    stream_lines = ["BT", "/F1 11 Tf"]
+    for i, line in enumerate(lines[:48]):
+        size = 16 if i == 0 else 11
+        stream_lines.append(f"/F1 {size} Tf")
+        stream_lines.append(f"1 0 0 1 50 {y} Tm ({_pdf_escape(_pdf_text(line))}) Tj")
+        y -= 18 if i == 0 else 14
+    stream_lines.append("ET")
+    stream = "\n".join(stream_lines).encode("latin-1", "replace")
+    objects = [
+        b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+        b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+        b"4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+        b"5 0 obj\n<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream\nendobj\n",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(out))
+        out.extend(obj)
+    xref = len(out)
+    out.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
+    for off in offsets[1:]:
+        out.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+    out.extend(f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode("ascii"))
+    return bytes(out)
