@@ -201,7 +201,7 @@ async function logout(){
   stopPolling();
   const su = $("#sideUser"); if(su) su.style.display="none";
   $("#orgName").textContent="";
-  ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
+  ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","intelligence","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
   showAuthModal();
 }
 function startApp(){
@@ -228,6 +228,7 @@ const NAV = [
   {id:"routes",     label:"Rutas",       icon:"route"},
   {id:"workflows",  label:"Workflows",   icon:"sitemap-4"},
   {id:"goals",      label:"Objetivos",   icon:"target"},
+  {id:"intelligence",label:"Inteligencia",icon:"chart-line"},
   {id:"settings",   label:"Ajustes",     icon:"settings"},
 ];
 
@@ -267,6 +268,7 @@ function goView(id){
   if(id==="routes") renderRoutes();
   if(id==="workflows") renderWorkflows();
   if(id==="goals") renderGoals();
+  if(id==="intelligence") renderIntelligence();
   if(id==="settings") renderSettings();
 }
 
@@ -309,6 +311,7 @@ async function refresh(initial){
     else if(App.view==="routes") renderRoutes();
     else if(App.view==="workflows") renderWorkflows();
     else if(App.view==="goals") renderGoals();
+    else if(App.view==="intelligence") renderIntelligence();
     else if(App.view==="ai") loadAiProviders();
   }catch(e){ /* deja lo anterior */ }
 }
@@ -318,7 +321,7 @@ function updateSync(st, before){
   if(st && st.last_cycle_at){
     const dt = parseTime(st.last_cycle_at);
     const age = dt ? Math.floor((Date.now()-dt.getTime())/1000) : 0;
-    $("#syncText").textContent = "Ciclo hace "+fmt.ago(st.last_cycle_at);
+    $("#syncText").textContent = "Ciclo "+fmt.ago(st.last_cycle_at);
     if(age>180) se.classList.add("stale");
   }
   $("#ratePill").textContent = (st&&st.cycle_period_s? Math.round(st.cycle_period_s/60)+" min" : "15 min");
@@ -501,7 +504,8 @@ function renderOverview(){
         </div>
       </div>
       <div class="card">
-        <div class="hd"><h3>Conformidad</h3><div class="grow"></div><span class="sub">${compPct}%</span></div>
+        <div class="hd"><h3>Conformidad</h3><div class="grow"></div><span class="sub">${compPct}%</span>
+          <button class="btn sm" onclick="downloadCompliancePdf()">${I.shield} PDF</button></div>
         <div class="bd">
           <div class="donut-wrap">
             <div class="donut" id="compDonut" style="width:122px;height:122px"></div>
@@ -540,6 +544,10 @@ function renderOverview(){
   initMap(devs, "overviewMap");
 }
 function openAiFromOverview(){ goView("ai"); }
+
+function downloadCompliancePdf(){
+  window.location.href = "/api/export?kind=compliance&format=pdf";
+}
 
 function renderDonut(node, pct, fg, total){
   if(!node) return;
@@ -1448,6 +1456,70 @@ function renderGoals(){
     App.__goalChart = new Chart(cv, {type:"line",
       data:{labels:trend.map((_,i)=>i+1), datasets:[{data:trend, borderColor:"#5e6ad5", backgroundColor:"rgba(94,106,213,.12)", borderWidth:2, fill:true, tension:.35, pointRadius:0}]},
       options:{responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"var(--muted-2)",font:{size:9}}}}} });
+  }
+}
+
+/* ============================================================
+   VISTA: INTELIGENCIA DE FLOTA — evidencia local, no predicción
+   ============================================================ */
+async function renderIntelligence(){
+  const node = $("#view-intelligence"); if(!node) return;
+  node.innerHTML = `<div class="card"><div class="bd"><div class="sub">Calculando inteligencia local…</div></div></div>`;
+  try{
+    const payload = await api("/api/analytics");
+    const analytics = payload.analytics || {};
+    const intel = analytics.fleet_intelligence || {};
+    if(intel.status !== "ready"){
+      node.innerHTML = `<div class="toolbar"><div><div style="font-size:13px;font-weight:600">Inteligencia de flota</div><div class="sub">Métricas descriptivas basadas en histórico local</div></div></div>${emptyState("Aún no hay histórico suficiente", (intel.recommendations||[])[0]||"Acumula ciclos para activar esta vista.")}`;
+      return;
+    }
+    const q = intel.quality_components || {};
+    const delta = Number(intel.compliance_delta_points||0);
+    const score = Number(intel.signal_quality_score||0);
+    const scoreTone = score>=90?"ok":score>=70?"warn":"bad";
+    const components = [
+      ["Recencia", q.freshness_percent||0, "Tiempo desde el último ciclo"],
+      ["Continuidad", q.continuity_percent||0, "Intervalos sin interrupciones prolongadas"],
+      ["Cobertura GPS", q.gps_coverage_percent||0, "Puntos con latitud y longitud"],
+      ["Profundidad", q.history_depth_percent||0, "Volumen histórico disponible"],
+    ];
+    const componentHtml = components.map(([label,value,help])=>`<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>${esc(label)} <span class="sub">· ${esc(help)}</span></span><b>${value}%</b></div>
+      <div style="height:7px;background:var(--panel-3);border-radius:8px;overflow:hidden"><div style="height:100%;width:${Math.max(0,Math.min(100,value))}%;background:${value>=90?'var(--green)':value>=70?'var(--amber)':'var(--red)'};border-radius:8px"></div></div>
+    </div>`).join("");
+    const recommendations = (intel.recommendations||[]).map(text=>`<div class="aitem"><div class="ic">${reicon("search",{size:16})}</div><div class="grow"><div class="nm">${esc(text)}</div></div></div>`).join("");
+    const top = intel.top_transition_device;
+    node.innerHTML = `
+      <div class="toolbar"><div><div style="font-size:13px;font-weight:600">Inteligencia de flota</div><div class="sub">${intel.history_points} ciclos · ${intel.history_span_hours} h observadas · sin predicción</div></div><div class="grow"></div>
+        <span class="tag in"><span class="d"></span>Evidencia local</span></div>
+      <div class="kpis">
+        ${kpiCard("Calidad de datos", score+"/100", scoreTone, reicon("chart-line"))}
+        ${kpiCard("Recencia", fmtDur(intel.freshness_seconds), (q.freshness_percent||0)>=90?"ok":"warn", reicon("refresh"))}
+        ${kpiCard("Cortes > "+Math.round((intel.gap_threshold_seconds||0)/60)+"m", intel.gap_count||0, intel.gap_count?"warn":"ok", reicon("alert-triangle2"))}
+        ${kpiCard("Conformidad", (delta>0?"+":"")+delta+" pp", delta>=0?"ok":"bad", reicon("shield-check"))}
+        ${kpiCard("Transiciones", intel.geofence_transitions||0, "acc", reicon("route"))}
+        ${kpiCard("Pico fuera", intel.outside_peak||0, intel.outside_peak?"warn":"ok", reicon("map-pin"))}
+      </div>
+      <div class="grid-main">
+        <div class="card"><div class="hd"><h3>Conformidad observada</h3><div class="grow"></div><span class="sub">Últimos ${Math.min(60,(analytics.compliance_series||[]).length)} ciclos</span></div><div class="bd"><canvas id="intelTrend" height="150" role="img" aria-label="Tendencia de conformidad observada en los ciclos recientes"></canvas></div></div>
+        <div class="card"><div class="hd"><h3>Calidad explicada</h3><div class="grow"></div><span class="mono">${score}/100</span></div><div class="bd">${componentHtml}<div class="sub" style="margin-top:8px">Fórmula: ${esc((intel.evidence||{}).quality_formula||"—")}</div></div></div>
+      </div>
+      <div class="grid-main" style="margin-top:14px">
+        <div class="card"><div class="hd"><h3>Hallazgos accionables</h3></div><div class="bd"><div class="alist">${recommendations||emptyState("Sin hallazgos", "La señal histórica es estable.")}</div></div></div>
+        <div class="card"><div class="hd"><h3>Movimiento de perímetro</h3></div><div class="bd"><div class="alist">
+          <div class="aitem"><div class="ic">${reicon("route")}</div><div class="grow"><div class="nm">Transiciones detectadas</div><div class="ds">Cambios reales entre inside/outside/unknown</div></div><span class="mono">${intel.geofence_transitions||0}</span></div>
+          <div class="aitem"><div class="ic">${reicon("devices")}</div><div class="grow"><div class="nm">Mayor actividad</div><div class="ds">Dispositivo con más cambios de estado</div></div><span class="mono">${top?esc(top.device_id)+" · "+top.transitions:"—"}</span></div>
+          <div class="aitem"><div class="ic">${reicon("clock")}</div><div class="grow"><div class="nm">Intervalo mediano</div><div class="ds">P95 ${fmtDur(intel.p95_interval_seconds)}</div></div><span class="mono">${fmtDur(intel.median_interval_seconds)}</span></div>
+        </div></div></div>
+      </div>`;
+    const series = analytics.compliance_series || [];
+    const cv = $("#intelTrend");
+    if(cv && series.length){
+      if(App.__intelChart) App.__intelChart.destroy();
+      App.__intelChart = new Chart(cv,{type:"line",data:{labels:series.map(x=>x.idx),datasets:[{label:"Conformidad",data:series.map(x=>x.compliance_percent),borderColor:"#5e6ad5",backgroundColor:"rgba(94,106,213,.12)",borderWidth:2,fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"var(--muted-2)",callback:v=>v+"%"}}}}});
+    }
+  }catch(error){
+    node.innerHTML = emptyState("No se pudo cargar la inteligencia", error.message||"Error de conexión");
   }
 }
 

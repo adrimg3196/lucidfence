@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from statistics import median
 from typing import Any
 
 
@@ -26,6 +27,15 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     fences = list(status.get("fences") or [])
     stats = dict(status.get("stats") or {})
     history = list(status.get("stats_history") or [])
+    raw_trails = status.get("trails") or []
+    trails: list[dict[str, Any]] = []
+    if isinstance(raw_trails, dict):
+        for device_id, rows in raw_trails.items():
+            for row in rows if isinstance(rows, list) else []:
+                if isinstance(row, dict):
+                    trails.append({**row, "device_id": str(row.get("device_id") or device_id)})
+    elif isinstance(raw_trails, list):
+        trails = [row for row in raw_trails if isinstance(row, dict)]
 
     if eng is not None and getattr(eng, "risk", None) is not None:
         risk = _risk_from_engine(eng, devices)
@@ -35,7 +45,7 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     if eng is not None and getattr(eng, "incidents", None) is not None:
         incidents = eng.incidents.merge(incidents)
     policies = derive_policies(fences, devices, status)
-    analytics = build_analytics(devices, events, actions, history)
+    analytics = build_analytics(devices, events, actions, history, trails=trails)
     insights = build_insights(devices, events, actions, incidents, risk, stats)
     report = build_report(status, devices, incidents, risk, insights, analytics)
 
@@ -346,6 +356,9 @@ def build_analytics(
     events: list[dict[str, Any]],
     actions: list[dict[str, Any]],
     history: list[dict[str, Any]],
+    *,
+    trails: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     platforms = Counter(str(d.get("platform") or "unknown") for d in devices)
     states = Counter(str(d.get("fence_state") or "unknown") for d in devices)
@@ -370,6 +383,146 @@ def build_analytics(
         "event_distribution": dict(kinds),
         "action_distribution": dict(action_names),
         "compliance_series": compliance_series,
+        "fleet_intelligence": _fleet_intelligence(history, trails or [], now=now),
+    }
+
+
+def _fleet_intelligence(
+    history: list[dict[str, Any]],
+    trails: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Derive explainable operational intelligence from observed local history.
+
+    This is deliberately descriptive, not predictive: every metric is backed by
+    timestamps, counters or GPS trail states already stored by LucidFence.
+    """
+    observed_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    timeline = sorted(
+        ((dt, row) for row in history if (dt := _parse_dt(row.get("ts"))) is not None),
+        key=lambda item: item[0],
+    )
+    if not timeline:
+        return {
+            "status": "insufficient_data",
+            "history_points": 0,
+            "history_span_hours": 0,
+            "median_interval_seconds": None,
+            "p95_interval_seconds": None,
+            "gap_count": 0,
+            "freshness_seconds": None,
+            "compliance_delta_points": None,
+            "outside_peak": 0,
+            "geofence_transitions": 0,
+            "top_transition_device": None,
+            "signal_quality_score": 0,
+            "quality_components": {
+                "freshness_percent": 0,
+                "continuity_percent": 0,
+                "gps_coverage_percent": 0,
+                "history_depth_percent": 0,
+            },
+            "recommendations": ["Acumula ciclos para habilitar tendencias con evidencia."],
+            "evidence": {"method": "observed-local-history", "prediction": False},
+        }
+
+    timestamps = [item[0] for item in timeline]
+    intervals = [
+        (current - previous).total_seconds()
+        for previous, current in zip(timestamps, timestamps[1:])
+        if current > previous
+    ]
+    median_interval = int(round(median(intervals))) if intervals else None
+    ordered_intervals = sorted(intervals)
+    p95_interval = (
+        int(round(ordered_intervals[max(0, int(len(ordered_intervals) * 0.95 + 0.999) - 1)]))
+        if ordered_intervals else None
+    )
+    gap_threshold = max(1800, (median_interval or 900) * 2)
+    gap_count = sum(1 for seconds in intervals if seconds > gap_threshold)
+    continuity = round((1 - gap_count / max(1, len(intervals))) * 100)
+    freshness_seconds = max(0, int(round((observed_now - timestamps[-1]).total_seconds())))
+    if freshness_seconds <= gap_threshold:
+        freshness = 100
+    else:
+        freshness = max(0, round(100 - ((freshness_seconds - gap_threshold) / gap_threshold) * 50))
+
+    def compliance(row: dict[str, Any]) -> int:
+        total = max(1, int(row.get("devices_total") or 0))
+        return round((total - int(row.get("non_compliant") or 0)) / total * 100)
+
+    trail_rows = sorted(
+        ((str(row.get("device_id") or "unknown"), dt, row) for row in trails
+         if (dt := _parse_dt(row.get("ts"))) is not None),
+        key=lambda item: (item[0], item[1]),
+    )
+    transitions: Counter[str] = Counter()
+    previous_state: dict[str, str] = {}
+    coordinates = 0
+    for device_id, _, row in trail_rows:
+        if row.get("lat") is not None and row.get("lng") is not None:
+            coordinates += 1
+        state = str(row.get("fence_state") or "unknown")
+        if device_id in previous_state and state != previous_state[device_id]:
+            transitions[device_id] += 1
+        previous_state[device_id] = state
+
+    gps_coverage = round(coordinates / max(1, len(trail_rows)) * 100) if trail_rows else 0
+    history_depth = min(100, round(len(timeline) / 24 * 100))
+    # Conservative floor: a component below 100 must never be rounded up to a
+    # misleading perfect score (for example, continuity=99 with one real gap).
+    signal_quality = int(
+        freshness * 0.4 + continuity * 0.3 + gps_coverage * 0.2 + history_depth * 0.1
+    )
+    compliance_delta = compliance(timeline[-1][1]) - compliance(timeline[0][1])
+    recommendations: list[str] = []
+    if freshness < 100:
+        recommendations.append("Revisa la ingesta: el último ciclo está retrasado.")
+    if gap_count:
+        gap_label = "interrupción" if gap_count == 1 else "interrupciones"
+        recommendations.append(
+            f"Investiga {gap_count} {gap_label} superiores a {gap_threshold // 60} minutos."
+        )
+    if compliance_delta < -2:
+        recommendations.append("La conformidad observada empeoró; revisa dispositivos non-compliant.")
+    if transitions:
+        recommendations.append("Revisa los dispositivos con más transiciones de geovalla.")
+    if not recommendations:
+        recommendations.append("La señal histórica es estable; continúa monitorizando.")
+
+    top_transition = transitions.most_common(1)
+    return {
+        "status": "ready",
+        "history_points": len(timeline),
+        "history_span_hours": round((timestamps[-1] - timestamps[0]).total_seconds() / 3600, 2),
+        "median_interval_seconds": median_interval,
+        "p95_interval_seconds": p95_interval,
+        "gap_threshold_seconds": gap_threshold,
+        "gap_count": gap_count,
+        "freshness_seconds": freshness_seconds,
+        "compliance_delta_points": compliance_delta,
+        "outside_peak": max(int(row.get("outside") or 0) for _, row in timeline),
+        "geofence_transitions": sum(transitions.values()),
+        "top_transition_device": (
+            {"device_id": top_transition[0][0], "transitions": top_transition[0][1]}
+            if top_transition else None
+        ),
+        "signal_quality_score": signal_quality,
+        "quality_components": {
+            "freshness_percent": freshness,
+            "continuity_percent": continuity,
+            "gps_coverage_percent": gps_coverage,
+            "history_depth_percent": history_depth,
+        },
+        "recommendations": recommendations,
+        "evidence": {
+            "method": "observed-local-history",
+            "prediction": False,
+            "window_start": timestamps[0].isoformat(),
+            "window_end": timestamps[-1].isoformat(),
+            "quality_formula": "40% recencia + 30% continuidad + 20% cobertura GPS + 10% profundidad histórica",
+        },
     }
 
 

@@ -81,6 +81,8 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Incidentes, lifecycle y auditoría.
 - Workflows y acciones UEM con cooldown para acciones destructivas.
 - CVE + EPSS y playbooks SOAR declarativos.
+- Fleet Intelligence descriptiva: recencia, continuidad, interrupciones, cobertura GPS,
+  tendencia de conformidad y transiciones de geovalla con fórmula explicable.
 - Alertas, export CSV/HTML y digest.
 - RBAC local y aislamiento por organización.
 - Dashboard local sin CDN, telemetría ni frontend cloud.
@@ -98,6 +100,7 @@ lucidfence/
 ├── mcp/lucidfence_mcp.py   # MCP local read-only
 ├── saas/                   # auth local, RBAC y aislamiento
 ├── static/                 # interfaz local, assets vendorizados
+├── analysis/               # notebooks reproducibles con outputs verificados
 ├── data/                   # seeds públicos read-only del paquete
 ├── macos/                   # app Swift/WebKit + builder PyInstaller/DMG
 ├── Formula/lucidfence.rb   # Homebrew
