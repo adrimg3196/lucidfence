@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-18T20:10:20Z",
+  "generated_at": "2026-07-18T21:03:06Z",
   "mode": "simulation",
   "totals": {
     "devices": 9,
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T20:10:20Z",
+      "generated_at": "2026-07-18T21:03:05Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 11,
+        "vulnerable_apps": 12,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -178,30 +178,30 @@
           {
             "app": "google chrome",
             "version": "120.0.0",
-            "cve": "CVE-2007-0045",
-            "source": "NVD",
-            "severity": "medium"
-          },
-          {
-            "app": "google chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2007-0048",
-            "source": "NVD",
-            "severity": "medium"
-          },
-          {
-            "app": "google chrome",
-            "version": "120.0.0",
-            "cve": "CVE-2008-4340",
-            "source": "NVD",
-            "severity": "medium"
-          },
-          {
-            "app": "google chrome",
-            "version": "120.0.0",
             "cve": "CVE-2024-0519",
             "source": "local",
             "severity": "high"
+          },
+          {
+            "app": "slack",
+            "version": "4.37.0",
+            "cve": "CVE-1999-1186",
+            "source": "NVD",
+            "severity": "medium"
+          },
+          {
+            "app": "slack",
+            "version": "4.37.0",
+            "cve": "CVE-1999-0298",
+            "source": "NVD",
+            "severity": "medium"
+          },
+          {
+            "app": "slack",
+            "version": "4.37.0",
+            "cve": "CVE-1999-1489",
+            "source": "NVD",
+            "severity": "medium"
           }
         ]
       },
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T20:10:20Z",
+      "generated_at": "2026-07-18T21:03:05Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T20:10:20Z",
+      "generated_at": "2026-07-18T21:03:06Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -609,7 +609,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 11,
+    "vulnerable_apps": 12,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
@@ -618,30 +618,30 @@
       {
         "app": "google chrome",
         "version": "120.0.0",
-        "cve": "CVE-2007-0045",
-        "source": "NVD",
-        "severity": "medium"
-      },
-      {
-        "app": "google chrome",
-        "version": "120.0.0",
-        "cve": "CVE-2007-0048",
-        "source": "NVD",
-        "severity": "medium"
-      },
-      {
-        "app": "google chrome",
-        "version": "120.0.0",
-        "cve": "CVE-2008-4340",
-        "source": "NVD",
-        "severity": "medium"
-      },
-      {
-        "app": "google chrome",
-        "version": "120.0.0",
         "cve": "CVE-2024-0519",
         "source": "local",
         "severity": "high"
+      },
+      {
+        "app": "slack",
+        "version": "4.37.0",
+        "cve": "CVE-1999-1186",
+        "source": "NVD",
+        "severity": "medium"
+      },
+      {
+        "app": "slack",
+        "version": "4.37.0",
+        "cve": "CVE-1999-0298",
+        "source": "NVD",
+        "severity": "medium"
+      },
+      {
+        "app": "slack",
+        "version": "4.37.0",
+        "cve": "CVE-1999-1489",
+        "source": "NVD",
+        "severity": "medium"
       }
     ]
   },
