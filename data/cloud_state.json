@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-07-18T23:06:19Z",
+  "generated_at": "2026-07-19T00:05:57Z",
   "mode": "simulation",
   "totals": {
     "devices": 9,
@@ -23,7 +23,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T23:06:19Z",
+      "generated_at": "2026-07-19T00:05:56Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -169,7 +169,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 12,
+        "vulnerable_apps": 11,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -232,7 +232,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T23:06:19Z",
+      "generated_at": "2026-07-19T00:05:56Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -344,7 +344,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-07-18T23:06:19Z",
+      "generated_at": "2026-07-19T00:05:57Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -609,7 +609,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 12,
+    "vulnerable_apps": 11,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
