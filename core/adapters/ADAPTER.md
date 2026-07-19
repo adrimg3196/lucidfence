@@ -65,3 +65,52 @@ entran al **Hall of Fame** del README y su autor se vuelve *Adapter Maintainer*
 (con co-maintainership y voz en el roadmap de la interfaz).
 
 ¿Tu MDM no está? Ábrelo. Es un PR de fin de semana.
+
+## Live IntuneAdapter (Microsoft Graph) — issue #1
+
+`IntuneAdapter` puede ahora operar en modo *live* contra Microsoft Graph
+(`/deviceManagement/managedDevices`), además del modo *mock* por defecto.
+
+### Cómo activarlo
+
+1. Registra una app en Azure AD (Microsoft Entra ID) con `Application` permissions
+   `DeviceManagementConfiguration.ReadWrite.All` (rol de aplicación, NO delegated).
+2. Crea un client secret. Configura:
+   ```
+   INTUNE_TENANT_ID=<tu-tenant-guid>
+   INTUNE_CLIENT_ID=<app-client-guid>
+   INTUNE_CLIENT_SECRET=<secret-valor>
+   ```
+   (o pasa `tenant_id` / `client_id` / `client_secret` al constructor).
+3. Construye el adapter en modo live:
+   ```python
+   from core.adapters.intune import IntuneAdapter
+   adapter = IntuneAdapter(live=True, org_id="contoso")  # creds desde env
+   r = adapter.execute({"device_id": "abc-123"}, "lock", {})
+   # r["mode"] == "live", r["graph_status"] == 204 si OK
+   ```
+4. El endpoint por defecto es `https://graph.microsoft.com/v1.0`. Si tu tenant
+   tiene un endpoint regional (ej. US Gov), sobrescribe `endpoint_template`.
+
+### Errores mapeados (no rompen el dashboard)
+
+| `error_type`         | Cuándo                                              |
+|----------------------|-----------------------------------------------------|
+| `auth_error`         | 401/403 de Graph; o falta tenant_id/client_*.        |
+| `transport_error`    | 5xx de Graph; timeout; respuesta no JSON.          |
+| `missing_device_id`  | `device` no trae `device_id` / `id`.                |
+| `unsupported_action` | Acción no está en GRAPH_ACTION (lock/wipe/...).     |
+| `graph_rejected`     | 4xx distinto (rate-limit, validation).              |
+| `device_not_found`   | 404 sobre managed device.                           |
+
+El contrato del dashboard (`MDMAdapter.execute`) garantiza que **nunca se
+lanza excepción** — siempre devuelve `{"ok": False, "error": ..., "error_type": ...}`.
+
+### Pruebas
+
+* Mock path: igual que el adapter pre-live (`test_adapters_contrib.py` sigue verde).
+* Live path: `tests/test_adapters_intune_live.py` cubre URL shape, error mapping,
+  falta de credenciales y dry_run — sin tocar la red real.
+
+`build_intune_adapter_from_config(cfg)` está disponible para wiring desde
+`config.json` (ver `mdm.intune.tenant_id` / `client_id` / `client_secret`).

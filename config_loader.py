@@ -47,4 +47,18 @@ def load(config_path: Path) -> dict:
     org_env = env.get("APPLIVERY_ORG_ID")
     if org_env:
         cfg.setdefault("applivery", {})["org_id"] = org_env
+
+    # Intune (Microsoft Graph) live mode — only constructed on demand by
+    # build_intune_adapter_from_config(). Mirrors the intune env-var contract
+    # so a minimal config.json + .env enables live mode without code changes.
+    intune_cfg = cfg.setdefault("mdm", {}).setdefault("intune", {})
+    intune_cfg.setdefault("live", bool(env.get("INTUNE_TENANT_ID")))
+    intune_cfg.setdefault("tenant_id", env.get("INTUNE_TENANT_ID", ""))
+    intune_cfg.setdefault("client_id", env.get("INTUNE_CLIENT_ID", ""))
+    intune_cfg.setdefault("client_secret", env.get("INTUNE_CLIENT_SECRET", ""))
+    intune_cfg.setdefault(
+        "endpoint_template",
+        env.get("INTUNE_ENDPOINT", "https://graph.microsoft.com/v1.0"),
+    )
+
     return cfg
