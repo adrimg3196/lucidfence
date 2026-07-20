@@ -15,6 +15,10 @@ from core.adapters.applivery import AppliveryAdapter
 from core.adapters.intune import IntuneAdapter
 from core.adapters.jamf import JamfAdapter
 from core.adapters.ios_geofence import is_ios_device, ios_geofence_compliance
+from core.adapters.windows_conformidad import (
+    WindowsConformidadAdapter,
+    build_windows_conformidad_adapter_from_config,
+)
 
 # Acciones UEM válidas (compartidas por todos los adapters).
 VALID_ACTIONS = {
@@ -35,6 +39,7 @@ ADAPTER_REGISTRY = {
     "applivery": AppliveryAdapter,
     "intune": IntuneAdapter,
     "jamf": JamfAdapter,
+    "windows_conformidad": WindowsConformidadAdapter,
 }
 
 
