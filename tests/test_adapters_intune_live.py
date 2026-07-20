@@ -85,11 +85,12 @@ def test_action_url_shape():
         return _Resp(204, body={})
 
     import requests as _rq
+    _orig_post = _rq.post
     _rq.post = fake_post  # type: ignore
-    # Use the live branch without monkey-patching requests module — use Action object
-    # that the adapter invokes via requests.post. We only verify URL composition.
-    # Avoid the actual call by going through the dry_run path.
-    out = a.execute({"device_id": "abc-123"}, "wipe", {}, dry_run=True)
+    try:
+        out = a.execute({"device_id": "abc-123"}, "wipe", {}, dry_run=True)
+    finally:
+        _rq.post = _orig_post  # restore real requests.post so other tests aren't polluted
     check("would_send" in out, f"expected would_send in dry_run: {out!r}")
     would = out["would_send"]
     check("/deviceManagement/managedDevices/abc-123/wipe" in would["url"],
