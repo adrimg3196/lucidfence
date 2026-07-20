@@ -171,11 +171,20 @@ class Engine:
                 tdir, username=username or None, api_key=api_key or None,
                 inbox_domain=inbox_domain,
             )
-            # If an incident email recipient is configured, wrap the mailbox in
-            # an AtomicMailNotifier and attach it alongside any webhook notifier.
-            if email_to and self.incidents.notifier is None:
-                from core.notifier import AtomicMailNotifier
-                self.incidents.notifier = AtomicMailNotifier(self.mailbox, to=email_to)
+            # If an incident email recipient is configured, attach Atomic Mail
+            # to the incident lifecycle. When a webhook is also configured,
+            # fan out to both channels so real-time geofence exits still reach
+            # email instead of being shadowed by the webhook notifier.
+            if email_to:
+                from core.notifier import AtomicMailNotifier, IncidentFanoutNotifier
+                email_notifier = AtomicMailNotifier(self.mailbox, to=email_to)
+                if self.incidents.notifier is None:
+                    self.incidents.notifier = email_notifier
+                else:
+                    self.incidents.notifier = IncidentFanoutNotifier([
+                        self.incidents.notifier,
+                        email_notifier,
+                    ])
             # Warm the session (register/recover) best-effort so the first
             # alert doesn't pay the PoW cost. Failures are tolerated.
             try:

@@ -12,12 +12,13 @@ end-to-end send is covered by test_atomicmail_live.py (skipped without network).
 import os
 import sys
 import json
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.alerts import AlertEngine  # noqa: E402
-from core.notifier import AtomicMailNotifier  # noqa: E402
+from core.notifier import AtomicMailNotifier, IncidentFanoutNotifier  # noqa: E402
 
 
 class FakeMailbox:
@@ -90,6 +91,94 @@ def test_notifier_disabled_without_recipient():
     n = AtomicMailNotifier(FakeMailbox(), to="")
     assert n.enabled() is False
     assert n.notify("open", {"id": "x"}) is False
+
+
+def test_incident_fanout_notifier_delivers_webhook_and_atomicmail():
+    webhook_payloads = []
+
+    def fake_post(url, payload):
+        webhook_payloads.append((url, payload))
+        return {"ok": True, "status": 200}
+
+    from core.notifier import IncidentNotifier
+
+    mb = FakeMailbox()
+    fanout = IncidentFanoutNotifier([
+        IncidentNotifier("https://hooks.example.com/lucidfence", http_post=fake_post),
+        AtomicMailNotifier(mb, to="soc@acme.com"),
+    ])
+
+    ok = fanout.notify("open", {
+        "id": "inc-outside-d1",
+        "type": "geofence_exit",
+        "title": "Tablet A1 está fuera de geovalla",
+        "severity": "high",
+        "device_name": "Tablet A1",
+    })
+
+    assert ok is True
+    assert len(webhook_payloads) == 1
+    assert len(mb.sent) == 1
+    assert mb.sent[0]["to"] == "soc@acme.com"
+    assert "fuera de geovalla" in mb.sent[0]["subject"]
+
+
+def test_engine_geofence_exit_emails_in_realtime_even_with_webhook_configured():
+    """Regression: webhook config must not shadow Atomic Mail incident email."""
+    from core.engine import Engine
+    from core.location_source import LocationReport
+    import core.atomicmail_client as atomicmail_client
+
+    old_builder = atomicmail_client.build_tenant_mailbox
+    mailbox = FakeMailbox()
+    webhook_payloads = []
+
+    def fake_builder(*args, **kwargs):
+        return mailbox
+
+    def fake_post(url, payload):
+        webhook_payloads.append((url, payload))
+        return {"ok": True, "status": 200}
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "fences.json").write_text(json.dumps({"fences": []}), encoding="utf-8")
+        (root / "routes.json").write_text("[]", encoding="utf-8")
+        (root / "policies.json").write_text("[]", encoding="utf-8")
+        try:
+            atomicmail_client.build_tenant_mailbox = fake_builder
+            eng = Engine({
+                "mode": "simulation",
+                "autostart": False,
+                "data_dir": str(root),
+                "fences_path": str(root / "fences.json"),
+                "routes_path": str(root / "routes.json"),
+                "policies_path": str(root / "policies.json"),
+                "incident_webhook_url": "https://hooks.example.com/lucidfence",
+                "atomicmail": {
+                    "username": "lfacme",
+                    "incident_email_to": "soc@acme.com",
+                },
+            })
+            # Patch the webhook child inside the fanout so the test stays offline.
+            for notifier in getattr(eng.incidents.notifier, "notifiers", []):
+                if hasattr(notifier, "_post"):
+                    notifier._post = fake_post
+            eng.routes = []
+            eng.source = type("S", (), {"fetch": lambda self: [
+                LocationReport(device_id="d1", name="Tablet A1", platform="android",
+                               status="active", compliant=True, lat=40.0, lng=-3.0)
+            ]})()  # type: ignore[assignment]
+            eng.run_once()
+        finally:
+            atomicmail_client.build_tenant_mailbox = old_builder
+
+    assert len(webhook_payloads) == 1
+    assert len(mailbox.sent) == 1
+    msg = mailbox.sent[0]
+    assert msg["to"] == "soc@acme.com"
+    assert "Tablet A1 está fuera de geovalla" in msg["subject"]
+    assert "Estado: open" in msg["text"]
 
 
 def test_engine_send_digest_builds_and_sends():

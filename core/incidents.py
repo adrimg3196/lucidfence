@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 VALID_STATUSES = {"open", "acknowledged", "resolved"}
 
@@ -22,7 +22,7 @@ class IncidentStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self._items: dict[str, dict] = {}
-        self.notifier = None  # Optional[IncidentNotifier]; wired by the Engine
+        self.notifier: Optional[Any] = None  # IncidentNotifier-like; wired by the Engine
         self._load()
 
     def _load(self) -> None:

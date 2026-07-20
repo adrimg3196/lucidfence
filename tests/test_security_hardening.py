@@ -125,3 +125,47 @@ def test_webhook_non_2xx_is_not_treated_as_delegated():
     assert res["delegated"] is False, res
     assert res.get("attempted") is True, res
 
+
+def test_saas_rate_limit_keys_by_ip_then_session_and_exempts_health():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "saas_server", Path(__file__).resolve().parent.parent / "saas_server.py")
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class _Headers(dict):
+        def get_all(self, name):
+            value = self.get(name)
+            return [] if value is None else [value]
+
+    class _Handler:
+        def __init__(self, path="/api/status", ip="203.0.113.10", cookie=""):
+            self.path = path
+            self.client_address = (ip, 12345)
+            self.headers = _Headers()
+            if cookie:
+                self.headers["Cookie"] = cookie
+
+    setattr(mod, "RATE_LIMIT_REQUESTS", 2)
+    setattr(mod, "RATE_LIMIT_WINDOW_S", 10)
+    getattr(mod, "_rate_limit_buckets").clear()
+
+    ip_only = _Handler()
+    assert mod._rate_limit_check(ip_only, now=1000)[0]
+    assert mod._rate_limit_check(ip_only, now=1001)[0]
+    ok, retry_after, key = mod._rate_limit_check(ip_only, now=1002)
+    assert ok is False and retry_after >= 8 and key.startswith("ip:203.0.113.10")
+
+    # An authenticated browser session gets its own bucket, so one noisy IP does
+    # not block every active session behind the same NAT/proxy.
+    session_a = _Handler(cookie="gf_session=session-a")
+    session_b = _Handler(cookie="gf_session=session-b")
+    assert mod._rate_limit_key(session_a) != mod._rate_limit_key(session_b)
+    assert mod._rate_limit_check(session_a, now=1002)[0]
+    assert mod._rate_limit_check(session_b, now=1002)[0]
+
+    # Keep external health probes safe for always-on deploys.
+    assert mod._rate_limit_check(_Handler(path="/api/health"), now=1002) == (True, 0, "")
+

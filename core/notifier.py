@@ -110,6 +110,56 @@ class IncidentNotifier:
         }
 
 
+class IncidentFanoutNotifier:
+    """Fan out one incident transition to multiple notification channels.
+
+    Used when a tenant configures both an incoming webhook and Atomic Mail.
+    Delivery is best-effort per channel: one failing channel must not prevent the
+    other from receiving a real-time geofence/incident alert.
+    """
+
+    def __init__(self, notifiers: list[Any]):
+        self.notifiers = [n for n in notifiers if n is not None]
+        self.last_result: Optional[dict] = None
+        self.deliveries: list[dict] = []
+
+    def enabled(self) -> bool:
+        for notifier in self.notifiers:
+            try:
+                enabled = getattr(notifier, "enabled", None)
+                if enabled is None or enabled():
+                    return True
+            except Exception:  # noqa: BLE001 - ignore broken channel probes
+                continue
+        return False
+
+    def notify(self, transition: str, incident: dict) -> bool:
+        results = []
+        delivered = False
+        for notifier in self.notifiers:
+            try:
+                ok = bool(notifier.notify(transition, incident))
+                results.append({
+                    "channel": type(notifier).__name__,
+                    "ok": ok,
+                    "last_result": getattr(notifier, "last_result", None),
+                })
+                delivered = delivered or ok
+            except Exception as exc:  # noqa: BLE001 - never propagate
+                results.append({
+                    "channel": type(notifier).__name__,
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+        self.last_result = {"ok": delivered, "results": results}
+        self.deliveries.append({
+            "transition": transition,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "result": self.last_result,
+        })
+        return delivered
+
+
 class AtomicMailNotifier:
     """Incident lifecycle notifier that emails via Atomic Mail Agentic.
 

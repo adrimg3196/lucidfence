@@ -82,6 +82,10 @@ CONFIG_FILE = ROOT / os.environ.get("LUCIDFENCE_CONFIG_FILE", "config.json")
 DATA_ROOT = ensure_data_dir()
 COOKIE_SESSION = "gf_session"
 COOKIE_ORG = "gf_org"
+RATE_LIMIT_REQUESTS = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_REQUESTS", "120") or "120")
+RATE_LIMIT_WINDOW_S = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_WINDOW_S", "60") or "60")
+_rate_limit_buckets: dict[str, list[float]] = {}
+_rate_limit_lock = threading.Lock()
 
 # Global stores for the local app. Runtime data never lives in Homebrew's
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
@@ -477,6 +481,83 @@ def _gateway_tenant(handler):
     return None
 
 
+def _client_ip(handler) -> str:
+    """Best-effort client IP for rate-limiting.
+
+    Direct always-on deployments use the socket peer. Reverse-proxy deployments
+    may opt into forwarded headers with LUCIDFENCE_TRUST_PROXY=1.
+    """
+    if os.environ.get("LUCIDFENCE_TRUST_PROXY") == "1":
+        xff = (handler.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        if xff:
+            return xff
+        xri = (handler.headers.get("X-Real-IP") or "").strip()
+        if xri:
+            return xri
+    try:
+        return str(handler.client_address[0])
+    except Exception:
+        return "unknown"
+
+
+def _rate_limit_key(handler) -> str:
+    """Prefer session identity; fall back to source IP before authentication."""
+    token = _cookie(handler, COOKIE_SESSION) or ""
+    if token:
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+        return f"sess:{digest}"
+    return f"ip:{_client_ip(handler)}"
+
+
+def _rate_limit_required(handler) -> bool:
+    try:
+        route = urlparse(handler.path).path
+    except Exception:
+        return True
+    if route == "/api/health":
+        return False
+    return route.startswith("/api/") or route.startswith("/v1/")
+
+
+def _rate_limit_check(handler, now: float | None = None) -> tuple[bool, int, str]:
+    limit = RATE_LIMIT_REQUESTS
+    window = RATE_LIMIT_WINDOW_S
+    if limit <= 0 or window <= 0 or not _rate_limit_required(handler):
+        return True, 0, ""
+    now = time.time() if now is None else now
+    cutoff = now - window
+    key = _rate_limit_key(handler)
+    with _rate_limit_lock:
+        bucket = [ts for ts in _rate_limit_buckets.get(key, []) if ts > cutoff]
+        if len(bucket) >= limit:
+            retry_after = max(1, int(bucket[0] + window - now) + 1)
+            _rate_limit_buckets[key] = bucket
+            return False, retry_after, key
+        bucket.append(now)
+        _rate_limit_buckets[key] = bucket
+        # Opportunistic cleanup keeps the in-memory limiter bounded for
+        # always-on usage without a background thread.
+        if len(_rate_limit_buckets) > 4096:
+            stale = [k for k, vals in _rate_limit_buckets.items()
+                     if not vals or vals[-1] <= cutoff]
+            for k in stale[:1024]:
+                _rate_limit_buckets.pop(k, None)
+        return True, 0, key
+
+
+def _send_rate_limited(handler, retry_after: int):
+    body = json.dumps({"error": "rate_limit", "retry_after": retry_after},
+                      ensure_ascii=False, indent=2).encode("utf-8")
+    handler.send_response(429)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Retry-After", str(retry_after))
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7):
     # Accumulate; emitted inside _send_json AFTER send_response (Python 3.9
     # flush-order quirk: send_header before send_response leaks the header first)
@@ -730,6 +811,9 @@ class Handler(BaseHTTPRequestHandler):
         if not _host_allowed(self):
             self.send_error(400, "bad host")
             return
+        ok, retry_after, _ = _rate_limit_check(self)
+        if not ok:
+            return _send_rate_limited(self, retry_after)
         try:
             self._route()
         except Exception as e:
@@ -744,6 +828,9 @@ class Handler(BaseHTTPRequestHandler):
         if not _host_allowed(self):
             self.send_error(400, "bad host")
             return
+        ok, retry_after, _ = _rate_limit_check(self)
+        if not ok:
+            return _send_rate_limited(self, retry_after)
         try:
             # Pre-read the full body so the socket is left clean under HTTP/1.0
             # (otherwise the connection closes with unread bytes and the client
@@ -763,6 +850,12 @@ class Handler(BaseHTTPRequestHandler):
                 pass
 
     def do_DELETE(self):
+        if not _host_allowed(self):
+            self.send_error(400, "bad host")
+            return
+        ok, retry_after, _ = _rate_limit_check(self)
+        if not ok:
+            return _send_rate_limited(self, retry_after)
         try:
             self._route()
         except Exception as e:
