@@ -61,4 +61,13 @@ def load(config_path: Path) -> dict:
         env.get("INTUNE_ENDPOINT", "https://graph.microsoft.com/v1.0"),
     )
 
+    # Jamf Pro (Jamf Pro API) live mode — only constructed on demand by
+    # build_jamf_adapter_from_config(). Mirrors the intune env-var contract
+    # so a minimal config.json + .env enables live mode without code changes.
+    jamf_cfg = cfg.setdefault("mdm", {}).setdefault("jamf", {})
+    jamf_cfg.setdefault("live", bool(env.get("JAMF_BASE_URL")))
+    jamf_cfg.setdefault("base_url", env.get("JAMF_BASE_URL", ""))
+    jamf_cfg.setdefault("client_id", env.get("JAMF_CLIENT_ID", ""))
+    jamf_cfg.setdefault("client_secret", env.get("JAMF_CLIENT_SECRET", ""))
+
     return cfg

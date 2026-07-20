@@ -114,3 +114,55 @@ lanza excepción** — siempre devuelve `{"ok": False, "error": ..., "error_type
 
 `build_intune_adapter_from_config(cfg)` está disponible para wiring desde
 `config.json` (ver `mdm.intune.tenant_id` / `client_id` / `client_secret`).
+
+## Live JamfAdapter (Jamf Pro API) — issue #2
+
+`JamfAdapter` puede ahora operar en modo *live* contra la Jamf Pro API
+(`/api/v1/mobile-devices`), además del modo *mock* por defecto. Sigue el
+mismo patrón que Intune: `live=True` activa llamadas reales; sin credenciales
+opera en mock.
+
+### Cómo activarlo
+
+1. Crea un *API Role* en Jamf Pro con permisos de `Send Mobile Device Remote
+   Commands` (lock/wipe/restart/clear-passcode/locate/message).
+2. Genera un *API Client* (client_id + client_secret, Basic auth).
+3. Configura:
+   ```
+   JAMF_BASE_URL=https://<tu-tenant>.jamfcloud.com
+   JAMF_CLIENT_ID=<api-client-id>
+   JAMF_CLIENT_SECRET=<api-client-secret>
+   ```
+   (o pasa `base_url` / `client_id` / `client_secret` al constructor).
+4. Construye el adapter en modo live:
+   ```python
+   from core.adapters.jamf import JamfAdapter
+   adapter = JamfAdapter(live=True)  # creds desde env
+   r = adapter.execute({"device_id": "abc-123"}, "lock", {})
+   # r["mode"] == "live", r["jamf_status"] == 204 si OK
+   ```
+
+### Errores mapeados (no rompen el dashboard)
+
+| `error_type`         | Cuándo                                              |
+|----------------------|-----------------------------------------------------|
+| `auth_error`         | 401/403 de Jamf; o falta base_url/client_*.         |
+| `transport_error`    | 5xx de Jamf; timeout; respuesta no JSON.            |
+| `missing_device_id`  | `device` no trae `device_id` / `id`.                |
+| `unsupported_action` | Acción no está en JAMF_VERB (lock/wipe/...).        |
+| `jamf_rejected`      | 4xx distinto (rate-limit, validation).              |
+| `device_not_found`   | 404 sobre mobile device.                            |
+
+El token de sesión se obtiene vía `POST /api/v1/auth/token` (Basic auth) y se
+cachea hasta ~50 min. El contrato `MDMAdapter.execute` garantiza que **nunca se
+lanza excepción** — siempre devuelve `{"ok": False, "error": ..., "error_type": ...}`.
+
+### Pruebas
+
+* Mock path: igual que el adapter pre-live (`test_adapters_contrib.py` sigue verde).
+* Live path: `tests/test_adapters_jamf_live.py` cubre URL shape, error mapping,
+  falta de credenciales y dry_run — sin tocar la red real.
+
+`build_jamf_adapter_from_config(cfg)` está disponible para wiring desde
+`config.json` (ver `mdm.jamf.base_url` / `client_id` / `client_secret`).
+

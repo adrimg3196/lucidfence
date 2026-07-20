@@ -23,6 +23,10 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
       CoC to be added separately by maintainer without payment data.
 - [x] Applied reviewer fixes from the Fleet Intelligence audit (cadence-based gap
       detection, minimum-evidence, future-timestamp rejection, bounds, a11y/responsive).
+- [x] Re-implemented Jamf live adapter (Bounty #2) following the verified #13
+      pattern — `live` flag, token cache, AuthError/TransportError mapping,
+      device-list normalization, dry_run, `build_jamf_adapter_from_config`;
+      issue #2 closed; suite 171 green.
 
 ## Open / next
 

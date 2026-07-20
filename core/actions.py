@@ -26,6 +26,11 @@ from core.adapters import (  # noqa: F401
     build_adapter,
 )
 
+# Live config builders (community adapters). Re-exported so callers can
+# construct a live adapter directly from a config dict.
+from core.adapters.intune import build_intune_adapter_from_config  # noqa: F401
+from core.adapters.jamf import build_jamf_adapter_from_config  # noqa: F401
+
 # Alias para no romper referencias históricas (LiveAdapter === AppliveryAdapter).
 LiveAdapter = AppliveryAdapter
 
@@ -39,4 +44,6 @@ __all__ = [
     "VALID_ACTIONS",
     "ADAPTER_REGISTRY",
     "build_adapter",
+    "build_intune_adapter_from_config",
+    "build_jamf_adapter_from_config",
 ]
