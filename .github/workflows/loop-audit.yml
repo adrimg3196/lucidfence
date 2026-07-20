@@ -1,0 +1,23 @@
+name: loop-audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Loop readiness audit
+        run: npx -y @cobusgreyling/loop-audit . --md
+        continue-on-error: true
