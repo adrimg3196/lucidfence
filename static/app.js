@@ -236,13 +236,15 @@ function renderNav(){
   const n = $("#nav"); n.innerHTML="";
   NAV.forEach(item=>{
     const a = el("a", App.view===item.id?"active":"");
+    a.href = "#"+item.id;
+    a.setAttribute("aria-current", App.view===item.id ? "page" : "false");
     let badge="";
     if(item.id==="incidents" && App._openIncidents){
       badge = ` <span class="nav-badge">${App._openIncidents}</span>`;
     }
     const ic = reicon(item.icon, {size:18, className:"nav-ic"});
     a.innerHTML = `${ic}<span>${item.label}</span>${badge}`;
-    a.onclick = ()=>goView(item.id);
+    a.onclick = event=>{ event.preventDefault(); goView(item.id); };
     n.appendChild(a);
   });
 }
@@ -1462,64 +1464,81 @@ function renderGoals(){
 /* ============================================================
    VISTA: INTELIGENCIA DE FLOTA — evidencia local, no predicción
    ============================================================ */
+function finiteMetric(value, min=0, max=100){
+  if(value===null || value===undefined || value==="") return null;
+  const number = Number(value);
+  if(!Number.isFinite(number)) return null;
+  return Math.max(min, Math.min(max, number));
+}
+function metricText(value, suffix=""){ return value===null ? "—" : `${value}${suffix}`; }
+function safeDuration(value){ const number=finiteMetric(value,0,31536000); return number===null?"—":fmtDur(number); }
+
 async function renderIntelligence(){
   const node = $("#view-intelligence"); if(!node) return;
-  node.innerHTML = `<div class="card"><div class="bd"><div class="sub">Calculando inteligencia local…</div></div></div>`;
+  node.innerHTML = `<div class="card" aria-live="polite"><div class="bd"><div class="sub">Calculando inteligencia local…</div></div></div>`;
   try{
     const payload = await api("/api/analytics");
     const analytics = payload.analytics || {};
     const intel = analytics.fleet_intelligence || {};
     if(intel.status !== "ready"){
-      node.innerHTML = `<div class="toolbar"><div><div style="font-size:13px;font-weight:600">Inteligencia de flota</div><div class="sub">Métricas descriptivas basadas en histórico local</div></div></div>${emptyState("Aún no hay histórico suficiente", (intel.recommendations||[])[0]||"Acumula ciclos para activar esta vista.")}`;
+      node.innerHTML = `<div class="toolbar"><div><h1 class="view-title">Inteligencia de flota</h1><div class="sub">Métricas descriptivas basadas en histórico local</div></div></div><div aria-live="polite">${emptyState("Aún no hay histórico suficiente", (intel.recommendations||[])[0]||"Acumula ciclos para activar esta vista.")}</div>`;
       return;
     }
     const q = intel.quality_components || {};
-    const delta = Number(intel.compliance_delta_points||0);
-    const score = Number(intel.signal_quality_score||0);
-    const scoreTone = score>=90?"ok":score>=70?"warn":"bad";
+    const delta = finiteMetric(intel.compliance_delta_points,-100,100);
+    const score = finiteMetric(intel.signal_quality_score,0,100);
+    const freshnessSeconds = finiteMetric(intel.freshness_seconds,0,31536000);
+    const gaps = finiteMetric(intel.gap_count,0,1000000);
+    const transitions = finiteMetric(intel.geofence_transitions,0,1000000);
+    const outsidePeak = finiteMetric(intel.outside_peak,0,1000000);
+    const gapThreshold = finiteMetric(intel.gap_threshold_seconds,1,31536000);
+    const scoreTone = score===null?"warn":score>=90?"ok":score>=70?"warn":"bad";
     const components = [
-      ["Recencia", q.freshness_percent||0, "Tiempo desde el último ciclo"],
-      ["Continuidad", q.continuity_percent||0, "Intervalos sin interrupciones prolongadas"],
-      ["Cobertura GPS", q.gps_coverage_percent||0, "Puntos con latitud y longitud"],
-      ["Profundidad", q.history_depth_percent||0, "Volumen histórico disponible"],
+      ["Recencia", finiteMetric(q.freshness_percent), "Tiempo desde el último ciclo"],
+      ["Continuidad", finiteMetric(q.continuity_percent), "Intervalos sin interrupciones prolongadas"],
+      ["Cobertura GPS", finiteMetric(q.gps_coverage_percent), "Puntos con coordenadas válidas"],
+      ["Profundidad", finiteMetric(q.history_depth_percent), "Tiempo histórico disponible"],
     ];
-    const componentHtml = components.map(([label,value,help])=>`<div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>${esc(label)} <span class="sub">· ${esc(help)}</span></span><b>${value}%</b></div>
-      <div style="height:7px;background:var(--panel-3);border-radius:8px;overflow:hidden"><div style="height:100%;width:${Math.max(0,Math.min(100,value))}%;background:${value>=90?'var(--green)':value>=70?'var(--amber)':'var(--red)'};border-radius:8px"></div></div>
-    </div>`).join("");
-    const recommendations = (intel.recommendations||[]).map(text=>`<div class="aitem"><div class="ic">${reicon("search",{size:16})}</div><div class="grow"><div class="nm">${esc(text)}</div></div></div>`).join("");
-    const top = intel.top_transition_device;
+    const componentHtml = components.map(([label,value,help])=>{
+      const width=value===null?0:value;
+      return `<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span>${esc(label)} <span class="sub">· ${esc(help)}</span></span><b>${metricText(value,"%")}</b></div><div style="height:7px;background:var(--panel-3);border-radius:8px;overflow:hidden"><div style="height:100%;width:${width}%;background:${value===null?'var(--muted)':value>=90?'var(--green)':value>=70?'var(--amber)':'var(--red)'};border-radius:8px"></div></div></div>`;
+    }).join("");
+    const recommendations = (Array.isArray(intel.recommendations)?intel.recommendations:[]).map(text=>`<div class="aitem"><div class="ic">${reicon("search",{size:16})}</div><div class="grow"><div class="nm">${esc(text)}</div></div></div>`).join("");
+    const top = intel.top_transition_device && typeof intel.top_transition_device==="object" ? intel.top_transition_device : null;
+    const series = (Array.isArray(analytics.compliance_series)?analytics.compliance_series:[]).map((row,index)=>({idx:index+1,value:finiteMetric(row&&row.compliance_percent)})).filter(row=>row.value!==null).slice(-60);
+    const tableRows = series.slice(-10).map(row=>`<tr><td>${row.idx}</td><td>${row.value}%</td></tr>`).join("");
+    const chartContent = series.length ? `<canvas id="intelTrend" height="150" role="img" aria-label="Tendencia de conformidad observada en los ciclos recientes"></canvas><table class="sr-only intel-data-table"><caption>Últimos valores de conformidad observada</caption><thead><tr><th>Ciclo</th><th>Conformidad</th></tr></thead><tbody>${tableRows}</tbody></table>` : emptyState("Sin tendencia disponible","Se necesitan ciclos válidos para dibujar la serie.");
+    const historyPoints = finiteMetric(intel.history_points,0,1000000);
+    const spanSeconds = finiteMetric(Number(intel.history_span_hours)*3600,0,315360000);
     node.innerHTML = `
-      <div class="toolbar"><div><div style="font-size:13px;font-weight:600">Inteligencia de flota</div><div class="sub">${intel.history_points} ciclos · ${intel.history_span_hours} h observadas · sin predicción</div></div><div class="grow"></div>
-        <span class="tag in"><span class="d"></span>Evidencia local</span></div>
+      <div class="toolbar"><div><h1 class="view-title">Inteligencia de flota</h1><div class="sub">${metricText(historyPoints)} ciclos · ${spanSeconds===null?'periodo no disponible':fmtDur(spanSeconds)} observados · sin predicción</div></div><div class="grow"></div><span class="tag in"><span class="d"></span>Evidencia local</span></div>
       <div class="kpis">
-        ${kpiCard("Calidad de datos", score+"/100", scoreTone, reicon("chart-line"))}
-        ${kpiCard("Recencia", fmtDur(intel.freshness_seconds), (q.freshness_percent||0)>=90?"ok":"warn", reicon("refresh"))}
-        ${kpiCard("Cortes > "+Math.round((intel.gap_threshold_seconds||0)/60)+"m", intel.gap_count||0, intel.gap_count?"warn":"ok", reicon("alert-triangle2"))}
-        ${kpiCard("Conformidad", (delta>0?"+":"")+delta+" pp", delta>=0?"ok":"bad", reicon("shield-check"))}
-        ${kpiCard("Transiciones", intel.geofence_transitions||0, "acc", reicon("route"))}
-        ${kpiCard("Pico fuera", intel.outside_peak||0, intel.outside_peak?"warn":"ok", reicon("map-pin"))}
+        ${kpiCard("Calidad de datos", metricText(score,"/100"), scoreTone, reicon("chart-line"))}
+        ${kpiCard("Recencia", freshnessSeconds===null?"—":fmtDur(freshnessSeconds), freshnessSeconds===null?"warn":(finiteMetric(q.freshness_percent)||0)>=90?"ok":"warn", reicon("refresh"))}
+        ${kpiCard("Cortes"+(gapThreshold===null?"":" > "+Math.round(gapThreshold/60)+"m"), metricText(gaps), gaps===null?"warn":gaps?"warn":"ok", reicon("alert-triangle2"))}
+        ${kpiCard("Conformidad vs. inicio", delta===null?"—":`${delta>0?"+":""}${delta} pp`, delta===null?"warn":delta>=0?"ok":"bad", reicon("shield-check"))}
+        ${kpiCard("Transiciones", metricText(transitions), transitions===null?"warn":"acc", reicon("route"))}
+        ${kpiCard("Pico fuera", metricText(outsidePeak), outsidePeak===null?"warn":outsidePeak?"warn":"ok", reicon("map-pin"))}
       </div>
       <div class="grid-main">
-        <div class="card"><div class="hd"><h3>Conformidad observada</h3><div class="grow"></div><span class="sub">Últimos ${Math.min(60,(analytics.compliance_series||[]).length)} ciclos</span></div><div class="bd"><canvas id="intelTrend" height="150" role="img" aria-label="Tendencia de conformidad observada en los ciclos recientes"></canvas></div></div>
-        <div class="card"><div class="hd"><h3>Calidad explicada</h3><div class="grow"></div><span class="mono">${score}/100</span></div><div class="bd">${componentHtml}<div class="sub" style="margin-top:8px">Fórmula: ${esc((intel.evidence||{}).quality_formula||"—")}</div></div></div>
+        <div class="card"><div class="hd"><h3>Conformidad observada</h3><div class="grow"></div><span class="sub">${series.length?`Últimos ${series.length} ciclos`:"Sin datos"}</span></div><div class="bd">${chartContent}</div></div>
+        <div class="card"><div class="hd"><h3>Calidad explicada</h3><div class="grow"></div><span class="mono">${metricText(score,"/100")}</span></div><div class="bd">${componentHtml}<div class="sub" style="margin-top:8px">Fórmula: ${esc((intel.evidence||{}).quality_formula||"—")}</div></div></div>
       </div>
       <div class="grid-main" style="margin-top:14px">
         <div class="card"><div class="hd"><h3>Hallazgos accionables</h3></div><div class="bd"><div class="alist">${recommendations||emptyState("Sin hallazgos", "La señal histórica es estable.")}</div></div></div>
         <div class="card"><div class="hd"><h3>Movimiento de perímetro</h3></div><div class="bd"><div class="alist">
-          <div class="aitem"><div class="ic">${reicon("route")}</div><div class="grow"><div class="nm">Transiciones detectadas</div><div class="ds">Cambios reales entre inside/outside/unknown</div></div><span class="mono">${intel.geofence_transitions||0}</span></div>
-          <div class="aitem"><div class="ic">${reicon("devices")}</div><div class="grow"><div class="nm">Mayor actividad</div><div class="ds">Dispositivo con más cambios de estado</div></div><span class="mono">${top?esc(top.device_id)+" · "+top.transitions:"—"}</span></div>
-          <div class="aitem"><div class="ic">${reicon("clock")}</div><div class="grow"><div class="nm">Intervalo mediano</div><div class="ds">P95 ${fmtDur(intel.p95_interval_seconds)}</div></div><span class="mono">${fmtDur(intel.median_interval_seconds)}</span></div>
+          <div class="aitem"><div class="ic">${reicon("route")}</div><div class="grow"><div class="nm">Transiciones detectadas</div><div class="ds">Cambios observados entre dentro, fuera y desconocido</div></div><span class="mono">${metricText(transitions)}</span></div>
+          <div class="aitem"><div class="ic">${reicon("devices")}</div><div class="grow"><div class="nm">Mayor actividad</div><div class="ds">Dispositivo con más cambios de estado</div></div><span class="mono">${top?esc(top.device_id)+" · "+metricText(finiteMetric(top.transitions,0,1000000)):"—"}</span></div>
+          <div class="aitem"><div class="ic">${reicon("clock")}</div><div class="grow"><div class="nm">Intervalo mediano</div><div class="ds">P95 ${safeDuration(intel.p95_interval_seconds)}</div></div><span class="mono">${safeDuration(intel.median_interval_seconds)}</span></div>
         </div></div></div>
       </div>`;
-    const series = analytics.compliance_series || [];
     const cv = $("#intelTrend");
     if(cv && series.length){
       if(App.__intelChart) App.__intelChart.destroy();
-      App.__intelChart = new Chart(cv,{type:"line",data:{labels:series.map(x=>x.idx),datasets:[{label:"Conformidad",data:series.map(x=>x.compliance_percent),borderColor:"#5e6ad5",backgroundColor:"rgba(94,106,213,.12)",borderWidth:2,fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"var(--muted-2)",callback:v=>v+"%"}}}}});
+      App.__intelChart = new Chart(cv,{type:"line",data:{labels:series.map(x=>x.idx),datasets:[{label:"Conformidad",data:series.map(x=>x.value),borderColor:"#5e6ad5",backgroundColor:"rgba(94,106,213,.12)",borderWidth:2,fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"#8b949e",callback:v=>v+"%"}}}}});
     }
   }catch(error){
-    node.innerHTML = emptyState("No se pudo cargar la inteligencia", error.message||"Error de conexión");
+    node.innerHTML = `<div aria-live="assertive">${emptyState("No se pudo cargar la inteligencia", error.message||"Error de conexión")}</div>`;
   }
 }
 

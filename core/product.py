@@ -7,10 +7,39 @@ never performs network calls, and never exposes secrets.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
+import math
 from statistics import median
 from typing import Any
+
+
+MAX_HISTORY_POINTS = 4096
+MAX_TRAIL_POINTS = 20000
+ALLOWED_CLOCK_SKEW_SECONDS = 300
+
+
+def _safe_nonnegative_int(value: Any) -> tuple[int, bool]:
+    """Return a non-negative integer and whether sanitization was required."""
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        parsed = int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0, True
+    if parsed < 0:
+        return 0, True
+    return parsed, False
+
+
+def _valid_coordinate(lat_value: Any, lng_value: Any) -> bool:
+    try:
+        if isinstance(lat_value, bool) or isinstance(lng_value, bool):
+            return False
+        lat, lng = float(lat_value), float(lng_value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(lat) and math.isfinite(lng) and -90 <= lat <= 90 and -180 <= lng <= 180
 
 
 def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
@@ -26,16 +55,18 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     actions = enrich_actions(status.get("recent_actions") or [])
     fences = list(status.get("fences") or [])
     stats = dict(status.get("stats") or {})
-    history = list(status.get("stats_history") or [])
+    raw_history = status.get("stats_history") or []
+    history = raw_history if isinstance(raw_history, list) else []
     raw_trails = status.get("trails") or []
-    trails: list[dict[str, Any]] = []
+    bounded_trails: deque[dict[str, Any]] = deque(maxlen=MAX_TRAIL_POINTS)
     if isinstance(raw_trails, dict):
         for device_id, rows in raw_trails.items():
             for row in rows if isinstance(rows, list) else []:
                 if isinstance(row, dict):
-                    trails.append({**row, "device_id": str(row.get("device_id") or device_id)})
+                    bounded_trails.append({**row, "device_id": str(row.get("device_id") or device_id)})
     elif isinstance(raw_trails, list):
-        trails = [row for row in raw_trails if isinstance(row, dict)]
+        bounded_trails.extend(row for row in raw_trails if isinstance(row, dict))
+    trails = list(bounded_trails)
 
     if eng is not None and getattr(eng, "risk", None) is not None:
         risk = _risk_from_engine(eng, devices)
@@ -45,7 +76,10 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     if eng is not None and getattr(eng, "incidents", None) is not None:
         incidents = eng.incidents.merge(incidents)
     policies = derive_policies(fences, devices, status)
-    analytics = build_analytics(devices, events, actions, history, trails=trails)
+    analytics = build_analytics(
+        devices, events, actions, history, trails=trails,
+        expected_interval_seconds=status.get("interval_seconds") or 900,
+    )
     insights = build_insights(devices, events, actions, incidents, risk, stats)
     report = build_report(status, devices, incidents, risk, insights, analytics)
 
@@ -359,22 +393,27 @@ def build_analytics(
     *,
     trails: list[dict[str, Any]] | None = None,
     now: datetime | None = None,
+    expected_interval_seconds: Any = 900,
 ) -> dict[str, Any]:
     platforms = Counter(str(d.get("platform") or "unknown") for d in devices)
     states = Counter(str(d.get("fence_state") or "unknown") for d in devices)
     kinds = Counter(str(e.get("kind") or "other") for e in events)
     action_names = Counter(str(a.get("action") or "unknown") for a in actions)
     compliance_series = []
-    for i, h in enumerate(history[-60:]):
-        total = max(1, int(h.get("devices_total") or 0))
-        non = int(h.get("non_compliant") or 0)
+    for i, h in enumerate(row for row in history[-60:] if isinstance(row, dict)):
+        total, _ = _safe_nonnegative_int(h.get("devices_total"))
+        non, _ = _safe_nonnegative_int(h.get("non_compliant"))
+        non = min(total, non)
+        inside, _ = _safe_nonnegative_int(h.get("inside"))
+        outside, _ = _safe_nonnegative_int(h.get("outside"))
+        unknown, _ = _safe_nonnegative_int(h.get("unknown"))
         compliance_series.append({
             "idx": i + 1,
             "ts": h.get("ts"),
-            "compliance_percent": round(((total - non) / total) * 100),
-            "inside": int(h.get("inside") or 0),
-            "outside": int(h.get("outside") or 0),
-            "unknown": int(h.get("unknown") or 0),
+            "compliance_percent": 100 if total == 0 else round(((total - non) / total) * 100),
+            "inside": inside,
+            "outside": outside,
+            "unknown": unknown,
             "non_compliant": non,
         })
     return {
@@ -383,146 +422,146 @@ def build_analytics(
         "event_distribution": dict(kinds),
         "action_distribution": dict(action_names),
         "compliance_series": compliance_series,
-        "fleet_intelligence": _fleet_intelligence(history, trails or [], now=now),
+        "fleet_intelligence": _fleet_intelligence(
+            history, trails or [], now=now,
+            expected_interval_seconds=expected_interval_seconds,
+        ),
     }
 
 
-def _fleet_intelligence(
-    history: list[dict[str, Any]],
-    trails: list[dict[str, Any]],
-    *,
-    now: datetime | None = None,
-) -> dict[str, Any]:
-    """Derive explainable operational intelligence from observed local history.
-
-    This is deliberately descriptive, not predictive: every metric is backed by
-    timestamps, counters or GPS trail states already stored by LucidFence.
-    """
-    observed_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    timeline = sorted(
-        ((dt, row) for row in history if (dt := _parse_dt(row.get("ts"))) is not None),
-        key=lambda item: item[0],
-    )
-    if not timeline:
-        return {
-            "status": "insufficient_data",
-            "history_points": 0,
-            "history_span_hours": 0,
-            "median_interval_seconds": None,
-            "p95_interval_seconds": None,
-            "gap_count": 0,
-            "freshness_seconds": None,
-            "compliance_delta_points": None,
-            "outside_peak": 0,
-            "geofence_transitions": 0,
-            "top_transition_device": None,
-            "signal_quality_score": 0,
-            "quality_components": {
-                "freshness_percent": 0,
-                "continuity_percent": 0,
-                "gps_coverage_percent": 0,
-                "history_depth_percent": 0,
-            },
-            "recommendations": ["Acumula ciclos para habilitar tendencias con evidencia."],
-            "evidence": {"method": "observed-local-history", "prediction": False},
-        }
-
-    timestamps = [item[0] for item in timeline]
-    intervals = [
-        (current - previous).total_seconds()
-        for previous, current in zip(timestamps, timestamps[1:])
-        if current > previous
-    ]
-    median_interval = int(round(median(intervals))) if intervals else None
-    ordered_intervals = sorted(intervals)
-    p95_interval = (
-        int(round(ordered_intervals[max(0, int(len(ordered_intervals) * 0.95 + 0.999) - 1)]))
-        if ordered_intervals else None
-    )
-    gap_threshold = max(1800, (median_interval or 900) * 2)
-    gap_count = sum(1 for seconds in intervals if seconds > gap_threshold)
-    continuity = round((1 - gap_count / max(1, len(intervals))) * 100)
-    freshness_seconds = max(0, int(round((observed_now - timestamps[-1]).total_seconds())))
-    if freshness_seconds <= gap_threshold:
-        freshness = 100
-    else:
-        freshness = max(0, round(100 - ((freshness_seconds - gap_threshold) / gap_threshold) * 50))
-
-    def compliance(row: dict[str, Any]) -> int:
-        total = max(1, int(row.get("devices_total") or 0))
-        return round((total - int(row.get("non_compliant") or 0)) / total * 100)
-
-    trail_rows = sorted(
-        ((str(row.get("device_id") or "unknown"), dt, row) for row in trails
-         if (dt := _parse_dt(row.get("ts"))) is not None),
-        key=lambda item: (item[0], item[1]),
-    )
-    transitions: Counter[str] = Counter()
-    previous_state: dict[str, str] = {}
-    coordinates = 0
-    for device_id, _, row in trail_rows:
-        if row.get("lat") is not None and row.get("lng") is not None:
-            coordinates += 1
-        state = str(row.get("fence_state") or "unknown")
-        if device_id in previous_state and state != previous_state[device_id]:
-            transitions[device_id] += 1
-        previous_state[device_id] = state
-
-    gps_coverage = round(coordinates / max(1, len(trail_rows)) * 100) if trail_rows else 0
-    history_depth = min(100, round(len(timeline) / 24 * 100))
-    # Conservative floor: a component below 100 must never be rounded up to a
-    # misleading perfect score (for example, continuity=99 with one real gap).
-    signal_quality = int(
-        freshness * 0.4 + continuity * 0.3 + gps_coverage * 0.2 + history_depth * 0.1
-    )
-    compliance_delta = compliance(timeline[-1][1]) - compliance(timeline[0][1])
-    recommendations: list[str] = []
-    if freshness < 100:
-        recommendations.append("Revisa la ingesta: el último ciclo está retrasado.")
-    if gap_count:
-        gap_label = "interrupción" if gap_count == 1 else "interrupciones"
-        recommendations.append(
-            f"Investiga {gap_count} {gap_label} superiores a {gap_threshold // 60} minutos."
-        )
-    if compliance_delta < -2:
-        recommendations.append("La conformidad observada empeoró; revisa dispositivos non-compliant.")
-    if transitions:
-        recommendations.append("Revisa los dispositivos con más transiciones de geovalla.")
-    if not recommendations:
-        recommendations.append("La señal histórica es estable; continúa monitorizando.")
-
-    top_transition = transitions.most_common(1)
+def _empty_fleet_intelligence(*, history_points=0, invalid_timestamp_count=0,
+        duplicate_timestamp_count=0, clock_skew_detected=False,
+        expected_interval_seconds=900, history_points_discarded=0):
+    gap_threshold = max(1800, expected_interval_seconds * 2)
     return {
-        "status": "ready",
-        "history_points": len(timeline),
-        "history_span_hours": round((timestamps[-1] - timestamps[0]).total_seconds() / 3600, 2),
-        "median_interval_seconds": median_interval,
-        "p95_interval_seconds": p95_interval,
-        "gap_threshold_seconds": gap_threshold,
-        "gap_count": gap_count,
-        "freshness_seconds": freshness_seconds,
-        "compliance_delta_points": compliance_delta,
-        "outside_peak": max(int(row.get("outside") or 0) for _, row in timeline),
-        "geofence_transitions": sum(transitions.values()),
-        "top_transition_device": (
-            {"device_id": top_transition[0][0], "transitions": top_transition[0][1]}
-            if top_transition else None
-        ),
-        "signal_quality_score": signal_quality,
-        "quality_components": {
-            "freshness_percent": freshness,
-            "continuity_percent": continuity,
-            "gps_coverage_percent": gps_coverage,
-            "history_depth_percent": history_depth,
-        },
-        "recommendations": recommendations,
-        "evidence": {
-            "method": "observed-local-history",
-            "prediction": False,
-            "window_start": timestamps[0].isoformat(),
-            "window_end": timestamps[-1].isoformat(),
-            "quality_formula": "40% recencia + 30% continuidad + 20% cobertura GPS + 10% profundidad histórica",
-        },
+        "status": "insufficient_data", "history_points": history_points,
+        "history_span_hours": 0, "median_interval_seconds": None,
+        "p95_interval_seconds": None, "gap_threshold_seconds": gap_threshold,
+        "gap_count": 0, "freshness_seconds": None, "compliance_delta_points": None,
+        "outside_peak": 0, "geofence_transitions": 0, "top_transition_device": None,
+        "signal_quality_score": 0, "invalid_timestamp_count": invalid_timestamp_count,
+        "duplicate_timestamp_count": duplicate_timestamp_count,
+        "clock_skew_detected": clock_skew_detected, "invalid_counter_count": 0,
+        "quality_components": {"freshness_percent": 0, "continuity_percent": 0,
+            "gps_coverage_percent": 0, "history_depth_percent": 0},
+        "recommendations": ["Acumula al menos dos ciclos distintos para habilitar tendencias con evidencia."],
+        "evidence": {"method": "observed-local-history", "prediction": False,
+            "window_start": None, "window_end": None, "trail_window_start": None,
+            "trail_window_end": None, "expected_interval_seconds": expected_interval_seconds,
+            "history_points_discarded": history_points_discarded,
+            "trail_points_analyzed": 0, "trail_points_discarded": 0,
+            "quality_formula": "40% recencia + 30% continuidad + 20% cobertura GPS + 10% profundidad histórica"},
+    }
+
+
+def _fleet_intelligence(history, trails, *, now=None, expected_interval_seconds=900):
+    """Derive bounded, explainable intelligence from observed local history."""
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None:
+        observed_now = observed_now.replace(tzinfo=timezone.utc)
+    observed_now = observed_now.astimezone(timezone.utc)
+    expected, expected_invalid = _safe_nonnegative_int(expected_interval_seconds)
+    expected = min(86400, max(1, expected or 900))
+    gap_threshold = max(1800, expected * 2)
+
+    source = history[-MAX_HISTORY_POINTS:]
+    history_discarded = max(0, len(history) - len(source))
+    invalid_timestamps, clock_skew, parsed = 0, False, []
+    for row in source:
+        dt = _parse_dt(row.get("ts")) if isinstance(row, dict) else None
+        if dt is None:
+            invalid_timestamps += 1; continue
+        if (dt - observed_now).total_seconds() > ALLOWED_CLOCK_SKEW_SECONDS:
+            invalid_timestamps += 1; clock_skew = True; continue
+        parsed.append((dt, row))
+    parsed.sort(key=lambda item: item[0])
+    unique = {dt: row for dt, row in parsed}
+    duplicates = len(parsed) - len(unique)
+    timeline = sorted(unique.items())
+    if len(timeline) < 2:
+        result = _empty_fleet_intelligence(history_points=len(timeline),
+            invalid_timestamp_count=invalid_timestamps, duplicate_timestamp_count=duplicates,
+            clock_skew_detected=clock_skew, expected_interval_seconds=expected,
+            history_points_discarded=history_discarded)
+        if clock_skew:
+            result["recommendations"].append("Revisa el reloj de origen: hay timestamps futuros descartados.")
+        return result
+
+    timestamps = [dt for dt, _ in timeline]
+    intervals = [(b-a).total_seconds() for a,b in zip(timestamps,timestamps[1:])]
+    ordered = sorted(intervals)
+    median_interval = int(round(median(intervals)))
+    p95_interval = int(round(ordered[max(0, math.ceil(len(ordered)*.95)-1)]))
+    gap_count = sum(seconds > gap_threshold for seconds in intervals)
+    continuity = round((1-gap_count/len(intervals))*100)
+    freshness_seconds = max(0, round((observed_now-timestamps[-1]).total_seconds()))
+    freshness = 100 if freshness_seconds <= gap_threshold else max(0,
+        round(100-((freshness_seconds-gap_threshold)/gap_threshold)*50))
+
+    invalid_counters = int(expected_invalid)
+    def counter(row, key):
+        nonlocal invalid_counters
+        value, invalid = _safe_nonnegative_int(row.get(key)); invalid_counters += int(invalid)
+        return value
+    def compliance(row):
+        nonlocal invalid_counters
+        total, non = counter(row,"devices_total"), counter(row,"non_compliant")
+        if non > total: non, invalid_counters = total, invalid_counters+1
+        return 100 if total == 0 else round((total-non)/total*100)
+
+    trail_source = trails[-MAX_TRAIL_POINTS:]
+    trail_discarded = max(0, len(trails)-len(trail_source))
+    trail_end = min(timestamps[-1], observed_now)
+    trail_rows = []
+    for row in trail_source:
+        dt = _parse_dt(row.get("ts")) if isinstance(row,dict) else None
+        if dt is None or dt < timestamps[0] or dt > trail_end:
+            trail_discarded += 1; continue
+        trail_rows.append((str(row.get("device_id") or ""),dt,row))
+    trail_rows.sort(key=lambda item:(item[0],item[1]))
+    transitions, previous, coordinates = Counter(), {}, 0
+    for device_id, _, row in trail_rows:
+        coordinates += int(_valid_coordinate(row.get("lat"),row.get("lng")))
+        if not device_id: continue
+        state = str(row.get("fence_state") or "unknown")
+        if device_id in previous and state != previous[device_id]: transitions[device_id] += 1
+        previous[device_id] = state
+
+    gps = round(coordinates/len(trail_rows)*100) if trail_rows else 0
+    span = max(0,(timestamps[-1]-timestamps[0]).total_seconds())
+    depth = min(100,round(span/86400*100))
+    quality = int(freshness*.4+continuity*.3+gps*.2+depth*.1)
+    delta = max(-100,min(100,compliance(timeline[-1][1])-compliance(timeline[0][1])))
+    outside_peak = max(counter(row,"outside") for _,row in timeline)
+    recommendations=[]
+    if clock_skew: recommendations.append("Revisa el reloj de origen: hay timestamps futuros descartados.")
+    if freshness < 100: recommendations.append("Revisa la ingesta: el último ciclo está retrasado.")
+    if gap_count:
+        label="interrupción" if gap_count==1 else "interrupciones"
+        recommendations.append(f"Investiga {gap_count} {label} superiores a {gap_threshold//60} minutos.")
+    if delta < -2: recommendations.append("La conformidad observada empeoró; revisa dispositivos non-compliant.")
+    if transitions: recommendations.append("Revisa los dispositivos con más transiciones de geovalla.")
+    if not recommendations: recommendations.append("La señal histórica es estable; continúa monitorizando.")
+    top=transitions.most_common(1)
+    return {
+        "status":"ready","history_points":len(timeline),"history_span_hours":round(span/3600,2),
+        "median_interval_seconds":median_interval,"p95_interval_seconds":p95_interval,
+        "gap_threshold_seconds":gap_threshold,"gap_count":gap_count,"freshness_seconds":freshness_seconds,
+        "compliance_delta_points":delta,"outside_peak":outside_peak,
+        "geofence_transitions":sum(transitions.values()),
+        "top_transition_device":({"device_id":top[0][0],"transitions":top[0][1]} if top else None),
+        "signal_quality_score":quality,"invalid_timestamp_count":invalid_timestamps,
+        "duplicate_timestamp_count":duplicates,"clock_skew_detected":clock_skew,
+        "invalid_counter_count":invalid_counters,
+        "quality_components":{"freshness_percent":freshness,"continuity_percent":continuity,
+            "gps_coverage_percent":gps,"history_depth_percent":depth},
+        "recommendations":recommendations,
+        "evidence":{"method":"observed-local-history","prediction":False,
+            "window_start":timestamps[0].isoformat(),"window_end":timestamps[-1].isoformat(),
+            "trail_window_start":timestamps[0].isoformat(),"trail_window_end":trail_end.isoformat(),
+            "expected_interval_seconds":expected,"history_points_discarded":history_discarded,
+            "trail_points_analyzed":len(trail_rows),"trail_points_discarded":trail_discarded,
+            "quality_formula":"40% recencia + 30% continuidad + 20% cobertura GPS + 10% profundidad histórica"},
     }
 
 
