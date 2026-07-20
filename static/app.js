@@ -230,6 +230,7 @@ const NAV = [
   {id:"goals",      label:"Objetivos",   icon:"target"},
   {id:"intelligence",label:"Inteligencia",icon:"chart-line"},
   {id:"settings",   label:"Ajustes",     icon:"settings"},
+  {id:"roadmap",    label:"Roadmap",     icon:"git-branch"},
 ];
 
 function renderNav(){
@@ -272,6 +273,7 @@ function goView(id){
   if(id==="goals") renderGoals();
   if(id==="intelligence") renderIntelligence();
   if(id==="settings") renderSettings();
+  if(id==="roadmap") renderRoadmap();
 }
 
 /* ---------- boot ---------- */
@@ -315,7 +317,59 @@ async function refresh(initial){
     else if(App.view==="goals") renderGoals();
     else if(App.view==="intelligence") renderIntelligence();
     else if(App.view==="ai") loadAiProviders();
+    else if(App.view==="roadmap") renderRoadmap();
   }catch(e){ /* deja lo anterior */ }
+}
+
+/* ============================================================
+   VISTA: ROADMAP (mejora tooling) — fuente de verdad roadmap.json
+   ============================================================ */
+async function renderRoadmap(){
+  const node = $("#view-roadmap"); if(!node) return;
+  try{
+    const d = await api("/api/roadmap");
+    const prog = d.progress || {};
+    const pct = prog.pct||0;
+    const barFull = Math.max(0, Math.min(10, Math.round(pct/10)));
+    const bar = "█".repeat(barFull)+"░".repeat(10-barFull);
+    const stCls = pct>=50 ? "in" : "unk";
+    let html = `
+      <div class="view-head">
+        <div><h2>Roadmap de mejora tooling</h2>
+          <div class="sub">${esc(d.meta?.title||"")} · ${esc(d.meta?.horizon||"")}</div></div>
+        <div class="acts"><span class="tag ${stCls}"><span class="d"></span>${pct}% (${prog.done||0}/${prog.total||0})</span></div>
+      </div>
+      <div class="card"><div class="bd">
+        <div class="donut-wrap" style="padding:8px 4px">
+          <div class="donut"><div class="center"><div class="big">${pct}%</div><div class="lab">progreso</div></div></div>
+          <div class="legend-col">
+            <div class="row"><span class="sw" style="background:var(--green)"></span><b>${prog.done||0}</b> features terminadas</div>
+            <div class="row"><span class="sw" style="background:var(--muted-2)"></span><b>${(prog.total||0)-(prog.done||0)}</b> pendientes</div>
+            <div class="row" style="font-family:var(--mono);color:var(--muted)">[${bar}]</div>
+          </div>
+        </div>
+      </div></div>`;
+    (d.plan?.phases||[]).forEach(ph=>{
+      const phSt = ph.status==="on_track"?"in":ph.status==="complete"?"in":ph.status==="at_risk"?"nocomp":"unk";
+      html += `<div class="card" style="margin-top:14px"><div class="hd"><h3>◉ ${esc(ph.id)} (${esc(ph.timeframe||"")})</h3><div class="grow"></div><span class="tag ${phSt}"><span class="d"></span>${esc(ph.status)}</span></div><div class="bd"><div class="alist" id="rm-${esc(ph.id)}"></div></div></div>`;
+    });
+    node.innerHTML = html;
+    (d.plan?.phases||[]).forEach(ph=>{
+      const list = $("#rm-"+ph.id); if(!list) return;
+      (ph.features||[]).forEach(f=>{
+        const icon = {done:"✓",deployed:"🚀",in_progress:"▶",blocked:"✗",planned:"○",proposed:"?"}[f.status]||"?";
+        const stCls = f.status==="done"||f.status==="deployed"?"in":f.status==="in_progress"?"in":f.status==="blocked"?"nocomp":"unk";
+        const item = el("div","aitem");
+        item.innerHTML = `<div class="ic">${icon}</div>
+          <div class="grow"><div class="nm">${esc(f.id)} · ${esc(f.title)}</div>
+            <div class="ds">${esc(f.impact||"")}/${esc(f.effort||"")} · ${esc(f.capability||"")}</div></div>
+          <span class="tag ${stCls}"><span class="d"></span>${esc(f.status)}</span>`;
+        list.appendChild(item);
+      });
+    });
+  }catch(e){
+    node.innerHTML = `<div class="empty"><div class="t">No se pudo cargar el roadmap</div><div class="s">${esc(e.message)}</div></div>`;
+  }
 }
 function updateSync(st, before){
   const syncing = !before || (st && st.last_cycle_at && (!before.last_cycle_at || st.last_cycle_at>before.last_cycle_at));

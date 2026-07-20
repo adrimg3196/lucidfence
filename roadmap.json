@@ -1,0 +1,654 @@
+{
+  "meta": {
+    "version": "1.0",
+    "status": "active",
+    "title": "LucidFence — Roadmap anual de mejora (tooling)",
+    "tool": "geofencing",
+    "created": "2026-07-20",
+    "updated": "2026-07-20",
+    "horizon": "12 meses · Q3-2026 → Q2-2027",
+    "principles": [
+      "Local-first & soberano: los datos del tenant nunca salen de su maquina.",
+      "$0 por defecto: solo free tiers; cualquier dependencia de pago se pregunta antes.",
+      "Verificar en runtime: no basta con 'compila'; se valida producto vivo (:8765) y QA PASS/FAIL.",
+      "Runner honesto: la suite de tests no oculta fallos; el numero verde es real.",
+      "Sin secretos: nada de tokens en el cliente Pages ni en el repo.",
+      "Mejora continua como ciudadano de primera clase: roadmap vivo + /loop MoA (proposers gratis + Opus 4.8)."
+    ]
+  },
+  "plan": {
+    "phases": [
+      {
+        "id": "Q3-2026",
+        "title": "Fundacion de mejora tooling + Loop",
+        "timeframe": "Jul-Sep 2026",
+        "status": "on_track",
+        "description": "Convertir la mejora continua en ciudadano de primera clase de la herramienta de geofencing. Roadmap vivo, /loop operativo, dashboard de mejora.",
+        "features": [
+          {
+            "id": "F1.1",
+            "title": "Roadmap Tooling (roadmap_tooling.py + roadmap.json + CLI)",
+            "capability": "cli",
+            "impact": "p0_must",
+            "effort": "small",
+            "status": "in_progress",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "python3 roadmap_tooling.py --validate sale 0 y 'valido'",
+              "GET /api/roadmap devuelve plan + progress computado",
+              "Pestana Roadmap en dashboard pinta fases y features con badges",
+              "tests/roadmap_tooling_test.py pasa"
+            ],
+            "subtasks": [
+              {
+                "id": "F1.1.1",
+                "title": "Crear roadmap_tooling.py (motor load/save/validate/format/update)",
+                "status": "done"
+              },
+              {
+                "id": "F1.1.2",
+                "title": "Crear roadmap.json (fuente de verdad, 4 fases, ~20 features)",
+                "status": "done"
+              },
+              {
+                "id": "F1.1.3",
+                "title": "Anadir pestana Roadmap a dashboard.html + app.js",
+                "status": "in_progress"
+              },
+              {
+                "id": "F1.1.4",
+                "title": "Endpoint GET /api/roadmap en saas_server.py",
+                "status": "in_progress"
+              },
+              {
+                "id": "F1.1.5",
+                "title": "Test en tests/roadmap_tooling_test.py",
+                "status": "in_progress"
+              }
+            ],
+            "progress": {
+              "pct": 60
+            },
+            "_phase_id": "Q3-2026"
+          },
+          {
+            "id": "F1.2",
+            "title": "/loop de mejora (MoA: proposers gratis + Opus 4.8)",
+            "capability": "loop",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "in_progress",
+            "dependencies": [
+              "F1.1"
+            ],
+            "acceptance_criteria": [
+              "python3 loop_improve.py --feature F1.1 corre 1 iteracion completa sin error",
+              "Usa proposers gratis (OpenRouter/Nous, Groq, NVIDIA, Together, Fireworks, DeepInfra, GitHub, OpenAI) cuando hay clave",
+              "Agrega con Opus 4.8 (claude CLI o MoA server :8085) cuando esta disponible",
+              "Degrada a analisis local deterministico si no hay claves (loop demostrable sin secretos)",
+              "Historial en data/loop_history.jsonl; max 3 iter, temp decay 0.1"
+            ],
+            "subtasks": [
+              {
+                "id": "F1.2.1",
+                "title": "Crear loop_improve.py (orquestador MoA sobre roadmap)",
+                "status": "in_progress"
+              },
+              {
+                "id": "F1.2.2",
+                "title": "Registrar historial en data/loop_history.jsonl",
+                "status": "pending"
+              },
+              {
+                "id": "F1.2.3",
+                "title": "Integrar verificacion con tests/run_tests.py",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 30
+            },
+            "_phase_id": "Q3-2026"
+          },
+          {
+            "id": "F1.3",
+            "title": "Dashboard de mejora (pestana Roadmap en dashboard local)",
+            "capability": "dashboard",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F1.1"
+            ],
+            "acceptance_criteria": [
+              "Pestana Roadmap muestra fases, features, iconos de estado",
+              "Barra de progreso global visible",
+              "GET /api/roadmap funciona desde el dashboard"
+            ],
+            "subtasks": [
+              {
+                "id": "F1.3.1",
+                "title": "Anadir pestana Roadmap a dashboard.html",
+                "status": "pending"
+              },
+              {
+                "id": "F1.3.2",
+                "title": "Anadir refreshRoadmap() a app.js",
+                "status": "pending"
+              },
+              {
+                "id": "F1.3.3",
+                "title": "Endpoint GET /api/roadmap en saas_server.py",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q3-2026"
+          },
+          {
+            "id": "F1.4",
+            "title": "QA extendido con tests de roadmap + loop + providers",
+            "capability": "devops",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F1.1",
+              "F1.2"
+            ],
+            "acceptance_criteria": [
+              "tests/roadmap_tooling_test.py valida schema + CLI + API",
+              "tests/loop_improve_test.py valida 1 iteracion completa (fallback local)",
+              "tests/providers_test.py verifica disponibilidad de free tiers sin exfiltrar claves",
+              "Correr tests no rompe funcionalidad existente (105/105 sigue verde)"
+            ],
+            "subtasks": [
+              {
+                "id": "F1.4.1",
+                "title": "Crear tests/roadmap_tooling_test.py",
+                "status": "in_progress"
+              },
+              {
+                "id": "F1.4.2",
+                "title": "Crear tests/loop_improve_test.py",
+                "status": "pending"
+              },
+              {
+                "id": "F1.4.3",
+                "title": "Anadir a tests/run_tests.py (auto-descubierto)",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q3-2026"
+          }
+        ]
+      },
+      {
+        "id": "Q4-2026",
+        "title": "Automatizacion y Resiliencia",
+        "timeframe": "Oct-Dic 2026",
+        "status": "pending",
+        "description": "Automatizar el ciclo de mejora, endurecer la capa de simulacion y analisis, y anadir alertas inteligentes.",
+        "features": [
+          {
+            "id": "F2.1",
+            "title": "Auto-priorizacion de features via /loop",
+            "capability": "loop",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F1.2",
+              "F1.4"
+            ],
+            "acceptance_criteria": [
+              "/loop lee roadmap.json y selecciona automaticamente la proxima feature pendiente",
+              "Propone estimacion de esfuerzo basada en features similares",
+              "Actualiza roadmap.json al empezar/terminar la iteracion"
+            ],
+            "subtasks": [
+              {
+                "id": "F2.1.1",
+                "title": "Loop lee roadmap.json y selecciona pending feature",
+                "status": "pending"
+              },
+              {
+                "id": "F2.1.2",
+                "title": "Loop persiste estado en roadmap.json",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q4-2026"
+          },
+          {
+            "id": "F2.2",
+            "title": "Alertas inteligentes (cruce de geocerca por LLM)",
+            "capability": "engine",
+            "impact": "p0_must",
+            "effort": "large",
+            "status": "planned",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "LLM analiza cruce de geocerca y genera alerta contextual",
+              "Soporta Twilio, Telegram y email como canales",
+              "Configuracion por tenant de sensibilidad y canales"
+            ],
+            "subtasks": [
+              {
+                "id": "F2.2.1",
+                "title": "Integrar LLM con engine de geocercas",
+                "status": "pending"
+              },
+              {
+                "id": "F2.2.2",
+                "title": "Anadir canales de alerta (Twilio, Telegram)",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q4-2026"
+          },
+          {
+            "id": "F2.3",
+            "title": "Analisis predictivo de movimiento",
+            "capability": "engine",
+            "impact": "p1_should",
+            "effort": "large",
+            "status": "planned",
+            "dependencies": [
+              "F2.2"
+            ],
+            "acceptance_criteria": [
+              "Modelo predictivo anticipa cruce de geocerca antes de que ocurra",
+              "Reporte semanal de patrones de movimiento",
+              "Deteccion de anomalias en rutas habituales"
+            ],
+            "subtasks": [
+              {
+                "id": "F2.3.1",
+                "title": "Implementar modelo predictivo basico",
+                "status": "pending"
+              },
+              {
+                "id": "F2.3.2",
+                "title": "Dashboard de patrones y anomalias",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q4-2026"
+          },
+          {
+            "id": "F2.4",
+            "title": "Observabilidad del /loop (metricas de calidad)",
+            "capability": "observability",
+            "impact": "p2_nice",
+            "effort": "small",
+            "status": "planned",
+            "dependencies": [
+              "F1.2"
+            ],
+            "acceptance_criteria": [
+              "Cada iteracion del loop registra: tiempo, temperatura, score, provider usado",
+              "Dashboard muestra metricas de rendimiento del loop",
+              "Alertas si calidad promedio baja del threshold"
+            ],
+            "subtasks": [
+              {
+                "id": "F2.4.1",
+                "title": "Registrar metricas por iteracion",
+                "status": "pending"
+              },
+              {
+                "id": "F2.4.2",
+                "title": "Dashboard de metricas del loop",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q4-2026"
+          }
+        ]
+      },
+      {
+        "id": "Q1-2027",
+        "title": "Ecosistema y DX",
+        "timeframe": "Ene-Mar 2027",
+        "status": "pending",
+        "description": "Extensibilidad, SDK, integraciones con UEMs reales (Intune, Workspace ONE), y mejora de la experiencia del desarrollador.",
+        "features": [
+          {
+            "id": "F3.1",
+            "title": "SDK Python (pip install lucidfence)",
+            "capability": "cli",
+            "impact": "p0_must",
+            "effort": "large",
+            "status": "planned",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "pip install lucidfence instala todo",
+              "from lucidfence import GeoFencer, Simulator, Reporter funciona",
+              "Documentacion en ReadTheDocs"
+            ],
+            "subtasks": [
+              {
+                "id": "F3.1.1",
+                "title": "Estructurar paquete Python",
+                "status": "pending"
+              },
+              {
+                "id": "F3.1.2",
+                "title": "Publicar en PyPI",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q1-2027"
+          },
+          {
+            "id": "F3.2",
+            "title": "Plugins de proveedores LLM (arquitectura extensible)",
+            "capability": "plugin",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F1.2"
+            ],
+            "acceptance_criteria": [
+              "Nuevo proveedor LLM se anade con 1 archivo Python",
+              "Auto-descubrimiento de modelos disponibles",
+              "Plugin marketplace documentado"
+            ],
+            "subtasks": [
+              {
+                "id": "F3.2.1",
+                "title": "Disenar interfaz de plugin",
+                "status": "pending"
+              },
+              {
+                "id": "F3.2.2",
+                "title": "Ejemplos de plugins (todos los free tiers)",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q1-2027"
+          },
+          {
+            "id": "F3.3",
+            "title": "Integracion con UEM (Intune + Workspace ONE)",
+            "capability": "engine",
+            "impact": "p0_must",
+            "effort": "large",
+            "status": "planned",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "Conector Intune que trae dispositivos y geocercas",
+              "Conector Workspace ONE equivalente",
+              "Sincronizacion bidireccional de geocercas",
+              "Autenticacion OAuth2 con ambos proveedores"
+            ],
+            "subtasks": [
+              {
+                "id": "F3.3.1",
+                "title": "Implementar conector Intune",
+                "status": "pending"
+              },
+              {
+                "id": "F3.3.2",
+                "title": "Implementar conector Workspace ONE",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q1-2027"
+          },
+          {
+            "id": "F3.4",
+            "title": "CLI interactiva / REPL (lf shell)",
+            "capability": "cli",
+            "impact": "p2_nice",
+            "effort": "small",
+            "status": "planned",
+            "dependencies": [
+              "F3.1"
+            ],
+            "acceptance_criteria": [
+              "lf shell arranca REPL con autocompletado",
+              "Comandos: simulate, analyze, loop, roadmap, export"
+            ],
+            "subtasks": [
+              {
+                "id": "F3.4.1",
+                "title": "Implementar REPL basico",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q1-2027"
+          },
+          {
+            "id": "F3.5",
+            "title": "Dashboard multi-tenant con autenticacion",
+            "capability": "dashboard",
+            "impact": "p1_should",
+            "effort": "large",
+            "status": "planned",
+            "dependencies": [
+              "F1.3"
+            ],
+            "acceptance_criteria": [
+              "Login por tenant con JWT",
+              "Cada tenant ve solo sus dispositivos y geocercas",
+              "Dashboard responsive (mobile-first)"
+            ],
+            "subtasks": [
+              {
+                "id": "F3.5.1",
+                "title": "Implementar autenticacion JWT",
+                "status": "pending"
+              },
+              {
+                "id": "F3.5.2",
+                "title": "Aislar datos por tenant",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q1-2027"
+          }
+        ]
+      },
+      {
+        "id": "Q2-2027",
+        "title": "Produccion y Gobernanza",
+        "timeframe": "Abr-Jun 2027",
+        "status": "pending",
+        "description": "Despliegue multi-usuario real, cumplimiento, CI/CD profesional y release comunitario.",
+        "features": [
+          {
+            "id": "F4.1",
+            "title": "Containerizacion (Docker multi-stage + compose)",
+            "capability": "devops",
+            "impact": "p0_must",
+            "effort": "small",
+            "status": "planned",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "Dockerfile multi-stage produce imagen < 200MB",
+              "docker-compose up levanta todo (dashboard + saas-api + loop)",
+              "Healthcheck en cada servicio"
+            ],
+            "subtasks": [
+              {
+                "id": "F4.1.1",
+                "title": "Optimizar Dockerfile existente",
+                "status": "pending"
+              },
+              {
+                "id": "F4.1.2",
+                "title": "Anadir healthchecks a docker-compose.yml",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q2-2027"
+          },
+          {
+            "id": "F4.2",
+            "title": "Observabilidad con Prometheus + logs estructurados",
+            "capability": "observability",
+            "impact": "p1_should",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F4.1"
+            ],
+            "acceptance_criteria": [
+              "Endpoint /metrics en formato Prometheus",
+              "Logs JSON estructurados con correlation-id",
+              "Grafana dashboard basico"
+            ],
+            "subtasks": [
+              {
+                "id": "F4.2.1",
+                "title": "Implementar endpoint /metrics",
+                "status": "pending"
+              },
+              {
+                "id": "F4.2.2",
+                "title": "Estructurar logs en JSON",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q2-2027"
+          },
+          {
+            "id": "F4.3",
+            "title": "Gobernanza / Compliance (audit trail + API keys)",
+            "capability": "security",
+            "impact": "p0_must",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F3.5"
+            ],
+            "acceptance_criteria": [
+              "Cada operacion de geocerca queda registrada con timestamp + usuario",
+              "API keys rotables por tenant",
+              "Exportable a SIEM en formato JSON/CEF"
+            ],
+            "subtasks": [
+              {
+                "id": "F4.3.1",
+                "title": "Implementar audit trail",
+                "status": "pending"
+              },
+              {
+                "id": "F4.3.2",
+                "title": "Sistema de API keys multi-tenant",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q2-2027"
+          },
+          {
+            "id": "F4.4",
+            "title": "Release comunitario (CI/CD + changelog + issues)",
+            "capability": "devops",
+            "impact": "p0_must",
+            "effort": "small",
+            "status": "planned",
+            "dependencies": [],
+            "acceptance_criteria": [
+              "GitHub Actions corre tests + lint + build en cada PR",
+              "CHANGELOG.md generado automaticamente",
+              "Template de issues (bug/feature/mejora) documentado"
+            ],
+            "subtasks": [
+              {
+                "id": "F4.4.1",
+                "title": "Configurar CI completo",
+                "status": "pending"
+              },
+              {
+                "id": "F4.4.2",
+                "title": "Automatizar changelog",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q2-2027"
+          },
+          {
+            "id": "F4.5",
+            "title": "Caso de exito publico + landing page",
+            "capability": "docs",
+            "impact": "p2_nice",
+            "effort": "medium",
+            "status": "planned",
+            "dependencies": [
+              "F4.4"
+            ],
+            "acceptance_criteria": [
+              "Landing page en adri.fail/lucidfence",
+              "Caso de uso real documentado (anonimizado)",
+              "Testimonial del cliente (Miguel Angel)"
+            ],
+            "subtasks": [
+              {
+                "id": "F4.5.1",
+                "title": "Disenar landing page",
+                "status": "pending"
+              },
+              {
+                "id": "F4.5.2",
+                "title": "Redactar caso de exito",
+                "status": "pending"
+              }
+            ],
+            "progress": {
+              "pct": 0
+            },
+            "_phase_id": "Q2-2027"
+          }
+        ]
+      }
+    ]
+  }
+}

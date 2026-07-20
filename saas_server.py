@@ -866,6 +866,12 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+    def do_PATCH(self):
+        # Reutiliza la misma logica que POST (el handler HTTP/1.0 no tiene
+        # do_PATCH por defecto). Las rutas que lo necesitan comprueban
+        # self.command == "PATCH" dentro de _route().
+        self.do_POST()
+
     def _route(self):
         parsed = urlparse(self.path)
         route = parsed.path
@@ -912,6 +918,29 @@ class Handler(BaseHTTPRequestHandler):
             return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "desktop_nonce": os.environ.get("LUCIDFENCE_DESKTOP_NONCE", ""),
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+        # ---- Roadmap de mejora tooling (sin auth, publico) ----
+        # Fuente de verdad: roadmap.json + motor roadmap_tooling.py.
+        if route == "/api/roadmap" and method == "GET":
+            try:
+                import roadmap_tooling as _rm
+                d = _rm.load_roadmap()
+                if not d:
+                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
+                return _send_json(self, _rm.get_api_response(d))
+            except Exception as e:
+                return _send_json(self, {"error": "roadmap no disponible", "detail": str(e)}, 404)
+        if route == "/api/roadmap" and method == "PATCH":
+            try:
+                import roadmap_tooling as _rm
+                d = _rm.load_roadmap()
+                if not d:
+                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
+                body = _read_body(self)
+                code, resp = _rm.patch_api(d, body)
+                return _send_json(self, resp, code)
+            except Exception as e:
+                return _send_json(self, {"error": str(e)}, 400)
 
         # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
         # External SOAR tools cannot hold a browser session cookie. This endpoint
