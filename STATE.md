@@ -6,9 +6,29 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 ## Loop status (updated 2026-07-20)
 
 - **Level:** L1 (report-only + human-gated merges)
-- **Last run:** 2026-07-20 (loop-audit readiness audit)
-- **Readiness score:** 33/100 → improving via this scaffolding commit
+- **Last run:** 2026-07-20 (stabilization QA pass)
+- **Readiness score:** 33/100 → improving; roadmap 2026-2027 targets 80 by Q2'27
 - **Kill switch:** `loop-pause` label on any PR, or `LOOP_PAUSE=1` env in CI
+
+## Stabilization QA (2026-07-20) — ALL PASS
+
+Evidence-based stabilization checkpoint (no claims without runtime proof):
+
+- **Suite honesta:** 174/174 passed, 0 failed — run 3x consecutivas, sin flaky
+  (la contaminación histórica de `cve._FEED` en `test_cloud_cve_feed` ya no reproduce).
+- **Runtime `:8765`:** server arranca limpio (mode=live dry_run=True), sin errores en log.
+  - `/` -> 200 (`LucidFence · Command Center`, 37.5 KB), `/api/health` -> 200 ok.
+  - Endpoints protegidos -> 401 correcto (`/api/state`, `/api/tenants`, `/healthz`).
+- **E2E auth:** signup crea user+org owner con token; demo-auth alimenta KPIs reales:
+  6 devices, risk{risk,summary}, cve{cve_summary,devices}, 5 incidents, fences/routes OK.
+- **Secretos:** `gitleaks` — 210 commits escaneados, **no leaks found**.
+- **Vitrina serverless:** `cloud_publisher.py` publica `data/cloud_state.json`
+  (9 dispositivos / 3 tenants / compliance 66.7%).
+- **Docker:** no disponible en el entorno de build (macOS sin Docker) → sintaxis se
+  valida en cliente/CI, según boundary de AGENTS.md.
+- **Entorno limpio:** server de QA detenido, sin procesos zombie en `:8765`.
+
+Estado: **producto estable y verificado en runtime**. Base v1.2.0. Próximo hito v1.3.0.
 
 ## What is DONE (this loop cycle)
 
