@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1280px; height:640px; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(120% 120% at 15% 10%, #1b2033 0%, #0c0e18 55%, #070810 100%);
+    color:#eef1fb; width:1280px; height:640px; position:relative; overflow:hidden;
+  }
+  /* subtle geofence rings */
+  .ring { position:absolute; border-radius:50%; border:2px solid rgba(94,106,213,.18); }
+  .r1 { width:900px; height:900px; right:-260px; top:-230px; }
+  .r2 { width:620px; height:620px; right:-120px; top:-90px; border-color:rgba(94,106,213,.28); }
+  .r3 { width:360px; height:360px; right:10px; top:40px; border-color:rgba(120,200,255,.35); }
+  .dot { position:absolute; right:178px; top:208px; width:26px; height:26px; border-radius:50%;
+         background:#5e6ad5; box-shadow:0 0 0 8px rgba(94,106,213,.25), 0 0 40px rgba(94,106,213,.8); }
+  .wrap { position:absolute; left:88px; top:84px; width:760px; }
+  .brand { display:flex; align-items:center; gap:16px; margin-bottom:30px; }
+  .mark { width:52px; height:52px; border-radius:14px;
+          background:linear-gradient(135deg,#5e6ad5,#8a7bff); display:flex; align-items:center; justify-content:center;
+          font-size:30px; font-weight:800; color:#fff; box-shadow:0 8px 30px rgba(94,106,213,.5); }
+  .brand h2 { font-size:30px; font-weight:700; letter-spacing:-.5px; }
+  h1 { font-size:58px; line-height:1.05; font-weight:800; letter-spacing:-1.5px; margin-bottom:24px; }
+  h1 .accent { color:#8fa0ff; }
+  p.sub { font-size:25px; line-height:1.4; color:#b9c0da; font-weight:400; max-width:670px; margin-bottom:34px; }
+  .tags { display:flex; gap:12px; flex-wrap:wrap; }
+  .tag { font-size:20px; padding:9px 18px; border-radius:999px;
+         background:rgba(94,106,213,.14); border:1px solid rgba(120,140,255,.3); color:#cdd4f0; font-weight:600; }
+  .foot { position:absolute; left:88px; bottom:52px; display:flex; align-items:center; gap:22px;
+          font-size:21px; color:#8b93b4; }
+  .foot b { color:#cfd6ef; font-weight:700; }
+  .pill { padding:7px 16px; border-radius:8px; background:rgba(60,200,140,.13);
+          border:1px solid rgba(60,200,140,.35); color:#7ee3ad; font-weight:700; font-size:19px; }
+</style>
+</head>
+<body>
+  <div class="ring r1"></div>
+  <div class="ring r2"></div>
+  <div class="ring r3"></div>
+  <div class="dot"></div>
+
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark">L</div>
+      <h2>LucidFence</h2>
+    </div>
+    <h1>MDM/UEM geofencing<br>with an <span class="accent">explainable<br>risk engine</span></h1>
+    <p class="sub">Local-first, open-source device management. No location exfiltration — your fleet data stays on your machine.</p>
+    <div class="tags">
+      <span class="tag">Intune</span>
+      <span class="tag">Jamf</span>
+      <span class="tag">Applivery</span>
+      <span class="tag">macOS · Linux</span>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="pill">Apache-2.0</span>
+    <span><b>github.com</b>/adrimg3196/lucidfence</span>
+  </div>
+</body>
+</html>
