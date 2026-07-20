@@ -86,7 +86,9 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Alertas, export CSV/HTML y digest.
 - RBAC local y aislamiento por organización.
 - Dashboard local sin CDN, telemetría ni frontend cloud.
-- Adapters: simulación, Applivery live y bases extensibles para Intune/Jamf.
+- Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
+  `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y
+  `jamf` (live vía Jamf Pro API, Bounty #2). Ver `core/adapters/ADAPTER.md`.
 - IA opcional BYO API/modelo (OpenAI, Ollama, LM Studio, Nous Portal o compatible).
 - Gateway local OpenAI-compatible y MCP read-only incluidos.
 
@@ -150,3 +152,25 @@ Consulta [`SECURITY.md`](SECURITY.md) si está disponible o abre un security adv
 ## Licencia
 
 Todo el producto distribuido en este repositorio se publica bajo **Apache License 2.0**. Uso personal, comercial, modificación y redistribución permitidos conforme a la licencia.
+
+## Adapter Hall of Fame
+
+Programa de adapters de la comunidad (issue #3). El producto es agnóstico al
+MDM vía la interfaz `MDMAdapter` (`core/adapters/base.py`). Quien entregue el
+primer PR **verificado** de un MDM entra al Hall of Fame y se vuelve
+*Adapter Maintainer*.
+
+| Adapter | Estado | Contribuidor | Notas |
+|---------|--------|--------------|-------|
+| `intune` (Microsoft Graph live) | ✅ live (Bounty #1) | [@jdjioe5-cpu](https://github.com/jdjioe5-cpu) | PR #13 mergeado — respeta el contrato congelado, tests 7/7, sin secretos |
+| `jamf` (Jamf Pro API live) | ✅ live (Bounty #2) | mantenedor | reimplementado siguiendo el patrón #13 — tests 7/7 |
+| `applivery` | ✅ live | mantenedor | conector principal |
+| `simulation` | ✅ mock | mantenedor | demo 100% local |
+
+**Siguientes MDMs pedidos:** SOTI, Workspace ONE, Mosyle, Kandji, Fleet.
+
+**Política anti-spam:** los PRs/comments que incluyan direcciones de wallet
+(Solana, BTC, USDT, ETH, XMR…), promoción de repos externos o pago de bounty
+en cripto serán cerrados sin merge. El código debe respetar `base.py` (no
+cambiar la interfaz), usar solo placeholders en `.env.example` y pasar la suite
+sin credenciales reales. Ver `core/adapters/ADAPTER.md`.
