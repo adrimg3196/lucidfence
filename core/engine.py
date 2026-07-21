@@ -825,15 +825,14 @@ class Engine:
         }
 
     # ---- loop ------------------------------------------------------------
-    def start(self):
-        if self._thread and self._thread.is_alive():
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
 
-    def _loop(self):
-        # run immediately, then every interval
+    def _loop(self) -> None:
         while not self._stop.is_set():
             try:
                 self.run_once()
@@ -841,7 +840,7 @@ class Engine:
                 self.last_stats = {"error": str(exc), "ts": now_iso()}
             self._stop.wait(self.interval)
 
-    def stop(self):
+    def stop(self) -> None:
         self._stop.set()
 
     # ---- risk context helpers -----------------------------------------
