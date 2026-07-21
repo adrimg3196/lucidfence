@@ -166,3 +166,42 @@ lanza excepción** — siempre devuelve `{"ok": False, "error": ..., "error_type
 `build_jamf_adapter_from_config(cfg)` está disponible para wiring desde
 `config.json` (ver `mdm.jamf.base_url` / `client_id` / `client_secret`).
 
+
+## SDK contract tests (issue #14)
+
+`tests/test_sdk_contract.py` provides reusable contract assertions that
+every community adapter must pass. The contract is:
+
+* Subclass `MDMAdapter` (ABC).
+* Set a stable lowercase `name` (regex `^[a-z][a-z0-9_]*$`).
+* Implement `execute(device, action, params, dry_run=False) -> dict`.
+* **Never raise** — return `{"ok": False, "error_type": "...", "error": "..."}`.
+* Always include keys: `adapter`, `ok` (bool), `device_id`, `action`.
+
+The contract runner is reusable from any adapter's own test file:
+
+```python
+from tests.test_sdk_contract import assert_valid_name, assert_response_shape
+
+def test_my_adapter_contract():
+    a = MyAdapter()
+    assert_valid_name(a.name)
+    r = a.execute({"device_id": "abc"}, "lock", {})
+    assert_response_shape(r, a.name)
+```
+
+## SDK template — `core/adapters/_template_adapter.py`
+
+Drop-in starter for a new community adapter. The template runs in mock
+mode out of the box (returns `ok: True`, `mock: True`) so the new adapter
+registers cleanly without a live MDM endpoint. Replace `_build_request`
+and uncomment the live-path branch to wire up your MDM.
+
+Reference implementations in this repo:
+* `IntuneAdapter` — Microsoft Graph OAuth client_credentials + REST (merged in #13).
+* `JamfAdapter` — Jamf Pro API Basic auth + REST (merged in #21).
+* `TemplateMdmAdapter` — the SDK template itself; community adapters
+  start by copying this file and renaming.
+
+The SDK template is verified by `test_sdk_template_helper` in the SDK
+contract suite — if you break it, the CI badge turns red.
