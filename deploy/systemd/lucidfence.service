@@ -1,0 +1,21 @@
+[Unit]
+Description=LucidFence local always-on service (systemd)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/lucidfence
+ExecStart=/usr/bin/env python3 saas_server.py
+Restart=always
+RestartSec=5
+Environment=LUCIDFENCE_PORT=8765
+Environment=LUCIDFENCE_HOST=127.0.0.1
+
+# Hardening básico
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
