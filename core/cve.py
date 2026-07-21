@@ -82,6 +82,26 @@ CVE_DB: dict[str, list[dict]] = {
 
 # Feed en memoria (mergeado sobre CVE_DB). Se popula con load_feed().
 _FEED: dict[str, list[dict]] = {}
+_local_saved_feed_snapshot: list[tuple[str, list[dict]]] = []
+
+
+def isolate_feed() -> dict[str, list[dict]]:
+    """Snapshot and clear the global ``cve._FEED`` to isolate tests.
+
+    Returns a shallow portable snapshot that ``restore_feed`` can replay.
+    """
+    global _local_saved_feed_snapshot
+    _local_saved_feed_snapshot = sorted(_FEED.items())
+    _FEED.clear()
+    return dict(_local_saved_feed_snapshot)
+
+
+def restore_feed(snapshot: dict[str, list[dict]]) -> None:
+    """Restore ``cve._FEED`` from a saved snapshot."""
+    global _local_saved_feed_snapshot
+    _FEED.clear()
+    _local_saved_feed_snapshot = sorted(snapshot.items())
+    _FEED.update(dict(_local_saved_feed_snapshot))
 
 
 def load_feed(path: str) -> int:

@@ -18,10 +18,8 @@ import core.cve_feed_nvd as cve_feed_nvd  # noqa: E402
 def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
     old_sync = cve_feed_nvd.sync_nvd_feed
     old_feed = dict(cve._FEED)
-    # Isolate: the engine merges the NVD feed into the global cve._FEED, and
-    # other suites may have populated it. Reset so the fake below is the only
-    # source — keeps the assertion deterministic regardless of run order.
-    cve._FEED.clear()
+    # Use official isolation helpers to prevent cross-test _FEED pollution.
+    saved = cve.isolate_feed()
 
     def fake_sync(out_path: str, **_kwargs) -> int:
         payload = {
@@ -83,8 +81,7 @@ def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
         assert "CVE-2099-0001" in ids, summary
     finally:
         cve_feed_nvd.sync_nvd_feed = old_sync
-        cve._FEED.clear()
-        cve._FEED.update(old_feed)
+        cve.restore_feed(saved or {})
 
 
 def test_cloud_cve_summary_falls_back_to_demo_without_engine_signal():

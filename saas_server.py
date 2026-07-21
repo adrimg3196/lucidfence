@@ -65,6 +65,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "core"))
 
 import config_loader
+import cloud_publisher
 from saas.tenant import TenantStore, PLAN_LIMITS
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.engine import Engine
@@ -929,7 +930,7 @@ class Handler(BaseHTTPRequestHandler):
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
                 return _send_json(self, _rm.get_api_response(d))
             except Exception as e:
-                return _send_json(self, {"error": "roadmap no disponible", "detail": str(e)}, 404)
+                return _send_json(self, {"error": "roadmap no disponible"}, 404)
         if route == "/api/roadmap" and method == "PATCH":
             try:
                 import roadmap_tooling as _rm
@@ -1770,11 +1771,26 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/cve" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
-            return _send_json(self, {"cve_summary": eng._cve_summary(),
-                                     "devices": [
-                                         {"device_id": s.device_id, "name": s.name,
-                                          "apps": s.apps} for s in eng.store.snapshot().values()
-                                     ]})
+            devices = [
+                {"device_id": s.device_id, "name": s.name, "apps": s.apps}
+                for s in eng.store.snapshot().values()
+            ]
+            summary = eng._cve_summary()
+            if not (summary.get("vulnerable_apps") or 0):
+                # No real signal (local dev / offline / empty fleet): broadcast
+                # demo fallback aligned with cloud publisher behavior.
+                summary = dict(summary)
+                summary.update(cloud_publisher._demo_cve_summary(summary, total=len(devices)))
+            else:
+                summary = dict(summary)
+                try:
+                    from core import cve as _cve
+                    nvd_keys = [k for k, v in _cve._FEED.items() if v]
+                    summary["demo"] = False
+                    summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
+                except Exception:
+                    summary["source"] = "local-db"
+            return _send_json(self, {"cve_summary": summary, "devices": devices})
         if route == "/api/soar" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)

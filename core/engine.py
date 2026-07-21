@@ -106,7 +106,11 @@ class Engine:
         # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
         try:
             from core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
-            cve_feed_path = config.get("cve_feed_path") or DEFAULT_OUT
+            cve_feed_path = config.get("cve_feed_path")
+            if not cve_feed_path:
+                cve_feed_path = os.path.join(
+                    self.data_dir, f"cve_feed_{self.org_id}.json"
+                )
             if config.get("cve_feed_sync"):
                 sync_nvd_feed(
                     apps=config.get("cve_feed_apps"),
