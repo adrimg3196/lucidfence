@@ -137,7 +137,31 @@ python3 bin/lucidfence start --no-open
 
 La suite debe terminar con un resumen explícito y cero fallos. El proyecto usa Python 3.9+ y evita frameworks web.
 
-## Seguridad y privacidad
+## Operación y monitoreo always-on
+
+```bash
+# Arrancar servicio en segundo plano managed
+python3 scripts/health_monitor.py
+
+# Salida JSON con estado del check y, en caso de fallo, apertura/cierre
+# automática de issue de infraestructura en GitHub con severidad y alertas.
+```
+
+Documentación operativa:
+
+- [`docs/operations/health-monitor.md`](docs/operations/health-monitor.md)
+- `scripts/health_monitor.py`
+
+## Diseño
+
+- Tema dark por defecto, light opcional.
+- Tokens CSS en variables `:root` para colores, radios, sombras y fonts.
+- Densidad compacta y jerarquía clara; los KPIs y chips priorizan legibilidad.
+- Contraste AA para texto normal; UI components usan bordes suaves y paneles diferenciados.
+- Navegación consistente: sidebar, topbar y vistas principales con mismo vocabulario.
+- Comportamiento responsivo en `1100px`, `700px` y `430px`.
+
+Referencia canónica: `static/dashboard.html` y `static/cloud.html`.
 
 - Escucha en `127.0.0.1` por defecto.
 - Sin telemetría ni cuenta remota.
