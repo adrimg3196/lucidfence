@@ -19,6 +19,10 @@ from core.adapters.windows_conformidad import (
     WindowsConformidadAdapter,
     build_windows_conformidad_adapter_from_config,
 )
+from core.adapters.chromeos import (
+    ChromeOSAdapter,
+    build_chromeos_adapter_from_config,
+)
 
 # Acciones UEM válidas (compartidas por todos los adapters).
 VALID_ACTIONS = {
@@ -40,6 +44,7 @@ ADAPTER_REGISTRY = {
     "intune": IntuneAdapter,
     "jamf": JamfAdapter,
     "windows_conformidad": WindowsConformidadAdapter,
+    "chromeos": ChromeOSAdapter,
 }
 
 
