@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
+import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from threading import RLock
 from typing import Callable, TypeGuard
 
 
@@ -140,12 +142,37 @@ class MultiUEMOrchestrator:
         max_location_age_seconds: int | float = 900,
         max_accuracy_m: float = 500,
     ) -> None:
-        self._bindings = {binding.name: binding for binding in bindings}
+        validated: dict[str, ProviderBinding] = {}
+        for index, binding in enumerate(bindings):
+            if not isinstance(binding, ProviderBinding):
+                raise ValueError(f"invalid binding at index {index}")
+            name = binding.name
+            if (
+                not isinstance(name, str)
+                or not name.isascii()
+                or re.fullmatch(r"[a-z][a-z0-9_]*", name) is None
+            ):
+                raise ValueError(f"invalid provider name at index {index}")
+            if name in validated:
+                raise ValueError(f"duplicate provider name: {name}")
+            if not isinstance(binding.capabilities, ProviderCapabilities):
+                raise ValueError(f"invalid capabilities for provider {name}")
+            if not callable(binding.fetch_devices):
+                raise ValueError(f"invalid fetch_devices callback for provider {name}")
+            if binding.execute_action is not None and not callable(binding.execute_action):
+                raise ValueError(f"invalid execute_action callback for provider {name}")
+            validated[name] = binding
+        self._bindings = validated
         self.max_location_age_seconds = max_location_age_seconds
         self.max_accuracy_m = max_accuracy_m
         self._health: dict[str, ProviderHealth] = {}
+        self._lock = RLock()
 
     def sync(self, now: datetime | None = None) -> SyncResult:
+        with self._lock:
+            return self._sync(now)
+
+    def _sync(self, now: datetime | None = None) -> SyncResult:
         now = now or datetime.now(timezone.utc)
         records: list[NormalizedDevice] = []
         health: dict[str, ProviderHealth] = {}
@@ -164,14 +191,14 @@ class MultiUEMOrchestrator:
 
         devices = self._consolidate(records, now)
         successes = sum(item.status == "ok" for item in health.values())
-        if health and successes == 0:
+        if not health or successes == 0:
             status = "error"
         elif successes < len(health):
             status = "degraded"
         else:
             status = "ok"
-        self._health = health
-        return SyncResult(devices=devices, health=health, status=status)
+        self._health = deepcopy(health)
+        return SyncResult(devices=devices, health=deepcopy(health), status=status)
 
     def _consolidate(
         self, records: list[NormalizedDevice], now: datetime
@@ -352,21 +379,23 @@ class MultiUEMOrchestrator:
         dry_run: bool = False,
     ) -> dict:
         if isinstance(device, NormalizedDevice):
+            provider = device.provider
             references = device.provider_refs or {
-                device.provider: device.provider_device_id
+                provider: device.provider_device_id
             }
-            candidates = [
-                name
-                for name in sorted(references)
-                if name in self._bindings
-                and action in self._bindings[name].capabilities.actions
-            ]
-            provider = candidates[0] if candidates else device.provider
-            remote_id = references.get(provider)
         else:
             provider = device.get("provider")
-            references = device.get("provider_refs") or {}
-            remote_id = device.get("provider_device_id") or references.get(provider)
+            references = device.get("provider_refs") or {
+                provider: device.get("provider_device_id")
+            }
+        candidates = [
+            name
+            for name in sorted(references)
+            if name in self._bindings
+            and action in self._bindings[name].capabilities.actions
+        ]
+        provider = candidates[0] if candidates else provider
+        remote_id = references.get(provider)
 
         binding = self._bindings.get(provider)
         if binding is None:
@@ -384,21 +413,47 @@ class MultiUEMOrchestrator:
                 "adapter": provider,
             }
         try:
-            response = binding.execute_action(remote_id, action, params, dry_run)
-        except Exception as exc:
+            response = binding.execute_action(remote_id, action, deepcopy(params), dry_run)
+        except Exception:
             return {
                 "ok": False,
                 "error_type": "provider_error",
-                "detail": type(exc).__name__,
                 "adapter": provider,
             }
-        if not isinstance(response, dict):
+        allowed_types = {
+            "ok": bool,
+            "action": str,
+            "mode": str,
+            "dry_run": bool,
+            "delegated": bool,
+            "error_type": str,
+            "http_status": int,
+        }
+        if (
+            not isinstance(response, dict)
+            or not isinstance(response.get("ok"), bool)
+            or any(
+                key in response
+                and (
+                    not isinstance(response[key], expected)
+                    or (expected is int and isinstance(response[key], bool))
+                )
+                for key, expected in allowed_types.items()
+            )
+        ):
             return {
                 "ok": False,
-                "error_type": "invalid_provider_response",
+                "error_type": "invalid_response",
                 "adapter": provider,
             }
-        return {**response, "adapter": provider}
+        sanitized = {
+            key: deepcopy(response[key])
+            for key in allowed_types
+            if key in response
+        }
+        sanitized["adapter"] = provider
+        return sanitized
 
     def health(self) -> dict[str, ProviderHealth]:
-        return dict(self._health)
+        with self._lock:
+            return deepcopy(self._health)

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event, Thread
 
 from core.multiuem import (
     LocationEvidence,
@@ -6,6 +7,7 @@ from core.multiuem import (
     NormalizedDevice,
     ProviderBinding,
     ProviderCapabilities,
+    ProviderHealth,
 )
 
 
@@ -49,6 +51,53 @@ def binding(name, devices_or_fetch, *, actions=frozenset(), execute=None):
 
 def evidence(provider, observed_at, accuracy=25):
     return LocationEvidence(40.42, -3.71, observed_at, accuracy, provider, "gps")
+
+
+def assert_value_error(expected, callback):
+    try:
+        callback()
+    except ValueError as exc:
+        assert str(exc) == expected
+    else:
+        raise AssertionError("ValueError not raised")
+
+
+def test_constructor_rejects_invalid_or_duplicate_bindings_deterministically():
+    valid = binding("intune", [])
+    invalid_names = [None, "", "Intune", "intune!", "íntune", "-intune"]
+    for invalid_name in invalid_names:
+        malformed = ProviderBinding(
+            name=invalid_name,
+            capabilities=ProviderCapabilities(),
+            fetch_devices=lambda: [],
+        )
+        assert_value_error(
+            "invalid provider name at index 0",
+            lambda malformed=malformed: MultiUEMOrchestrator([malformed]),
+        )
+
+    assert_value_error(
+        "duplicate provider name: intune",
+        lambda: MultiUEMOrchestrator([valid, valid]),
+    )
+    assert_value_error(
+        "invalid capabilities for provider intune",
+        lambda: MultiUEMOrchestrator([
+            ProviderBinding("intune", None, lambda: []),
+        ]),
+    )
+    assert_value_error(
+        "invalid fetch_devices callback for provider intune",
+        lambda: MultiUEMOrchestrator([
+            ProviderBinding("intune", ProviderCapabilities(), None),
+        ]),
+    )
+    assert_value_error(
+        "invalid execute_action callback for provider intune",
+        lambda: MultiUEMOrchestrator([
+            ProviderBinding("intune", ProviderCapabilities(), lambda: [], "not-callable"),
+        ]),
+    )
 
 
 def test_sync_isolates_sanitized_failure_and_merges_strong_identity_deterministically():
@@ -206,7 +255,7 @@ def test_execute_routes_remote_provider_id_and_preserves_dry_run():
     )
 
     assert calls == [("b-7", "lock", {}, True)]
-    assert response == {"ok": True, "request_id": "safe-id", "adapter": "intune"}
+    assert response == {"ok": True, "adapter": "intune"}
 
 
 def test_execute_uses_provider_refs_for_merged_device():
@@ -228,6 +277,34 @@ def test_execute_uses_provider_refs_for_merged_device():
     assert response["adapter"] == "intune"
 
 
+def test_execute_dict_routes_by_capability_and_uses_target_provider_reference():
+    calls = []
+
+    def execute(remote_id, action, params, dry_run):
+        calls.append(remote_id)
+        return {"ok": True}
+
+    orchestrator = MultiUEMOrchestrator(
+        [
+            binding("applivery", [], actions=frozenset({"lock"}), execute=lambda *args: None),
+            binding("intune", [], actions=frozenset({"wipe"}), execute=execute),
+        ]
+    )
+
+    response = orchestrator.execute(
+        {
+            "provider": "applivery",
+            "provider_device_id": "a-1",
+            "provider_refs": {"applivery": "a-1", "intune": "b-7"},
+        },
+        "wipe",
+        {},
+    )
+
+    assert calls == ["b-7"]
+    assert response == {"ok": True, "adapter": "intune"}
+
+
 def test_execute_capability_gate_rejects_unsupported_action_without_calling_provider():
     calls = []
     orchestrator = MultiUEMOrchestrator(
@@ -244,6 +321,75 @@ def test_execute_capability_gate_rejects_unsupported_action_without_calling_prov
         "error_type": "unsupported_action",
         "adapter": "intune",
     }
+
+
+def test_execute_rejects_non_boolean_ok_and_sanitizes_callback_response():
+    responses = [
+        {"ok": "yes", "token": "secret"},
+        {
+            "ok": False,
+            "adapter": "forged",
+            "action": "lock",
+            "mode": "delegated",
+            "dry_run": True,
+            "delegated": True,
+            "error_type": "remote_error",
+            "http_status": 409,
+            "body": "token=secret",
+            "headers": {"authorization": "secret"},
+            "request": {"password": "secret"},
+            "message": "secret",
+        },
+    ]
+
+    def execute(*args):
+        return responses.pop(0)
+
+    orchestrator = MultiUEMOrchestrator(
+        [binding("intune", [], actions=frozenset({"lock"}), execute=execute)]
+    )
+
+    invalid = orchestrator.execute(
+        {"provider": "intune", "provider_device_id": "b-7"}, "lock", {}
+    )
+    sanitized = orchestrator.execute(
+        {"provider": "intune", "provider_device_id": "b-7"}, "lock", {}
+    )
+
+    assert invalid == {"ok": False, "error_type": "invalid_response", "adapter": "intune"}
+    assert sanitized == {
+        "ok": False,
+        "adapter": "intune",
+        "action": "lock",
+        "mode": "delegated",
+        "dry_run": True,
+        "delegated": True,
+        "error_type": "remote_error",
+        "http_status": 409,
+    }
+
+
+def test_execute_deepcopies_params_and_detaches_returned_response():
+    retained = {}
+
+    def execute(remote_id, action, params, dry_run):
+        params["nested"]["changed"] = True
+        response = {"ok": True, "mode": "delegated"}
+        retained["response"] = response
+        return response
+
+    params = {"nested": {"changed": False}}
+    orchestrator = MultiUEMOrchestrator(
+        [binding("intune", [], actions=frozenset({"lock"}), execute=execute)]
+    )
+
+    result = orchestrator.execute(
+        {"provider": "intune", "provider_device_id": "b-7"}, "lock", params
+    )
+    retained["response"]["mode"] = "mutated"
+
+    assert params == {"nested": {"changed": False}}
+    assert result == {"ok": True, "adapter": "intune", "mode": "delegated"}
 
 
 def test_execute_unknown_provider_and_provider_failure_are_structured_and_sanitized():
@@ -266,7 +412,6 @@ def test_execute_unknown_provider_and_provider_failure_are_structured_and_saniti
     assert failing == {
         "ok": False,
         "error_type": "provider_error",
-        "detail": "RuntimeError",
         "adapter": "intune",
     }
     assert "token=" not in str(failing)
@@ -286,3 +431,56 @@ def test_sync_status_is_error_when_every_provider_fails_and_health_is_cached():
 
     assert result.status == "error"
     assert orchestrator.health() == result.health
+
+
+def test_sync_with_zero_bindings_is_explicit_error():
+    result = MultiUEMOrchestrator([]).sync(NOW)
+
+    assert result.status == "error"
+    assert result.health == {}
+
+
+def test_sync_result_and_health_are_detached_from_cached_state():
+    orchestrator = MultiUEMOrchestrator([binding("intune", [])])
+
+    result = orchestrator.sync(NOW)
+    result.health.clear()
+    health = orchestrator.health()
+    health.clear()
+
+    assert orchestrator.health() == {"intune": ProviderHealth("ok", 0)}
+
+
+def test_concurrent_syncs_publish_health_in_execution_order():
+    first_started = Event()
+    second_started = Event()
+    release_first = Event()
+    calls = 0
+
+    def fetch():
+        nonlocal calls
+        calls += 1
+        call = calls
+        if call == 1:
+            first_started.set()
+            assert release_first.wait(2)
+        else:
+            second_started.set()
+        return [device("intune", str(index)) for index in range(call)]
+
+    orchestrator = MultiUEMOrchestrator([binding("intune", fetch)])
+    first = Thread(target=lambda: orchestrator.sync(NOW))
+    second = Thread(target=lambda: orchestrator.sync(NOW))
+
+    first.start()
+    assert first_started.wait(2)
+    second.start()
+    serialized = not second_started.wait(0.1)
+    release_first.set()
+    first.join(2)
+    second.join(2)
+
+    assert serialized
+    assert not first.is_alive() and not second.is_alive()
+    assert calls == 2
+    assert orchestrator.health()["intune"].devices == 2
