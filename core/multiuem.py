@@ -15,7 +15,10 @@ def normalize_identity(value: object | None) -> str | None:
     """Return a correlation-safe identity, or ``None`` for empty placeholders."""
     if value is None:
         return None
-    normalized = "".join(character for character in str(value) if character.isalnum()).upper()
+    text = str(value)
+    if not text.isascii():
+        return None
+    normalized = "".join(character for character in text if character.isalnum()).upper()
     if not normalized or normalized in _UNUSABLE_IDENTITIES:
         return None
     return normalized
@@ -41,11 +44,15 @@ class LocationEvidence:
     def quality(
         self,
         now: datetime,
-        max_age_seconds: int,
+        max_age_seconds: int | float,
         max_accuracy_m: float,
-        future_tolerance_seconds: int = 60,
+        future_tolerance_seconds: int | float = 60,
     ) -> tuple[bool, str]:
         """Classify whether this observation is safe to use for geofencing."""
+        limits = (max_age_seconds, max_accuracy_m, future_tolerance_seconds)
+        if any(not self._valid_number(limit) or limit < 0 for limit in limits):
+            return False, "invalid_limits"
+
         if not self._valid_coordinate(self.lat, -90, 90) or not self._valid_coordinate(
             self.lng, -180, 180
         ):
