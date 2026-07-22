@@ -449,6 +449,20 @@ only.
 
 Discovery starts only from admin config, requires exact metadata issuer, validates every endpoint and A/AAAA, revalidates on connect, disables redirects and bounds responses. Hosted requests only `openid email profile`, never `offline_access`, and persists no provider tokens.
 
+`OIDCMetadataValidator` canonicalizes issuer/endpoints before DNS: HTTPS, valid DNS hostname or canonical IP, no userinfo/query/fragment/backslash/ambiguous escapes, and only allowlisted ports. Discovery's issuer is byte-identical to configured issuer. For every attempt, resolve a fresh A/AAAA snapshot and reject if any address is loopback, private, link-local, ULA, CGNAT, multicast, unspecified, reserved, IPv4-mapped private or cloud metadata. Reject non-canonical decimal/octal/hex IP forms and mixed public/private DNS. `PinnedHTTPSConnection` connects only to one IP from that snapshot without a second DNS lookup, while retaining the original hostname for Host, SNI and certificate verification; alternatively peer IP must be verified before any request/header/secret is sent. Every retry and JWKS refresh repeats this process. Discovery/token/JWKS/UserInfo never follow redirects.
+
+The pre-auth cookie is random, ephemeral and host-only: `Secure` in hosted, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`; it expires on consume or flow TTL. Callback compares the binding in constant time and fails before token exchange when missing or from another browser.
+
+`OIDCFlowStore.consume()`, uniqueness of `(issuer, subject)`, invitation/owner-bootstrap mutation, user create/link and session issue share one transaction lock. This JSON-backed slice is explicitly single-process and startup fails if configured for multiple workers. Durable writes use a tempfile in the same directory, `0600`, flush, `fsync`, `os.replace`, then directory `fsync`. Concurrent callbacks create exactly one session and at most one user/link.
+
+SSO sessions have configurable absolute TTL and server-side idle timeout. Success revokes pre-auth and any old session ID, generates a new cryptographic ID, and sets `Max-Age`/`Expires` consistent with TTL. Client-supplied session IDs are never reused.
+
+`(issuer, subject)` is globally unique to one user. Invitation, identity, user and owner-bootstrap check/write is atomic. RED tests cover concurrent provisioning, simultaneous links to different accounts, invitation replay and partial persistence failure; exactly one contender wins.
+
+Callback validates unique parameters and consumes state atomically before branching to `code` or `error`; an OP error also invalidates state/nonce. A timeout after sending code to the token endpoint consumes the code and is never retried automatically.
+
+Local SSO accepts only `http://127.0.0.1:<port>/<exact-path>` or `http://[::1]:<port>/<exact-path>`. Reject `localhost`, DNS names, LAN, wildcard, `0.0.0.0`, wrong port/path. The listener binds only the registered loopback IP; an ephemeral listener uses neither `SO_REUSEADDR` nor `SO_REUSEPORT` and closes after the first valid callback or TTL.
+
 After success, destroy pre-auth/old sessions, mint a fresh session, set a host-only `Secure; HttpOnly; SameSite=Lax; Path=/` cookie and return 303 to an enum-backed clean path with no-store/no-referrer headers. Logout always revokes the local session. Redact callback queries from HTTP access logs.
 
 - [ ] **Step 5: Run GREEN and auth regressions**
