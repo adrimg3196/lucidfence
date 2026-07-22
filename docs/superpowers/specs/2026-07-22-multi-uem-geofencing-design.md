@@ -138,6 +138,25 @@ Ambos modos usan `MultiUEMOrchestrator`, el mismo contrato de capacidades y el
 mismo gate de evidencia. Cambiar de despliegue no cambia la semántica de
 identidad, geofencing ni acciones.
 
+### 6.2 SSO para hosted, opcional en local
+
+El modo hosted ofrecerá contraseña local y SSO OIDC. Google será el preset
+primario; Microsoft Entra ID, Okta y otros se habilitarán mediante configuración
+OIDC estándar, no mediante flujos propietarios.
+
+- Authorization Code con PKCE S256, `state` y `nonce` de un solo uso y TTL corto.
+- Redirect URI exacta y HTTPS en hosted; loopback se admite solo en desarrollo/local.
+- Discovery, authorization, token y userinfo permanecen en un issuer HTTPS
+  permitido; no se siguen redirecciones autenticadas cross-origin.
+- La identidad durable es `(issuer, sub)`, nunca el email por sí solo.
+- `email_verified=true`, dominio permitido e invitación/política explícita son
+  requisitos de aprovisionamiento; no se crea un owner arbitrario por poseer un
+  correo Google.
+- Client secrets, access tokens e ID tokens permanecen server-side, con permisos
+  `0600`, y nunca entran en API, logs, URLs de frontend o Service Worker.
+- El modo local conserva login/owner local y no depende de disponibilidad de
+  Google. SSO local es opt-in, no requisito de arranque.
+
 ## 7. API y UX
 
 El API añadirá una vista tenant-authenticated de salud Multi-UEM que exponga:
@@ -201,7 +220,9 @@ Cada test nuevo debe observarse fallar por la ausencia del comportamiento antes 
 11. El modo hosted exige login y aísla organizaciones.
 12. El modo local funciona sin cuenta cloud en loopback y falla cerrado si se expone sin autenticación local.
 13. Hosted y local ejecutan el mismo orquestador Multi-UEM, no ediciones funcionalmente distintas.
-14. Suite completa, E2E vivo, seguridad y revisión independiente terminan en PASS.
+14. Google SSO completa Authorization Code + PKCE y crea sesión solo para una identidad OIDC autorizada.
+15. Un proveedor OIDC genérico permite configurar Entra ID/Okta sin cambiar código, manteniendo `issuer + sub` como vínculo.
+16. Suite completa, E2E vivo, seguridad y revisión independiente terminan en PASS.
 
 ## 11. Fuera de alcance
 

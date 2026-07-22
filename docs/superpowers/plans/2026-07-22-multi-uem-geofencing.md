@@ -359,7 +359,92 @@ git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 
 ---
 
-### Task 5: Hosted login, local ownership, health API and admin-console evidence
+### Task 5: Google and generic OIDC SSO
+
+**Files:**
+- Create: `core/oidc.py`
+- Modify: `saas/auth.py`
+- Modify: `saas_server.py` (auth routes only)
+- Modify: `.env.example`
+- Create: `tests/test_oidc_sso.py`
+
+**Interfaces:**
+- Produces: `OIDCProvider`, `OIDCFlowStore`, `OIDCClient`.
+- Produces: `GET /api/auth/sso/providers`,
+  `GET /api/auth/sso/<provider>/start`, and
+  `GET /api/auth/sso/<provider>/callback`.
+- Persists account links by `(issuer, subject)`; never auto-links by email.
+- Google is a preset configuration; Entra ID, Okta and other providers use the
+  same generic OIDC contract.
+
+- [ ] **Step 1: Write RED domain and HTTP-flow tests**
+
+Use a fake HTTPS transport and fake obvious credentials. Assert:
+
+1. start creates 256-bit `state`, `nonce` and PKCE verifier, stores them
+   server-side with a ten-minute maximum TTL, and emits a S256 challenge;
+2. callback consumes state exactly once and rejects missing, expired, replayed
+   or mismatched state before token exchange;
+3. redirect URI is exact and return paths are relative allowlisted paths;
+4. discovery/token/userinfo endpoints must be HTTPS, same issuer policy and
+   public destinations; authenticated redirects are disabled;
+5. userinfo requires stable `sub`, matching issuer, and verified email when
+   email is used for provisioning;
+6. two providers with the same email but different `(issuer, sub)` are not
+   silently merged;
+7. raw client secret, code, verifier, access token and ID token never appear in
+   API responses, exceptions, logs or persisted user records;
+8. disabled/unconfigured SSO returns a non-secret provider list and structured
+   failure, while password login remains functional.
+
+- [ ] **Step 2: Run RED**
+
+Run: `/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_oidc_sso.py -q`
+Expected: FAIL because `core.oidc` and SSO routes do not exist.
+
+- [ ] **Step 3: Implement generic Authorization Code + PKCE**
+
+Use stdlib `urllib` through an injectable transport. Never accept access tokens
+from the browser. Exchange the code server-side, query the configured HTTPS
+userinfo endpoint, and validate provisioning policy. OIDC flow state is
+server-side, one-time and bounded. Error details exposed to the client are stable
+codes only.
+
+Extend `User` compatibly with `external_identities: list[dict]` using a default
+factory. Existing password users must load unchanged. Add an AuthStore index on
+`(issuer, subject)` and an explicit linking/provisioning method. Provisioning
+requires either a pre-authorized external identity/invitation or a configured
+verified domain + target organization/role; owner bootstrap is a separate,
+explicit one-time policy.
+
+- [ ] **Step 4: Implement Google preset and generic provider config**
+
+Google defaults to issuer `https://accounts.google.com`; client ID, client
+secret, redirect URI, allowed domains and provisioning policy are deployment
+secrets. Generic providers require explicit issuer/discovery URL. `.env.example`
+contains placeholders only. The provider-list endpoint exposes name/label/enabled
+only.
+
+- [ ] **Step 5: Run GREEN and auth regressions**
+
+Run:
+
+```bash
+/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_oidc_sso.py tests/test_auth_concurrency.py tests/test_security_hardening.py -q
+```
+
+Expected: all pass.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add core/oidc.py saas/auth.py saas_server.py .env.example tests/test_oidc_sso.py
+git commit -m "feat(auth): add secure Google and generic OIDC SSO"
+```
+
+---
+
+### Task 6: Hosted login, local ownership, health API and admin-console evidence
 
 **Files:**
 - Modify: `saas_server.py`
@@ -379,6 +464,8 @@ git commit -m "feat(engine): consume multi-UEM evidence fail closed"
   local loopback permits local-owner bootstrap without a cloud account, and a
   non-loopback local bind fails closed unless local authentication is enabled.
 - UI consumes the endpoint and renders provider chips, sync status and location quality/reason.
+- UI consumes `/api/auth/sso/providers` and renders only enabled SSO buttons;
+  callback errors are generic and never expose provider tokens or codes.
 
 - [ ] **Step 1: Write RED API tests**
 
@@ -428,6 +515,8 @@ No mutation endpoint is added in this slice.
 
 Extend the browser smoke to assert:
 
+- enabled Google/OIDC login buttons are keyboard accessible and initiate the
+  server-side flow; password login remains available;
 - provider status is visible;
 - each device detail shows provider and location quality;
 - rejected location explains `unknown` rather than displaying `outside`;
@@ -457,7 +546,7 @@ git commit -m "feat(ui): support hosted login and local Multi-UEM ownership"
 
 ---
 
-### Task 6: Whole-product verification, security review and documentation
+### Task 7: Whole-product verification, security review and documentation
 
 **Files:**
 - Modify: `README.md`
@@ -496,7 +585,7 @@ Verify both deployment paths. Start local mode from this worktree on a free loop
 
 - [ ] **Step 5: Dispatch final independent code/security review**
 
-Reviewer receives spec path, plan path and complete branch diff package. It must inspect tenant isolation, hosted login, local loopback ownership, non-loopback fail-closed behavior, hosted/local Multi-UEM parity, identity ambiguity, stale/future/inaccurate locations, action routing, SSRF/redirects, error sanitization, legacy behavior, UI claims and test honesty. Fix every Critical/Important issue and re-review.
+Reviewer receives spec path, plan path and complete branch diff package. It must inspect tenant isolation, password auth, OIDC state/nonce/PKCE, issuer/redirect validation, identity linking, token redaction, hosted login, local loopback ownership, non-loopback fail-closed behavior, hosted/local Multi-UEM parity, identity ambiguity, stale/future/inaccurate locations, action routing, SSRF/redirects, error sanitization, legacy behavior, UI claims and test honesty. Fix every Critical/Important issue and re-review.
 
 - [ ] **Step 6: Clean runtime and verify workspace**
 
@@ -511,7 +600,7 @@ git commit -m "docs: publish verified multi-UEM operations guide"
 
 ## Plan Self-Review Checklist
 
-- Spec coverage: tasks cover all 14 acceptance criteria.
+- Spec coverage: tasks cover all 16 acceptance criteria.
 - Compatibility: legacy path remains explicit in Tasks 3 and 4.
 - Type consistency: canonical/provider IDs and evidence types have one definition in Task 1.
 - Security: tenant isolation, secret sanitization and URL safety have explicit tests.
