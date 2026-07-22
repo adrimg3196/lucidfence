@@ -173,9 +173,11 @@ Rules:
 3. Candidate identity keys are valid normalized serial and IMEI.
 4. Merge only when all matching strong keys point to the same canonical record.
 5. Conflict means no automatic merge and marks every involved record.
-6. Choose location among accepted candidates by `(observed_at desc, accuracy asc, provider name asc)`.
-7. Preserve provider references for action routing.
-8. `status` is `ok`, `degraded`, or `error` based on provider outcomes.
+6. Choose location among accepted candidates by parsed `(observed_at desc, accuracy asc, provider name asc)`; never compare timestamp strings lexicographically.
+7. Merge compliance conservatively: any explicit `False` dominates `True`, which dominates `None`.
+8. Preserve provider references for action routing and field-level provenance for every selected inventory value.
+9. For equal-quality inventory values, use provider name ascending as deterministic tie-breaker; never depend on binding iteration order.
+10. `status` is `ok`, `degraded`, or `error` based on provider outcomes.
 
 - [ ] **Step 4: Write and run RED action-routing tests**
 
