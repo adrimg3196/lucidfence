@@ -29,7 +29,7 @@ def build_sbom(root: Path) -> dict:
                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
     return {
         "bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1,
-        "metadata": {"component": {"type": "application", "name": "lucidfence", "version": "1.3.0"}},
+        "metadata": {"component": {"type": "application", "name": "lucidfence", "version": "1.3.1"}},
         "components": components,
         "properties": [{"name": "lucidfence:source-file-count", "value": str(len(files))},
                        {"name": "lucidfence:source-manifest-sha256",

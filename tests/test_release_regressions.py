@@ -104,3 +104,13 @@ def test_demo_and_gateway_use_actual_bound_socket():
     assert saas_server._gateway_allowed(exposed) is False
     server = (ROOT / "saas_server.py").read_text()
     assert "bound_host = _bound_host(self)" in server
+
+
+def test_quick_runner_uses_supported_python_and_hash_locked_venv():
+    runner = (ROOT / "run.sh").read_text()
+    assert "3, 11" in runner
+    assert "-m venv" in runner
+    assert "requirements.lock" in runner
+    assert "--require-hashes" in runner
+    assert "exec \"$VENV_PYTHON\" saas_server.py" in runner
+    assert "pip install requests" not in runner

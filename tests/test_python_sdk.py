@@ -27,7 +27,7 @@ def test_sdk_simulator_and_reporter_are_local_and_useful():
     assert rows[0]["device_id"] == "d1"
     report = Reporter.from_status({"devices": rows, "fences": [], "stats": {}, "recent_events": [], "recent_actions": []})
     assert report["summary"]["fleet_size"] == 1
-    assert __version__ == "1.3.0"
+    assert __version__ == "1.3.1"
 
 
 def test_python_package_metadata_exists():
