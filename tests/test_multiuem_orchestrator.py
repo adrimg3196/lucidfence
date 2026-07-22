@@ -190,6 +190,21 @@ def test_sync_isolates_sanitized_failure_and_merges_strong_identity_deterministi
     assert result.status == "degraded"
 
 
+def test_sync_isolates_provider_when_fetch_contains_none_record():
+    malformed_provider = [device("alpha", "valid"), None]
+    orchestrator = MultiUEMOrchestrator([
+        binding("alpha", malformed_provider),
+        binding("beta", [device("beta", "safe")]),
+    ])
+
+    result = orchestrator.sync(NOW)
+
+    assert [item.canonical_id for item in result.devices] == ["beta:safe"]
+    assert result.health["alpha"] == ProviderHealth("error", detail="invalid_records")
+    assert result.health["beta"] == ProviderHealth("ok", 1)
+    assert result.status == "degraded"
+
+
 def test_placeholder_identities_never_merge():
     result = MultiUEMOrchestrator(
         [
@@ -331,6 +346,36 @@ def test_execute_uses_provider_refs_for_merged_device():
     assert response["adapter"] == "intune"
 
 
+def test_execute_prefers_binding_order_regardless_of_provider_refs_order():
+    calls = []
+
+    def execute_for(provider):
+        def execute(remote_id, action, params, dry_run):
+            calls.append((provider, remote_id))
+            return {"ok": True}
+        return execute
+
+    orchestrator = MultiUEMOrchestrator([
+        binding("alpha", [], actions=frozenset({"lock"}), execute=execute_for("alpha")),
+        binding("beta", [], actions=frozenset({"lock"}), execute=execute_for("beta")),
+    ])
+    base = {"provider": "beta", "provider_device_id": "beta-exact"}
+
+    forward = orchestrator.execute(
+        {**base, "provider_refs": {"alpha": "alpha-exact", "beta": "beta-exact"}},
+        "lock",
+        {},
+    )
+    reversed_refs = orchestrator.execute(
+        {**base, "provider_refs": {"beta": "beta-exact", "alpha": "alpha-exact"}},
+        "lock",
+        {},
+    )
+
+    assert calls == [("alpha", "alpha-exact"), ("alpha", "alpha-exact")]
+    assert forward["adapter"] == reversed_refs["adapter"] == "alpha"
+
+
 def test_execute_dict_routes_by_capability_and_uses_target_provider_reference():
     calls = []
 
@@ -459,6 +504,47 @@ def test_execute_fixes_trusted_response_fields_and_rejects_spoofing_channels():
         "dry_run": False,
     } for item in rejected)
     assert "SECRET" not in str(fixed) + str(rejected)
+
+
+def test_execute_rejects_hostile_dict_subclass_responses_without_raising():
+    class GetRaises(dict):
+        def get(self, *args, **kwargs):
+            raise RuntimeError("token=SECRET")
+
+    class ItemsRaises(dict):
+        def items(self):
+            raise RuntimeError("token=SECRET")
+
+    class DeepcopyRaises(dict):
+        def __deepcopy__(self, memo):
+            raise RuntimeError("token=SECRET")
+
+    responses = [
+        GetRaises(ok=True),
+        ItemsRaises(ok=True),
+        DeepcopyRaises(ok=True),
+    ]
+    orchestrator = MultiUEMOrchestrator([
+        binding(
+            "intune",
+            [],
+            actions=frozenset({"lock"}),
+            execute=lambda *_: responses.pop(0),
+        )
+    ])
+    target = {"provider": "intune", "provider_device_id": "b-7"}
+
+    rejected = [orchestrator.execute(target, "lock", {}) for _ in range(3)]
+
+    expected = {
+        "ok": False,
+        "error_type": "invalid_response",
+        "adapter": "intune",
+        "action": "lock",
+        "dry_run": False,
+    }
+    assert rejected == [expected, expected, expected]
+    assert "SECRET" not in str(rejected)
 
 
 def test_execute_rejects_non_boolean_ok_and_sanitizes_callback_response():
@@ -680,3 +766,34 @@ def test_concurrent_syncs_publish_latest_started_health_and_skip_stale_results()
     assert not first.is_alive() and not second.is_alive()
     assert calls == 2
     assert orchestrator.health()["intune"].devices == 2
+
+
+def test_newer_malformed_sync_blocks_older_health_publication():
+    first_started = Event()
+    release_first = Event()
+    calls = 0
+    results = []
+
+    def fetch():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_started.set()
+            assert release_first.wait(2)
+            return [device("intune", "older")]
+        return None
+
+    orchestrator = MultiUEMOrchestrator([binding("intune", fetch)])
+    older = Thread(target=lambda: results.append(orchestrator.sync(NOW)))
+
+    older.start()
+    assert first_started.wait(2)
+    newer = orchestrator.sync(NOW)
+    release_first.set()
+    older.join(2)
+
+    assert not older.is_alive()
+    assert newer.status == "error"
+    assert newer.health["intune"] == ProviderHealth("error", detail="invalid_records")
+    assert len(results) == 1 and results[0].status == "ok"
+    assert orchestrator.health() == newer.health

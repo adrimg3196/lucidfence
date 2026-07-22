@@ -153,7 +153,7 @@ class ProviderBinding:
 
 
 class MultiUEMOrchestrator:
-    """Isolate provider failures and conservatively consolidate their inventory."""
+    """Isolate providers and use configured binding order as action priority."""
 
     def __init__(
         self,
@@ -223,7 +223,16 @@ class MultiUEMOrchestrator:
         with self._lock:
             self._next_sync_sequence += 1
             sequence = self._next_sync_sequence
-        result = self._sync(now)
+        try:
+            result = self._sync(now)
+        except Exception as exc:
+            result = SyncResult(
+                health={
+                    name: ProviderHealth("error", detail=type(exc).__name__)
+                    for name in self._bindings
+                },
+                status="error",
+            )
         with self._lock:
             if sequence > self._published_sync_sequence:
                 self._health = deepcopy(result.health)
@@ -238,16 +247,32 @@ class MultiUEMOrchestrator:
         for name, binding in sorted(self._bindings.items()):
             try:
                 fetched = binding.fetch_devices()
+                if type(fetched) is not list:
+                    health[name] = ProviderHealth("error", detail="invalid_records")
+                    continue
                 provider_records = [deepcopy(item) for item in fetched]
+                if not self._valid_provider_records(name, provider_records):
+                    health[name] = ProviderHealth("error", detail="invalid_records")
+                    continue
                 for item in provider_records:
                     item.provider = name
                     item.provider_refs = {name: item.provider_device_id}
+                    item.provenance = {}
                 records.extend(provider_records)
                 health[name] = ProviderHealth("ok", len(provider_records))
             except Exception as exc:
                 health[name] = ProviderHealth("error", detail=type(exc).__name__)
 
-        devices = self._consolidate(records, now)
+        try:
+            devices = self._consolidate(records, now)
+        except Exception as exc:
+            detail = type(exc).__name__
+            health = {
+                name: ProviderHealth("error", detail=detail)
+                if item.status == "ok" else item
+                for name, item in health.items()
+            }
+            devices = []
         successes = sum(item.status == "ok" for item in health.values())
         if not health or successes == 0:
             status = "error"
@@ -256,6 +281,90 @@ class MultiUEMOrchestrator:
         else:
             status = "ok"
         return SyncResult(devices=devices, health=deepcopy(health), status=status)
+
+    @classmethod
+    def _valid_provider_records(cls, provider: str, records: list[NormalizedDevice]) -> bool:
+        for item in records:
+            if type(item) is not NormalizedDevice:
+                return False
+            if (
+                item.provider != provider
+                or not cls._safe_name(item.provider)
+                or not cls._safe_remote_id(item.provider_device_id)
+                or not cls._safe_remote_id(item.canonical_id)
+                or not cls._safe_text(item.name)
+                or not cls._safe_text(item.platform)
+                or not cls._safe_text(item.status)
+                or not cls._valid_optional_identity(item.serial_number)
+                or not cls._valid_optional_identity(item.imei)
+                or (item.compliant is not None and type(item.compliant) is not bool)
+                or not cls._valid_inventory(item.inventory)
+                or type(item.provider_refs) is not dict
+                or type(item.provenance) is not dict
+                or type(item.identity_conflict) is not bool
+                or not cls._valid_location(provider, item.location)
+            ):
+                return False
+        return True
+
+    @classmethod
+    def _valid_location(cls, provider: str, location: object) -> bool:
+        if location is None:
+            return True
+        if type(location) is not LocationEvidence:
+            return False
+        if (
+            not LocationEvidence._valid_coordinate(location.lat, -90, 90)
+            or not LocationEvidence._valid_coordinate(location.lng, -180, 180)
+            or not isinstance(location.observed_at, str)
+            or not cls._safe_name(location.provider)
+            or location.provider != provider
+            or not cls._safe_text(location.source)
+        ):
+            return False
+        if location.accuracy_m is not None and (
+            not LocationEvidence._valid_number(location.accuracy_m)
+            or location.accuracy_m < 0
+        ):
+            return False
+        try:
+            observed_at = datetime.fromisoformat(location.observed_at.replace("Z", "+00:00"))
+            return observed_at.tzinfo is not None
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return False
+
+    @classmethod
+    def _valid_optional_identity(cls, value: object) -> bool:
+        return value is None or (
+            type(value) is str
+            and len(value) <= _MAX_REMOTE_ID_LENGTH
+            and value.isprintable()
+        )
+
+    @classmethod
+    def _valid_inventory(cls, value: object, depth: int = 0) -> bool:
+        if depth > 32:
+            return False
+        if value is None or type(value) in (bool, int, str):
+            return True
+        if type(value) is float:
+            return math.isfinite(value)
+        if type(value) is list:
+            return all(cls._valid_inventory(item, depth + 1) for item in value)
+        if type(value) is dict:
+            return all(
+                type(key) is str and cls._valid_inventory(item, depth + 1)
+                for key, item in value.items()
+            )
+        return False
+
+    @staticmethod
+    def _safe_text(value: object) -> TypeGuard[str]:
+        return (
+            type(value) is str
+            and 0 < len(value) <= _MAX_REMOTE_ID_LENGTH
+            and value.isprintable()
+        )
 
     def _consolidate(
         self, records: list[NormalizedDevice], now: datetime
@@ -473,9 +582,8 @@ class MultiUEMOrchestrator:
 
         candidates = [
             name
-            for name in references
-            if name in self._bindings
-            and action in self._bindings[name].capabilities.actions
+            for name, candidate_binding in self._bindings.items()
+            if name in references and action in candidate_binding.capabilities.actions
         ]
         provider = candidates[0] if candidates else provider
         remote_id = references.get(provider)
@@ -495,6 +603,13 @@ class MultiUEMOrchestrator:
                 "error_type": "missing_provider_device_id",
                 "adapter": provider,
             }
+        invalid_response = {
+            "ok": False,
+            "error_type": "invalid_response",
+            "adapter": provider,
+            "action": action,
+            "dry_run": dry_run,
+        }
         try:
             response = binding.execute_action(remote_id, action, deepcopy(params), dry_run)
         except Exception:
@@ -503,53 +618,49 @@ class MultiUEMOrchestrator:
                 "error_type": "provider_error",
                 "adapter": provider,
             }
-        invalid_response = {
-            "ok": False,
-            "error_type": "invalid_response",
-            "adapter": provider,
-            "action": action,
-            "dry_run": dry_run,
-        }
-        if not isinstance(response, dict) or type(response.get("ok")) is not bool:
-            return invalid_response
-        mode = response.get("mode")
-        if mode is not None and (
-            not isinstance(mode, str)
-            or len(mode) > _MAX_SAFE_NAME_LENGTH
-            or mode not in _RESPONSE_MODES
-        ):
-            return invalid_response
-        delegated = response.get("delegated")
-        if delegated is not None and type(delegated) is not bool:
-            return invalid_response
-        http_status = response.get("http_status")
-        if http_status is not None and (
-            type(http_status) is not int or not 100 <= http_status <= 599
-        ):
-            return invalid_response
-        error_type = response.get("error_type")
-        if error_type is not None and (
-            not isinstance(error_type, str)
-            or len(error_type) > _MAX_SAFE_NAME_LENGTH
-            or error_type not in _RESPONSE_ERROR_TYPES
-        ):
-            return invalid_response
+        try:
+            if type(response) is not dict or type(response.get("ok")) is not bool:
+                return invalid_response
+            mode = response.get("mode")
+            if mode is not None and (
+                not isinstance(mode, str)
+                or len(mode) > _MAX_SAFE_NAME_LENGTH
+                or mode not in _RESPONSE_MODES
+            ):
+                return invalid_response
+            delegated = response.get("delegated")
+            if delegated is not None and type(delegated) is not bool:
+                return invalid_response
+            http_status = response.get("http_status")
+            if http_status is not None and (
+                type(http_status) is not int or not 100 <= http_status <= 599
+            ):
+                return invalid_response
+            error_type = response.get("error_type")
+            if error_type is not None and (
+                not isinstance(error_type, str)
+                or len(error_type) > _MAX_SAFE_NAME_LENGTH
+                or error_type not in _RESPONSE_ERROR_TYPES
+            ):
+                return invalid_response
 
-        sanitized = {
-            "ok": response["ok"],
-            "adapter": provider,
-            "action": action,
-            "dry_run": dry_run,
-        }
-        if mode is not None:
-            sanitized["mode"] = mode
-        if delegated is not None:
-            sanitized["delegated"] = delegated
-        if http_status is not None:
-            sanitized["http_status"] = http_status
-        if response["ok"] is False:
-            sanitized["error_type"] = error_type or "provider_error"
-        return sanitized
+            sanitized = {
+                "ok": response["ok"],
+                "adapter": provider,
+                "action": action,
+                "dry_run": dry_run,
+            }
+            if mode is not None:
+                sanitized["mode"] = mode
+            if delegated is not None:
+                sanitized["delegated"] = delegated
+            if http_status is not None:
+                sanitized["http_status"] = http_status
+            if response["ok"] is False:
+                sanitized["error_type"] = error_type or "provider_error"
+            return sanitized
+        except Exception:
+            return invalid_response
 
     @staticmethod
     def _safe_name(value: object) -> TypeGuard[str]:
