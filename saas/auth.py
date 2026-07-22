@@ -13,6 +13,7 @@ Roles:
   admin     -> manage devices/fences/actions/policies, not billing
   operator  -> run cycles, trigger actions, view everything
   viewer    -> read-only dashboards and reports
+  auditor   -> immutable audit/compliance visibility + report export
 """
 from __future__ import annotations
 
@@ -41,6 +42,7 @@ ROLE_CAPS = {
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
         "report:read", "report:export",
+        "company:read", "company:write", "company:run", "company:approve",
     },
     "admin": {
         "org:read", "org:update",
@@ -52,6 +54,7 @@ ROLE_CAPS = {
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
         "report:read", "report:export",
+        "company:read", "company:write", "company:run", "company:approve",
     },
     "operator": {
         "org:read",
@@ -61,11 +64,16 @@ ROLE_CAPS = {
         "route:read", "route:write",
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
-        "report:read",
+        "report:read", "company:read", "company:run",
     },
     "viewer": {
         "org:read", "device:read", "fence:read", "policy:read",
+        "route:read", "workflow:read", "incident:read", "report:read", "company:read",
+    },
+    "auditor": {
+        "org:read", "device:read", "fence:read", "policy:read",
         "route:read", "workflow:read", "incident:read", "report:read",
+        "report:export", "audit:read", "company:read",
     },
 }
 
@@ -74,6 +82,7 @@ ROLE_LABELS = {
     "admin": "Administrador",
     "operator": "Operador",
     "viewer": "Solo lectura",
+    "auditor": "Auditor",
 }
 
 SESSION_TTL = 60 * 60 * 24 * 7  # 7 days

@@ -1,0 +1,448 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LucidFence Local API",
+    "version": "2.1.0",
+    "description": "Versioned, tenant-isolated local API with a governed autonomous geofencing company. Browser sessions or lf_ bearer API keys are required except for health and schema endpoints."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765/api/v2"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "lf_ API key"
+      },
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gf_session"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "ok"
+          },
+          "service": {
+            "const": "lucidfence"
+          }
+        }
+      },
+      "CompanyGoal": {
+        "type": "object",
+        "required": [
+          "title",
+          "outcome",
+          "metrics"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object"
+            }
+          },
+          "priority": {
+            "enum": [
+              "p0",
+              "p1",
+              "p2"
+            ]
+          },
+          "autonomy": {
+            "enum": [
+              "observe",
+              "recommend",
+              "simulate",
+              "execute_safe"
+            ]
+          }
+        }
+      },
+      "CompanyTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "risk",
+          "status",
+          "evidence",
+          "acceptance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "forbidden"
+            ]
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "executed",
+              "blocked",
+              "ready_for_handoff",
+              "rejected"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "acceptance": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requires_approvals": {
+            "type": "integer"
+          },
+          "result": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerApiKey": []
+    },
+    {
+      "browserSession": []
+    }
+  ],
+  "paths": {
+    "/status": {
+      "get": {
+        "summary": "Fleet status",
+        "responses": {
+          "200": {
+            "description": "Tenant fleet snapshot"
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "summary": "Device inventory",
+        "responses": {
+          "200": {
+            "description": "Devices"
+          }
+        }
+      }
+    },
+    "/fences": {
+      "get": {
+        "summary": "List geofences",
+        "responses": {
+          "200": {
+            "description": "Geofences"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create geofence",
+        "responses": {
+          "200": {
+            "description": "Created"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/routes": {
+      "get": {
+        "summary": "List routes",
+        "responses": {
+          "200": {
+            "description": "Routes"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create route",
+        "responses": {
+          "200": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/risk": {
+      "get": {
+        "summary": "Explainable fleet risk",
+        "responses": {
+          "200": {
+            "description": "Risk bundle"
+          }
+        }
+      }
+    },
+    "/analytics": {
+      "get": {
+        "summary": "Descriptive and predictive analytics",
+        "responses": {
+          "200": {
+            "description": "Analytics"
+          }
+        }
+      }
+    },
+    "/incidents": {
+      "get": {
+        "summary": "List incidents",
+        "responses": {
+          "200": {
+            "description": "Incidents"
+          }
+        }
+      }
+    },
+    "/workflows": {
+      "get": {
+        "summary": "List workflows",
+        "responses": {
+          "200": {
+            "description": "Workflows"
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "summary": "List alert rules",
+        "responses": {
+          "200": {
+            "description": "Rules"
+          }
+        }
+      }
+    },
+    "/compliance": {
+      "get": {
+        "summary": "Compliance report",
+        "responses": {
+          "200": {
+            "description": "Compliance"
+          }
+        }
+      }
+    },
+    "/roadmap": {
+      "get": {
+        "summary": "Authenticated roadmap",
+        "responses": {
+          "200": {
+            "description": "Roadmap"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "summary": "List tenant API keys (owner)",
+        "responses": {
+          "200": {
+            "description": "Keys"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create API key",
+        "responses": {
+          "201": {
+            "description": "Token shown once"
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "JSON/CEF audit export",
+        "responses": {
+          "200": {
+            "description": "Hash-chained events"
+          }
+        }
+      }
+    },
+    "/company": {
+      "get": {
+        "summary": "Tenant-scoped autonomous company state",
+        "responses": {
+          "200": {
+            "description": "Goals, agents, tasks, decisions and evidence metrics"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/goals": {
+      "post": {
+        "summary": "Create a measurable company goal (owner/admin session)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyGoal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Goal created"
+          },
+          "400": {
+            "description": "Invalid goal"
+          },
+          "403": {
+            "description": "Session/RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/cycle": {
+      "post": {
+        "summary": "Run one bounded evidence-driven cycle",
+        "responses": {
+          "200": {
+            "description": "Cycle decision and created tasks"
+          },
+          "409": {
+            "description": "Paused or no active goal"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/pause": {
+      "post": {
+        "summary": "Fail-close the company control plane",
+        "responses": {
+          "200": {
+            "description": "Paused"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/resume": {
+      "post": {
+        "summary": "Resume the company control plane",
+        "responses": {
+          "200": {
+            "description": "Resumed"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/tasks/{task_id}/approve": {
+      "post": {
+        "summary": "Record distinct human approval; never executes UEM commands",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task ready for human handoff"
+          },
+          "409": {
+            "description": "Blocked, duplicate or terminal task"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/tasks/{task_id}/reject": {
+      "post": {
+        "summary": "Reject a proposed company task",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task rejected"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    }
+  }
+}

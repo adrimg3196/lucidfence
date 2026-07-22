@@ -144,6 +144,15 @@
   .card>.bd{padding:16px}
   .card .sub{font-size:11.5px;color:var(--muted)}
 
+  /* Autonomous company: an operations room, not a generic agent chat. */
+  .company-hero{position:relative;isolation:isolate;overflow:hidden;border:1px solid color-mix(in srgb,var(--accent) 38%,var(--border));background:linear-gradient(115deg,var(--panel),color-mix(in srgb,var(--accent) 8%,var(--panel)));padding:22px;border-radius:var(--radius-lg);margin-bottom:14px}
+  .company-hero:after{content:"";position:absolute;right:-40px;top:-85px;width:280px;height:280px;border-radius:50%;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);box-shadow:0 0 0 32px color-mix(in srgb,var(--accent) 5%,transparent),0 0 0 64px color-mix(in srgb,var(--accent) 3%,transparent);z-index:-1}
+  .company-hero h1{margin:4px 0 7px;font-size:24px;letter-spacing:-.035em}.company-eyebrow{font:600 10px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--accent)}
+  .company-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);gap:14px;align-items:start}.company-agents{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.company-agent{padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2)}
+  .company-agent b{display:block;font-size:11.5px;margin-bottom:4px}.company-task{padding:11px 0;border-bottom:1px solid var(--border)}.company-task:last-child{border-bottom:0}.company-form{display:grid;grid-template-columns:1.4fr 1.6fr .7fr .7fr;gap:8px;margin-top:14px}.company-form .input{width:100%}
+  @media(max-width:1000px){.company-layout{grid-template-columns:1fr}.company-agents{grid-template-columns:repeat(2,1fr)}.company-form{grid-template-columns:1fr 1fr}}
+  @media(max-width:620px){.company-agents,.company-form{grid-template-columns:1fr}}
+
   /* ---------- KPI (compactos) ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -400,6 +409,9 @@
   .reasons li::before{content:"";position:absolute;left:11px;top:11px;width:7px;height:7px;border-radius:50%;
     background:var(--amber);box-shadow:0 0 0 3px var(--amber-soft)}
   .reasons li:first-child::before{background:var(--red);box-shadow:0 0 0 3px var(--red-soft)}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  }
   </style>
 </head>
 <body>
@@ -430,7 +442,7 @@
     </aside>
 
     <!-- MAIN -->
-    <div class="main">
+    <main class="main" id="main-content" tabindex="-1">
       <header class="topbar">
         <div class="crumbs"><span class="pv" id="crumbP">Geofence</span><span class="sep">/</span><span class="cv" id="crumbC">Resumen</span></div>
         <div class="grow"></div>
@@ -458,21 +470,22 @@
       <div class="view hidden" id="view-workflows"></div>
       <div class="view hidden" id="view-goals"></div>
       <div class="view hidden" id="view-intelligence"></div>
+      <div class="view hidden" id="view-company"></div>
       <div class="view hidden" id="view-settings"></div>
       <div class="view hidden" id="view-roadmap"></div>
-    </div>
+    </main>
   </div>
 
   <!-- OVERLAY / MODAL / COMMAND PALETTE -->
   <div class="ovl" id="ovl"></div>
-  <div class="modal" id="devModal">
+  <div class="modal" id="devModal" role="dialog" aria-modal="true" aria-labelledby="mName" aria-hidden="true">
     <div class="mhd">
       <div class="mav" id="mAv">?</div>
       <div style="flex:1;min-width:0">
         <h2 id="mName">—</h2><div class="msub" id="mId"></div>
       </div>
       <div id="mTag"></div>
-      <button class="xbtn" id="mClose"><span data-reicon="x-square" data-size="16"></span></button>
+      <button class="xbtn" id="mClose" aria-label="Cerrar detalle de dispositivo"><span data-reicon="x-square" data-size="16"></span></button>
     </div>
     <div class="mbody">
     <div class="kv" id="mKv"></div>
@@ -495,13 +508,13 @@
       <div id="mEvents" style="margin-top:8px"></div>
     </div>
   </div>
-  <div class="cmdk" id="cmdk"><div class="cmdk-box"><input id="cmdkInput" placeholder="Buscar comando o dispositivo…" /><div class="cmdk-list" id="cmdkList"></div></div></div>
+  <div class="cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Paleta de comandos" aria-hidden="true"><div class="cmdk-box"><label class="sr-only" for="cmdkInput">Buscar comando o dispositivo</label><input id="cmdkInput" placeholder="Buscar comando o dispositivo…" /><div class="cmdk-list" id="cmdkList"></div></div></div>
 
-  <div id="toasts"></div>
+  <div id="toasts" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- AUTH MODAL (G1) — login/signup SaaS multi-tenant, 100% local -->
   <div class="ovl" id="authOvl"></div>
-  <div class="modal auth-modal" id="authModal">
+  <div class="modal auth-modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authSub" aria-hidden="true">
     <div class="mhd" style="border-bottom:1px solid var(--border)">
       <div class="mav" style="background:linear-gradient(135deg,var(--accent),#8b5cf6)"><span data-reicon="shield-check" data-size="18"></span></div>
       <div style="flex:1;min-width:0">
@@ -513,10 +526,10 @@
         <button data-t="login" class="active" style="flex:1">Entrar</button>
         <button data-t="signup" style="flex:1">Crear cuenta</button>
       </div>
-      <div class="field"><label>Email</label><input class="input" id="authEmail" type="email" autocomplete="username" placeholder="tu@empresa.com" /></div>
-      <div class="field" id="authOrgField" style="display:none"><label>Organización</label><input class="input" id="authOrg" autocomplete="organization" placeholder="Mi Empresa S.L." /></div>
-      <div class="field"><label>Contraseña</label><input class="input" id="authPass" type="password" autocomplete="current-password" placeholder="••••••••" /></div>
-      <div id="authResult" class="test-result"></div>
+      <div class="field"><label for="authEmail">Email</label><input class="input" id="authEmail" type="email" autocomplete="username" placeholder="tu@empresa.com" /></div>
+      <div class="field" id="authOrgField" style="display:none"><label for="authOrg">Organización</label><input class="input" id="authOrg" autocomplete="organization" placeholder="Mi Empresa S.L." /></div>
+      <div class="field"><label for="authPass">Contraseña</label><input class="input" id="authPass" type="password" autocomplete="current-password" placeholder="••••••••" /></div>
+      <div id="authResult" class="test-result" role="alert" aria-live="assertive"></div>
       <button class="btn primary" id="authSubmit" style="width:100%;justify-content:center;margin-top:6px">Entrar</button>
       <div class="sub" style="text-align:center;margin-top:12px">100% local · sin terceros · credenciales nunca salen de tu máquina</div>
     </div>

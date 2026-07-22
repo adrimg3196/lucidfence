@@ -46,6 +46,18 @@
     "SOAR·CVE": "SOAR·CVE",
     "Dispositivos": "Dispositivos",
     "Riesgo": "Riesgo",
+    "Mapa": "Mapa",
+    "Inventario": "Inventario",
+    "IA · MoA": "IA · MoA",
+    "Eventos": "Eventos",
+    "Acciones": "Acciones",
+    "Alertas": "Alertas",
+    "Objetivos": "Objetivos",
+    "Ajustes": "Ajustes",
+    "Resumen de operación": "Resumen de operación",
+    "Pregunta a la IA sobre tu flota": "Pregunta a la IA sobre tu flota",
+    "Mapa de flota en vivo": "Mapa de flota en vivo",
+    "Conformidad": "Conformidad",
     "Resumen ejecutivo": "Resumen ejecutivo",
     "En geovalla": "En geovalla",
     "Fuera de geovalla": "Fuera de geovalla",
@@ -89,7 +101,34 @@
     "modelo con contexto de flota": "modelo con contexto de flota",
     "hallazgos del motor de riesgo": "hallazgos del motor de riesgo",
     "Email y contraseña": "Email y contraseña",
-    "El nombre de la organización": "El nombre de la organización"
+    "El nombre de la organización": "El nombre de la organización",
+    "Inteligencia de flota": "Inteligencia de flota",
+    "Riesgo de cruce": "Riesgo de cruce",
+    "Anomalías GPS": "Anomalías GPS",
+    "Evidencia local": "Evidencia local",
+    "Compañía autónoma": "Compañía autónoma",
+    "Compañía autónoma de geofencing": "Compañía autónoma de geofencing",
+    "Nuevo objetivo medible": "Nuevo objetivo medible",
+    "Ejecutar ciclo seguro": "Ejecutar ciclo seguro",
+    "Pausar compañía": "Pausar compañía",
+    "Reanudar compañía": "Reanudar compañía",
+    "Squad disponible": "Squad disponible",
+    "Cola gobernada": "Cola gobernada",
+    "Contrato de autonomía": "Contrato de autonomía",
+    "Objetivos activos": "Objetivos activos",
+    "Tareas abiertas": "Tareas abiertas",
+    "Cobertura de evidencia": "Cobertura de evidencia",
+    "Bloqueos de seguridad": "Bloqueos de seguridad",
+    "Crear objetivo": "Crear objetivo",
+    "Nivel de autonomía": "Nivel de autonomía",
+    "Objetivo: reducir salidas no autorizadas": "Objetivo: reducir salidas no autorizadas",
+    "Resultado operativo esperado": "Resultado operativo esperado",
+    "Field Intelligence": "Inteligencia de Campo",
+    "Geo Policy": "Política Geo",
+    "UEM Operations": "Operaciones UEM",
+    "Risk & Compliance": "Riesgo y Compliance",
+    "Product Value": "Valor de Producto",
+    "Independent Critic": "Crítica Independiente"
   };
   const EN = {
     "Command Center": "Command Center",
@@ -187,7 +226,34 @@
     "modelo con contexto de flota": "model with fleet context",
     "hallazgos del motor de riesgo": "risk engine findings",
     "Email y contraseña": "Email and password",
-    "El nombre de la organización": "The organization name"
+    "El nombre de la organización": "The organization name",
+    "Inteligencia de flota": "Fleet intelligence",
+    "Riesgo de cruce": "Crossing risk",
+    "Anomalías GPS": "GPS anomalies",
+    "Evidencia local": "Local evidence",
+    "Compañía autónoma": "Autonomous company",
+    "Compañía autónoma de geofencing": "Autonomous geofencing company",
+    "Nuevo objetivo medible": "New measurable goal",
+    "Ejecutar ciclo seguro": "Run safe cycle",
+    "Pausar compañía": "Pause company",
+    "Reanudar compañía": "Resume company",
+    "Squad disponible": "Available squad",
+    "Cola gobernada": "Governed queue",
+    "Contrato de autonomía": "Autonomy contract",
+    "Objetivos activos": "Active goals",
+    "Tareas abiertas": "Open tasks",
+    "Cobertura de evidencia": "Evidence coverage",
+    "Bloqueos de seguridad": "Safety blocks",
+    "Crear objetivo": "Create goal",
+    "Nivel de autonomía": "Autonomy level",
+    "Objetivo: reducir salidas no autorizadas": "Goal: reduce unauthorized exits",
+    "Resultado operativo esperado": "Expected operational outcome",
+    "Field Intelligence": "Field Intelligence",
+    "Geo Policy": "Geo Policy",
+    "UEM Operations": "UEM Operations",
+    "Risk & Compliance": "Risk & Compliance",
+    "Product Value": "Product Value",
+    "Independent Critic": "Independent Critic"
   };
 
   // Build a bidirectional lookup from the two parallel maps ES (keys) / EN (values).
@@ -195,6 +261,17 @@
   for (const k in ES) {
     LOOKUP[k] = { es: k, en: EN[k] };           // ES text -> pair
     if (EN[k]) LOOKUP[EN[k]] = { es: k, en: EN[k] }; // EN text -> pair
+  }
+
+  function translateValue(value, lang) {
+    const trimmed = String(value || "").trim();
+    if (LOOKUP[trimmed]) return String(value).replace(trimmed, LOOKUP[trimmed][lang]);
+    let output = String(value || "");
+    const phrases = Object.keys(LOOKUP).filter(k => k.length >= 8).sort((a,b) => b.length-a.length);
+    for (const phrase of phrases) {
+      if (output.includes(phrase)) output = output.split(phrase).join(LOOKUP[phrase][lang]);
+    }
+    return output;
   }
 
   function applyI18n(lang) {
@@ -207,9 +284,12 @@
       nodes.push(n);
     }
     for (const node of nodes) {
-      const txt = node.nodeValue.trim();
-      const pair = LOOKUP[txt];
-      if (pair) node.nodeValue = node.nodeValue.replace(txt, pair[lang]);
+      node.nodeValue = translateValue(node.nodeValue, lang);
+    }
+    for (const el of document.querySelectorAll("[placeholder],[title],[aria-label]")) {
+      for (const attr of ["placeholder", "title", "aria-label"]) {
+        if (el.hasAttribute(attr)) el.setAttribute(attr, translateValue(el.getAttribute(attr), lang));
+      }
     }
   }
 
@@ -232,10 +312,12 @@
     btn.setAttribute("style", "position:fixed;right:12px;bottom:12px;z-index:9999;" +
       "background:var(--accent);color:#fff;border:0;border-radius:8px;" +
       "padding:8px 14px;font:600 12px var(--font);cursor:pointer;box-shadow:var(--shadow)");
+    btn.setAttribute("aria-label", lang === "en" ? "Cambiar a español" : "Switch to English");
     btn.addEventListener("click", function () {
       const cur = document.documentElement.lang || "es";
       setLang(cur === "en" ? "es" : "en");
       btn.textContent = (document.documentElement.lang === "en") ? "ES" : "EN";
+      btn.setAttribute("aria-label", document.documentElement.lang === "en" ? "Cambiar a español" : "Switch to English");
     });
     document.body.appendChild(btn);
     // Re-apply when app.js injects dynamic content.

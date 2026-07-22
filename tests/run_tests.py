@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import tempfile
 import time
 import traceback
 
@@ -27,6 +28,13 @@ def _load_module(path):
     return mod
 
 
+def _system_exit_code(exc: SystemExit) -> int:
+    """Normalize SystemExit exactly like Python's process semantics."""
+    if exc.code is None:
+        return 0
+    return exc.code if isinstance(exc.code, int) else 1
+
+
 def main():
     passed = 0
     failed = 0
@@ -42,6 +50,9 @@ def main():
     # (pero jamás matamos un server que el usuario tenga levantado a propósito,
     # pues esos corren fuera de este PID/venv).
     import subprocess
+    qa_data = tempfile.TemporaryDirectory(prefix="lucidfence-qa-")
+    previous_data_dir = os.environ.get("LUCIDFENCE_DATA_DIR")
+    os.environ["LUCIDFENCE_DATA_DIR"] = qa_data.name
     srv = None
     try:
         import http.client
@@ -54,6 +65,14 @@ def main():
                 return True
             except Exception:
                 return False
+        if _server_up():
+            print("ERROR: :8765 ya está ocupado; QA hermético no reutiliza servidores existentes.", file=sys.stderr)
+            if previous_data_dir is None:
+                os.environ.pop("LUCIDFENCE_DATA_DIR", None)
+            else:
+                os.environ["LUCIDFENCE_DATA_DIR"] = previous_data_dir
+            qa_data.cleanup()
+            sys.exit(2)
         if not _server_up():
             # Liberar :8765 si lo ocupa un server huérfano de un run previo.
             try:
@@ -100,12 +119,19 @@ def main():
                 continue
             try:
                 mod = _load_module(os.path.join(HERE, fn))
-            except SystemExit:
+            except SystemExit as exc:
                 # Module ran its own suite at import time and chose to exit.
                 # Its own prints already reported PASS/FAIL. Count it as one
                 # executed file and keep discovering the rest.
-                passed += 1
-                print(f"  [module-level suite] {fn} (see output above)")
+                code = _system_exit_code(exc)
+                if code == 0:
+                    passed += 1
+                    print(f"  [module-level suite] {fn} (exit 0)")
+                else:
+                    failed += 1
+                    msg = f"module-level suite exited {code}"
+                    failures.append((f"{fn}::<import>", msg))
+                    print(f"  FAIL  {fn}::<import>: {msg}")
                 continue
             except Exception as e:  # noqa: BLE001 - report, don't crash
                 failed += 1
@@ -120,6 +146,12 @@ def main():
                     t()
                     passed += 1
                     print(f"  PASS  {fn}::{t.__name__}")
+                except SystemExit as exc:
+                    failed += 1
+                    code = _system_exit_code(exc)
+                    msg = f"test raised SystemExit({code})"
+                    failures.append((f"{fn}::{t.__name__}", msg))
+                    print(f"  FAIL  {fn}::{t.__name__}: {msg}")
                 except Exception as e:  # noqa: BLE001 - report, don't crash
                     failed += 1
                     msg = "".join(traceback.format_exception_only(type(e), e)).strip()
@@ -132,6 +164,11 @@ def main():
                 srv.wait(timeout=5)
             except Exception:
                 srv.kill()
+        if previous_data_dir is None:
+            os.environ.pop("LUCIDFENCE_DATA_DIR", None)
+        else:
+            os.environ["LUCIDFENCE_DATA_DIR"] = previous_data_dir
+        qa_data.cleanup()
     print(f"\n=== {passed} passed, {failed} failed ===")
     if failed:
         print("\nFAILURES:")

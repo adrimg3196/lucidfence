@@ -76,6 +76,10 @@ from core import workflows as WF  # workflows module (templates + custom builder
 from core.actions import VALID_ACTIONS
 from core.alerts import ALERT_TYPES, CHANNELS, ALERT_TYPE_LABELS
 from core.app_paths import ensure_data_dir
+from core.api_keys import APIKeyStore, append_audit, verify_audit
+from core.compliance_controls import map_controls
+from core.cluster import ClusterLease
+from core.autonomous_company import CompanyControlPlane
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
@@ -87,11 +91,15 @@ RATE_LIMIT_REQUESTS = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_REQUESTS", "120"
 RATE_LIMIT_WINDOW_S = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_WINDOW_S", "60") or "60")
 _rate_limit_buckets: dict[str, list[float]] = {}
 _rate_limit_lock = threading.Lock()
+_metrics_lock = threading.Lock()
+_request_counts: dict[str, int] = {}
+MAX_REQUEST_BODY = 1024 * 1024
 
 # Global stores for the local app. Runtime data never lives in Homebrew's
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
 _tenants = TenantStore(DATA_ROOT)
 _auth = AuthStore(DATA_ROOT)
+_api_keys = APIKeyStore(DATA_ROOT)
 # Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
 # configuracion manual (ciso@acme.test / demo1234). Idempotente: si el
 # usuario ya existe, no hace nada. Si el tenant demo no existe, lo crea.
@@ -113,6 +121,7 @@ _SIMULATION = False
 # Per-org engine cache. Each org gets its own running engine.
 _engines: dict[str, Engine] = {}
 _engines_lock = threading.Lock()
+_cluster_lease: ClusterLease | None = None
 
 
 def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
@@ -343,6 +352,32 @@ def engine_for(org_id: str) -> Engine:
         return eng
 
 
+def _company_context(eng: Engine) -> dict:
+    """Build a bounded, secret-free evidence snapshot for one company cycle."""
+    devices = list(eng.store.snapshot().values())
+    known_compliance = [item for item in devices if item.compliant is not None]
+    compliant = sum(1 for item in known_compliance if item.compliant is True)
+    critical_apps = 0
+    for device in devices:
+        for app in device.apps or []:
+            cves = app.get("cves") or app.get("vulnerabilities") or []
+            if any(str(cve.get("severity") or "").lower() == "critical" for cve in cves if isinstance(cve, dict)):
+                critical_apps += 1
+    try:
+        open_incidents = len(eng.incidents.list(status="open"))
+    except Exception:
+        open_incidents = 0
+    return {
+        "devices": len(devices),
+        "outside": sum(1 for item in devices if item.fence_state == "outside"),
+        "unknown": sum(1 for item in devices if item.fence_state == "unknown"),
+        "high_risk": sum(1 for item in devices if item.risk_severity in {"high", "critical"}),
+        "critical_cve_apps": critical_apps,
+        "open_incidents": open_incidents,
+        "compliance_percent": round(100 * compliant / len(known_compliance), 1) if known_compliance else 100.0,
+    }
+
+
 def reload_engine(org_id: str) -> Engine:
     """Rebuild the cached engine for an org from the current config/.env.
 
@@ -381,6 +416,18 @@ def user_from_request(handler) -> Optional[dict]:
             u = _auth.get(sess["user_id"])
             if u and u.active:
                 return u.to_public()
+    authorization = (handler.headers.get("Authorization") or "").strip()
+    if authorization.startswith("Bearer lf_"):
+        record = _api_keys.authenticate(authorization[7:])
+        if record:
+            return {
+                "id": "apikey:" + str(record["id"]),
+                "email": "",
+                "name": str(record.get("name") or "API key"),
+                "active": True,
+                "org_roles": {str(record["org_id"]): str(record["role"])},
+                "auth_type": "api_key",
+            }
     # No anonymous fallback. La dashboard local obtiene una sesión real con
     # RBAC vía /api/auth/login; toda llamada API requiere esa cookie de sesión.
     # (No hay endpoint demo: un request no autenticado nunca se trata como
@@ -515,7 +562,7 @@ def _rate_limit_required(handler) -> bool:
         route = urlparse(handler.path).path
     except Exception:
         return True
-    if route == "/api/health":
+    if route in ("/api/health", "/api/healthz", "/api/readyz"):
         return False
     return route.startswith("/api/") or route.startswith("/v1/")
 
@@ -609,6 +656,24 @@ def _safe_webhook_url(url: str):
     return url
 
 
+def _request_id(handler) -> str:
+    current = getattr(handler, "_request_id", "")
+    if current:
+        return current
+    supplied = (handler.headers.get("X-Request-ID") or "").strip()
+    if supplied and len(supplied) <= 80 and all(ch.isalnum() or ch in "-_." for ch in supplied):
+        current = supplied
+    else:
+        current = os.urandom(12).hex()
+    handler._request_id = current
+    return current
+
+
+def _log_event(event: str, **fields) -> None:
+    record = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "event": event, **fields}
+    print(json.dumps(record, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
 def _send_json(handler, obj, code=200):
     body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
     handler.send_response(code)
@@ -617,6 +682,13 @@ def _send_json(handler, obj, code=200):
     handler.send_header("X-Content-Type-Options", "nosniff")
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
+    handler.send_header("X-Request-ID", _request_id(handler))
+    api_version = getattr(handler, "_api_version", "")
+    if api_version:
+        handler.send_header("X-API-Version", api_version)
+        if api_version == "v1":
+            handler.send_header("Deprecation", "true")
+            handler.send_header("Sunset", "Thu, 31 Dec 2027 23:59:59 GMT")
     # CSP: only same-origin resources; blocks injected third-party scripts (XSS)
     handler.send_header(
         "Content-Security-Policy",
@@ -630,6 +702,19 @@ def _send_json(handler, obj, code=200):
     handler.wfile.write(body)
 
 
+def _send_text(handler, text: str, content_type="text/plain; charset=utf-8", code=200):
+    body = text.encode("utf-8")
+    handler.send_response(code)
+    handler.send_header("Content-Type", content_type)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("X-Request-ID", _request_id(handler))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _send_file(handler, path: Path, content_type: str):
     try:
         body = path.read_bytes()
@@ -639,6 +724,16 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_response(200)
     handler.send_header("Content-Type", content_type)
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header("X-Request-ID", _request_id(handler))
+    csp = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+           "script-src 'self' 'unsafe-inline'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
+           "frame-ancestors 'none'") if path.name in ("cloud.html", "index.html") else (
+           "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+           "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+    handler.send_header("Content-Security-Policy", csp)
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -818,10 +913,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self._route()
         except Exception as e:
-            import traceback
-            print("ROUTE ERROR:", traceback.format_exc())
+            _log_event("route_error", request_id=_request_id(self), method=self.command,
+                       route=urlparse(self.path).path, error_type=type(e).__name__)
             try:
-                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
+                _send_json(self, {"error": "server_error"}, 500)
             except Exception:
                 pass
 
@@ -836,17 +931,23 @@ class Handler(BaseHTTPRequestHandler):
             # Pre-read the full body so the socket is left clean under HTTP/1.0
             # (otherwise the connection closes with unread bytes and the client
             # sees "HTTP/0.9 when not allowed"). _read_body() reuses it.
-            length = int(self.headers.get("Content-Length", 0) or 0)
+            raw_length = self.headers.get("Content-Length", "0") or "0"
+            try:
+                length = int(raw_length)
+            except (TypeError, ValueError):
+                return _send_json(self, {"error": "content_length invalido"}, 400)
+            if length < 0 or length > MAX_REQUEST_BODY:
+                return _send_json(self, {"error": "payload demasiado grande", "max_bytes": MAX_REQUEST_BODY}, 413)
             if length > 0:
                 self._preread_body = self.rfile.read(length)
             else:
                 self._preread_body = b""
             self._route()
         except Exception as e:
-            import traceback
-            print("ROUTE ERROR:", traceback.format_exc())
+            _log_event("route_error", request_id=_request_id(self), method=self.command,
+                       route=urlparse(self.path).path, error_type=type(e).__name__)
             try:
-                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
+                _send_json(self, {"error": "server_error"}, 500)
             except Exception:
                 pass
 
@@ -860,10 +961,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self._route()
         except Exception as e:
-            import traceback
-            print("ROUTE ERROR:", traceback.format_exc())
+            _log_event("route_error", request_id=_request_id(self), method=self.command,
+                       route=urlparse(self.path).path, error_type=type(e).__name__)
             try:
-                _send_json(self, {"error": "server_error", "detail": str(e)}, 500)
+                _send_json(self, {"error": "server_error"}, 500)
             except Exception:
                 pass
 
@@ -878,6 +979,33 @@ class Handler(BaseHTTPRequestHandler):
         route = parsed.path
         qs = parse_qs(parsed.query)
         method = self.command
+        for version in ("v2", "v1"):
+            prefix = f"/api/{version}"
+            if route == prefix or route.startswith(prefix + "/"):
+                self._api_version = version
+                suffix = route[len(prefix):]
+                route = "/api" + (suffix or "/")
+                break
+        with _metrics_lock:
+            _request_counts[method] = _request_counts.get(method, 0) + 1
+
+        if route == "/metrics" and method == "GET":
+            with _metrics_lock:
+                counts = dict(_request_counts)
+            lines = [
+                "# HELP lucidfence_http_requests_total HTTP requests handled by method.",
+                "# TYPE lucidfence_http_requests_total counter",
+            ]
+            for verb, count in sorted(counts.items()):
+                lines.append(f'lucidfence_http_requests_total{{method="{verb}"}} {count}')
+            lines.extend([
+                "# TYPE lucidfence_tenants gauge",
+                f"lucidfence_tenants {len(_tenants.all())}",
+                "# TYPE lucidfence_engines gauge",
+                f"lucidfence_engines {len(_engines)}",
+                "",
+            ])
+            return _send_text(self, "\n".join(lines), "text/plain; version=0.0.4; charset=utf-8")
 
         # static
         if route in ("/", "/app", "/app/", "/dashboard", "/dashboard.html"):
@@ -897,6 +1025,17 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
             return
+        if route == "/favicon.ico" and method == "GET":
+            self.send_response(204)
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            return
+        if route == "/api/openapi.json" and method == "GET":
+            try:
+                schema = json.loads((ROOT / "docs" / "openapi.json").read_text(encoding="utf-8"))
+                return _send_json(self, schema)
+            except (OSError, json.JSONDecodeError):
+                return _send_json(self, {"error": "openapi no disponible"}, 503)
 
         # ---- auth ----
         if route == "/api/auth/signup" and method == "POST":
@@ -915,33 +1054,17 @@ class Handler(BaseHTTPRequestHandler):
                                      "orgs": [o.to_dict() for o in _tenants.list_for_user(user["id"])]})
 
         # ---- Healthcheck sin auth (para monitoreo externo / start_all.sh) ----
-        if route == "/api/health" and method == "GET":
+        if route in ("/api/health", "/api/healthz") and method == "GET":
             return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "desktop_nonce": os.environ.get("LUCIDFENCE_DESKTOP_NONCE", ""),
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+        if route == "/api/readyz" and method == "GET":
+            return _send_json(self, {"ready": True, "service": "lucidfence",
+                                     "tenants_loaded": len(_tenants.all()),
+                                     "cluster_mode": os.environ.get("LUCIDFENCE_CLUSTER_MODE", "single"),
+                                     "leader": bool(_cluster_lease and _cluster_lease.acquired) if os.environ.get("LUCIDFENCE_CLUSTER_MODE") == "active-passive" else True,
+                                     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
-        # ---- Roadmap de mejora tooling (sin auth, publico) ----
-        # Fuente de verdad: roadmap.json + motor roadmap_tooling.py.
-        if route == "/api/roadmap" and method == "GET":
-            try:
-                import roadmap_tooling as _rm
-                d = _rm.load_roadmap()
-                if not d:
-                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
-                return _send_json(self, _rm.get_api_response(d))
-            except Exception as e:
-                return _send_json(self, {"error": "roadmap no disponible"}, 404)
-        if route == "/api/roadmap" and method == "PATCH":
-            try:
-                import roadmap_tooling as _rm
-                d = _rm.load_roadmap()
-                if not d:
-                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
-                body = _read_body(self)
-                code, resp = _rm.patch_api(d, body)
-                return _send_json(self, resp, code)
-            except Exception as e:
-                return _send_json(self, {"error": str(e)}, 400)
 
         # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
         # External SOAR tools cannot hold a browser session cookie. This endpoint
@@ -998,8 +1121,131 @@ class Handler(BaseHTTPRequestHandler):
             return
         user, org = guarded
 
+        # Tenant API keys: high-entropy bearer tokens, shown once, hashed at rest.
+        role = user["org_roles"].get(org)
+        # Operational planning data is authenticated. Mutation is restricted to
+        # an owner browser session so an automation key cannot rewrite the repo.
+        if route == "/api/roadmap" and method == "GET":
+            try:
+                import roadmap_tooling as _rm
+                data = _rm.load_roadmap()
+                if not data:
+                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
+                return _send_json(self, _rm.get_api_response(data))
+            except Exception:
+                return _send_json(self, {"error": "roadmap no disponible"}, 404)
+        if route == "/api/roadmap" and method == "PATCH":
+            if role != "owner" or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo owner con sesion"}, 403)
+            try:
+                import roadmap_tooling as _rm
+                data = _rm.load_roadmap()
+                if not data:
+                    return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
+                code, response = _rm.patch_api(data, _read_body(self))
+                append_audit(_tenants.data_dir(org), {"event": "roadmap.updated", "actor": user.get("id")})
+                return _send_json(self, response, code)
+            except Exception:
+                return _send_json(self, {"error": "roadmap update invalida"}, 400)
+        if route == "/api/loop/metrics" and method == "GET":
+            try:
+                import loop_improve as _loop
+                return _send_json(self, _loop.loop_metrics())
+            except Exception:
+                return _send_json(self, {"error": "metricas de loop no disponibles"}, 503)
+        if route == "/api/api-keys" and method == "GET":
+            if role != "owner":
+                return _send_json(self, {"error": "solo owner"}, 403)
+            return _send_json(self, {"keys": _api_keys.list_for_org(org)})
+        if route == "/api/api-keys" and method == "POST":
+            if role != "owner" or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo owner con sesion"}, 403)
+            body = _read_body(self)
+            try:
+                token, record = _api_keys.create(org, body.get("name", "automation"), body.get("role", "operator"))
+            except ValueError as exc:
+                return _send_json(self, {"error": str(exc)}, 400)
+            append_audit(_tenants.data_dir(org), {"event": "api_key.created", "actor": user.get("id"), "key_id": record["id"], "role": record["role"]})
+            return _send_json(self, {"ok": True, "key": token, "record": record}, 201)
+        if route.startswith("/api/api-keys/") and method == "DELETE":
+            if role != "owner" or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo owner con sesion"}, 403)
+            key_id = route[len("/api/api-keys/"):].strip("/")
+            if not _api_keys.revoke(org, key_id):
+                return _send_json(self, {"error": "api key no encontrada"}, 404)
+            append_audit(_tenants.data_dir(org), {"event": "api_key.revoked", "actor": user.get("id"), "key_id": key_id})
+            return _send_json(self, {"ok": True})
+        if route == "/api/audit" and method == "GET":
+            if role not in ("owner", "admin", "viewer", "auditor"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            audit_path = _tenants.data_dir(org) / "audit.jsonl"
+            events = []
+            try:
+                for line in audit_path.read_text(encoding="utf-8").splitlines()[-500:]:
+                    item = json.loads(line)
+                    if isinstance(item, dict):
+                        events.append(item)
+            except (OSError, json.JSONDecodeError):
+                events = []
+            cef = [f"CEF:0|LucidFence|Local|1.3|{e.get('event','event')}|{e.get('event','event')}|5|rt={e.get('ts','')} act={e.get('actor','')} cs1={e.get('hash','')} cs1Label=chainHash" for e in events]
+            return _send_json(self, {"events": events, "cef": cef, "integrity": verify_audit(_tenants.data_dir(org))})
+
         # engine is per-org; build/lookup it once for the whole request
         eng = engine_for(org)
+
+        # Governed autonomous-company control plane. State is tenant-local and
+        # no route here executes a device command: approved operational work is
+        # handed back to the existing audited UEM action flow.
+        if route == "/api/company" and method == "GET":
+            if not AuthStore.can(role, "company:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            return _send_json(self, CompanyControlPlane(_tenants.data_dir(org)).snapshot())
+        if route == "/api/company/goals" and method == "POST":
+            if not AuthStore.can(role, "company:write") or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "requiere owner/admin con sesion"}, 403)
+            try:
+                goal = CompanyControlPlane(_tenants.data_dir(org)).create_goal(_read_body(self), actor=user["id"])
+            except ValueError as exc:
+                return _send_json(self, {"error": str(exc)}, 400)
+            append_audit(_tenants.data_dir(org), {"event": "company.goal.created", "actor": user["id"], "goal_id": goal["id"]})
+            return _send_json(self, goal, 201)
+        if route == "/api/company/cycle" and method == "POST":
+            if not AuthStore.can(role, "company:run"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            try:
+                result = CompanyControlPlane(_tenants.data_dir(org)).run_cycle(_company_context(eng), actor=user["id"])
+            except RuntimeError as exc:
+                return _send_json(self, {"error": str(exc)}, 409)
+            except ValueError as exc:
+                return _send_json(self, {"error": str(exc)}, 400)
+            append_audit(_tenants.data_dir(org), {"event": "company.cycle.completed", "actor": user["id"], "cycle": result["cycle"], "goal_id": result["goal_id"], "tasks": len(result["created_tasks"])})
+            return _send_json(self, result)
+        if route in {"/api/company/pause", "/api/company/resume"} and method == "POST":
+            if not AuthStore.can(role, "company:write") or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "requiere owner/admin con sesion"}, 403)
+            plane = CompanyControlPlane(_tenants.data_dir(org)); body = _read_body(self)
+            try:
+                result = plane.pause(body.get("reason") or "operator pause", user["id"]) if route.endswith("/pause") else plane.resume(user["id"])
+            except ValueError as exc:
+                return _send_json(self, {"error": str(exc)}, 400)
+            append_audit(_tenants.data_dir(org), {"event": "company.paused" if result["paused"] else "company.resumed", "actor": user["id"]})
+            return _send_json(self, result)
+        if route.startswith("/api/company/tasks/") and method == "POST":
+            if not AuthStore.can(role, "company:approve") or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "requiere owner/admin con sesion"}, 403)
+            suffix = route[len("/api/company/tasks/"):].strip("/").split("/")
+            if len(suffix) != 2 or suffix[1] not in {"approve", "reject"}:
+                return _send_json(self, {"error": "ruta no valida"}, 404)
+            task_id, action = suffix; body = _read_body(self)
+            try:
+                plane = CompanyControlPlane(_tenants.data_dir(org))
+                task = plane.approve_task(task_id, user["id"], body.get("reason") or "reviewed") if action == "approve" else plane.reject_task(task_id, user["id"], body.get("reason") or "rejected")
+            except KeyError:
+                return _send_json(self, {"error": "tarea no encontrada"}, 404)
+            except ValueError as exc:
+                return _send_json(self, {"error": str(exc)}, 409)
+            append_audit(_tenants.data_dir(org), {"event": f"company.task.{action}d", "actor": user["id"], "task_id": task_id, "risk": task.get("risk")})
+            return _send_json(self, task)
 
         if route == "/api/fences" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "fence:read"):
@@ -1126,11 +1372,11 @@ class Handler(BaseHTTPRequestHandler):
             # Return the full engine status (devices, trails, events, actions,
             # stats_history, fences, routes) — the SPA consumes all of it.
             raw.update({
-                "device_count": device_count or st.get("devices_total", 0),
-                "inside_count": inside_count or st.get("inside", 0),
-                "outside_count": outside_count or st.get("outside", 0),
-                "unknown_count": unknown_count or st.get("unknown", 0),
-                "noncompliant": noncompliant or st.get("non_compliant", 0),
+                "device_count": device_count,
+                "inside_count": inside_count,
+                "outside_count": outside_count,
+                "unknown_count": unknown_count,
+                "noncompliant": noncompliant,
                 "events_this_cycle": st.get("events_this_cycle", 0),
                 "actions_this_cycle": st.get("actions_this_cycle", 0),
                 "integration_error": st.get("integration_error"),
@@ -1830,11 +2076,17 @@ class Handler(BaseHTTPRequestHandler):
             a = product.get("analytics", {})
             devs = list(eng.store.snapshot().values())
             non = sum(1 for s in devs if s.compliant is False)
-            total = max(1, len(devs))
+            total = len(devs)
             return _send_json(self, {
-                "compliance_percent": round((total - non) / total * 100),
+                "compliance_percent": round((total - non) / total * 100) if total else 0,
                 "series": a.get("compliance_series", []),
                 "state_distribution": a.get("state_distribution", {}),
+                "controls": map_controls(
+                    [item.to_dict() if hasattr(item, "to_dict") else dict(vars(item)) for item in devs],
+                    product.get("cve_summary", {}),
+                    verify_audit(_tenants.data_dir(org)),
+                ),
+                "framework_disclaimer": "Evidence mapping only; not CIS/ISO certification.",
             })
         if route == "/api/report":
             return _send_json(self, {"report": product.get("report", {})})
@@ -1871,7 +2123,7 @@ def _start_parent_watchdog() -> None:
 def main():
     _start_parent_watchdog()
     cfg = config_loader.load(CONFIG_FILE)
-    global _SIMULATION
+    global _SIMULATION, _cluster_lease
     _SIMULATION = (cfg.get("mode") == "simulation")
     host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")
     port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
@@ -1879,12 +2131,20 @@ def main():
     print(f"[{ts}] LucidFence local app running at http://{host}:{port}")
     print(f"  mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
     print(f"  data={DATA_ROOT}")
+    if os.environ.get("LUCIDFENCE_CLUSTER_MODE") == "active-passive":
+        _cluster_lease = ClusterLease(DATA_ROOT, os.environ.get("LUCIDFENCE_NODE_ID"))
+        if not _cluster_lease.acquire():
+            raise RuntimeError("standby: another LucidFence node holds the writer lease")
+        print(f"  cluster=active-passive leader={_cluster_lease.node_id}")
     httpd = ThreadingHTTPServer((host, port), Handler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print(f"[{ts}] Shutdown requested.")
         httpd.shutdown()
+    finally:
+        if _cluster_lease:
+            _cluster_lease.release()
 
 
 if __name__ == "__main__":

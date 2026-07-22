@@ -12,14 +12,15 @@ from pathlib import Path
 try:
     from playwright.sync_api import sync_playwright
 except Exception as exc:
-    print(f"SKIP playwright unavailable: {exc}")
-    sys.exit(0)
+    sync_playwright = None
+    _PLAYWRIGHT_ERROR = exc
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def main() -> int:
+def test_cloud_browser_smoke() -> None:
+    assert sync_playwright is not None, f"Playwright es obligatorio para E2E: {_PLAYWRIGHT_ERROR}"
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -46,6 +47,10 @@ def main() -> int:
             print("webapp-testing-ok: cloud page smoke passed, screenshot saved")
         finally:
             browser.close()
+
+
+def main() -> int:
+    test_cloud_browser_smoke()
     return 0
 
 

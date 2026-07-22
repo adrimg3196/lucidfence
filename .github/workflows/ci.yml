@@ -25,8 +25,9 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          python3 -m pip install requests
+          python3 -m pip install --require-hashes -r requirements.lock
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
 
       - name: Run test suite
         run: python3 tests/run_tests.py
@@ -43,7 +44,26 @@ jobs:
           node-version: "20"
 
       - name: Syntax check app.js
-        run: node --check static/app.js
+        run: |
+          node --check static/app.js
+          node --check static/i18n.js
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 -m pip install pip-audit
+      - run: pip-audit -r requirements.lock
+      - name: Generate CycloneDX SBOM
+        run: python3 scripts/generate_sbom.py --out sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lucidfence-sbom
+          path: sbom.cdx.json
 
   secret-scan:
     name: Secret scan (gitleaks)

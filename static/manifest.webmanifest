@@ -1,0 +1,13 @@
+{
+  "name": "LucidFence Web",
+  "short_name": "LucidFence",
+  "description": "Geofencing UEM/MDM browser-only, local-first y gratuito",
+  "start_url": "./web.html#company",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b0f",
+  "theme_color": "#111318",
+  "icons": [
+    {"src": "lucidfence-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

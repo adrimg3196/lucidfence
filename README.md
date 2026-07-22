@@ -1,12 +1,39 @@
 # LucidFence
 
-> Geofencing y riesgo explicable para flotas UEM/MDM. Open source, gratuito y local-first.
+> Geofencing y riesgo explicable para flotas UEM/MDM. Open source, gratuito y 100% web.
 
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![macOS + Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue.svg)](bin/lucidfence)
-[![Local-first](https://img.shields.io/badge/data-local--first-5e6ad5.svg)](docs/LOCAL_APP.md)
+[![PWA](https://img.shields.io/badge/app-PWA-5e6ad5.svg)](static/web.html)
+[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/AUTONOMOUS_GEOFENCING_COMPANY.md)
 
-LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Se ejecuta en tu Mac o servidor Linux; no exige una cuenta de LucidFence, una nube propia ni una suscripción.
+LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Su modo principal funciona directamente en el navegador: no exige instalación, cuenta de LucidFence, nube propia ni suscripción.
+
+## Consumir LucidFence Web — infraestructura del usuario
+
+LucidFence no necesita ni presupone un hosting operado por el autor. Cada organización genera el bundle y lo publica en su propia cuenta, dominio, nube o intranet:
+
+```bash
+python3 scripts/build_web_bundle.py
+```
+
+Artefactos:
+
+```text
+dist/lucidfence-web/       # directorio estático
+dist/lucidfence-web.zip    # paquete redistribuible
+dist/lucidfence-web/SHA256SUMS
+```
+
+Consulta [`deploy/web/SELF_HOST.md`](deploy/web/SELF_HOST.md) para desplegarlo en GitHub Pages, Cloudflare Pages, Nginx, Caddy, S3 o un contenedor del cliente.
+
+- Sin signup, tarjeta, Python, Docker o Homebrew.
+- Objetivos, flota, geovallas y ciclos se ejecutan en JavaScript/Web Worker.
+- El workspace se guarda en IndexedDB y puede exportarse/importarse.
+- El Service Worker permite reutilizarla offline después de la primera carga.
+- Las simulaciones no tienen efectos externos y no usan APIs de pago.
+- Los secretos UEM se rechazan en las importaciones y nunca se guardan en GitHub Pages.
+
+La app de escritorio, Homebrew y el backend Python siguen disponibles como opciones avanzadas para conectores live y despliegues soberanos; ya no son obligatorios para probar ni operar el modo de simulación.
 
 ## Descargar la app de escritorio — Preview comunitaria
 
@@ -85,6 +112,10 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
   tendencia de conformidad y transiciones de geovalla con fórmula explicable.
 - Alertas, export CSV/HTML y digest.
 - RBAC local y aislamiento por organización.
+- Compañía autónoma de geofencing gobernada: objetivos medibles, squads
+  especializados, evidencia, simulación, policy gates y handoff humano sin
+  ejecución implícita de comandos UEM. Ver
+  [`docs/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/AUTONOMOUS_GEOFENCING_COMPANY.md).
 - Dashboard local sin CDN, telemetría ni frontend cloud.
 - Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
   `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y

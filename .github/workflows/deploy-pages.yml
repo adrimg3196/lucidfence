@@ -1,42 +1,37 @@
-name: deploy-pages
+name: build-web-bundle
 
-# Landing + dashboard estático a GitHub Pages (siempre-on, gratis).
-# Copia static/ a la raíz del artefacto con -L (dereferencia symlinks)
-# para evitar el fallo de deploy-pages con enlaces simbólicos.
+# Build-only: LucidFence does not operate a canonical hosted runtime.
+# End users download/fork the bundle and deploy it in their own infrastructure.
 on:
   push:
     branches: [main]
+    paths:
+      - "static/web*"
+      - "static/sw.js"
+      - "static/manifest.webmanifest"
+      - "static/lucidfence-icon.svg"
+      - "deploy/web/**"
+      - "scripts/build_web_bundle.py"
+      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
-  pages:
+  bundle:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Preparar artefacto (static/ -> raíz, sin symlinks)
-        run: |
-          rm -rf _pages && mkdir -p _pages
-          cp -rL static/. _pages/
-          # landing es la portada
-          [ -f _pages/index.html ] || cp _pages/landing.html _pages/index.html
-          # Documentación y artefactos de instalación para clientes (raíz).
-          for f in CLIENTE.md README.md docker-compose.yml install.sh requirements.txt; do
-            [ -f "$f" ] && cp -L "$f" _pages/ || true
-          done
-          ls -la _pages | head
-      - name: Subir artefacto de Pages
-        uses: actions/upload-pages-artifact@v3
+      - name: Construir bundle estático owner-neutral
+        run: python3 scripts/build_web_bundle.py
+      - name: Verificar checksums
+        working-directory: dist/lucidfence-web
+        run: sha256sum -c SHA256SUMS
+      - name: Publicar artefacto descargable, no hosting
+        uses: actions/upload-artifact@v4
         with:
-          path: _pages
-          retention-days: 1
-      - name: Desplegar a Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          name: lucidfence-web
+          path: dist/lucidfence-web.zip
+          if-no-files-found: error
+          retention-days: 30

@@ -70,4 +70,13 @@ def load(config_path: Path) -> dict:
     jamf_cfg.setdefault("client_id", env.get("JAMF_CLIENT_ID", ""))
     jamf_cfg.setdefault("client_secret", env.get("JAMF_CLIENT_SECRET", ""))
 
+    # VMware Workspace ONE UEM live mode. Secrets stay in environment/tenant
+    # config and the adapter performs no network call during construction.
+    workspace_cfg = cfg.setdefault("mdm", {}).setdefault("workspace_one", {})
+    workspace_cfg.setdefault("live", bool(env.get("WORKSPACE_ONE_BASE_URL")))
+    workspace_cfg.setdefault("base_url", env.get("WORKSPACE_ONE_BASE_URL", ""))
+    workspace_cfg.setdefault("tenant_code", env.get("WORKSPACE_ONE_TENANT_CODE", ""))
+    workspace_cfg.setdefault("username", env.get("WORKSPACE_ONE_USERNAME", ""))
+    workspace_cfg.setdefault("password", env.get("WORKSPACE_ONE_PASSWORD", ""))
+
     return cfg

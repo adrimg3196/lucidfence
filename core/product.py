@@ -13,6 +13,8 @@ import math
 from statistics import median
 from typing import Any
 
+from core.predictive import forecast_movements
+
 
 MAX_HISTORY_POINTS = 4096
 MAX_TRAIL_POINTS = 20000
@@ -77,7 +79,7 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
         incidents = eng.incidents.merge(incidents)
     policies = derive_policies(fences, devices, status)
     analytics = build_analytics(
-        devices, events, actions, history, trails=trails,
+        devices, events, actions, history, trails=trails, fences=fences,
         expected_interval_seconds=status.get("interval_seconds") or 900,
     )
     insights = build_insights(devices, events, actions, incidents, risk, stats)
@@ -392,6 +394,7 @@ def build_analytics(
     history: list[dict[str, Any]],
     *,
     trails: list[dict[str, Any]] | None = None,
+    fences: list[dict[str, Any]] | None = None,
     now: datetime | None = None,
     expected_interval_seconds: Any = 900,
 ) -> dict[str, Any]:
@@ -425,6 +428,9 @@ def build_analytics(
         "fleet_intelligence": _fleet_intelligence(
             history, trails or [], now=now,
             expected_interval_seconds=expected_interval_seconds,
+        ),
+        "predictive_movement": forecast_movements(
+            trails or [], fences or [], int(expected_interval_seconds or 900),
         ),
     }
 

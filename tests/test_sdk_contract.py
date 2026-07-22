@@ -66,16 +66,10 @@ class _DictDevice(dict):
 
 
 def make_adapter(name: str):
-    """Build a real registered adapter by name, or skip if unknown."""
-    if name == "simulation":
-        return SimulationAdapter()
+    """Build every registered adapter with safe/default constructor values."""
     if name == "applivery":
         return AppliveryAdapter(org_id="o", endpoint_template="/x")
-    if name == "intune":
-        return IntuneAdapter()
-    if name == "jamf":
-        return JamfAdapter()
-    return None  # community adapter — caller decides
+    return ADAPTER_REGISTRY[name]()
 
 
 def test_all_registered_adapters_have_unique_names():
@@ -97,7 +91,7 @@ def test_all_registered_adapters_implement_execute():
 
 def test_known_adapters_satisfy_response_contract():
     """For every built-in adapter, a lock call returns the required keys."""
-    for n in ("simulation", "applivery", "intune", "jamf"):
+    for n in ADAPTER_REGISTRY:
         a = make_adapter(n)
         if a is None:
             continue
@@ -108,7 +102,7 @@ def test_known_adapters_satisfy_response_contract():
 
 def test_known_adapters_handle_dict_device():
     """Adapter must accept a dict-shaped device (UI/server shape)."""
-    for n in ("simulation", "intune", "jamf"):
+    for n in ADAPTER_REGISTRY:
         a = make_adapter(n)
         if a is None:
             continue
@@ -118,7 +112,7 @@ def test_known_adapters_handle_dict_device():
 
 def test_known_adapters_dry_run_does_not_raise():
     """dry_run=True must construct the request but not send it."""
-    for n in ("intune", "jamf", "applivery"):
+    for n in ADAPTER_REGISTRY:
         a = make_adapter(n)
         if a is None:
             continue

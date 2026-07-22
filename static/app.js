@@ -150,12 +150,12 @@ function showAuthModal(){
   const m = $("#authModal"), ov = $("#authOvl");
   if(!m) return;
   setAuthTab(App._authTab||"login");
-  m.classList.add("show"); ov.classList.add("show");
+  m.classList.add("show"); m.setAttribute("aria-hidden","false"); ov.classList.add("show");
   const e = $("#authEmail"); if(e) setTimeout(()=>e.focus(), 30);
 }
 function hideAuthModal(){
   const m = $("#authModal"), ov = $("#authOvl");
-  if(m) m.classList.remove("show"); if(ov) ov.classList.remove("show");
+  if(m){ m.classList.remove("show"); m.setAttribute("aria-hidden","true"); } if(ov) ov.classList.remove("show");
   const res = $("#authResult"); if(res){ res.className="test-result"; res.textContent=""; }
 }
 function setAuthTab(tab){
@@ -206,7 +206,11 @@ async function logout(){
 }
 function startApp(){
   renderNav();
-  refresh(true).then(()=>{ goView(App.view||"overview"); App._started=true; startPolling(); }).catch(()=>{});
+  refresh(true).then(()=>{
+    const requested=location.hash.replace(/^#/,"");
+    goView(NAV.some(item=>item.id===requested)?requested:(App.view||"overview"));
+    App._started=true; startPolling();
+  }).catch(()=>{});
 }
 function startPolling(){ stopPolling(); App.pollTimer = setInterval(()=>refresh(false), 60000); }
 function stopPolling(){ if(App.pollTimer){ clearInterval(App.pollTimer); App.pollTimer=null; } }
@@ -229,6 +233,7 @@ const NAV = [
   {id:"workflows",  label:"Workflows",   icon:"sitemap-4"},
   {id:"goals",      label:"Objetivos",   icon:"target"},
   {id:"intelligence",label:"Inteligencia",icon:"chart-line"},
+  {id:"company",     label:"Compañía autónoma",icon:"building"},
   {id:"settings",   label:"Ajustes",     icon:"settings"},
   {id:"roadmap",    label:"Roadmap",     icon:"git-branch"},
 ];
@@ -251,6 +256,7 @@ function renderNav(){
 }
 function goView(id){
   App.view = id;
+  if(location.hash!=="#"+id) history.replaceState(null,"","#"+id);
   renderNav();
   $$(".view").forEach(v=>v.classList.add("hidden"));
   const v = $("#view-"+id); v.classList.remove("hidden");
@@ -272,6 +278,7 @@ function goView(id){
   if(id==="workflows") renderWorkflows();
   if(id==="goals") renderGoals();
   if(id==="intelligence") renderIntelligence();
+  if(id==="company") renderCompany();
   if(id==="settings") renderSettings();
   if(id==="roadmap") renderRoadmap();
 }
@@ -316,9 +323,18 @@ async function refresh(initial){
     else if(App.view==="workflows") renderWorkflows();
     else if(App.view==="goals") renderGoals();
     else if(App.view==="intelligence") renderIntelligence();
+    else if(App.view==="company") renderCompany();
     else if(App.view==="ai") loadAiProviders();
     else if(App.view==="roadmap") renderRoadmap();
-  }catch(e){ /* deja lo anterior */ }
+  }catch(e){
+    const se=$("#sync"); if(se) se.classList.add("stale");
+    const text=$("#syncText"); if(text) text.textContent="Error de conexión · datos anteriores";
+    const now=Date.now();
+    if(!App._lastRefreshErrorAt || now-App._lastRefreshErrorAt>30000){
+      toast("Datos no actualizados", e.message||"No se pudo contactar con la API", "bad");
+      App._lastRefreshErrorAt=now;
+    }
+  }
 }
 
 /* ============================================================
@@ -327,7 +343,10 @@ async function refresh(initial){
 async function renderRoadmap(){
   const node = $("#view-roadmap"); if(!node) return;
   try{
-    const d = await api("/api/roadmap");
+    const [d, loopMetrics] = await Promise.all([
+      api("/api/roadmap"),
+      api("/api/loop/metrics").catch(()=>({iterations:0,average_score:0,below_threshold:0}))
+    ]);
     const prog = d.progress || {};
     const pct = prog.pct||0;
     const barFull = Math.max(0, Math.min(10, Math.round(pct/10)));
@@ -346,6 +365,8 @@ async function renderRoadmap(){
             <div class="row"><span class="sw" style="background:var(--green)"></span><b>${prog.done||0}</b> features terminadas</div>
             <div class="row"><span class="sw" style="background:var(--muted-2)"></span><b>${(prog.total||0)-(prog.done||0)}</b> pendientes</div>
             <div class="row" style="font-family:var(--mono);color:var(--muted)">[${bar}]</div>
+            <div class="row"><b>${finiteMetric(loopMetrics.iterations,0,1000000)||0}</b> iteraciones del loop</div>
+            <div class="row"><b>${finiteMetric(loopMetrics.average_score,0,10)||0}/10</b> calidad media · ${finiteMetric(loopMetrics.below_threshold,0,1000000)||0} bajo umbral</div>
           </div>
         </div>
       </div></div>`;
@@ -529,8 +550,8 @@ function renderOverview(){
   const unknown = devs.length-inside-outside;
   const noncomp = devs.filter(d=>d.compliant===false).length;
   const iosGeo = st.ios_geofence_summary || {};
-  const total = devs.length || (inside+outside+unknown) || 1;
-  const compPct = Math.round((total-noncomp)/total*100);
+  const total = devs.length;
+  const compPct = total ? Math.round((total-noncomp)/total*100) : 0;
   const events = st.recent_events||[];
   const actions = st.recent_actions||[];
   const routes = st.routes||[];
@@ -672,10 +693,10 @@ function renderMapView(){
   const st = App.status; if(!st) return;
   $("#view-map").innerHTML = `
     <div class="toolbar"><div class="filters" id="mapFilters">
-      <span class="chip${App.mapFilter==="all"?" active":""}" data-f="all">Todos</span>
-      <span class="chip${App.mapFilter==="inside"?" active":""}" data-f="inside">Dentro</span>
-      <span class="chip${App.mapFilter==="outside"?" active":""}" data-f="outside">Fuera</span>
-      <span class="chip${App.mapFilter==="unknown"?" active":""}" data-f="unknown">Desconocidos</span>
+      <button type="button" class="chip${App.mapFilter==="all"?" active":""}" data-f="all">Todos</button>
+      <button type="button" class="chip${App.mapFilter==="inside"?" active":""}" data-f="inside">Dentro</button>
+      <button type="button" class="chip${App.mapFilter==="outside"?" active":""}" data-f="outside">Fuera</button>
+      <button type="button" class="chip${App.mapFilter==="unknown"?" active":""}" data-f="unknown">Desconocidos</button>
     </div><div class="grow"></div>
       <button class="btn sm" onclick="recenterMap()">Centrar</button></div>
     <div class="card"><div class="map-wrap"><div id="fleetMap" class="map-canvas"></div>
@@ -744,7 +765,7 @@ function drawMapMarkers(devs, filter){
     // trail
     const tr = (d.trail||[]).slice(-30);
     if(tr.length>1){
-      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]&&p[1]), {color:col, weight:1.5, opacity:.4}).addTo(App.trailLayer);
+      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]!=null&&p[1]!=null), {color:col, weight:1.5, opacity:.4}).addTo(App.trailLayer);
     }
   });
 }
@@ -758,11 +779,11 @@ function renderDevices(){
   $("#view-devices").innerHTML = `
     <div class="toolbar">
       <div class="filters" id="devFilters">
-        <span class="chip active" data-f="all">Todos</span>
-        <span class="chip" data-f="inside">Dentro</span>
-        <span class="chip" data-f="outside">Fuera</span>
-        <span class="chip" data-f="unknown">Desconocidos</span>
-        <span class="chip" data-f="noncompliant">Incumplen</span>
+        <button type="button" class="chip active" data-f="all">Todos</button>
+        <button type="button" class="chip" data-f="inside">Dentro</button>
+        <button type="button" class="chip" data-f="outside">Fuera</button>
+        <button type="button" class="chip" data-f="unknown">Desconocidos</button>
+        <button type="button" class="chip" data-f="noncompliant">Incumplen</button>
       </div>
       <input class="search" id="devSearch" placeholder="Buscar dispositivo…"/>
     </div>
@@ -819,7 +840,7 @@ function renderDeviceRows(){
       <td><span class="tag ${tagCls}"><span class="d"></span>${state==="inside"?"Dentro":state==="outside"?"Fuera":"Desconocido"}</span></td>
       <td>${d.compliant===false?`<span class="tag nocomp"><span class="d"></span>Incumple</span>`:`<div style="display:flex;align-items:center;gap:8px"><div class="cbar ${cbCls}"><i style="width:${compPct}%"></i></div><span class="mono">${compPct}%</span></div>`}</td>
       <td>${iosGeofenceBadge(d, {empty:true})}</td>
-      <td class="mono">${esc(d.city||d.country|| (d.lat!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
+      <td class="mono">${esc(d.city||d.country|| (d.lat!=null&&d.lng!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
       <td class="mono">${fmt.ago(d.last_seen)}</td>
       <td>${verifiedCell}</td>
       <td><span class="plat" style="cursor:pointer" onclick="openDeviceModal('${esc(d.device_id)}')">${I.act}</span></td>`;
@@ -830,6 +851,7 @@ function renderDeviceRows(){
 
 /* ---------- device modal ---------- */
 async function openDeviceModal(id){
+  App._modalReturnFocus = document.activeElement;
   const d = (App.status.devices||[]).find(x=>x.device_id===id);
   if(!d) return;
   $("#mAv").textContent = avatarText(d.name); $("#mAv").style.background = avatarColor(d.device_id);
@@ -841,7 +863,7 @@ async function openDeviceModal(id){
     ["Plataforma", d.platform||"—"], ["Estado geovalla", state],
     ["Conformidad", d.compliant===false?"Incumple":(d.compliance_pct!=null?d.compliance_pct+"%":"OK")],
     ["Cumplimiento iOS geocerca", d.geofence_compliance ? ((d.geofence_compliance.compliant?"OK":"Incumple") + " · " + (d.geofence_compliance.policy_name||"política iOS")) : "—"],
-    ["Ubicación", d.lat!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
+    ["Ubicación", d.lat!=null&&d.lng!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
     ["Visto", fmt.date(d.last_seen)],
@@ -898,9 +920,9 @@ async function openDeviceModal(id){
     const tr = (det.trail||[]).slice(-40);
     if(tr.length>1 && typeof L!=="undefined"){
       const tm = L.map(trailNode, {zoomControl:false, attributionControl:false}).setView([tr[0].lat,tr[0].lng], 9);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:19}).addTo(tm);
-      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p.lat&&p.lng), {color:"#5e6ad5",weight:2}).addTo(tm);
-      tr.forEach(p=>{ if(p.lat&&p.lng) L.circleMarker([p.lat,p.lng],{radius:3,color:"#5e6ad5",fillOpacity:.7}).addTo(tm); });
+      L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(tm);
+      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]!=null&&p[1]!=null), {color:"#5e6ad5",weight:2}).addTo(tm);
+      tr.forEach(p=>{ if(p.lat!=null&&p.lng!=null) L.circleMarker([p.lat,p.lng],{radius:3,color:"#5e6ad5",fillOpacity:.7}).addTo(tm); });
       setTimeout(()=>tm.invalidateSize(),40);
     }
     const evs = (det.events||[]).slice(-8).reverse();
@@ -921,10 +943,15 @@ async function openDeviceModal(id){
       };
     });
   }catch(e){ $("#mEvents").innerHTML = `<div class="sub">No se pudieron cargar detalles.</div>`; }
-  $("#ovl").classList.add("show"); $("#devModal").classList.add("show");
+  $("#ovl").classList.add("show"); $("#devModal").classList.add("show"); $("#devModal").setAttribute("aria-hidden","false");
+  $("#mClose").focus();
   if(App.map) App.map.closePopup();
 }
-function closeModal(){ $("#ovl").classList.remove("show"); $("#devModal").classList.remove("show"); }
+function closeModal(){
+  $("#ovl").classList.remove("show"); $("#devModal").classList.remove("show"); $("#devModal").setAttribute("aria-hidden","true");
+  if(App._modalReturnFocus && document.contains(App._modalReturnFocus)) App._modalReturnFocus.focus();
+  App._modalReturnFocus=null;
+}
 $("#mClose") && ($("#mClose").onclick = closeModal);
 $("#ovl") && ($("#ovl").onclick = closeModal);
 
@@ -938,10 +965,10 @@ function renderEvents(){
   events.forEach(e=>counts[e.kind||"unknown"]=(counts[e.kind||"unknown"]||0)+1);
   $("#view-events").innerHTML = `
     <div class="toolbar"><div class="filters" id="evFilters">
-      <span class="chip active" data-f="all">Todos</span>
-      <span class="chip" data-f="enter">Entradas</span>
-      <span class="chip" data-f="exit">Salidas</span>
-      <span class="chip" data-f="action">Acciones</span>
+      <button type="button" class="chip active" data-f="all">Todos</button>
+      <button type="button" class="chip" data-f="enter">Entradas</button>
+      <button type="button" class="chip" data-f="exit">Salidas</button>
+      <button type="button" class="chip" data-f="action">Acciones</button>
     </div></div>
     <div class="card"><div class="tl" id="evList"></div></div>`;
   let f="all";
@@ -959,11 +986,11 @@ let incidentFilter = "active";
 async function renderIncidents(){
   const node = $("#view-incidents"); if(!node) return;
   node.innerHTML = `<div class="toolbar"><div class="filters" id="incFilters">
-      <span class="chip ${incidentFilter==='active'?'active':''}" data-f="active">Activos</span>
-      <span class="chip ${incidentFilter==='open'?'active':''}" data-f="open">Abiertos</span>
-      <span class="chip ${incidentFilter==='acknowledged'?'active':''}" data-f="acknowledged">En investigación</span>
-      <span class="chip ${incidentFilter==='resolved'?'active':''}" data-f="resolved">Resueltos</span>
-      <span class="chip ${incidentFilter==='all'?'active':''}" data-f="all">Todos</span>
+      <button type="button" class="chip ${incidentFilter==='active'?'active':''}" data-f="active">Activos</button>
+      <button type="button" class="chip ${incidentFilter==='open'?'active':''}" data-f="open">Abiertos</button>
+      <button type="button" class="chip ${incidentFilter==='acknowledged'?'active':''}" data-f="acknowledged">En investigación</button>
+      <button type="button" class="chip ${incidentFilter==='resolved'?'active':''}" data-f="resolved">Resueltos</button>
+      <button type="button" class="chip ${incidentFilter==='all'?'active':''}" data-f="all">Todos</button>
     </div><div class="grow"></div><button class="btn sm" id="incReload">Actualizar</button><button class="btn sm sec" id="incExport">Exportar CSV</button></div>
     <div class="grid3" id="incStats" style="margin:10px 12px;display:none">
       <div class="kpi"><div class="k" id="kOpen">–</div><div class="l">Abiertos</div></div>
@@ -1435,7 +1462,7 @@ function buildFleetContext(st){
   lines.push(`Dentro: ${st.inside_count||0} · Fuera: ${st.outside_count||0} · Desconocidos: ${st.unknown_count||0} · Incumplen: ${st.noncompliant||0}`);
   lines.push("Detalle:");
   devs.slice(0,40).forEach(d=>{
-    lines.push(`- ${d.name} (${d.platform}) → ${d.fence_state||"desconocido"}${d.compliant===false?" [INCUMPLE]":""} | ${d.city||d.country||""} | ${d.lat!=null?d.lat.toFixed(3)+","+d.lng.toFixed(3):"sin coord"} | visto ${fmt.ago(d.last_seen)} | fuente ${d.location_source||d.source||"?"}`);
+    lines.push(`- ${d.name} (${d.platform}) → ${d.fence_state||"desconocido"}${d.compliant===false?" [INCUMPLE]":""} | ${d.city||d.country||""} | ${d.lat!=null&&d.lng!=null?d.lat.toFixed(3)+","+d.lng.toFixed(3):"sin coord"} | visto ${fmt.ago(d.last_seen)} | fuente ${d.location_source||d.source||"?"}`);
   });
   const evs = (st.recent_events||[]).slice(0,15);
   if(evs.length){ lines.push("Eventos recientes:"); evs.forEach(e=>lines.push(`- [${e.kind}] ${e.text||e.msg||""} (${fmt.ago(e.ts)})`)); }
@@ -1450,10 +1477,10 @@ function buildFleetContext(st){
 function renderGoals(){
   const st = App.status; if(!st) return;
   const devs = st.devices||[];
-  const total = devs.length || (st.inside_count+st.outside_count+st.unknown_count) || 1;
+  const total = devs.length;
   const inside = st.inside_count||0, outside = st.outside_count||0, unknown = st.unknown_count||0;
   const noncomp = st.noncompliant||0;
-  const compPct = Math.round((total-noncomp)/total*100);
+  const compPct = total ? Math.round((total-noncomp)/total*100) : 0;
   const routesOn = (st.stats&&st.stats.routes_on_route!=null)?st.stats.routes_on_route:0;
   const routesTot = (st.routes||[]).length;
   const fences = (st.fences||[]).length;
@@ -1461,7 +1488,7 @@ function renderGoals(){
   // Objetivos (targets) — configurables aquí
   const goals = [
     {key:"comp", label:"Conformidad de flota", icon:I.shield, target:95, real:compPct, unit:"%", hint:"% dispositivos conformes"},
-    {key:"inside", label:"Dispositivos en su geovalla", icon:I.in, target:90, real:Math.round(inside/total*100), unit:"%", hint:"% dentro de zona asignada"},
+    {key:"inside", label:"Dispositivos en su geovalla", icon:I.in, target:90, real:total?Math.round(inside/total*100):0, unit:"%", hint:"% dentro de zona asignada"},
     {key:"cov", label:"Cobertura de geovallas", icon:I.dev, target:100, real:Math.min(100, Math.round(fences/3*100)), unit:"%", hint:fences+" geovallas definidas"},
     {key:"routes", label:"Rutas en trayecto", icon:I.route, target:100, real:routesTot?Math.round(routesOn/Math.max(1,routesTot)*100):0, unit:"%", hint:routesOn+"/"+routesTot+" en ruta"},
     {key:"vis", label:"Visibilidad (sin señal)", icon:I.out, target:0, real:unknown, unit:"disp", invert:true, hint:unknown+" sin señal"},
@@ -1527,6 +1554,42 @@ function finiteMetric(value, min=0, max=100){
 function metricText(value, suffix=""){ return value===null ? "—" : `${value}${suffix}`; }
 function safeDuration(value){ const number=finiteMetric(value,0,31536000); return number===null?"—":fmtDur(number); }
 
+async function renderCompany(){
+  const node=$("#view-company"); if(!node) return;
+  node.innerHTML=`<div class="card" aria-live="polite"><div class="bd"><div class="sub">Cargando control plane por tenant…</div></div></div>`;
+  try{
+    const data=await api("/api/company");
+    const metrics=data.metrics||{}, goals=data.goals||[], tasks=(data.tasks||[]).slice().reverse(), agents=data.agents||[];
+    const activeGoals=goals.filter(g=>g.status==="active");
+    const riskClass=r=>r==="forbidden"||r==="high"?"nocomp":r==="medium"?"out":"in";
+    const statusClass=s=>s==="executed"?"in":s==="blocked"||s==="rejected"?"nocomp":"unk";
+    const agentHtml=agents.map(a=>`<div class="company-agent"><b>${esc(a.name)}</b><div class="sub">${esc(a.mission)}</div></div>`).join("");
+    const goalHtml=activeGoals.length?activeGoals.map(g=>`<div class="company-task"><div class="row gap wrap"><b style="font-size:12px">${esc(g.title)}</b><span class="tag in"><span class="d"></span>${esc(g.priority)} · ${esc(g.autonomy)}</span></div><div class="sub" style="margin-top:5px">${esc(g.outcome)}</div><div class="sub" style="margin-top:4px">${(g.metrics||[]).map(m=>`${esc(m.name)} → ${esc(m.target)}`).join(" · ")}</div></div>`).join(""):`<div class="sub">No hay objetivo activo. Define un resultado, métrica y límite de autonomía antes de ejecutar ciclos.</div>`;
+    const taskHtml=tasks.length?tasks.slice(0,10).map(t=>`<div class="company-task"><div class="row gap wrap"><b style="font-size:12px;flex:1">${esc(t.title)}</b><span class="tag ${riskClass(t.risk)}"><span class="d"></span>${esc(t.risk)}</span><span class="tag ${statusClass(t.status)}"><span class="d"></span>${esc(t.status)}</span></div><div class="sub" style="margin-top:5px">${esc(t.agent_id)} · ${esc(t.action)} · evidencia ${(t.evidence||[]).length}</div>${t.status==="proposed"&&t.requires_approvals>0?`<button class="btn sm companyApprove" data-task="${esc(t.id)}" style="margin-top:8px">Revisar y aprobar handoff</button>`:""}</div>`).join(""):`<div class="sub">El primer ciclo convertirá telemetría real en tareas verificables.</div>`;
+    node.innerHTML=`
+      <section class="company-hero" aria-labelledby="companyTitle">
+        <div class="company-eyebrow">Control plane · tenant scoped · ${data.paused?"PAUSED":"ACTIVE"}</div>
+        <h1 id="companyTitle">Compañía autónoma de geofencing</h1>
+        <div class="sub" style="max-width:760px">Un equipo digital que observa la flota, forma el squad adecuado y entrega simulaciones o recomendaciones con evidencia. Nunca ejecuta wipe, factory reset ni comandos UEM desde este plano.</div>
+        <div class="row gap wrap" style="margin-top:15px"><button class="btn primary" id="companyNewGoal">Nuevo objetivo medible</button><button class="btn" id="companyRun" ${activeGoals.length&&!data.paused?"":"disabled"}>Ejecutar ciclo seguro</button><button class="btn" id="companyPause">${data.paused?"Reanudar compañía":"Pausar compañía"}</button></div>
+        <form id="companyGoalForm" class="company-form hidden">
+          <label class="sr-only" for="companyGoalTitle">Objetivo</label><input class="input" id="companyGoalTitle" maxlength="160" required placeholder="Objetivo: reducir salidas no autorizadas" />
+          <label class="sr-only" for="companyGoalOutcome">Resultado</label><input class="input" id="companyGoalOutcome" maxlength="500" required placeholder="Resultado operativo esperado" />
+          <label class="sr-only" for="companyGoalTarget">Meta</label><input class="input" id="companyGoalTarget" type="number" value="0" required title="Meta outside_devices" />
+          <select class="input" id="companyGoalAutonomy" aria-label="Nivel de autonomía"><option value="recommend">Recomendar</option><option value="simulate" selected>Simular</option><option value="execute_safe">Ejecutar solo análisis seguros</option><option value="observe">Solo observar</option></select>
+          <button class="btn primary" id="companyCreateGoal" type="button">Crear objetivo</button>
+        </form>
+      </section>
+      <div class="kpis"><div class="kpi"><div class="lab">Ciclos</div><div class="val">${data.cycle||0}</div></div><div class="kpi"><div class="lab">Objetivos activos</div><div class="val">${metrics.active_goals||0}</div></div><div class="kpi"><div class="lab">Tareas abiertas</div><div class="val">${metrics.open_tasks||0}</div></div><div class="kpi"><div class="lab">Cobertura de evidencia</div><div class="val">${metrics.evidence_coverage??100}%</div></div><div class="kpi"><div class="lab">Bloqueos de seguridad</div><div class="val">${metrics.safety_blocks||0}</div></div></div>
+      <div class="company-layout"><div><div class="card"><div class="hd"><h3>Squad disponible</h3><div class="grow"></div><span class="tag in"><span class="d"></span>${agents.length} roles</span></div><div class="bd"><div class="company-agents">${agentHtml}</div></div></div><div class="card" style="margin-top:14px"><div class="hd"><h3>Cola gobernada</h3></div><div class="bd">${taskHtml}</div></div></div><div><div class="card"><div class="hd"><h3>Objetivos</h3></div><div class="bd">${goalHtml}</div></div><div class="card" style="margin-top:14px"><div class="hd"><h3>Contrato de autonomía</h3></div><div class="bd"><div class="sub">LOW: análisis/simulación local. MEDIUM: una aprobación humana. HIGH: doble aprobación. FORBIDDEN: destrucción, borrado de tenant o desactivación de auditoría.</div></div></div></div></div>`;
+    $("#companyNewGoal").onclick=()=>$("#companyGoalForm").classList.toggle("hidden");
+    $("#companyCreateGoal").onclick=async()=>{ const form=$("#companyGoalForm"); if(!form.reportValidity())return; try{ await api("/api/company/goals",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:$("#companyGoalTitle").value,outcome:$("#companyGoalOutcome").value,metrics:[{name:"outside_devices",target:Number($("#companyGoalTarget").value),direction:"max"}],constraints:["No ejecutar acciones destructivas","Exigir evidencia y rollback"],priority:"p0",autonomy:$("#companyGoalAutonomy").value})}); toast("Objetivo creado","La compañía ya puede priorizar ciclos","good"); renderCompany(); }catch(err){toast("Objetivo no creado",err.message,"bad");} };
+    $("#companyRun").onclick=async()=>{try{const r=await api("/api/company/cycle",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});toast("Ciclo completado",`${r.created_tasks.length} tareas con evidencia`,"good");renderCompany();}catch(err){toast("Ciclo detenido",err.message,"bad");}};
+    $("#companyPause").onclick=async()=>{try{await api(data.paused?"/api/company/resume":"/api/company/pause",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:"Pausa desde Command Center"})});renderCompany();}catch(err){toast("No se cambió el estado",err.message,"bad");}};
+    $$(".companyApprove").forEach(btn=>btn.onclick=async()=>{const reason=window.prompt("Motivo de aprobación y comprobación realizada");if(!reason)return;try{await api(`/api/company/tasks/${btn.dataset.task}/approve`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason})});toast("Handoff aprobado","La acción sigue separada del control plane","good");renderCompany();}catch(err){toast("No aprobado",err.message,"bad");}});
+  }catch(err){ node.innerHTML=`<div class="card"><div class="bd"><b>Control plane no disponible</b><div class="sub" style="margin-top:6px">${esc(err.message)}</div></div></div>`; }
+}
+
 async function renderIntelligence(){
   const node = $("#view-intelligence"); if(!node) return;
   node.innerHTML = `<div class="card" aria-live="polite"><div class="bd"><div class="sub">Calculando inteligencia local…</div></div></div>`;
@@ -1534,6 +1597,7 @@ async function renderIntelligence(){
     const payload = await api("/api/analytics");
     const analytics = payload.analytics || {};
     const intel = analytics.fleet_intelligence || {};
+    const predictive = analytics.predictive_movement || {};
     if(intel.status !== "ready"){
       node.innerHTML = `<div class="toolbar"><div><h1 class="view-title">Inteligencia de flota</h1><div class="sub">Métricas descriptivas basadas en histórico local</div></div></div><div aria-live="polite">${emptyState("Aún no hay histórico suficiente", (intel.recommendations||[])[0]||"Acumula ciclos para activar esta vista.")}</div>`;
       return;
@@ -1545,6 +1609,8 @@ async function renderIntelligence(){
     const gaps = finiteMetric(intel.gap_count,0,1000000);
     const transitions = finiteMetric(intel.geofence_transitions,0,1000000);
     const outsidePeak = finiteMetric(intel.outside_peak,0,1000000);
+    const crossingRisk = finiteMetric(predictive.crossing_risk_count,0,1000000);
+    const movementAnomalies = finiteMetric(predictive.anomaly_count,0,1000000);
     const gapThreshold = finiteMetric(intel.gap_threshold_seconds,1,31536000);
     const scoreTone = score===null?"warn":score>=90?"ok":score>=70?"warn":"bad";
     const components = [
@@ -1565,7 +1631,7 @@ async function renderIntelligence(){
     const historyPoints = finiteMetric(intel.history_points,0,1000000);
     const spanSeconds = finiteMetric(Number(intel.history_span_hours)*3600,0,315360000);
     node.innerHTML = `
-      <div class="toolbar"><div><h1 class="view-title">Inteligencia de flota</h1><div class="sub">${metricText(historyPoints)} ciclos · ${spanSeconds===null?'periodo no disponible':fmtDur(spanSeconds)} observados · sin predicción</div></div><div class="grow"></div><span class="tag in"><span class="d"></span>Evidencia local</span></div>
+      <div class="toolbar"><div><h1 class="view-title">Inteligencia de flota</h1><div class="sub">${metricText(historyPoints)} ciclos · ${spanSeconds===null?'periodo no disponible':fmtDur(spanSeconds)} observados · previsión explicable local</div></div><div class="grow"></div><span class="tag in"><span class="d"></span>Evidencia local</span></div>
       <div class="kpis">
         ${kpiCard("Calidad de datos", metricText(score,"/100"), scoreTone, reicon("chart-line"))}
         ${kpiCard("Recencia", freshnessSeconds===null?"—":fmtDur(freshnessSeconds), freshnessSeconds===null?"warn":(finiteMetric(q.freshness_percent)||0)>=90?"ok":"warn", reicon("refresh"))}
@@ -1573,6 +1639,8 @@ async function renderIntelligence(){
         ${kpiCard("Conformidad vs. inicio", delta===null?"—":`${delta>0?"+":""}${delta} pp`, delta===null?"warn":delta>=0?"ok":"bad", reicon("shield-check"))}
         ${kpiCard("Transiciones", metricText(transitions), transitions===null?"warn":"acc", reicon("route"))}
         ${kpiCard("Pico fuera", metricText(outsidePeak), outsidePeak===null?"warn":outsidePeak?"warn":"ok", reicon("map-pin"))}
+        ${kpiCard("Riesgo de cruce", metricText(crossingRisk), crossingRisk?"warn":"ok", reicon("route"))}
+        ${kpiCard("Anomalías GPS", metricText(movementAnomalies), movementAnomalies?"bad":"ok", reicon("alert-triangle2"))}
       </div>
       <div class="grid-main">
         <div class="card"><div class="hd"><h3>Conformidad observada</h3><div class="grow"></div><span class="sub">${series.length?`Últimos ${series.length} ciclos`:"Sin datos"}</span></div><div class="bd">${chartContent}</div></div>
@@ -1616,7 +1684,9 @@ function showModal(title, avatarHtml, bodyHtml, onSave, saveLabel="Guardar"){
   footer.innerHTML = `<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn outline" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">${saveLabel}</button></div>`;
   $("#mCancel").onclick = closeModal;
   $("#mSave").onclick = async ()=>{ $("#mSave").disabled=true; await onSave(); $("#mSave").disabled=false; };
-  $("#ovl").classList.add("show"); $("#devModal").classList.add("show");
+  App._modalReturnFocus = document.activeElement;
+  $("#ovl").classList.add("show"); $("#devModal").classList.add("show"); $("#devModal").setAttribute("aria-hidden","false");
+  $("#mCancel").focus();
 }
 function toggleTheme(){
   const cur = document.documentElement.getAttribute("data-theme");
@@ -1653,7 +1723,8 @@ function openCmdk(){
     if(elx.dataset.dev) openDeviceModal(elx.dataset.dev); else runCmdk(elx);
     closeCmdk();
   });
-  $("#cmdk").classList.add("show");
+  App._cmdkReturnFocus = document.activeElement;
+  $("#cmdk").classList.add("show"); $("#cmdk").setAttribute("aria-hidden","false");
   $("#cmdkInput").value=""; $("#cmdkInput").focus();
 }
 function runCmdk(elx){
@@ -1672,7 +1743,12 @@ function runCmdk(elx){
   ]}].forEach(g=>g.items.forEach(it=>all.push(it)));
   if(all[idx]) all[idx].act();
 }
-function closeCmdk(){ $("#cmdk").classList.remove("show"); }
+function closeCmdk(){
+  const wasOpen=$("#cmdk").classList.contains("show");
+  $("#cmdk").classList.remove("show"); $("#cmdk").setAttribute("aria-hidden","true");
+  if(wasOpen && App._cmdkReturnFocus && document.contains(App._cmdkReturnFocus)) App._cmdkReturnFocus.focus();
+  App._cmdkReturnFocus=null;
+}
 async function forceCycle(){
   toast("Ciclo","Forzando…","info");
   try{ const r = await api("/api/run-once", {method:"POST"}); if(r.ok) toast("Ciclo completado","","ok"); refresh(false); }
@@ -1693,6 +1769,10 @@ function bindGlobal(){
   $$("#authTabs button").forEach(b=>b.onclick=()=>setAuthTab(b.dataset.t));
   $("#authOvl") && ($("#authOvl").onclick = ()=>{ /* modal auth no se cierra con backdrop: evita acceso sin sesión */ });
   $("#sideLogout") && ($("#sideLogout").onclick = logout);
+  window.addEventListener("hashchange", ()=>{
+    const requested=location.hash.replace(/^#/,"");
+    if(App._started && requested!==App.view && NAV.some(item=>item.id===requested)) goView(requested);
+  });
   document.addEventListener("keydown", e=>{
     if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); openCmdk(); }
     if(e.key==="Escape"){ closeModal(); closeCmdk(); }

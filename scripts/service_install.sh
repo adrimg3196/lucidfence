@@ -53,4 +53,4 @@ EOF"
   echo "Installed systemd unit: $UNIT"
 fi
 
-echo "Verify: curl -sf http://127.0.0.1:$PORT/health"
+echo "Verify: curl -sf http://127.0.0.1:$PORT/api/readyz"
