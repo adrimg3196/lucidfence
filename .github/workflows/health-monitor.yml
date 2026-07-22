@@ -1,15 +1,13 @@
 name: health-monitor
 
-# Runs health check against live and creates issue on failure (#18).
+# Manual health check against an explicitly supplied live deployment.
+# A hosted GitHub runner cannot reach the developer's 127.0.0.1.
 on:
-  schedule:
-    - cron: '*/10 * * * *'
   workflow_dispatch:
     inputs:
       host:
         description: 'Health base URL'
-        required: false
-        default: 'http://127.0.0.1:8765'
+        required: true
 
 permissions:
   contents: read
@@ -23,4 +21,4 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python3 scripts/health_monitor.py --host '${{ github.event.inputs.host || 'http://127.0.0.1:8765' }}' --repo ${{ github.repository }}
+      - run: python3 scripts/health_monitor.py --host '${{ github.event.inputs.host }}' --repo ${{ github.repository }}

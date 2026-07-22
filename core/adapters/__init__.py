@@ -23,6 +23,10 @@ from core.adapters.chromeos import (
     ChromeOSAdapter,
     build_chromeos_adapter_from_config,
 )
+from core.adapters.workspace_one import (
+    WorkspaceONEAdapter,
+    build_workspace_one_adapter_from_config,
+)
 
 # Acciones UEM válidas (compartidas por todos los adapters).
 VALID_ACTIONS = {
@@ -45,6 +49,7 @@ ADAPTER_REGISTRY = {
     "jamf": JamfAdapter,
     "windows_conformidad": WindowsConformidadAdapter,
     "chromeos": ChromeOSAdapter,
+    "workspace_one": WorkspaceONEAdapter,
 }
 
 
@@ -75,6 +80,8 @@ __all__ = [
     "AppliveryAdapter",
     "IntuneAdapter",
     "JamfAdapter",
+    "WorkspaceONEAdapter",
+    "build_workspace_one_adapter_from_config",
     "is_ios_device",
     "ios_geofence_compliance",
     "VALID_ACTIONS",

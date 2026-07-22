@@ -272,21 +272,24 @@ def cmd_mcp(_args) -> int:
     return 0
 
 
+def cmd_shell(_args) -> int:
+    from lucidfence.shell import LucidFenceShell
+    LucidFenceShell(ROOT).cmdloop()
+    return 0
+
+
 def cmd_doctor(args) -> int:
-    host, port = _host(args.host), _port(args.port)
-    checks = [
-        ("Python >= 3.9", sys.version_info >= (3, 9), sys.version.split()[0]),
-        ("Servidor instalado", (ROOT / "saas_server.py").is_file(), str(ROOT / "saas_server.py")),
-        ("Dashboard instalado", (ROOT / "static" / "dashboard.html").is_file(), str(ROOT / "static" / "dashboard.html")),
-        ("MCP local instalado", (ROOT / "mcp" / "lucidfence_mcp.py").is_file(), str(ROOT / "mcp" / "lucidfence_mcp.py")),
-        ("Directorio de datos", _runtime_dir().is_dir() and os.access(_runtime_dir(), os.W_OK), str(_runtime_dir())),
-        ("Servicio HTTP", _healthy(host, port), _url(host, port)),
-    ]
-    failed = False
-    for label, ok, detail in checks:
-        failed = failed or not ok
-        print(f"{'PASS' if ok else 'INFO'}  {label}: {detail}")
-    return 1 if failed and not all(ok for _, ok, _ in checks[:4]) else 0
+    from core.app_paths import ensure_data_dir
+    from core.doctor import run_doctor
+    report = run_doctor(ROOT, ensure_data_dir(), _port(args.port))
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        for check in report["checks"]:
+            mark = "OK" if check["ok"] else ("WARN" if check["severity"] == "warning" else "FAIL")
+            print(f"[{mark:4}] {check['name']}: {check['detail']}")
+        print(f"doctor: {'PASS' if report['ok'] else 'FAIL'} ({report['errors']} errors, {report['warnings']} warnings)")
+    return 0 if report["ok"] else 1
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -330,10 +333,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = sub.add_parser("doctor", help="diagnostica la instalación local")
     _common(doctor)
+    doctor.add_argument("--json", action="store_true", help="salida estructurada")
     doctor.set_defaults(func=cmd_doctor)
 
     mcp = sub.add_parser("mcp", help="ejecuta el MCP local read-only por stdio")
     mcp.set_defaults(func=cmd_mcp)
+
+    shell = sub.add_parser("shell", help="abre la shell interactiva local")
+    shell.set_defaults(func=cmd_shell)
     return parser
 
 

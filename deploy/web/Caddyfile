@@ -1,0 +1,11 @@
+:8080 {
+  root * .
+  file_server
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy no-referrer
+    Permissions-Policy "camera=(), microphone=(), payment=(), usb=()"
+  }
+  @serviceWorker path /sw.js
+  header @serviceWorker Cache-Control "no-cache"
+}

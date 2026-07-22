@@ -28,9 +28,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,9 +40,15 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 import roadmap_tooling as rm
+from core.provider_plugins import discover_provider_plugins, merge_providers
+from core.loop_governance import KillSwitch
 
-_CLI = "/Users/adri/.local/bin/claude"
+_CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI") or shutil.which("claude") or ""
 _HISTORY = _HERE / "data" / "loop_history.jsonl"
+
+
+def _kill_switch() -> KillSwitch:
+    return KillSwitch(Path(os.environ.get("LUCIDFENCE_DATA_DIR", str(_HERE / "data"))))
 _LOOP_CFG = {
     "max_iterations": 3,
     "temp_start": 0.7,
@@ -70,10 +78,15 @@ FREE_PROVIDERS = [
 ]
 
 
+def _provider_catalog():
+    plugins = discover_provider_plugins(_HERE / "plugins" / "providers")
+    return merge_providers(FREE_PROVIDERS, plugins)
+
+
 def _available_providers():
     """Devuelve los providers con API key presente (los que se pueden llamar de verdad)."""
     out = []
-    for p in FREE_PROVIDERS:
+    for p in _provider_catalog():
         if os.environ.get(p["env"]) or (Path(_HERE / ".env").exists() and _env_has(_HERE / ".env", p["env"])):
             out.append(p)
     return out
@@ -209,16 +222,52 @@ def _record(entry):
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def loop_metrics():
+    """Aggregate bounded, secret-free quality metrics for dashboard/ops."""
+    rows = []
+    try:
+        for line in _HISTORY.read_text(encoding="utf-8").splitlines()[-1000:]:
+            item = json.loads(line)
+            if isinstance(item, dict) and "score" in item:
+                rows.append(item)
+    except (OSError, json.JSONDecodeError):
+        pass
+    scores = [float(row.get("score") or 0) for row in rows]
+    return {
+        "iterations": len(rows),
+        "average_score": round(sum(scores) / len(scores), 2) if scores else 0,
+        "min_score": min(scores) if scores else 0,
+        "max_score": max(scores) if scores else 0,
+        "providers": sorted({name for row in rows for name in row.get("providers", [])}),
+        "quality_threshold": _LOOP_CFG["quality_threshold"],
+        "below_threshold": sum(score < _LOOP_CFG["quality_threshold"] for score in scores),
+    }
+
+
 def _next_feature(d):
-    """Primera feature pendiente o in_progress (la proxima a mejorar)."""
-    for status in ("in_progress", "planned"):
-        for f in rm.all_features(d):
-            if f["status"] == status:
-                return f
-    return None
+    """Dependency-aware priority: active first, then impact, then effort."""
+    features = rm.all_features(d)
+    done = {f["id"] for f in features if f["status"] in ("done", "deployed")}
+    impact = {"p0_must": 0, "p1_should": 1, "p2_nice": 2}
+    effort = {"small": 0, "medium": 1, "large": 2, "epic": 3}
+    eligible = [f for f in features if f["status"] in ("in_progress", "planned")
+                and set(f.get("dependencies") or []).issubset(done)]
+    eligible.sort(key=lambda f: (0 if f["status"] == "in_progress" else 1,
+                                 impact.get(f.get("impact"), 9), effort.get(f.get("effort"), 9), f["id"]))
+    return eligible[0] if eligible else None
 
 
-def run_loop(feature_id=None, max_iter=3, dry_run=False):
+def _feature_evidence_complete(feature):
+    subtasks = feature.get("subtasks") or []
+    return bool(subtasks) and all(item.get("status") == "done" for item in subtasks)
+
+
+def run_loop(feature_id=None, max_iter=None, dry_run=False) -> int:
+    if not _kill_switch().enabled:
+        print("⛔ /loop deshabilitado por kill switch persistente")
+        return 4
+    if max_iter is None:
+        max_iter = int(_LOOP_CFG["max_iterations"])
     d = rm.load_roadmap()
     if not d:
         print("roadmap.json no encontrado", file=sys.stderr)
@@ -245,10 +294,14 @@ def run_loop(feature_id=None, max_iter=3, dry_run=False):
         print(f"\n--- iteracion {i}/{max_iter} (temp={temp:.1f}) ---")
         # Proposers paralelos (simulados en secuencia; cada uno es independiente)
         proposals = []
-        for p in _available_providers():
-            out = _call_provider(p, f"Mejora la feature {feature['id']}: {feature['title']}", temp)
-            if out:
-                proposals.append(f"[{p['name']}] {out}")
+        providers = _available_providers()
+        with ThreadPoolExecutor(max_workers=max(1, min(8, len(providers)))) as pool:
+            futures = {pool.submit(_call_provider, p, f"Mejora la feature {feature['id']}: {feature['title']}", temp): p for p in providers}
+            for future in as_completed(futures):
+                p = futures[future]
+                out = future.result()
+                if out:
+                    proposals.append(f"[{p['name']}] {out}")
         # Siempre incluye el analista local como base
         proposals.append(_local_proposer(feature, temp))
         # Agregar con Opus 4.8 (o heuristico)
@@ -258,16 +311,17 @@ def run_loop(feature_id=None, max_iter=3, dry_run=False):
         if score > best_score:
             best_score = score
             best = merged
-        _record({
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "feature": feature["id"],
-            "iteration": i,
-            "temperature": round(temp, 2),
-            "providers": [p["name"] for p in _available_providers()],
-            "aggregator": "opus-4.8 (claude)" if Path(_CLI).exists() else "local-heuristic",
-            "score": score,
-            "merged_len": len(merged),
-        })
+        if not dry_run:
+            _record({
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "feature": feature["id"],
+                "iteration": i,
+                "temperature": round(temp, 2),
+                "providers": [p["name"] for p in _available_providers()],
+                "aggregator": "opus-4.8 (claude)" if _CLI and Path(_CLI).exists() else "local-heuristic",
+                "score": score,
+                "merged_len": len(merged),
+            })
         if score >= _LOOP_CFG["quality_threshold"]:
             print(f"   ✓ calidad >= {_LOOP_CFG['quality_threshold']}, paro.")
             break
@@ -281,10 +335,9 @@ def run_loop(feature_id=None, max_iter=3, dry_run=False):
     # Verify + persistir estado de la feature
     ok, detail = _verify()
     print(f"\n🧪 QA: {detail}")
-    if ok:
-        # Marcar subtareas done + feature done (la mejora queda validada)
-        for st in feature.get("subtasks", []):
-            st["status"] = "done"
+    if ok and _feature_evidence_complete(feature):
+        # QA green is necessary but not proof that implementation happened.
+        # Only already-completed subtasks may close a feature.
         feature["status"] = "done"
         feature["progress"] = {"pct": 100}
         rm.save_roadmap(d)
@@ -292,7 +345,10 @@ def run_loop(feature_id=None, max_iter=3, dry_run=False):
         _record({"ts": datetime.now(timezone.utc).isoformat(), "event": "feature_done",
                  "feature": feature["id"]})
     else:
-        print(f"   ⚠ QA no paso; {feature['id']} queda in_progress (no la marco done)")
+        reason = "QA no paso" if not ok else "quedan subtareas sin evidencia"
+        feature["status"] = "in_progress"
+        rm.save_roadmap(d)
+        print(f"   ⚠ {reason}; {feature['id']} queda in_progress (no la marco done)")
     return 0
 
 
@@ -302,7 +358,14 @@ def main():
     ap.add_argument("--feature", help="ID de feature a mejorar (p.ej. F1.2)")
     ap.add_argument("--max-iter", type=int, default=_LOOP_CFG["max_iterations"])
     ap.add_argument("--dry-run", action="store_true")
+    controls = ap.add_mutually_exclusive_group()
+    controls.add_argument("--disable", metavar="REASON", help="activa el kill switch persistente")
+    controls.add_argument("--enable", action="store_true", help="reactiva /loop")
     args = ap.parse_args()
+    if args.disable:
+        _kill_switch().disable(args.disable); print("/loop deshabilitado"); return
+    if args.enable:
+        _kill_switch().enable(); print("/loop habilitado"); return
     sys.exit(run_loop(feature_id=args.feature, max_iter=args.max_iter, dry_run=args.dry_run))
 
 

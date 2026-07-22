@@ -1,0 +1,33 @@
+{
+  "title": "LucidFence Local Operations",
+  "uid": "lucidfence-local",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HTTP requests",
+      "targets": [{"expr": "sum(lucidfence_http_requests_total)", "legendFormat": "requests"}],
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tenants",
+      "targets": [{"expr": "lucidfence_tenants", "legendFormat": "tenants"}],
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Active engines",
+      "targets": [{"expr": "lucidfence_engines", "legendFormat": "engines"}],
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+    }
+  ],
+  "templating": {"list": []},
+  "annotations": {"list": []}
+}

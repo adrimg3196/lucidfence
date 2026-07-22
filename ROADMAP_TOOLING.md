@@ -10,6 +10,11 @@ dashboard lo sirve) y se mejora en bucle con `python3 loop_improve.py` (el
 > Estado base (20-jul-2026): LucidFence v1.2.0 — adapters Applivery/Intune/Jamf
 > vivos, engine con risk explicable + CVE (NVD) + SOAR + incidents + workflows,
 > loop de mejora en fase temprana (L1, report-only).
+>
+> **Completado 21-jul-2026:** 18/18 features cerradas con evidencia en
+> `completion_evidence`; suite honesta, browser E2E, seguridad, wheel SDK y
+> runtime local forman el gate. No se consideran “hechas” acciones externas que
+> dependan de certificados, tokens de pago o testimonios no autorizados.
 
 ## Estructura de mejora a nivel de herramienta
 
