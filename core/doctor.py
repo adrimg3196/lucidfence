@@ -17,12 +17,15 @@ def run_doctor(root: Path, data_root: Path, port: int = 8765) -> dict:
         checks.append({"name": name, "ok": bool(ok), "severity": severity, "detail": detail})
 
     add("python", sys.version_info >= (3, 9), sys.version.split()[0])
-    required = ["saas_server.py", "config.json", "static/dashboard.html", "roadmap.json"]
+    required = ["saas_server.py", "static/dashboard.html", "roadmap.json"]
     missing = [name for name in required if not (root / name).is_file()]
     add("installation", not missing, "complete" if not missing else "missing: " + ", ".join(missing))
     try:
-        json.loads((root / "config.json").read_text(encoding="utf-8"))
-        add("config", True, "valid JSON")
+        import config_loader
+        config_path = root / "config.json"
+        config_loader.load(config_path)
+        detail = "valid JSON" if config_path.is_file() else "safe simulation defaults"
+        add("config", True, detail)
     except Exception as exc:
         add("config", False, type(exc).__name__)
     try:
