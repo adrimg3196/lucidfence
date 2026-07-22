@@ -209,8 +209,11 @@ git commit -m "feat(multiuem): orchestrate providers with safe identity merge"
 **Files:**
 - Create: `core/multiuem_providers.py`
 - Modify: `config_loader.py`
+- Modify: `core/secrets.py`
+- Modify: `saas_server.py` (`_apply_tenant_integration`, connector persistence only)
 - Modify: `.env.example`
 - Create: `tests/test_multiuem_providers.py`
+- Create: `tests/test_connector_credentials_isolation.py`
 
 **Interfaces:**
 - Consumes: `LiveLocationSource`, `SimulationLocationSource`, registered adapters and their `execute(..., "list", ...)` behavior.
@@ -223,6 +226,12 @@ Test a config containing two enabled providers and one disabled provider. Secret
 
 Test no `uem.providers`: builder returns `None` so legacy behavior remains active.
 
+Add a tenant-isolation test with two temporary tenant roots and different fake
+credentials for Intune and Jamf. Assert each binding receives only its tenant's
+credential, a missing tenant credential never falls back to the process
+environment, rotating tenant A does not change tenant B, and serialized health
+contains no secret fields or values.
+
 - [ ] **Step 2: Run RED**
 
 Run: `/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_providers.py -q`
@@ -231,6 +240,13 @@ Expected: FAIL because builder does not exist.
 - [ ] **Step 3: Implement wrappers**
 
 Provider fetch wrappers must output `NormalizedDevice`. Applivery wraps `LiveLocationSource.fetch()`. Other built-ins call their list/report seam only when supported; an adapter without inventory capability remains action-only and reports zero inventory rather than fabricating devices. Constructors must not perform network calls.
+
+Extend the existing tenant integration document to store provider blocks below
+`integration.json` with mode `0600`. `core/secrets.py` must return a provider
+credential mapping scoped to one tenant. `_apply_tenant_integration` passes that
+mapping into config explicitly. Provider builders must not read process-global
+credentials once an explicit tenant provider block exists, including when its
+credential value is empty.
 
 `.env.example` documents names only with placeholders and includes no usable credential. Keep all live modes opt-in.
 
@@ -243,7 +259,7 @@ For every configurable base URL, assert rejection of non-HTTPS, userinfo, localh
 Run:
 
 ```bash
-/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_providers.py tests/test_sdk_contract.py -q
+/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_tenant_credentials.py tests/test_sdk_contract.py -q
 ```
 
 Expected: all pass; frozen adapter contract unchanged.
@@ -251,7 +267,7 @@ Expected: all pass; frozen adapter contract unchanged.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/multiuem_providers.py config_loader.py .env.example tests/test_multiuem_providers.py
+git add core/multiuem_providers.py config_loader.py core/secrets.py saas_server.py .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py
 git commit -m "feat(multiuem): build tenant-local provider bindings"
 ```
 
@@ -262,7 +278,9 @@ git commit -m "feat(multiuem): build tenant-local provider bindings"
 **Files:**
 - Modify: `core/engine.py`
 - Modify: `core/state_store.py`
+- Modify: `core/location_source.py`
 - Create: `tests/test_multiuem_engine.py`
+- Create: `tests/test_location_evidence_transitions.py`
 
 **Interfaces:**
 - Consumes: `build_multiuem_orchestrator(config)` and its `fetch/execute/health` seams.
@@ -279,6 +297,17 @@ Build a hermetic config with two in-memory provider bindings injected through `c
 4. a fresh second cycle changes `inside -> outside` and routes the action using the provider remote ID;
 5. provider health appears in `last_stats["uem_providers"]`;
 6. legacy config still passes an existing engine route test unchanged.
+
+Add regression tests that reproduce the audited P0s:
+
+1. Applivery `lastLocation.agent.accuracy` reaches `LocationReport.accuracy_m`;
+2. `inside(hq) -> outside(None)` executes the `hq` action configured for
+   `on_exit`, using the previous fence rather than the current `None`;
+3. `inside(hq) -> unknown(None)` executes only safe `on_unknown` notification
+   behavior and never a destructive action;
+4. persisted transition events expose explicit `kind` in
+   `{enter, exit, unknown, recovered}` so the existing UI filters work;
+5. stale or inaccurate evidence cannot create an exit or route-exit event.
 
 - [ ] **Step 2: Run RED**
 
@@ -301,6 +330,12 @@ else:
 
 During each report, copy provider/provenance/quality fields into `DeviceState`. The orchestrator's `fetch()` must omit rejected coordinates (lat/lng `None`) but retain rejection metadata on the report, causing existing geometry code to choose `unknown`.
 
+When a transition leaves a fence, pass both previous and current state to the
+action dispatcher. Resolve `on_exit` and `on_unknown` against the previous
+fence ID. Reject destructive actions for an `unknown` transition regardless of
+fence configuration. Emit the explicit transition `kind`; do not infer it in
+the UI. Preserve Applivery accuracy in `_extract_last_location()`.
+
 Do not duplicate fence geometry or policy logic.
 
 - [ ] **Step 4: Run GREEN plus legacy engine tests**
@@ -308,7 +343,7 @@ Do not duplicate fence geometry or policy logic.
 Run:
 
 ```bash
-/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_engine.py tests/test_engine_routes.py tests/test_risk_evidence_gate.py -q
+/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_engine.py tests/test_location_evidence_transitions.py tests/test_engine_routes.py tests/test_risk_evidence_gate.py -q
 ```
 
 Expected: all pass.
@@ -316,7 +351,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add core/engine.py core/state_store.py tests/test_multiuem_engine.py
+git add core/engine.py core/state_store.py core/location_source.py tests/test_multiuem_engine.py tests/test_location_evidence_transitions.py
 git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 ```
 
