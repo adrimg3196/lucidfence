@@ -25,12 +25,19 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-import jwt
+try:
+    import jwt
+except ImportError:  # OIDC is optional for password/local-only deployments.
+    jwt = None  # type: ignore[assignment]
 
 
 MAX_FLOW_TTL = 600
 ALLOWED_RETURN_PATHS = frozenset({"/app", "/dashboard", "/settings"})
 ASYMMETRIC_ALGORITHMS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512")
+
+
+def oidc_dependencies_available() -> bool:
+    return jwt is not None
 
 
 class OIDCError(ValueError):
@@ -69,7 +76,7 @@ def validate_callback_params(query: str, *, max_length: int = 8192) -> dict[str,
     return result
 
 
-def _validate_loopback_redirect(uri: str) -> None:
+def _validate_loopback_redirect(uri: str, provider_name: str) -> None:
     try:
         parsed = urlsplit(uri)
         host = parsed.hostname
@@ -78,7 +85,9 @@ def _validate_loopback_redirect(uri: str) -> None:
         raise OIDCError("invalid_redirect_uri") from None
     if parsed.scheme != "http" or ip not in (ipaddress.ip_address("127.0.0.1"), ipaddress.ip_address("::1")):
         raise OIDCError("invalid_redirect_uri")
-    if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.port is None or not parsed.path.startswith("/"):
+    expected_path = f"/api/auth/sso/{provider_name}/callback"
+    if (parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.port is None or parsed.path != expected_path):
         raise OIDCError("invalid_redirect_uri")
 
 
@@ -108,7 +117,7 @@ class OIDCProvider:
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", self.name):
             raise OIDCError("invalid_provider")
         if self.local_public_client:
-            _validate_loopback_redirect(self.redirect_uri)
+            _validate_loopback_redirect(self.redirect_uri, self.name)
             if self.client_secret or self.token_auth_method != "none":
                 raise OIDCError("invalid_client_auth")
         elif self.redirect_uri:
@@ -330,6 +339,8 @@ class OIDCFlowStore:
                 raise OIDCError("flow_capacity")
             flows[state] = {"provider": provider.name, "issuer": provider.issuer,
                             "client_id": provider.client_id, "redirect_uri": provider.redirect_uri,
+                            "authorization_endpoint": provider.authorization_endpoint,
+                            "token_endpoint": provider.token_endpoint,
                             "browser_binding_hash": hashlib.sha256(browser_binding.encode()).hexdigest(),
                             "nonce": nonce, "verifier": verifier, "return_path": validate_return_path(return_path),
                             "purpose": purpose, "created_at": now, "expires_at": now + self.ttl_seconds}
@@ -377,18 +388,29 @@ class IDTokenValidator:
         self._keys: dict[str, Any] = {}
 
     def _refresh(self) -> None:
+        if jwt is None:
+            raise OIDCError("oidc_dependencies_unavailable")
         jwks = self.transport.json_request("GET", self.provider.jwks_uri, max_bytes=65536, timeout=5)
         keys = jwks.get("keys")
         if not isinstance(keys, list) or len(keys) > 32:
             raise OIDCError("invalid_id_token")
         parsed = {}
         for item in keys:
-            if isinstance(item, dict) and item.get("kid") and item.get("kty") in {"RSA", "EC"} and item.get("alg") in ASYMMETRIC_ALGORITHMS:
+            if not isinstance(item, dict):
+                continue
+            key_ops = item.get("key_ops")
+            signing_use = item.get("use") in (None, "sig")
+            verifies = key_ops is None or (isinstance(key_ops, list) and "verify" in key_ops)
+            if (signing_use and verifies and item.get("kid")
+                    and item.get("kty") in {"RSA", "EC"}
+                    and item.get("alg") in ASYMMETRIC_ALGORITHMS):
                 try: parsed[item["kid"]] = jwt.PyJWK.from_dict(item)
                 except Exception: continue
         self._keys = parsed
 
     def validate(self, token: str, expected_nonce: str) -> dict[str, Any]:
+        if jwt is None:
+            raise OIDCError("oidc_dependencies_unavailable")
         try:
             header = jwt.get_unverified_header(token)
             alg, kid = header.get("alg"), header.get("kid")
@@ -437,11 +459,42 @@ class OIDCClient:
                            "code_challenge_method": "S256"})
         return OIDCStart(provider.authorization_endpoint + "?" + query, state)
 
+    def callback_return_path(self, route_provider: str, query: str, browser_binding: str) -> str:
+        """Recover only the allowlisted destination without trusting callback data."""
+        try:
+            states = [value for key, value in parse_qsl(query, keep_blank_values=False)
+                      if key == "state"]
+            if len(states) != 1:
+                return "/app"
+            flow = self.flows.peek(states[0])
+            if not flow or flow.get("provider") != route_provider:
+                return "/app"
+            expected = str(flow.get("browser_binding_hash", ""))
+            actual = hashlib.sha256(browser_binding.encode()).hexdigest()
+            if not hmac.compare_digest(expected, actual):
+                return "/app"
+            return validate_return_path(str(flow.get("return_path", "")))
+        except (OIDCError, ValueError, UnicodeError):
+            return "/app"
+
     def callback(self, route_provider: str, query: str, browser_binding: str) -> OIDCResult:
-        params = validate_callback_params(query)
+        try:
+            params = validate_callback_params(query)
+        except OIDCError:
+            # Burn a uniquely identifiable, browser-bound flow even on malformed
+            # provider callbacks so an error can never leave reusable state.
+            try:
+                states = [value for key, value in parse_qsl(query, keep_blank_values=False)
+                          if key == "state"]
+                if len(states) == 1:
+                    self.flows.consume(states[0], browser_binding, route_provider)
+            except (OIDCError, ValueError, UnicodeError):
+                pass
+            raise
         flow = self.flows.consume(params["state"], browser_binding, route_provider)
         provider = self.providers.get(flow["provider"])
-        if not provider or flow["issuer"] != provider.issuer or flow["redirect_uri"] != provider.redirect_uri:
+        bindings = ("issuer", "client_id", "redirect_uri", "authorization_endpoint", "token_endpoint")
+        if not provider or any(flow.get(name) != getattr(provider, name) for name in bindings):
             raise OIDCError("provider_mixup")
         response_issuer = params.get("iss")
         if response_issuer is not None and response_issuer != provider.issuer:

@@ -18,27 +18,15 @@
     },
     {
       "type": "library",
-      "name": "charset-normalizer",
-      "version": "3.4.9",
-      "purl": "pkg:pypi/charset-normalizer@3.4.9"
-    },
-    {
-      "type": "library",
-      "name": "idna",
-      "version": "3.18",
-      "purl": "pkg:pypi/idna@3.18"
-    },
-    {
-      "type": "library",
-      "name": "requests",
-      "version": "2.33.0",
-      "purl": "pkg:pypi/requests@2.33.0"
-    },
-    {
-      "type": "library",
       "name": "cffi",
       "version": "2.1.0",
       "purl": "pkg:pypi/cffi@2.1.0"
+    },
+    {
+      "type": "library",
+      "name": "charset-normalizer",
+      "version": "3.4.9",
+      "purl": "pkg:pypi/charset-normalizer@3.4.9"
     },
     {
       "type": "library",
@@ -48,15 +36,27 @@
     },
     {
       "type": "library",
-      "name": "PyJWT",
-      "version": "2.13.0",
-      "purl": "pkg:pypi/pyjwt@2.13.0"
+      "name": "idna",
+      "version": "3.18",
+      "purl": "pkg:pypi/idna@3.18"
     },
     {
       "type": "library",
       "name": "pycparser",
       "version": "3.0",
       "purl": "pkg:pypi/pycparser@3.0"
+    },
+    {
+      "type": "library",
+      "name": "pyjwt",
+      "version": "2.13.0",
+      "purl": "pkg:pypi/pyjwt@2.13.0"
+    },
+    {
+      "type": "library",
+      "name": "requests",
+      "version": "2.33.0",
+      "purl": "pkg:pypi/requests@2.33.0"
     },
     {
       "type": "library",
@@ -68,11 +68,11 @@
   "properties": [
     {
       "name": "lucidfence:source-file-count",
-      "value": "151"
+      "value": "156"
     },
     {
       "name": "lucidfence:source-manifest-sha256",
-      "value": "db137ffd3a794dc86bc99bb3e83957c83fe2195cd4bc74848789ba68202367d2"
+      "value": "a6bdc4b85c7d0deb17ce1af69f024663fb0a5f503923cd747ad3db6192a55757"
     }
   ]
 }

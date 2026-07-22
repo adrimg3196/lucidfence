@@ -7,17 +7,25 @@ import http.client
 import json
 import os
 import stat
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 import threading
+from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qs, urlparse
 
-import jwt
-import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
+try:
+    import pytest
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+except ImportError:
+    pytest_module = sys.modules.get("pytest")
+    if pytest_module is not None and any("pytest" in arg for arg in sys.argv):
+        pytest_module.skip("optional OIDC test dependencies unavailable", allow_module_level=True)
+    raise SystemExit(0)
 
 from core.oidc import (
     IDTokenValidator,
@@ -220,6 +228,22 @@ def test_id_token_rejects_alg_none_unknown_kid_and_bad_signature():
     assert len([c for c in validator.transport.calls if c[1].endswith("/jwks")]) <= 2
 
 
+def test_jwks_rejects_encryption_and_sign_only_keys():
+    key, jwk = _rsa_material()
+    for marker in ({"use": "enc"}, {"key_ops": ["sign"]}, {"use": "sig", "key_ops": ["sign"]}):
+        candidate = {**jwk, **marker}
+        validator = IDTokenValidator(provider(), FakeTransport({"keys": [candidate]}))
+        with pytest.raises(OIDCError, match="invalid_id_token"):
+            validator.validate(signed_token(key), "n")
+
+    for marker in ({"use": "sig"}, {"key_ops": ["verify"]}, {}):
+        candidate = {key: value for key, value in jwk.items() if key != "use"}
+        candidate.update(marker)
+        assert IDTokenValidator(provider(), FakeTransport({"keys": [candidate]})).validate(
+            signed_token(key), "n"
+        )["sub"] == "subject-1"
+
+
 def test_callback_rejects_mixup_before_token_endpoint(tmp_path=None):
     tmp_path = _tmp(tmp_path)
     transport = FakeTransport()
@@ -230,6 +254,30 @@ def test_callback_rejects_mixup_before_token_endpoint(tmp_path=None):
     with pytest.raises(OIDCError, match="provider_mixup"):
         client.callback("b", f"state={started.state}&code=obvious-fake-code&iss={ISSUER}", "browser-a")
     assert transport.calls == []
+
+
+def test_callback_binds_mutable_provider_configuration_before_exchange(tmp_path=None):
+    tmp_path = _tmp(tmp_path)
+    mutations = {
+        "issuer": "https://changed.example.test",
+        "client_id": "changed-client",
+        "redirect_uri": "https://app.example.test/api/auth/sso/fake/changed",
+        "token_endpoint": "https://changed.example.test/token",
+        "authorization_endpoint": "https://changed.example.test/authorize",
+    }
+    for field, changed in mutations.items():
+        transport = FakeTransport()
+        original = provider()
+        store = OIDCFlowStore(tmp_path / f"flows-{field}.json")
+        client = OIDCClient({"fake": original}, store, transport)
+        started = client.start("fake", "browser-a", "/app")
+        setattr(original, field, changed)
+        with pytest.raises(OIDCError, match="provider_mixup"):
+            client.callback(
+                "fake", f"state={started.state}&code=obvious-fake-code&iss={ISSUER}", "browser-a"
+            )
+        assert transport.calls == []
+        assert store.peek(started.state) is None
 
 
 def test_distinct_callback_allows_missing_iss_only_when_provider_declares_unsupported(tmp_path=None):
@@ -292,6 +340,27 @@ def test_external_identity_is_unique_never_email_auto_linked_and_sessions_rotate
     assert auth.get_session(token) is None
 
 
+def test_disabled_sso_user_cannot_login_or_rotate_existing_session(tmp_path=None):
+    tmp_path = _tmp(tmp_path)
+    auth = AuthStore(tmp_path, session_ttl=60, session_idle_timeout=30)
+    user, old_session = auth.complete_oidc_login(
+        ISSUER, "disabled-subject", "disabled@example.test", "Disabled",
+        "org-1", "viewer",
+    )
+    user.active = False
+    auth._save_users()
+    sessions_before = json.loads((tmp_path / "_sessions.json").read_text())
+
+    with pytest.raises(ValueError, match="account_inactive"):
+        auth.complete_oidc_login(
+            ISSUER, "disabled-subject", "disabled@example.test", "Disabled",
+            "org-1", "viewer", old_session=old_session,
+        )
+
+    assert json.loads((tmp_path / "_sessions.json").read_text()) == sessions_before
+    assert auth.get_session(old_session) is not None
+
+
 def test_existing_password_user_json_loads_compatibly(tmp_path=None):
     tmp_path = _tmp(tmp_path)
     auth = AuthStore(tmp_path)
@@ -318,9 +387,33 @@ def test_loopback_redirect_is_exact_ip_literal_public_client_only():
     local = provider(client_secret="", redirect_uri="http://127.0.0.1:8765/api/auth/sso/fake/callback",
                      token_auth_method="none", local_public_client=True)
     assert local.local_public_client
-    for bad in ("http://localhost:8765/api/auth/sso/fake/callback", "http://0.0.0.0:8765/api/auth/sso/fake/callback", "http://192.168.1.2:8765/api/auth/sso/fake/callback"):
+    for bad in (
+        "http://localhost:8765/api/auth/sso/fake/callback",
+        "http://0.0.0.0:8765/api/auth/sso/fake/callback",
+        "http://192.168.1.2:8765/api/auth/sso/fake/callback",
+        "http://127.0.0.1:8765/wrong/callback",
+        "http://127.0.0.1:8765/api/auth/sso/fake/callback/extra",
+    ):
         with pytest.raises(OIDCError, match="invalid_redirect_uri"):
             provider(client_secret="", redirect_uri=bad, token_auth_method="none", local_public_client=True)
+
+
+def test_local_public_client_must_match_actual_listener_exactly():
+    import saas_server as server
+    local_v4 = provider(
+        client_secret="", redirect_uri="http://127.0.0.1:8765/api/auth/sso/fake/callback",
+        token_auth_method="none", local_public_client=True,
+    )
+    server._validate_oidc_startup({"fake": local_v4}, "127.0.0.1", 8765)
+    for host, port in (("127.0.0.1", 8766), ("::1", 8765), ("0.0.0.0", 8765), ("localhost", 8765)):
+        with pytest.raises(RuntimeError, match="OIDC local redirect must match server listener"):
+            server._validate_oidc_startup({"fake": local_v4}, host, port)
+
+    local_v6 = provider(
+        client_secret="", redirect_uri="http://[::1]:8765/api/auth/sso/fake/callback",
+        token_auth_method="none", local_public_client=True,
+    )
+    server._validate_oidc_startup({"fake": local_v6}, "::1", 8765)
 
 
 def test_http_routes_complete_crypto_fake_login_with_clean_303(tmp_path=None):
@@ -359,10 +452,102 @@ def test_http_routes_complete_crypto_fake_login_with_clean_303(tmp_path=None):
         assert response.status == 303 and response.getheader("Location") == "/app"
         assert response.getheader("Cache-Control") == "no-store"
         assert response.getheader("Referrer-Policy") == "no-referrer"
-        assert any(name == "Set-Cookie" and value.startswith("gf_session=") for name, value in cookies)
+        session_cookie = next(value for name, value in cookies if name == "Set-Cookie" and value.startswith("gf_session="))
+        attributes = {part.strip().split("=", 1)[0].lower(): part.strip().split("=", 1)[1]
+                      for part in session_cookie.split(";") if "=" in part}
+        assert int(attributes["max-age"]) == server._auth.session_ttl
+        expires_in = parsedate_to_datetime(attributes["expires"]).timestamp() - time.time()
+        assert server._auth.session_ttl - 2 <= expires_in <= server._auth.session_ttl + 2
     finally:
         httpd.shutdown(); httpd.server_close(); thread.join(timeout=2)
         server._oidc_client, server._oidc_providers, server._auth = old_client, old_providers, old_auth
+
+
+def test_http_callback_error_consumes_state_and_redirects_to_generic_clean_url(tmp_path=None):
+    tmp_path = _tmp(tmp_path)
+    import saas_server as server
+    flows = OIDCFlowStore(tmp_path / "flows.json", lock=threading.RLock())
+    client = OIDCClient({"fake": provider()}, flows, FakeTransport())
+    started = client.start("fake", "browser-a", "/settings")
+    old_client, old_providers = server._oidc_client, server._oidc_providers
+    server._oidc_client, server._oidc_providers = client, {"fake": provider()}
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True); thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+        callback = f"/api/auth/sso/fake/callback?state={started.state}&error=access_denied&iss={ISSUER}"
+        conn.request("GET", callback, headers={
+            "Host": f"127.0.0.1:{httpd.server_port}",
+            "Cookie": "gf_oidc_pre=browser-a",
+        })
+        response = conn.getresponse(); body = response.read()
+        assert response.status == 303
+        assert response.getheader("Location") == "/settings?auth_error=sso_failed"
+        assert response.getheader("Cache-Control") == "no-store"
+        assert response.getheader("Referrer-Policy") == "no-referrer"
+        assert body == b""
+        assert flows.peek(started.state) is None
+        assert "Max-Age=0" in response.getheader("Set-Cookie")
+    finally:
+        httpd.shutdown(); httpd.server_close(); thread.join(timeout=2)
+        server._oidc_client, server._oidc_providers = old_client, old_providers
+
+
+def test_http_disabled_sso_user_gets_generic_redirect_and_old_session_survives(tmp_path=None):
+    tmp_path = _tmp(tmp_path); key, jwk = _rsa_material()
+    import saas_server as server
+    transport = FakeTransport({"keys": [jwk]})
+    flows = OIDCFlowStore(tmp_path / "flows.json", lock=threading.RLock())
+    client = OIDCClient({"fake": provider()}, flows, transport)
+    auth = AuthStore(tmp_path / "auth")
+    user, old_session = auth.complete_oidc_login(
+        ISSUER, "disabled-http", "disabled@example.test", "Disabled", "org-1", "viewer"
+    )
+    user.active = False; auth._save_users()
+    started = client.start("fake", "browser-a", "/app")
+    nonce = flows.peek(started.state)["nonce"]
+    transport.token_response = {"id_token": signed_token(key, nonce=nonce, sub="disabled-http")}
+    transport.userinfo_response = None
+    old_globals = server._oidc_client, server._oidc_providers, server._auth
+    server._oidc_client, server._oidc_providers, server._auth = client, {"fake": provider()}, auth
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True); thread.start()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+        callback = f"/api/auth/sso/fake/callback?state={started.state}&code=c&iss={ISSUER}"
+        conn.request("GET", callback, headers={
+            "Host": f"127.0.0.1:{httpd.server_port}",
+            "Cookie": f"gf_oidc_pre=browser-a; gf_session={old_session}",
+        })
+        response = conn.getresponse(); response.read()
+        assert response.status == 303 and response.getheader("Location") == "/app?auth_error=sso_failed"
+        assert response.getheader("Cache-Control") == "no-store"
+        assert response.getheader("Referrer-Policy") == "no-referrer"
+        assert not any(value.startswith("gf_session=") for name, value in response.getheaders()
+                       if name == "Set-Cookie")
+        sessions = json.loads((tmp_path / "auth" / "_sessions.json").read_text())
+        assert old_session in sessions and len(sessions) == 1
+        assert flows.peek(started.state) is None
+    finally:
+        httpd.shutdown(); httpd.server_close(); thread.join(timeout=2)
+        server._oidc_client, server._oidc_providers, server._auth = old_globals
+
+
+def test_oidc_dependency_is_optional_until_a_provider_is_enabled():
+    import core.oidc as oidc
+    import saas_server as server
+    old_jwt = oidc.jwt
+    old_check = server.oidc_dependencies_available
+    try:
+        oidc.jwt = None
+        server.oidc_dependencies_available = oidc.oidc_dependencies_available
+        disabled = provider(enabled=False)
+        server._validate_oidc_startup({"fake": disabled}, "127.0.0.1", 8765)
+        with pytest.raises(RuntimeError, match="OIDC dependencies unavailable"):
+            server._validate_oidc_startup({"fake": provider()}, "127.0.0.1", 8765)
+    finally:
+        oidc.jwt = old_jwt
+        server.oidc_dependencies_available = old_check
 
 
 def test_http_callback_access_log_redacts_entire_query():

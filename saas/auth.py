@@ -271,6 +271,8 @@ class AuthStore:
                 self._by_email[storage_email] = user.id
                 self._by_external_identity[(issuer, subject)] = user.id
                 self._save_users()
+            if not user.active:
+                raise ValueError("account_inactive")
             if old_session:
                 self._sessions.pop(old_session, None)
             token = self._create_session_locked(user.id)

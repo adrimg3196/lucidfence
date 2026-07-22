@@ -47,10 +47,17 @@ def test_adapter_marketplace_manifest_is_hash_verified():
 
 def test_sbom_contains_locked_dependencies_and_source_manifest():
     sbom = build_sbom(ROOT)
+    committed = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
+    assert committed == sbom
     assert sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.5"
     purls = {item["purl"] for item in sbom["components"]}
     assert "pkg:pypi/requests@2.33.0" in purls and "pkg:pypi/urllib3@2.7.0" in purls
-    assert any(item["name"] == "lucidfence:source-manifest-sha256" for item in sbom["properties"])
+    properties = {item["name"]: item["value"] for item in sbom["properties"]}
+    source_files = [path for path in ROOT.rglob("*.py")
+                    if not any(part.startswith(".") or part in {"build", "dist", "__pycache__"}
+                               for part in path.relative_to(ROOT).parts)]
+    assert int(properties["lucidfence:source-file-count"]) == len(source_files)
+    assert len(properties["lucidfence:source-manifest-sha256"]) == 64
 
 
 def test_10k_geofence_kernel_benchmark_meets_budget():

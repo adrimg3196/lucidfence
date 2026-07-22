@@ -54,6 +54,7 @@ import sys
 import threading
 import time
 import http.client  # bypass del proxy de entorno (GET a 127.0.0.1 pasa, pero usamos esto por robustez)
+from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -69,7 +70,7 @@ import cloud_publisher
 from saas.tenant import TenantStore, PLAN_LIMITS
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
-                       PinnedHTTPSTransport)
+                       PinnedHTTPSTransport, oidc_dependencies_available)
 from core.engine import Engine
 from core.product import build_product
 from core import secrets as core_secrets
@@ -132,6 +133,20 @@ def _load_oidc_providers() -> dict[str, OIDCProvider]:
 _oidc_providers = _load_oidc_providers()
 _oidc_flows = OIDCFlowStore(DATA_ROOT / "_oidc_flows.json", lock=_auth._lock)
 _oidc_client = OIDCClient(_oidc_providers, _oidc_flows, PinnedHTTPSTransport())
+
+
+def _validate_oidc_startup(providers: dict[str, OIDCProvider], host: str, port: int) -> None:
+    enabled = [provider for provider in providers.values() if provider.enabled]
+    if enabled and not oidc_dependencies_available():
+        raise RuntimeError("OIDC dependencies unavailable")
+    for provider in enabled:
+        if not provider.local_public_client:
+            continue
+        redirect = urlparse(provider.redirect_uri)
+        if redirect.hostname != host or redirect.port != port:
+            raise RuntimeError("OIDC local redirect must match server listener")
+
+
 _api_keys = APIKeyStore(DATA_ROOT)
 # Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
 # configuracion manual (ciso@acme.test / demo1234). Idempotente: si el
@@ -652,14 +667,15 @@ def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7)
             secure = "Secure; "
     except Exception:
         secure = ""
-    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Strict; Max-Age={max_age}")
+    expires = formatdate(time.time() + max_age, usegmt=True)
+    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Strict; Max-Age={max_age}; Expires={expires}")
 
 
 def _clear_cookie(handler, name: str):
     lst = getattr(handler, "_set_cookies", None)
     if lst is None:
         lst = handler._set_cookies = []
-    lst.append(f"{name}=; Path=/; HttpOnly; Max-Age=0")
+    lst.append(f"{name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
 
 
 def _set_oidc_cookie(handler, name: str, value: str, max_age: int):
@@ -668,7 +684,8 @@ def _set_oidc_cookie(handler, name: str, value: str, max_age: int):
     if lst is None:
         lst = handler._set_cookies = []
     secure = "Secure; " if os.environ.get("LUCIDFENCE_TLS") == "1" else ""
-    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Lax; Max-Age={max_age}")
+    expires = formatdate(time.time() + max_age, usegmt=True)
+    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Lax; Max-Age={max_age}; Expires={expires}")
 
 
 def _send_redirect(handler, location: str, code: int, *, no_referrer: bool = False):
@@ -1968,6 +1985,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _oidc_callback(self, provider_name: str, raw_query: str):
         browser = _cookie(self, COOKIE_OIDC_PREAUTH) or ""
+        return_path = _oidc_client.callback_return_path(provider_name, raw_query, browser)
         try:
             result = _oidc_client.callback(provider_name, raw_query, browser)
             if result.purpose != "login":
@@ -1999,10 +2017,11 @@ class Handler(BaseHTTPRequestHandler):
         except OIDCError as exc:
             _clear_cookie(self, COOKIE_OIDC_PREAUTH)
             _log_event("oidc_login", provider=provider_name, outcome="failure", reason=exc.code)
-            return _send_json(self, {"error": exc.code}, 400)
-        except ValueError:
+            return _send_redirect(self, return_path + "?auth_error=sso_failed", 303, no_referrer=True)
+        except ValueError as exc:
             _clear_cookie(self, COOKIE_OIDC_PREAUTH)
-            return _send_json(self, {"error": "provisioning_denied"}, 403)
+            _log_event("oidc_login", provider=provider_name, outcome="failure", reason=str(exc))
+            return _send_redirect(self, return_path + "?auth_error=sso_failed", 303, no_referrer=True)
 
     def _signup(self):
         body = _read_body(self)
@@ -2252,6 +2271,7 @@ def main():
     _SIMULATION = (cfg.get("mode") == "simulation")
     host = os.environ.get("LUCIDFENCE_HOST") or cfg.get("server", {}).get("host", "127.0.0.1")
     port = int(os.environ.get("LUCIDFENCE_PORT") or cfg.get("server", {}).get("port", 8765))
+    _validate_oidc_startup(_oidc_providers, host, port)
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] LucidFence local app running at http://{host}:{port}")
     print(f"  mode={cfg.get('mode')} dry_run={cfg.get('dry_run')}")
