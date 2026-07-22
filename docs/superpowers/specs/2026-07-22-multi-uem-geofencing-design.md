@@ -145,17 +145,15 @@ primario; Microsoft Entra ID, Okta y otros se habilitarán mediante configuraci�
 OIDC estándar, no mediante flujos propietarios.
 
 - Authorization Code con PKCE S256, `state` y `nonce` de un solo uso y TTL corto.
+- El ID Token firmado es la prueba primaria de autenticación. Se validan JWS/JWKS con algoritmos asimétricos permitidos, `iss`, `aud`, `azp`, `exp`, `iat` y `nonce`; `alg=none`, confusión HS/RS y claves inesperadas fallan cerrado.
 - Redirect URI exacta y HTTPS en hosted; loopback se admite solo en desarrollo/local.
-- Discovery, authorization, token y userinfo permanecen en un issuer HTTPS
-  permitido; no se siguen redirecciones autenticadas cross-origin.
-- La identidad durable es `(issuer, sub)`, nunca el email por sí solo.
-- `email_verified=true`, dominio permitido e invitación/política explícita son
-  requisitos de aprovisionamiento; no se crea un owner arbitrario por poseer un
-  correo Google.
-- Client secrets, access tokens e ID tokens permanecen server-side, con permisos
-  `0600`, y nunca entran en API, logs, URLs de frontend o Service Worker.
-- El modo local conserva login/owner local y no depende de disponibilidad de
-  Google. SSO local es opt-in, no requisito de arranque.
+- Discovery, authorization, token, JWKS y userinfo parten únicamente de configuración administrativa. Cada URL y cada A/AAAA deben pasar una política de egress pública; se revalida al conectar, no se siguen redirects y se limitan tamaños.
+- Cada state queda ligado atómicamente al navegador pre-auth, provider, issuer, client ID, redirect URI, nonce, verifier y purpose. El callback deriva el provider del flow consumido y valida `iss`, evitando mix-up.
+- La identidad durable es `(issuer, sub)`, nunca el email por sí solo. Si se consulta UserInfo, su `sub` debe coincidir con el ID Token validado.
+- `email_verified=true`, dominio permitido e invitación/política explícita son requisitos de aprovisionamiento; no se crea un owner arbitrario por poseer un correo Google.
+- Client secrets, access tokens e ID tokens permanecen server-side, con permisos `0600`, y nunca entran en API, logs, URLs de frontend o Service Worker.
+- Tras SSO se destruye la pre-sesión, se rota la sesión y se responde 303 a una URL limpia con `Cache-Control: no-store` y `Referrer-Policy: no-referrer`.
+- El modo local conserva login/owner local y no depende de disponibilidad de Google. SSO local es opt-in, usa un public client separado y solo admite loopback IP literal.
 
 ## 7. API y UX
 

@@ -210,12 +210,21 @@ git commit -m "feat(multiuem): orchestrate providers with safe identity merge"
 
 **Files:**
 - Create: `core/multiuem_providers.py`
+- Create: `core/outbound_security.py`
 - Modify: `config_loader.py`
 - Modify: `core/secrets.py`
 - Modify: `saas_server.py` (`_apply_tenant_integration`, connector persistence only)
+- Modify: `core/location_source.py`
+- Modify: `core/adapters/applivery.py`
+- Modify: `core/adapters/intune.py`
+- Modify: `core/adapters/jamf.py`
+- Modify: `core/adapters/workspace_one.py`
+- Modify: `core/adapters/chromeos.py`
+- Modify: `core/adapters/windows_conformidad.py`
 - Modify: `.env.example`
 - Create: `tests/test_multiuem_providers.py`
 - Create: `tests/test_connector_credentials_isolation.py`
+- Create: `tests/test_uem_outbound_security.py`
 
 **Interfaces:**
 - Consumes: `LiveLocationSource`, `SimulationLocationSource`, registered adapters and their `execute(..., "list", ...)` behavior.
@@ -252,16 +261,26 @@ credential value is empty.
 
 `.env.example` documents names only with placeholders and includes no usable credential. Keep all live modes opt-in.
 
+Use explicit `str | None` constructor semantics: `None` permits legacy environment lookup; an explicit empty string means “tenant configured but missing” and never falls back to process globals. Adapter methods must not re-read environment variables after construction.
+
+Verified capability matrix:
+- Applivery: live inventory + location after hardening; no native action capability until its undocumented endpoint is independently validated.
+- Intune: live inventory + declared Graph actions; no location.
+- Jamf: live inventory/actions only after public tenant-host validation; otherwise unavailable, never mock-as-live.
+- Workspace ONE: live inventory/actions after host validation; profile export is not `native_geofences`.
+- ChromeOS: live report/inventory, no actions/location.
+- Windows: report-only and disabled when Intune already supplies the same Windows inventory.
+
 - [ ] **Step 4: Add URL safety tests before enabling configurable live endpoints**
 
-For every configurable base URL, assert rejection of non-HTTPS, userinfo, localhost, loopback, link-local, RFC1918, CGNAT and cross-origin pagination. Authenticated requests must disable redirects. If an existing adapter cannot satisfy the test without a broad refactor, keep that provider action-only/simulation in this slice and expose the limitation in capabilities.
+Create one shared outbound policy. Reject non-HTTPS, userinfo, query/fragment, localhost, loopback, link-local, RFC1918, CGNAT, multicast/reserved and any hostname with non-public A/AAAA. Revalidate on connection. Authenticated/token requests disable redirects. Pagination is same-origin, bounded and cycle-detected. Pin fixed public origins for Applivery, Microsoft Graph/login and Google Admin/OAuth. Jamf/Workspace ONE tenant hosts fail closed when public DNS validation cannot be established.
 
 - [ ] **Step 5: Run GREEN and contract regression**
 
 Run:
 
 ```bash
-/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_tenant_credentials.py tests/test_sdk_contract.py -q
+/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py tests/test_tenant_credentials.py tests/test_sdk_contract.py tests/test_adapters_intune_live.py tests/test_adapters_jamf_live.py -q
 ```
 
 Expected: all pass; frozen adapter contract unchanged.
@@ -269,8 +288,8 @@ Expected: all pass; frozen adapter contract unchanged.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/multiuem_providers.py config_loader.py core/secrets.py saas_server.py .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py
-git commit -m "feat(multiuem): build tenant-local provider bindings"
+git add core/multiuem_providers.py core/outbound_security.py config_loader.py core/secrets.py saas_server.py core/location_source.py core/adapters .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py
+git commit -m "feat(multiuem): connect tenant providers with hardened transport"
 ```
 
 ---
@@ -365,11 +384,15 @@ git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 - Create: `core/oidc.py`
 - Modify: `saas/auth.py`
 - Modify: `saas_server.py` (auth routes only)
+- Modify: `pyproject.toml`
+- Modify: `requirements.lock`
+- Modify: `sbom.cdx.json`
 - Modify: `.env.example`
 - Create: `tests/test_oidc_sso.py`
 
 **Interfaces:**
 - Produces: `OIDCProvider`, `OIDCFlowStore`, `OIDCClient`.
+- Produces: `OIDCMetadataValidator` and `IDTokenValidator`, backed by pinned `PyJWT[crypto]`; no handwritten signature verification.
 - Produces: `GET /api/auth/sso/providers`,
   `GET /api/auth/sso/<provider>/start`, and
   `GET /api/auth/sso/<provider>/callback`.
@@ -386,16 +409,15 @@ Use a fake HTTPS transport and fake obvious credentials. Assert:
 2. callback consumes state exactly once and rejects missing, expired, replayed
    or mismatched state before token exchange;
 3. redirect URI is exact and return paths are relative allowlisted paths;
-4. discovery/token/userinfo endpoints must be HTTPS, same issuer policy and
-   public destinations; authenticated redirects are disabled;
-5. userinfo requires stable `sub`, matching issuer, and verified email when
-   email is used for provisioning;
-6. two providers with the same email but different `(issuer, sub)` are not
-   silently merged;
-7. raw client secret, code, verifier, access token and ID token never appear in
-   API responses, exceptions, logs or persisted user records;
-8. disabled/unconfigured SSO returns a non-secret provider list and structured
-   failure, while password login remains functional.
+4. discovery/token/JWKS/userinfo endpoints must be HTTPS and pass an injectable public-egress policy on every connection; redirects are disabled;
+5. ID Token rejects invalid signature, `alg=none`, HS/RS confusion, unknown or stale `kid`, issuer mismatch, invalid `aud`/`azp`, expiry, future `iat`, and absent/mismatched/replayed nonce; bounded JWKS refresh is tested;
+6. authorization response mix-up is rejected: state A through provider B, response `iss=B`, or token endpoint B causes zero wrong-endpoint calls/leaks;
+7. userinfo requires `sub` equal to the validated ID Token and verified email when email is used for provisioning;
+8. two providers with the same email but different `(issuer, sub)` are not silently merged;
+9. raw client secret, code, verifier, access token and ID token never appear in API responses, exceptions, logs or persisted user records;
+10. disabled/unconfigured SSO returns a non-secret provider list and structured failure, while password login remains functional.
+
+Add RED tests for duplicated callback parameters, `code+error`, stolen state in another browser, concurrent callbacks, Host/forwarded-header poisoning, absolute/protocol-relative/double-encoded return paths, IPv4/IPv6 private and mapped addresses, mixed/rebinding DNS, cross-origin redirects, oversized metadata/JWKS/token bodies, token timeout after send, session fixation, logout revocation and callback-query log redaction.
 
 - [ ] **Step 2: Run RED**
 
@@ -404,11 +426,9 @@ Expected: FAIL because `core.oidc` and SSO routes do not exist.
 
 - [ ] **Step 3: Implement generic Authorization Code + PKCE**
 
-Use stdlib `urllib` through an injectable transport. Never accept access tokens
-from the browser. Exchange the code server-side, query the configured HTTPS
-userinfo endpoint, and validate provisioning policy. OIDC flow state is
-server-side, one-time and bounded. Error details exposed to the client are stable
-codes only.
+Use pinned `PyJWT[crypto]` for JWS/JWKS and an injectable no-redirect transport. Never accept tokens from the browser. Validate the ID Token before optional UserInfo. State is persisted server-side `0600`, capacity-bounded, purged and consumed atomically, and bound to a host-only pre-auth cookie. Exposed errors are stable codes only.
+
+Token endpoint authentication is an explicit allowlist: hosted prefers `client_secret_basic`; `client_secret_post` is opt-in and `none` is restricted to a separate loopback public-client registration. Secrets never enter URLs. The redirect URI comes only from trusted config and is byte-identical in authorize and token exchange.
 
 Extend `User` compatibly with `external_identities: list[dict]` using a default
 factory. Existing password users must load unchanged. Add an AuthStore index on
@@ -417,6 +437,8 @@ requires either a pre-authorized external identity/invitation or a configured
 verified domain + target organization/role; owner bootstrap is a separate,
 explicit one-time policy.
 
+Separate `purpose=login|link|owner-bootstrap`. Linking requires an authenticated user, CSRF and recent reauthentication. Invitations are single-use, expiring and bound to org/role/canonical identity. Owner bootstrap is opt-in, audited and disabled permanently after first use.
+
 - [ ] **Step 4: Implement Google preset and generic provider config**
 
 Google defaults to issuer `https://accounts.google.com`; client ID, client
@@ -424,6 +446,10 @@ secret, redirect URI, allowed domains and provisioning policy are deployment
 secrets. Generic providers require explicit issuer/discovery URL. `.env.example`
 contains placeholders only. The provider-list endpoint exposes name/label/enabled
 only.
+
+Discovery starts only from admin config, requires exact metadata issuer, validates every endpoint and A/AAAA, revalidates on connect, disables redirects and bounds responses. Hosted requests only `openid email profile`, never `offline_access`, and persists no provider tokens.
+
+After success, destroy pre-auth/old sessions, mint a fresh session, set a host-only `Secure; HttpOnly; SameSite=Lax; Path=/` cookie and return 303 to an enum-backed clean path with no-store/no-referrer headers. Logout always revokes the local session. Redact callback queries from HTTP access logs.
 
 - [ ] **Step 5: Run GREEN and auth regressions**
 
@@ -438,7 +464,7 @@ Expected: all pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/oidc.py saas/auth.py saas_server.py .env.example tests/test_oidc_sso.py
+git add core/oidc.py saas/auth.py saas_server.py pyproject.toml requirements.lock sbom.cdx.json .env.example tests/test_oidc_sso.py
 git commit -m "feat(auth): add secure Google and generic OIDC SSO"
 ```
 
