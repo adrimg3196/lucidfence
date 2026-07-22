@@ -12,6 +12,25 @@ from typing import Callable, TypeGuard
 
 
 _UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}
+_SAFE_NAME = re.compile(r"[a-z][a-z0-9_]*")
+_MAX_SAFE_NAME_LENGTH = 64
+_MAX_REMOTE_ID_LENGTH = 512
+_RESPONSE_MODES = frozenset({"delegated", "dry_run", "export", "live", "mock", "simulated"})
+_RESPONSE_ERROR_TYPES = frozenset({
+    "auth_error",
+    "device_not_found",
+    "google_rejected",
+    "graph_rejected",
+    "invalid_payload",
+    "jamf_rejected",
+    "missing_device_id",
+    "rate_limited",
+    "remote_error",
+    "transport_error",
+    "unknown_error",
+    "unsupported_action",
+    "vendor_rejected",
+})
 
 
 def normalize_identity(value: object | None) -> str | None:
@@ -149,28 +168,67 @@ class MultiUEMOrchestrator:
             name = binding.name
             if (
                 not isinstance(name, str)
+                or len(name) > _MAX_SAFE_NAME_LENGTH
                 or not name.isascii()
-                or re.fullmatch(r"[a-z][a-z0-9_]*", name) is None
+                or _SAFE_NAME.fullmatch(name) is None
             ):
                 raise ValueError(f"invalid provider name at index {index}")
             if name in validated:
                 raise ValueError(f"duplicate provider name: {name}")
             if not isinstance(binding.capabilities, ProviderCapabilities):
                 raise ValueError(f"invalid capabilities for provider {name}")
+            capabilities = binding.capabilities
+            booleans = (
+                capabilities.inventory,
+                capabilities.location,
+                capabilities.native_geofences,
+            )
+            actions = capabilities.actions
+            if (
+                any(type(value) is not bool for value in booleans)
+                or not isinstance(actions, (list, tuple, set, frozenset))
+                or any(
+                    not isinstance(action, str)
+                    or len(action) > _MAX_SAFE_NAME_LENGTH
+                    or not action.isascii()
+                    or _SAFE_NAME.fullmatch(action) is None
+                    for action in actions
+                )
+            ):
+                raise ValueError(f"invalid capabilities for provider {name}")
             if not callable(binding.fetch_devices):
                 raise ValueError(f"invalid fetch_devices callback for provider {name}")
             if binding.execute_action is not None and not callable(binding.execute_action):
                 raise ValueError(f"invalid execute_action callback for provider {name}")
-            validated[name] = binding
+            validated[name] = ProviderBinding(
+                name=name,
+                capabilities=ProviderCapabilities(
+                    inventory=capabilities.inventory,
+                    location=capabilities.location,
+                    native_geofences=capabilities.native_geofences,
+                    actions=frozenset(actions),
+                ),
+                fetch_devices=binding.fetch_devices,
+                execute_action=binding.execute_action,
+            )
         self._bindings = validated
         self.max_location_age_seconds = max_location_age_seconds
         self.max_accuracy_m = max_accuracy_m
         self._health: dict[str, ProviderHealth] = {}
         self._lock = RLock()
+        self._next_sync_sequence = 0
+        self._published_sync_sequence = 0
 
     def sync(self, now: datetime | None = None) -> SyncResult:
         with self._lock:
-            return self._sync(now)
+            self._next_sync_sequence += 1
+            sequence = self._next_sync_sequence
+        result = self._sync(now)
+        with self._lock:
+            if sequence > self._published_sync_sequence:
+                self._health = deepcopy(result.health)
+                self._published_sync_sequence = sequence
+        return result
 
     def _sync(self, now: datetime | None = None) -> SyncResult:
         now = now or datetime.now(timezone.utc)
@@ -197,7 +255,6 @@ class MultiUEMOrchestrator:
             status = "degraded"
         else:
             status = "ok"
-        self._health = deepcopy(health)
         return SyncResult(devices=devices, health=deepcopy(health), status=status)
 
     def _consolidate(
@@ -378,19 +435,45 @@ class MultiUEMOrchestrator:
         params: dict,
         dry_run: bool = False,
     ) -> dict:
+        if not self._safe_name(action):
+            return {"ok": False, "error_type": "invalid_action"}
+        if not isinstance(params, dict) or type(dry_run) is not bool:
+            return {"ok": False, "error_type": "invalid_params"}
+
         if isinstance(device, NormalizedDevice):
             provider = device.provider
-            references = device.provider_refs or {
-                provider: device.provider_device_id
-            }
-        else:
+            provider_device_id = device.provider_device_id
+            raw_references = device.provider_refs
+        elif isinstance(device, dict):
             provider = device.get("provider")
-            references = device.get("provider_refs") or {
-                provider: device.get("provider_device_id")
-            }
+            provider_device_id = device.get("provider_device_id")
+            raw_references = device.get("provider_refs")
+        else:
+            return {"ok": False, "error_type": "invalid_device"}
+
+        if not self._safe_name(provider):
+            return {"ok": False, "error_type": "invalid_device"}
+        if provider_device_id is not None and not self._safe_remote_id(provider_device_id):
+            return {"ok": False, "error_type": "invalid_device"}
+        if raw_references is None or raw_references == {}:
+            if not self._safe_remote_id(provider_device_id):
+                return {"ok": False, "error_type": "invalid_device"}
+            references = {provider: provider_device_id}
+        elif not isinstance(raw_references, dict):
+            return {"ok": False, "error_type": "invalid_device"}
+        else:
+            references = raw_references
+            if any(
+                not self._safe_name(name)
+                or name not in self._bindings
+                or not self._safe_remote_id(remote_id)
+                for name, remote_id in references.items()
+            ):
+                return {"ok": False, "error_type": "invalid_device"}
+
         candidates = [
             name
-            for name in sorted(references)
+            for name in references
             if name in self._bindings
             and action in self._bindings[name].capabilities.actions
         ]
@@ -420,39 +503,70 @@ class MultiUEMOrchestrator:
                 "error_type": "provider_error",
                 "adapter": provider,
             }
-        allowed_types = {
-            "ok": bool,
-            "action": str,
-            "mode": str,
-            "dry_run": bool,
-            "delegated": bool,
-            "error_type": str,
-            "http_status": int,
+        invalid_response = {
+            "ok": False,
+            "error_type": "invalid_response",
+            "adapter": provider,
+            "action": action,
+            "dry_run": dry_run,
         }
-        if (
-            not isinstance(response, dict)
-            or not isinstance(response.get("ok"), bool)
-            or any(
-                key in response
-                and (
-                    not isinstance(response[key], expected)
-                    or (expected is int and isinstance(response[key], bool))
-                )
-                for key, expected in allowed_types.items()
-            )
+        if not isinstance(response, dict) or type(response.get("ok")) is not bool:
+            return invalid_response
+        mode = response.get("mode")
+        if mode is not None and (
+            not isinstance(mode, str)
+            or len(mode) > _MAX_SAFE_NAME_LENGTH
+            or mode not in _RESPONSE_MODES
         ):
-            return {
-                "ok": False,
-                "error_type": "invalid_response",
-                "adapter": provider,
-            }
+            return invalid_response
+        delegated = response.get("delegated")
+        if delegated is not None and type(delegated) is not bool:
+            return invalid_response
+        http_status = response.get("http_status")
+        if http_status is not None and (
+            type(http_status) is not int or not 100 <= http_status <= 599
+        ):
+            return invalid_response
+        error_type = response.get("error_type")
+        if error_type is not None and (
+            not isinstance(error_type, str)
+            or len(error_type) > _MAX_SAFE_NAME_LENGTH
+            or error_type not in _RESPONSE_ERROR_TYPES
+        ):
+            return invalid_response
+
         sanitized = {
-            key: deepcopy(response[key])
-            for key in allowed_types
-            if key in response
+            "ok": response["ok"],
+            "adapter": provider,
+            "action": action,
+            "dry_run": dry_run,
         }
-        sanitized["adapter"] = provider
+        if mode is not None:
+            sanitized["mode"] = mode
+        if delegated is not None:
+            sanitized["delegated"] = delegated
+        if http_status is not None:
+            sanitized["http_status"] = http_status
+        if response["ok"] is False:
+            sanitized["error_type"] = error_type or "provider_error"
         return sanitized
+
+    @staticmethod
+    def _safe_name(value: object) -> TypeGuard[str]:
+        return (
+            isinstance(value, str)
+            and len(value) <= _MAX_SAFE_NAME_LENGTH
+            and value.isascii()
+            and _SAFE_NAME.fullmatch(value) is not None
+        )
+
+    @staticmethod
+    def _safe_remote_id(value: object) -> TypeGuard[str]:
+        return (
+            isinstance(value, str)
+            and 0 < len(value) <= _MAX_REMOTE_ID_LENGTH
+            and value.isprintable()
+        )
 
     def health(self) -> dict[str, ProviderHealth]:
         with self._lock:
