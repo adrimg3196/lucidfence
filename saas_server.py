@@ -68,6 +68,8 @@ import config_loader
 import cloud_publisher
 from saas.tenant import TenantStore, PLAN_LIMITS
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
+from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
+                       PinnedHTTPSTransport)
 from core.engine import Engine
 from core.product import build_product
 from core import secrets as core_secrets
@@ -87,6 +89,7 @@ CONFIG_FILE = ROOT / os.environ.get("LUCIDFENCE_CONFIG_FILE", "config.json")
 DATA_ROOT = ensure_data_dir()
 COOKIE_SESSION = "gf_session"
 COOKIE_ORG = "gf_org"
+COOKIE_OIDC_PREAUTH = "gf_oidc_pre"
 RATE_LIMIT_REQUESTS = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_REQUESTS", "120") or "120")
 RATE_LIMIT_WINDOW_S = int(os.environ.get("LUCIDFENCE_RATE_LIMIT_WINDOW_S", "60") or "60")
 _rate_limit_buckets: dict[str, list[float]] = {}
@@ -99,6 +102,36 @@ MAX_REQUEST_BODY = 1024 * 1024
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
 _tenants = TenantStore(DATA_ROOT)
 _auth = AuthStore(DATA_ROOT)
+def _load_oidc_providers() -> dict[str, OIDCProvider]:
+    """Load deployment-only OIDC configuration; never values from requests."""
+    providers: dict[str, OIDCProvider] = {}
+    google = OIDCProvider.google(
+        client_id=os.environ.get("LUCIDFENCE_GOOGLE_CLIENT_ID", ""),
+        client_secret=os.environ.get("LUCIDFENCE_GOOGLE_CLIENT_SECRET", ""),
+        redirect_uri=os.environ.get("LUCIDFENCE_GOOGLE_REDIRECT_URI", ""),
+        allowed_domains=tuple(filter(None, os.environ.get("LUCIDFENCE_GOOGLE_ALLOWED_DOMAINS", "").split(","))),
+        provision_org_id=os.environ.get("LUCIDFENCE_GOOGLE_PROVISION_ORG_ID", ""),
+    )
+    providers[google.name] = google
+    raw = os.environ.get("LUCIDFENCE_OIDC_PROVIDERS_JSON", "").strip()
+    if raw:
+        try:
+            rows = json.loads(raw)
+            if not isinstance(rows, list) or len(rows) > 16:
+                raise ValueError
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError
+                item = OIDCProvider(**row)
+                providers[item.name] = item
+        except (ValueError, TypeError, OIDCError, json.JSONDecodeError):
+            raise RuntimeError("invalid OIDC provider configuration") from None
+    return providers
+
+
+_oidc_providers = _load_oidc_providers()
+_oidc_flows = OIDCFlowStore(DATA_ROOT / "_oidc_flows.json", lock=_auth._lock)
+_oidc_client = OIDCClient(_oidc_providers, _oidc_flows, PinnedHTTPSTransport())
 _api_keys = APIKeyStore(DATA_ROOT)
 # Seed de la cuenta demo para que la vitrina/CI puedan autenticarse sin
 # configuracion manual (ciso@acme.test / demo1234). Idempotente: si el
@@ -629,6 +662,35 @@ def _clear_cookie(handler, name: str):
     lst.append(f"{name}=; Path=/; HttpOnly; Max-Age=0")
 
 
+def _set_oidc_cookie(handler, name: str, value: str, max_age: int):
+    """Host-only OIDC cookie. Proxy headers are intentionally not trusted."""
+    lst = getattr(handler, "_set_cookies", None)
+    if lst is None:
+        lst = handler._set_cookies = []
+    secure = "Secure; " if os.environ.get("LUCIDFENCE_TLS") == "1" else ""
+    lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Lax; Max-Age={max_age}")
+
+
+def _send_redirect(handler, location: str, code: int, *, no_referrer: bool = False):
+    handler.send_response(code)
+    handler.send_header("Location", location)
+    handler.send_header("Cache-Control", "no-store")
+    if no_referrer:
+        handler.send_header("Referrer-Policy", "no-referrer")
+    for cookie in getattr(handler, "_set_cookies", []) or []:
+        handler.send_header("Set-Cookie", cookie)
+    handler._set_cookies = []
+    handler.send_header("Content-Length", "0")
+    handler.end_headers()
+
+
+def _redact_access_path(path: str) -> str:
+    marker = "/api/auth/sso/"
+    if marker in path and "/callback?" in path:
+        return path.split("?", 1)[0] + "?[REDACTED]"
+    return path
+
+
 def _safe_webhook_url(url: str):
     """SSRF guard: only https, never private/link-local/loopback targets.
     Returns the normalized URL or '' if unsafe/unusable."""
@@ -900,8 +962,9 @@ def _product_bundle(eng: Engine) -> dict:
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
 
-    def log_message(self, *a):
-        return
+    def log_message(self, fmt, *args):
+        safe_args = tuple(_redact_access_path(str(arg)) for arg in args)
+        super().log_message(fmt, *safe_args)
 
     def do_GET(self):
         if not _host_allowed(self):
@@ -1038,6 +1101,14 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": "openapi no disponible"}, 503)
 
         # ---- auth ----
+        if route == "/api/auth/sso/providers" and method == "GET":
+            return _send_json(self, {"providers": [p.public_dict() for p in _oidc_providers.values()]})
+        if route.startswith("/api/auth/sso/") and route.endswith("/start") and method == "GET":
+            provider_name = route[len("/api/auth/sso/"):-len("/start")]
+            return self._oidc_start(provider_name, qs)
+        if route.startswith("/api/auth/sso/") and route.endswith("/callback") and method == "GET":
+            provider_name = route[len("/api/auth/sso/"):-len("/callback")]
+            return self._oidc_callback(provider_name, parsed.query)
         if route == "/api/auth/signup" and method == "POST":
             return self._signup()
         if route == "/api/auth/demo" and method == "POST":
@@ -1883,6 +1954,56 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     # ---- auth handlers --------------------------------------------------
+    def _oidc_start(self, provider_name: str, qs: dict):
+        try:
+            if set(qs) - {"return_path"} or len(qs.get("return_path", ["/app"])) != 1:
+                raise OIDCError("invalid_return_path")
+            browser = _cookie(self, COOKIE_OIDC_PREAUTH) or os.urandom(32).hex()
+            started = _oidc_client.start(provider_name, browser, qs.get("return_path", ["/app"])[0], "login")
+            _set_oidc_cookie(self, COOKIE_OIDC_PREAUTH, browser, 600)
+            return _send_redirect(self, started.authorization_url, 302)
+        except OIDCError as exc:
+            status = 503 if exc.code == "provider_unavailable" else 400
+            return _send_json(self, {"error": exc.code}, status)
+
+    def _oidc_callback(self, provider_name: str, raw_query: str):
+        browser = _cookie(self, COOKIE_OIDC_PREAUTH) or ""
+        try:
+            result = _oidc_client.callback(provider_name, raw_query, browser)
+            if result.purpose != "login":
+                raise OIDCError("unsupported_flow_purpose")
+            claims = result.claims
+            provider = _oidc_providers[result.provider]
+            issuer, subject = str(claims.get("iss") or ""), str(claims.get("sub") or "")
+            existing = _auth.get_by_external_identity(issuer, subject)
+            email = str(claims.get("email") or "").strip().lower()
+            if existing is None:
+                domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+                if claims.get("email_verified") is not True or domain not in provider.allowed_domains:
+                    raise OIDCError("provisioning_denied")
+                if not provider.provision_org_id or provider.provision_role == "owner":
+                    raise OIDCError("provisioning_denied")
+            old_session = _cookie(self, COOKIE_SESSION) or ""
+            org_id = provider.provision_org_id
+            role = provider.provision_role
+            if existing and existing.org_roles:
+                org_id, role = next(iter(existing.org_roles.items()))
+            user, token = _auth.complete_oidc_login(issuer, subject, email,
+                                                    str(claims.get("name") or email),
+                                                    org_id, role, old_session=old_session)
+            _clear_cookie(self, COOKIE_OIDC_PREAUTH)
+            _set_oidc_cookie(self, COOKIE_SESSION, token, _auth.session_ttl)
+            _set_oidc_cookie(self, COOKIE_ORG, org_id, _auth.session_ttl)
+            _log_event("oidc_login", provider=result.provider, outcome="success", user_id=user.id)
+            return _send_redirect(self, result.return_path, 303, no_referrer=True)
+        except OIDCError as exc:
+            _clear_cookie(self, COOKIE_OIDC_PREAUTH)
+            _log_event("oidc_login", provider=provider_name, outcome="failure", reason=exc.code)
+            return _send_json(self, {"error": exc.code}, 400)
+        except ValueError:
+            _clear_cookie(self, COOKIE_OIDC_PREAUTH)
+            return _send_json(self, {"error": "provisioning_denied"}, 403)
+
     def _signup(self):
         body = _read_body(self)
         email = (body.get("email") or "").strip()
@@ -2122,6 +2243,10 @@ def _start_parent_watchdog() -> None:
 
 def main():
     _start_parent_watchdog()
+    if any(provider.enabled for provider in _oidc_providers.values()):
+        workers = int(os.environ.get("LUCIDFENCE_WORKERS", "1") or "1")
+        if workers != 1:
+            raise RuntimeError("OIDC JSON flow/session storage requires LUCIDFENCE_WORKERS=1")
     cfg = config_loader.load(CONFIG_FILE)
     global _SIMULATION, _cluster_lease
     _SIMULATION = (cfg.get("mode") == "simulation")
