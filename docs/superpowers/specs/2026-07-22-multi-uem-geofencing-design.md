@@ -121,6 +121,23 @@ La configuración aceptará `uem.providers[]`, con nombre, enabled, mode y opcio
 
 No habrá fallback silencioso desde credenciales del tenant a credenciales de proceso para un proveedor configurado explícitamente. La compatibilidad legacy de Applivery se adaptará de forma explícita y comprobable.
 
+### 6.1 Dos modos de producto, un único motor Multi-UEM
+
+Multi-UEM es obligatorio tanto en SaaS como en local; no se mantendrá una edición
+local degradada a un solo UEM.
+
+- `hosted`: el usuario entra con login, pertenece a una organización y toda
+  lectura/configuración se autoriza contra ese tenant. No existe acceso demo
+  anónimo en un bind público.
+- `local`: no exige cuenta ni identidad cloud. En loopback se permite el
+  bootstrap de un propietario local y todas las sesiones, datos y credenciales
+  permanecen en el directorio local. Si se intenta exponer fuera de loopback,
+  el arranque falla cerrado salvo que se haya configurado autenticación local.
+
+Ambos modos usan `MultiUEMOrchestrator`, el mismo contrato de capacidades y el
+mismo gate de evidencia. Cambiar de despliegue no cambia la semántica de
+identidad, geofencing ni acciones.
+
 ## 7. API y UX
 
 El API añadirá una vista tenant-authenticated de salud Multi-UEM que exponga:
@@ -153,7 +170,9 @@ La implementación seguirá RED-GREEN-REFACTOR por comportamiento:
 5. enrutado de acciones;
 6. integración del motor;
 7. aislamiento tenant/API;
-8. UX y E2E vivo.
+8. login hosted y bootstrap local loopback;
+9. paridad Multi-UEM entre hosted y local;
+10. UX y E2E vivo.
 
 Cada test nuevo debe observarse fallar por la ausencia del comportamiento antes de escribir producción. Además se ejecutarán:
 
@@ -179,7 +198,10 @@ Cada test nuevo debe observarse fallar por la ausencia del comportamiento antes 
 8. Capacidades no soportadas fallan de forma estructurada y nunca hacen raise.
 9. Credenciales y errores permanecen aislados por tenant y sanitizados.
 10. El modo legacy de un proveedor sigue funcionando.
-11. Suite completa, E2E vivo, seguridad y revisión independiente terminan en PASS.
+11. El modo hosted exige login y aísla organizaciones.
+12. El modo local funciona sin cuenta cloud en loopback y falla cerrado si se expone sin autenticación local.
+13. Hosted y local ejecutan el mismo orquestador Multi-UEM, no ediciones funcionalmente distintas.
+14. Suite completa, E2E vivo, seguridad y revisión independiente terminan en PASS.
 
 ## 11. Fuera de alcance
 

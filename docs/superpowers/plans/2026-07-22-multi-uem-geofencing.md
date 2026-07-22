@@ -359,25 +359,42 @@ git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 
 ---
 
-### Task 5: Authenticated health API and admin-console evidence
+### Task 5: Hosted login, local ownership, health API and admin-console evidence
 
 **Files:**
 - Modify: `saas_server.py`
-- Modify: `saas/auth.py` only if a read capability is missing
+- Modify: `saas/auth.py`
+- Modify: `bin/lucidfence` only if bind validation is not already centralized
 - Modify: `static/app.js`
 - Modify: `static/i18n.js`
 - Modify: `docs/openapi.json`
 - Create: `tests/test_multiuem_api.py`
+- Create: `tests/test_deployment_auth_modes.py`
 - Modify: `tests/test_webapp_e2e_dashboard.py`
 
 **Interfaces:**
 - Produces: authenticated `GET /api/uem/providers` with tenant engine health/capabilities/coverage.
 - Produces: device JSON fields from Task 4.
+- Produces: explicit deployment mode `hosted|local`; hosted requires login,
+  local loopback permits local-owner bootstrap without a cloud account, and a
+  non-loopback local bind fails closed unless local authentication is enabled.
 - UI consumes the endpoint and renders provider chips, sync status and location quality/reason.
 
 - [ ] **Step 1: Write RED API tests**
 
 Assert unauthenticated request is 401, viewer with `device:read` can read, tenant A cannot observe provider configuration/errors from tenant B, payload contains no key matching `token|secret|password|authorization|cookie`, and error detail is sanitized.
+
+In `tests/test_deployment_auth_modes.py`, assert:
+
+1. `hosted` rejects anonymous provider/device reads and accepts a real login
+   session scoped to its organization;
+2. `local` on loopback creates a local owner session without any cloud/network
+   identity provider or signup dependency;
+3. `local` bound to a non-loopback address refuses startup/config validation
+   unless local authentication is explicitly enabled;
+4. hosted and local both construct the same `MultiUEMOrchestrator` type and can
+   activate two providers in one tenant cycle;
+5. local mode never serializes or transmits credentials to a central endpoint.
 
 - [ ] **Step 2: Run RED**
 
@@ -426,7 +443,7 @@ Run:
 ```bash
 node --check static/app.js
 node --check static/i18n.js
-/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_api.py tests/test_webapp_e2e_dashboard.py -q
+/Users/adri/geofence-uem/.venv/bin/python -m pytest tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py -q
 ```
 
 Expected: all pass and no JS syntax errors.
@@ -434,8 +451,8 @@ Expected: all pass and no JS syntax errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add saas_server.py saas/auth.py static/app.js static/i18n.js docs/openapi.json tests/test_multiuem_api.py tests/test_webapp_e2e_dashboard.py
-git commit -m "feat(ui): expose multi-UEM health and location evidence"
+git add saas_server.py saas/auth.py bin/lucidfence static/app.js static/i18n.js docs/openapi.json tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py
+git commit -m "feat(ui): support hosted login and local Multi-UEM ownership"
 ```
 
 ---
@@ -475,11 +492,11 @@ Expected: `0 failed`. Restore only generated tracked telemetry after the run.
 
 - [ ] **Step 4: Verify product live in browser**
 
-Start one server from this worktree on a free localhost port, confirm `/api/health`, login, providers endpoint, device evidence, geofence view and every navigation view. Assert browser console and failed requests are empty. Capture screenshot path for evidence but do not commit it.
+Verify both deployment paths. Start local mode from this worktree on a free loopback port, bootstrap the local owner, and confirm providers/device evidence/geofence views. Then start hosted mode in a separate temporary data root, confirm anonymous access is denied, login succeeds, and the same Multi-UEM views work. Assert browser console and failed requests are empty. Capture screenshot paths for evidence but do not commit them.
 
 - [ ] **Step 5: Dispatch final independent code/security review**
 
-Reviewer receives spec path, plan path and complete branch diff package. It must inspect tenant isolation, identity ambiguity, stale/future/inaccurate locations, action routing, SSRF/redirects, error sanitization, legacy behavior, UI claims and test honesty. Fix every Critical/Important issue and re-review.
+Reviewer receives spec path, plan path and complete branch diff package. It must inspect tenant isolation, hosted login, local loopback ownership, non-loopback fail-closed behavior, hosted/local Multi-UEM parity, identity ambiguity, stale/future/inaccurate locations, action routing, SSRF/redirects, error sanitization, legacy behavior, UI claims and test honesty. Fix every Critical/Important issue and re-review.
 
 - [ ] **Step 6: Clean runtime and verify workspace**
 
@@ -494,7 +511,7 @@ git commit -m "docs: publish verified multi-UEM operations guide"
 
 ## Plan Self-Review Checklist
 
-- Spec coverage: tasks cover all 11 acceptance criteria.
+- Spec coverage: tasks cover all 14 acceptance criteria.
 - Compatibility: legacy path remains explicit in Tasks 3 and 4.
 - Type consistency: canonical/provider IDs and evidence types have one definition in Task 1.
 - Security: tenant isolation, secret sanitization and URL safety have explicit tests.
