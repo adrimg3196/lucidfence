@@ -162,6 +162,7 @@ class AuthStore:
         if self.session_ttl <= 0 or self.session_idle_timeout <= 0:
             raise ValueError("session timeouts must be positive")
         self._failed_logins: dict[str, list[float]] = {}
+        self._lockouts_total = 0
         self._load()
 
     # ---- persistence ----------------------------------------------------
@@ -328,10 +329,14 @@ class AuthStore:
     def _record_login_failure(self, key: str):
         now = time.time()
         window = _login_window_s()
+        max_fails = _login_max_fails()
         with self._lock:
             fails = [t for t in self._failed_logins.get(key, []) if t > now - window]
             fails.append(now)
             self._failed_logins[key] = fails
+            if len(fails) == max_fails:
+                # Transición a bloqueado: contador observable (review Important #3).
+                self._lockouts_total += 1
             # Mantener el mapa acotado para uso always-on.
             if len(self._failed_logins) > 4096:
                 stale = [k for k, v in self._failed_logins.items()
@@ -348,6 +353,18 @@ class AuthStore:
         return True
 
     # ---- sessions -------------------------------------------------------
+    def lockout_stats(self) -> dict:
+        """Observabilidad del lockout (review Important #3): totales y emails
+        actualmente bloqueados. Solo datos operativos, sin passwords."""
+        now = time.time()
+        window = _login_window_s()
+        max_fails = _login_max_fails()
+        with self._lock:
+            locked = [k for k, v in self._failed_logins.items()
+                      if len([t for t in v if t > now - window]) >= max_fails]
+            return {"lockouts_total": self._lockouts_total,
+                    "locked_emails": locked}
+
     def purge_expired_sessions(self) -> int:
         """Elimina sesiones caducadas; devuelve cuántas se purgaron."""
         now = time.time()

@@ -28,3 +28,9 @@ nunca purga sesiones expiradas de `_sessions.json`.
 ## Criterios de éxito
 - Tests nuevos RED→GREEN; suite completa sigue 100% verde (254 + nuevos).
 - Sin dependencias nuevas, stdlib-first, sin secretos.
+
+## Limitaciones aceptadas (post-review independiente PASS)
+- Lockout en memoria: se resetea al reiniciar el proceso (aceptable local-first).
+- Lockout por email = posible DoS dirigido de cuenta (tradeoff clásico); mitigable
+  a futuro con clave email+IP si el threat model cambia a internet-facing.
+- Salt dummy fijo "00"*16: solo para paridad de timing, nunca almacena passwords.

@@ -88,3 +88,15 @@ def test_create_session_purges_opportunistically():
     st._sessions[stale]["expires_at"] = time.time() - 10
     st.create_session(u.id)  # debe purgar la caducada de paso
     assert stale not in st._sessions
+
+
+def test_lockout_emits_observable_counter():
+    """Important #3 del review: el lockout debe ser observable operativamente."""
+    st = _store()
+    st.create_user("m@n.com", "M", "correcthorse1", "org_1")
+    assert st.lockout_stats()["lockouts_total"] == 0
+    for _ in range(6):
+        st.authenticate("m@n.com", "nope")
+    stats = st.lockout_stats()
+    assert stats["lockouts_total"] >= 1
+    assert "m@n.com" in stats["locked_emails"]
