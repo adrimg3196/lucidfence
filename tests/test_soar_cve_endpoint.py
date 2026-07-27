@@ -35,7 +35,7 @@ def demo_cookie():
     email = f"soarqa-{suffix}@acme.test"
     _, body, ck = req("POST", "/api/auth/signup", {
         "email": email, "password": "SoarQa12345", "name": "SOAR QA",
-        "org_name": f"SOAR QA {suffix}", "plan": "pro",
+        "org_name": f"SOAR QA {suffix}",
     })
     if not body.get("ok"):
         raise RuntimeError(f"signup failed: {body}")

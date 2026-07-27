@@ -108,7 +108,7 @@ def _write_demo_seed(seed_path: Path):
 def build_demo_engine(workdir: Path) -> Engine:
     workdir.mkdir(parents=True, exist_ok=True)
     ts = TenantStore(workdir)
-    org = ts.create(name="LucidFence Cloud Demo", owner_id="cloud", plan="pro")
+    org = ts.create(name="LucidFence Cloud Demo", owner_id="cloud")
     tdir = ts.data_dir(org.id)
 
     # Geocercas demo (Madrid HQ + Almacén Central).

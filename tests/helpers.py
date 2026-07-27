@@ -28,7 +28,7 @@ def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org") -
     (tmp / "policies.json").write_text("[]", encoding="utf-8")
 
     ts = TenantStore(tmp)
-    org = ts.create(name=org_name, owner_id="owner-test", plan="free")
+    org = ts.create(name=org_name, owner_id="owner-test")
     tdir = ts.data_dir(org.id)
 
     cfg: dict = {

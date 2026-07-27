@@ -2,6 +2,21 @@
 
 All notable changes to LucidFence are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- feat(free)!: LucidFence es gratis para siempre — eliminados los planes Pro/Enterprise, `/api/plan`, `/api/plan/upgrade` y la capability `org:billing`; `FREE_PLAN` único con enlace de donaciones (`.github/FUNDING.yml`); tenants legacy migran a `free` al cargar
+- docs(revenue): `docs/revenue-model.md` reescrito como modelo gratis+donaciones; `docs/pricing-model.md` eliminado
+
+### Fixed
+
+- fix(server): el sanitizador de `log_message` convertía args numéricos a str y rompía `send_error(404)` (formato `%d`) — cualquier POST/DELETE a ruta desconocida devolvía 500 en vez de 404
+
+### Removed
+
+- chore(barrendero): `static/saas_views*.js` (4 ficheros, 530 líneas muertas: ningún HTML los cargaba) + SBOM regenerado
+
 ## [1.3.0] - 2026-07-21
 
 ### Added

@@ -16,11 +16,11 @@ def test_admin_cannot_grant_owner_or_admin_role():
     assert "user:invite" in ROLE_CAPS["admin"]
     assert "user:invite" in ROLE_CAPS["owner"]
     # owner-only grant of privileged roles is enforced in the /api/users handler;
-    # here we assert the capability model itself keeps org:billing/org:delete
-    # exclusive to owner so a minted admin can't reach billing.
-    assert "org:billing" in ROLE_CAPS["owner"]
-    assert "org:billing" not in ROLE_CAPS["admin"]
+    # here we assert the capability model itself keeps org:delete/user:role
+    # exclusive to owner so a minted admin can't destroy the org or escalate.
+    assert "org:delete" in ROLE_CAPS["owner"]
     assert "org:delete" not in ROLE_CAPS["admin"]
+    assert "user:role" not in ROLE_CAPS["admin"]
 
 
 def test_viewer_has_no_write_capabilities():

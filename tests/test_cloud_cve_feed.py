@@ -50,7 +50,7 @@ def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
 
             workdir = Path(tmp) / "tenant"
             ts = TenantStore(workdir)
-            org = ts.create(name="test", owner_id="cloud", plan="pro")
+            org = ts.create(name="test", owner_id="cloud")
             tdir = ts.data_dir(org.id)
             (tdir / "fences.json").write_text(json.dumps({"fences": []}), encoding="utf-8")
             (tdir / "policies.json").write_text("[]", encoding="utf-8")
