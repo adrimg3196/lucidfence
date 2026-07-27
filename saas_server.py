@@ -1526,7 +1526,7 @@ class Handler(BaseHTTPRequestHandler):
 
         # product intelligence
         if route in ("/api/risk", "/api/incidents", "/api/incidents/export", "/api/incidents/analytics",
-                     "/api/policies", "/api/analytics",
+                     "/api/policies", "/api/analytics", "/api/activation",
                      "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
 
@@ -2230,6 +2230,8 @@ class Handler(BaseHTTPRequestHandler):
             })
         if route == "/api/report":
             return _send_json(self, {"report": product.get("report", {})})
+        if route == "/api/activation":
+            return _send_json(self, {"activation": product.get("activation", {})})
         self.send_error(404)
 
 
