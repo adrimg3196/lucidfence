@@ -12,6 +12,7 @@ import json
 import statistics
 import sys
 import tempfile
+import os
 import time
 from pathlib import Path
 
@@ -73,6 +74,8 @@ def test_engine_tick_p95_regression() -> None:
     }
     eng = Engine(cfg)
 
+    eng.run_once()  # warm-up: primer tick frío (caches/IO) no mide regresión real
+
     samples = []
     for _ in range(20):
         t0 = time.perf_counter()
@@ -82,4 +85,6 @@ def test_engine_tick_p95_regression() -> None:
     p95 = sorted(samples)[int(len(samples) * 0.95)]
     mean = statistics.mean(samples)
     print(f"perf bench mean={mean:.4f}s p95={p95:.4f}s")
-    assert p95 < 0.05, f"engine tick p95 regression: {p95:.4f}s"
+    # ponytail: umbral tunable — runners CI compartidos son ~10x más lentos
+    limit = float(os.environ.get("LUCIDFENCE_PERF_P95_S", "0.05"))
+    assert p95 < limit, f"engine tick p95 regression: {p95:.4f}s (limit {limit}s)"

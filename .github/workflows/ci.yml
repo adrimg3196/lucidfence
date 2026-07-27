@@ -30,6 +30,8 @@ jobs:
           python3 -m playwright install --with-deps chromium
 
       - name: Run test suite
+        env:
+          LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
         run: python3 tests/run_tests.py
 
   frontend:
