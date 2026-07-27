@@ -1094,6 +1094,9 @@ class Handler(BaseHTTPRequestHandler):
         if route in ("/about", "/index.html", "/landing", "/landing.html"):
             _send_file(self, STATIC / "index.html", "text/html; charset=utf-8")
             return
+        if route in ("/cloud", "/cloud.html"):
+            _send_file(self, STATIC / "cloud.html", "text/html; charset=utf-8")
+            return
         if route.startswith("/static/"):
             rel = route[len("/static/"):]
             p = (STATIC / rel).resolve()
