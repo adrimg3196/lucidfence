@@ -980,7 +980,10 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
 
     def log_message(self, fmt, *args):
-        safe_args = tuple(_redact_access_path(str(arg)) for arg in args)
+        # Solo se redactan los args de texto: send_error() pasa el código como
+        # int con formato %d y convertirlo a str rompería el logging (500s).
+        safe_args = tuple(_redact_access_path(a) if isinstance(a, str) else a
+                          for a in args)
         super().log_message(fmt, *safe_args)
 
     def do_GET(self):
