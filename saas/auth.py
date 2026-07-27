@@ -126,6 +126,26 @@ def verify_password(password: str, pw_hash: str, pw_salt: str) -> bool:
     return hmac.compare_digest(dk, pw_hash)
 
 
+# Hash dummy precomputado: iguala el coste PBKDF2 cuando el email no existe,
+# eliminando el oráculo de timing de enumeración de usuarios.
+_DUMMY_SALT = "00" * 16
+_DUMMY_HASH, _ = _hash_password("lucidfence-dummy-password", _DUMMY_SALT)
+
+
+def _login_max_fails() -> int:
+    try:
+        return max(1, int(os.environ.get("LUCIDFENCE_LOGIN_MAX_FAILS", "5")))
+    except ValueError:
+        return 5
+
+
+def _login_window_s() -> float:
+    try:
+        return max(0.1, float(os.environ.get("LUCIDFENCE_LOGIN_WINDOW_S", "300")))
+    except ValueError:
+        return 300.0
+
+
 class AuthStore:
     def __init__(self, root: Path, *, session_ttl: int = SESSION_TTL,
                  session_idle_timeout: int = 60 * 60 * 8):
@@ -141,6 +161,7 @@ class AuthStore:
         self.session_idle_timeout = int(session_idle_timeout)
         if self.session_ttl <= 0 or self.session_idle_timeout <= 0:
             raise ValueError("session timeouts must be positive")
+        self._failed_logins: dict[str, list[float]] = {}
         self._load()
 
     # ---- persistence ----------------------------------------------------
@@ -280,12 +301,43 @@ class AuthStore:
             return user, token
 
     def authenticate(self, email: str, password: str) -> Optional[User]:
+        key = email.lower().strip()
+        now = time.time()
+        window = _login_window_s()
+        max_fails = _login_max_fails()
+        with self._lock:
+            fails = [t for t in self._failed_logins.get(key, []) if t > now - window]
+            self._failed_logins[key] = fails
+            locked = len(fails) >= max_fails
         u = self.get_by_email(email)
         if not u or not u.active:
+            # Coste PBKDF2 equivalente: evita oráculo de timing de enumeración.
+            verify_password(password, _DUMMY_HASH, _DUMMY_SALT)
+            self._record_login_failure(key)
             return None
-        if verify_password(password, u.pw_hash, u.pw_salt):
+        ok = verify_password(password, u.pw_hash, u.pw_salt)
+        if locked:
+            return None
+        if ok:
+            with self._lock:
+                self._failed_logins.pop(key, None)
             return u
+        self._record_login_failure(key)
         return None
+
+    def _record_login_failure(self, key: str):
+        now = time.time()
+        window = _login_window_s()
+        with self._lock:
+            fails = [t for t in self._failed_logins.get(key, []) if t > now - window]
+            fails.append(now)
+            self._failed_logins[key] = fails
+            # Mantener el mapa acotado para uso always-on.
+            if len(self._failed_logins) > 4096:
+                stale = [k for k, v in self._failed_logins.items()
+                         if not v or v[-1] <= now - window]
+                for k in stale[:1024]:
+                    self._failed_logins.pop(k, None)
 
     def add_org_role(self, user_id: str, org_id: str, role: str) -> bool:
         u = self._users.get(user_id)
@@ -296,6 +348,18 @@ class AuthStore:
         return True
 
     # ---- sessions -------------------------------------------------------
+    def purge_expired_sessions(self) -> int:
+        """Elimina sesiones caducadas; devuelve cuántas se purgaron."""
+        now = time.time()
+        with self._lock:
+            stale = [t for t, s in self._sessions.items()
+                     if s.get("expires_at", 0) < now]
+            for t in stale:
+                self._sessions.pop(t, None)
+            if stale:
+                self._save_sessions()
+            return len(stale)
+
     def _create_session_locked(self, user_id: str) -> str:
         token = os.urandom(32).hex()
         now = time.time()
@@ -310,6 +374,7 @@ class AuthStore:
 
     def create_session(self, user_id: str) -> str:
         with self._lock:
+            self.purge_expired_sessions()
             token = self._create_session_locked(user_id)
             self._save_sessions()
             return token
