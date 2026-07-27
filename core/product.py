@@ -84,9 +84,11 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     )
     insights = build_insights(devices, events, actions, incidents, risk, stats)
     report = build_report(status, devices, incidents, risk, insights, analytics)
+    activation = build_activation(status, devices, fences, actions)
 
     return {
         "generated_at": _now(),
+        "activation": activation,
         "summary": {
             "fleet_size": len(devices),
             "open_incidents": len([i for i in incidents if i.get("status") == "open"]),
@@ -104,6 +106,40 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
         "events": events,
         "actions": actions,
     }
+
+
+def build_activation(status: dict[str, Any], devices: list[dict[str, Any]],
+                     fences: list[dict[str, Any]],
+                     actions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Funnel local de activación demo→live (quick-win CEO 2026-07-27).
+
+    Instrumentación 100% local derivada del propio estado del engine; sin
+    telemetría externa (local-first). Cada hito es booleano y el score es el
+    porcentaje de hitos cumplidos.
+    """
+    milestones = {
+        "has_devices": len(devices) > 0,
+        "has_fences": len(fences) > 0,
+        "live_mode": (status.get("mode") or "").lower() == "live",
+        "action_executed": len(actions) > 0,
+        "dry_run_off": not bool(status.get("dry_run", True)),
+    }
+    total = len(milestones)
+    done = sum(1 for v in milestones.values() if v)
+    score = int(round(100 * done / total)) if total else 0
+    next_steps = [
+        ("has_devices", "Conecta un UEM o carga la demo para ver dispositivos."),
+        ("has_fences", "Crea tu primera geovalla en la pestaña Geovallas."),
+        ("live_mode", "Pasa de demo a live conectando tu UEM (Ajustes)."),
+        ("action_executed", "Ejecuta una acción (p.ej. lock) sobre un dispositivo."),
+        ("dry_run_off", "Desactiva dry-run para que las acciones sean reales."),
+    ]
+    next_step = "Tenant activado: todos los hitos cumplidos."
+    for key, msg in next_steps:
+        if not milestones[key]:
+            next_step = msg
+            break
+    return {"milestones": milestones, "score": score, "next_step": next_step}
 
 
 def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
