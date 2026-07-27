@@ -46,18 +46,8 @@ def _load_config(root: Path) -> Dict[str, Any]:
 
 
 def _read_env(root: Path) -> Dict[str, str]:
-    values: Dict[str, str] = {}
-    path = Path(root) / ENV_FILE
-    try:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            values[key.strip()] = value.strip().strip('"').strip("'")
-    except OSError:
-        pass
-    return values
+    from config_loader import _load_env  # ponytail: parser único de .env, compartido con config_loader
+    return _load_env(Path(root) / ENV_FILE)
 
 
 def _valid_url(value: str) -> bool:
