@@ -138,6 +138,22 @@ def verify_policy_idempotency(current_state_properties: Dict[str, Any], target_p
     return True
 
 
+def _is_truthy(val: Any) -> bool:
+    """Helper to convert any input safely to a boolean, failing closed on 'False' strings and missing values."""
+    if val is None:
+        return False
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, str):
+        normalized = val.strip().lower()
+        if normalized in ("false", "0", "no", "none", "null", ""):
+            return False
+        return normalized in ("true", "1", "yes", "indesiredstate", "incompliance")
+    if isinstance(val, (int, float)):
+        return val != 0
+    return bool(val)
+
+
 def parse_dsc_status_output(status_output: str) -> Dict[str, Any]:
     """Parses a PowerShell DSC status or DSC v3 test JSON output.
 
@@ -155,11 +171,18 @@ def parse_dsc_status_output(status_output: str) -> Dict[str, Any]:
         data = json.loads(status_output)
     except Exception:
         # Fallback for plain text stdout
+        # Check if compliant state is present and explicitly true, avoiding false matches
+        stdout_normalized = status_output.lower()
         compliant = (
-            "InDesiredState : True" in status_output
-            or "InCompliance : True" in status_output
-            or "InDesiredState: true" in status_output
-            or "InCompliance: true" in status_output
+            "indesiredstate : true" in stdout_normalized
+            or "incompliance : true" in stdout_normalized
+            or "indesiredstate: true" in stdout_normalized
+            or "incompliance: true" in stdout_normalized
+        ) and not (
+            "indesiredstate : false" in stdout_normalized
+            or "incompliance : false" in stdout_normalized
+            or "indesiredstate: false" in stdout_normalized
+            or "incompliance: false" in stdout_normalized
         )
         return {
             "compliant": compliant,
@@ -171,17 +194,29 @@ def parse_dsc_status_output(status_output: str) -> Dict[str, Any]:
     # Check DSC v3 results format
     if isinstance(data, dict) and "results" in data:
         results = data["results"]
+        if not results:
+            return {
+                "compliant": False,
+                "policy_id": "unknown",
+                "mode": "dsc",
+                "evidence": "No results in DSC v3 output",
+            }
         all_compliant = True
         policy_ids = []
         for r in results:
-            in_desired = r.get("inDesiredState") or r.get("in_desired_state")
+            in_desired = r.get("inDesiredState")
+            if in_desired is None:
+                in_desired = r.get("in_desired_state")
             if in_desired is None and "status" in r:
                 in_desired = r["status"] == "InDesiredState"
             if in_desired is None:
                 props = r.get("properties", {})
-                in_desired = props.get("compliant") or props.get("inDesiredState")
+                in_desired = props.get("compliant")
+                if in_desired is None:
+                    in_desired = props.get("inDesiredState")
 
-            if not in_desired:
+            # Fail closed on absent or malformed/false values
+            if in_desired is None or not _is_truthy(in_desired):
                 all_compliant = False
 
             pid = (
@@ -201,19 +236,24 @@ def parse_dsc_status_output(status_output: str) -> Dict[str, Any]:
 
     # Check classic DSC list format
     if isinstance(data, list):
+        if not data:
+            return {
+                "compliant": False,
+                "policy_id": "unknown",
+                "mode": "dsc_v2",
+                "evidence": "Empty classic DSC list",
+            }
         all_compliant = True
         policy_ids = []
         for item in data:
-            in_compliance = (
-                item.get("InCompliance")
-                or item.get("InDesiredState")
-                or item.get("InDesiredState") == "True"
-                or item.get("InCompliance") == "True"
-            )
+            in_compliance = item.get("InCompliance")
             if in_compliance is None:
-                in_compliance = True
-            if not in_compliance:
+                in_compliance = item.get("InDesiredState")
+
+            # Fail closed on absent or malformed/false values
+            if in_compliance is None or not _is_truthy(in_compliance):
                 all_compliant = False
+
             pid = item.get("PolicyId") or item.get("ResourceName")
             if pid:
                 policy_ids.append(pid)

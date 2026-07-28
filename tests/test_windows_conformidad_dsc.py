@@ -241,6 +241,46 @@ class TestWindowsConformidadDSC(unittest.TestCase):
         self.assertIn("geofence_compliance", dev_report)
         self.assertEqual(dev_report["geofence_compliance"]["policy_id"], "pol-offshift-outside")
 
+    def test_parse_dsc_status_fail_closed_and_string_booleans(self):
+        """Verify status output parsing fails closed on absent/malformed values and handles string booleans."""
+        # 1. String False
+        v3_output_str_false = {
+            "results": [
+                {
+                    "name": "LucidFencePolicy_pol-1",
+                    "inDesiredState": "False",
+                }
+            ]
+        }
+        parsed = parse_dsc_status_output(json.dumps(v3_output_str_false))
+        self.assertFalse(parsed["compliant"])
+
+        # 2. String False in classic format
+        classic_str_false = [
+            {
+                "ResourceName": "LucidFencePolicy",
+                "InCompliance": "false",
+            }
+        ]
+        parsed = parse_dsc_status_output(json.dumps(classic_str_false))
+        self.assertFalse(parsed["compliant"])
+
+        # 3. Absent value (missing entirely)
+        v3_output_missing = {
+            "results": [
+                {
+                    "name": "LucidFencePolicy_pol-1",
+                }
+            ]
+        }
+        parsed = parse_dsc_status_output(json.dumps(v3_output_missing))
+        self.assertFalse(parsed["compliant"])
+
+        # 4. Empty/malformed structure
+        self.assertFalse(parse_dsc_status_output("{}")["compliant"])
+        self.assertFalse(parse_dsc_status_output("[]")["compliant"])
+        self.assertFalse(parse_dsc_status_output("NotDesiredState : False")["compliant"])
+
 
 if __name__ == "__main__":
     unittest.main()
