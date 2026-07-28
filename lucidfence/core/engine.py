@@ -100,6 +100,13 @@ class Engine:
         )
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
+        # Posture real del endpoint vía osquery (opt-in con config "posture").
+        # Best-effort: sin log/binario, el engine funciona igual que antes.
+        try:
+            from lucidfence.core.posture_osquery import OsqueryPosture
+            self.posture = OsqueryPosture.from_config(config)
+        except Exception:
+            self.posture = None
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
         # arranque si la red/cache falla. Por defecto solo carga el cache local;
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
@@ -391,6 +398,8 @@ class Engine:
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
                 })
+                if self.posture is not None:
+                    risk_device = self.posture.enrich(risk_device)
                 risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 ds.risk_score = risk["risk_score"]
                 ds.risk_severity = risk["severity"]

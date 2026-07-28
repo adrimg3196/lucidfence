@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-07-28 | INTEGRADOR | **osquery integrado (orden directa de Adri: "sí o sí")**: `lucidfence/core/posture_osquery.py` — posture real del endpoint (os_version, cifrado, disco, batería, salud del agente) desde el results log de osqueryd o `osqueryi`, con evidence gate de frescura y merge en el Risk Engine (`engine.py` pre-`risk.evaluate`). Pack en `deploy/osquery/lucidfence.conf`, doc en `docs/operations/OSQUERY.md`, 7 tests nuevos. Suite 274 PASS / 2 FAIL conocidos (TypeGuard py3.9). Sinergia: mismo agente que usa Fleet → historia "funciona con tu despliegue osquery/Fleet existente". |
 | 2026-07-27 | BARRENDERO | Completada la migración a "gratis + donaciones": fuera Pro/Enterprise, `/api/plan*`, capability `org:billing` y 4 ficheros `static/saas_views*.js` muertos (530 líneas). Fix de causa raíz en `log_message` (POST a ruta desconocida devolvía 500 en vez de 404). Docs de pricing reescritos. Suite 267 PASS (= baseline main). |
 
 ## Hecho (2026-07-27)
@@ -18,10 +19,12 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 ## Ideas
 
+- osquery fase 2: mostrar `posture_source`/`osquery_version` en el dashboard (badge "verificado en endpoint"); explorar geolocalización wifi (`wifi_survey`) como location source alternativa sin GPS.
+
 - Purga de menciones a planes de pago en docs legacy de marketing (`docs/launch-copy/`, `docs/marketing-copy.md`, `KANBAN.md`, `docs/PILOT_RUNBOOK.md`).
 - Capabilities `org:delete` y `user:role` están en la matriz RBAC pero ningún endpoint las comprueba — decidir: implementar endpoints o borrarlas.
 - Botón "Apoya el proyecto" (donaciones) discreto en el dashboard, alimentado por `FREE_PLAN.donations`.
-- Migrar los 2 tests multiuem que fallan por `TypeGuard` (Python 3.9 del sistema) a `typing_extensions` o guardas de versión — único rojo de la suite.
+- Corregir el entrypoint de tests para que seleccione el entorno bloqueado con Python >=3.11 o falle temprano con un mensaje claro; actualizar README/PR template/monitor para no recomendar el `python3` accidental del sistema. Evidencia 2026-07-28: `/usr/bin/python3` 3.9 da 267 PASS/2 FAIL por `TypeGuard`, mientras los 43 tests multiuem pasan 43/43 con Python 3.11. No añadir `typing_extensions`: `pyproject.toml` ya declara `requires-python >=3.11` y el problema es el runner/entorno, no el dominio multiuem.
 - Rehacer `tests/coverage_analysis_cloud.md` tras la limpieza de billing.
 
 ## Notas para el siguiente turno
