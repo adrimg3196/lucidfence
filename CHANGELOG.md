@@ -7,7 +7,7 @@ All notable changes to LucidFence are documented here.
 ### Changed
 
 - feat(free)!: LucidFence es gratis para siempre — eliminados los planes Pro/Enterprise, `/api/plan`, `/api/plan/upgrade` y la capability `org:billing`; `FREE_PLAN` único con enlace de donaciones (`.github/FUNDING.yml`); tenants legacy migran a `free` al cargar
-- docs(revenue): `docs/revenue-model.md` reescrito como modelo gratis+donaciones; `docs/pricing-model.md` eliminado
+- docs(revenue): `docs/gtm/revenue-model.md` reescrito como modelo gratis+donaciones; `docs/pricing-model.md` eliminado
 
 ### Fixed
 
@@ -87,8 +87,8 @@ All notable changes to LucidFence are documented here.
 
 ### Documentation
 
-- docs: add RUNBOOK.md operator playbook (BOUNTY #19, WS5) [MERGE]
-- docs: add RUNBOOK.md operator playbook (Bounty #19, WS5)
+- docs: add docs/operations/RUNBOOK.md operator playbook (BOUNTY #19, WS5) [MERGE]
+- docs: add docs/operations/RUNBOOK.md operator playbook (Bounty #19, WS5)
 - docs(roadmap): enlaza milestones GitHub v1.3.0-v2.1.0 (roadmap ejecutable)
 - docs: roadmap anual 2026-2027 (Q3'26→Q2'27) + social preview asset
 - docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf live

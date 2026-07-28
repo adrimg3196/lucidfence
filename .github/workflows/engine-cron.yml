@@ -31,7 +31,7 @@ jobs:
         env:
           CLOUD_PUBLISH: "1"
         run: |
-          python cloud_publisher.py --cycles "${{ github.event.inputs.cycles || '1' }}"
+          python core/cloud_publisher.py --cycles "${{ github.event.inputs.cycles || '1' }}"
       - name: Commitear estado al repo (lo sirve Pages)
         run: |
           git config user.name "lucidfence-cloud[bot]"

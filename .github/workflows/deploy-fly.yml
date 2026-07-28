@@ -6,7 +6,7 @@ name: deploy-fly
 # workflow usa FLY_API_TOKEN para desplegar.
 #
 # Para activarlo: crear el secret FLY_API_TOKEN en Settings > Secrets y
-# disparar este workflow, o correr localmente ./deploy_fly.sh tras auth login.
+# disparar este workflow, o correr localmente ./scripts/deploy_fly.sh tras auth login.
 on:
   workflow_dispatch:
   # Opcional: descomenta para despliegue automático en cada push a main.

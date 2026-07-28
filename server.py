@@ -29,7 +29,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-import config_loader
+from core import config_loader
 import core.secrets as secrets
 from core.secrets import test_applivery_token
 from core.engine import Engine
