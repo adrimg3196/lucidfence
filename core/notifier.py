@@ -30,6 +30,10 @@ _VERB = {
 }
 
 
+# strix: STRIX-FINDING (baja) — SSRF: webhook_url procede de config.json local; un
+# valor http:// o una IP interna haría que el daemon postee incidentes a un
+# destino arbitrario. IMPLEMENTAR: solo https:// y, si aplica, denegar hosts
+# privados/link-local (reutilizar core/oidc.PublicEgressPolicy).
 def _default_http_post(url: str, payload: dict) -> dict:
     """Real HTTP POST via stdlib http.client. Never raises."""
     import http.client

@@ -72,6 +72,11 @@ def load_routes(path: Path) -> list[Route]:
         return []
     out: list[Route] = []
     for r in raw:
+        # strix: STRIX-FINDING — Validación de entrada: igual que fences.py, lat/lng
+        # no se acotan ni se protege float() contra ValueError. Un waypoint con
+        # coordenadas fuera de rango o no numéricas rompe el cálculo de ruta o el
+        # arranque. IMPLEMENTAR: validar rango [-90,90]/[-180,180] y try/except en
+        # float(), omitiendo el waypoint malformado en vez de propagar la excepción.
         wps = [Point(lat=float(w["lat"]), lng=float(w["lng"])) for w in r.get("waypoints", [])]
         if not wps:
             # Skip routes with no waypoints: an empty polyline would make

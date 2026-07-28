@@ -100,6 +100,11 @@ class LiveLocationSource:
 
     # ------------------------------------------------------------------ auth
     def _headers(self):
+        # strix: STRIX-FINDING — TLS no explícito: urlopen() usa el contexto por
+        # defecto del intérprete (en 3.10+ verifica certs, pero no es garantía
+        # portable ni consistente con core/secrets.py y core/oidc.py, que pasan
+        # ssl.create_default_context() con check_hostname=True). IMPLEMENTAR:
+        # pasar ssl.create_default_context() explícitamente en cada urlopen.
         # Service-account Bearer token (verified live).
         key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or ""
         return {
@@ -184,6 +189,12 @@ class LiveLocationSource:
 
     @staticmethod
     def _next_from_link(link_header: Optional[str]) -> Optional[str]:
+        # strix: STRIX-FINDING — SSRF (OWASP A10): la URL del header Link la dicta
+        # el servidor remoto y se re-pide CON el Bearer token adjunto. Un MDM
+        # comprometido o MITM puede devolver una URL interna (p.ej.
+        # http://169.254.169.254/…) y robar el token. IMPLEMENTAR: validar que la
+        # URL resuelta sea del mismo origen que api_base (mismo host/esquema) y
+        # denegar IPs privadas/link-local antes de seguirla.
         if not link_header:
             return None
         for part in link_header.split(","):
@@ -305,6 +316,11 @@ class LiveLocationSource:
 
     def fetch_one(self, device_id: str) -> Optional[LocationReport]:
         self.last_error = None
+        # strix: STRIX-FINDING — Inyección de ruta/SSRF: device_id proviene de la
+        # respuesta del MDM y se interpola en la URL vía .format(). Un id con '/'
+        # o '\\' desvía el path de la petición. IMPLEMENTAR: validar device_id
+        # contra ^[A-Za-z0-9._:@-]+$ (reutilizar patrón de core/oidc.py) antes de
+        # usarlo en la URL.
         path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
         url = f"{self._api_base}{path}"
         req = urllib.request.Request(url, headers=self._headers())

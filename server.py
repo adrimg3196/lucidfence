@@ -125,6 +125,15 @@ class Handler(BaseHTTPRequestHandler):
             st["masked_key"] = secrets.mask_key(ROOT)
             self._send_json(st)
             return
+        # strix: STRIX-FINDING — Broken Access Control / CSRF (OWASP A01/A05).
+        # Los endpoints POST (settings, settings/test, run-once) y todas las
+        # lecturas de estado se sirven SIN autenticación ni verificación de
+        # Origin. Cualquier página web abierta en la misma máquina puede hacer
+        # POST a http://127.0.0.1:8765/api/settings y sobreescribir credenciales
+        # o disparar ciclos del engine (drive-by sobre el daemon local).
+        # IMPLEMENTAR: exigir un token de sesión local (cookie HttpOnly firmada
+        # o header X-LucidFence-Token) y validar Origin/Referer == dashboard
+        # antes de mutar estado. Ver references/security-checklist.md.
         if route == "/api/settings" and method == "POST":
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length) if length else b"{}"
@@ -148,6 +157,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "configured": res.get("configured"),
                              "mode": eng.config.get("mode"), "dry_run": eng.config.get("dry_run")})
             return
+        # strix: STRIX-FINDING — el cuerpo acepta un `api_key` arbitrario que se
+        # envía tal cual a api.applivery.io. Con el endpoint sin auth, un atacante
+        # local usa este daemon como proxy de token (la clave nunca se filtra en
+        # la respuesta, pero SÍ sale hacia el exterior). IMPLEMENTAR: no aceptar
+        # token en el body desde un llamador no autenticado; usar solo la clave
+        # ya guardada en .env vía secrets.read_key().
         if route == "/api/settings/test" and method == "POST":
             # Validate the stored/provided token against the real Applivery API.
             # Safe: only does a GET /v1 (read-only). Never returns the key.

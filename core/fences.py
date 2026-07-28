@@ -32,6 +32,11 @@ class Fence:
     @staticmethod
     def from_raw(raw: dict) -> "Fence":
         c = raw.get("center")
+        # strix: STRIX-FINDING — Validación de entrada: lat/lng no se acotan ni se
+        # protege float() contra ValueError. Un fences.json editado a mano con
+        # lat=999 o valor no numérico crea geometría rota en silencio o crashea el
+        # arranque del engine. IMPLEMENTAR: validar -90<=lat<=90 y -180<=lng<=180 y
+        # envolver float() en try/except saltando el punto malformado.
         coords = [
             Point(lat=float(p["lat"]), lng=float(p["lng"]))
             for p in raw.get("coordinates", [])
