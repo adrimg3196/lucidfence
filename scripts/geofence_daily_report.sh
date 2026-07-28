@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# geofence_daily_report.sh — Reporte diario de compliance de geofencing (100% local)
+# scripts/geofence_daily_report.sh — Reporte diario de compliance de geofencing (100% local)
 #
 # Genera el reporte de compliance leyendo SOLO el estado local (data/) y la
 # configuracion de cercas (fences.json). Escribe reportes md/csv/json en --out
@@ -7,7 +7,7 @@
 # con dispositivos.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 OUT_DIR="${1:-reports}"

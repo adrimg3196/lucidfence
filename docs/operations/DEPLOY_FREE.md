@@ -5,7 +5,7 @@ agente maneja todo por CLI (sin consola web de pago).
 
 | Capa | Servicio gratis | Cómo lo maneja el agente |
 |------|----------------|-------------------------------|
-| Landing + dashboard web | Local + Fly.io static | `flyctl` (deploy) / `start_local.sh` |
+| Landing + dashboard web | Local + Fly.io static | `flyctl` (deploy) / `scripts/start_local.sh` |
 | Hosting always-on (VM) | Fly.io free tier (shared-cpu, min 1 siempre on) | `flyctl deploy` |
 | Email saliente | Atomic Mail Agentic (`@atomicmail.ai`, JMAP + PoW, sin tarjeta) | vendored en `core/atomicmail/`, facade `core/atomicmail_client.py` |
 | Dominio / branding | DigitalPlat FreeDomain (`.dpdns.org` etc.) | `core/freedomain.py` + UI `/static/whitelabel.html` |
@@ -26,7 +26,7 @@ python3.11 -m venv .venv && . .venv/bin/activate && pip install -r requirements.
 # landing:   http://127.0.0.1:8765/
 # dashboard: http://127.0.0.1:8765/app
 ```
-`start_local.sh` arranca MoA (IA, :8085) y LucidFence SaaS (engine + dashboard, :8765) juntos.
+`scripts/start_local.sh` arranca MoA (IA, :8085) y LucidFence SaaS (engine + dashboard, :8765) juntos.
 
 ## Desplegar always-on (Fly.io free)
 

@@ -24,19 +24,18 @@ data/trails.jsonl        export-ignore
 
 # Deploy nuestro (no del cliente)
 fly.toml                 export-ignore
-deploy_fly.sh            export-ignore
-.start_all.sh            export-ignore
-start_all.sh             export-ignore
-start_local.sh           export-ignore
-docker_start.sh          export-ignore
-geofence_daily_report.sh export-ignore
+scripts/deploy_fly.sh            export-ignore
+scripts/start_all.sh             export-ignore
+scripts/start_local.sh           export-ignore
+scripts/docker_start.sh          export-ignore
+scripts/geofence_daily_report.sh export-ignore
 
 # Tests / QA internos (el cliente no los corre)
 tests/                   export-ignore
 qa_saas.py               export-ignore
 
 # Build nuestro
-build.sh                 export-ignore
+scripts/build.sh                 export-ignore
 macos/                   export-ignore
 artifact.tar              export-ignore
 

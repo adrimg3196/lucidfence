@@ -6,7 +6,7 @@
 #   flyctl auth whoami       # confirma
 #
 # Luego el agente (o tú) ejecuta este script:
-#   ./deploy_fly.sh
+#   ./scripts/deploy_fly.sh
 #
 # Qué hace:
 #   1) flyctl launch --no-deploy   (crea la app, no despliega)
@@ -18,7 +18,7 @@
 #   flyctl secrets set MOA_OPENROUTER_KEY=xxx   # opcional, para IA real
 set -e
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 echo "[deploy] verificando flyctl..."
 command -v flyctl >/dev/null 2>&1 || { echo "[deploy] ERROR: instala flyctl (https://fly.io/install.sh) y haz 'flyctl auth login'"; exit 1; }

@@ -1145,7 +1145,7 @@ class Handler(BaseHTTPRequestHandler):
             return _send_json(self, {"user": user,
                                      "orgs": [o.to_dict() for o in _tenants.list_for_user(user["id"])]})
 
-        # ---- Healthcheck sin auth (para monitoreo externo / start_all.sh) ----
+        # ---- Healthcheck sin auth (para monitoreo externo / scripts/start_all.sh) ----
         if route in ("/api/health", "/api/healthz") and method == "GET":
             return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "desktop_nonce": os.environ.get("LUCIDFENCE_DESKTOP_NONCE", ""),

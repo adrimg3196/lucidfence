@@ -12,7 +12,7 @@ No Critical/High (no secrets leaked, no crypto failure, multi-tenant isolation h
 
 ## MEDIUM
 - **M1 — install.sh runs dependency lifecycle un-reviewed** (checklist §Dependency Security): executes `pip install -r requirements.txt` and `docker compose up --build` with no verification gate; also downloads `docker-compose.yml` from raw.githubusercontent with no checksum. Plus the documented `curl …/install.sh | bash` (curl|sh) supply-chain pattern.
-- **M2 — docker-compose/docker_start network exposure**: `ports: "8765:8765"` publishes on 0.0.0.0 with no TLS (plaintext login). `docker_start.sh` binds MoA on `0.0.0.0:8085` (unauthenticated AI endpoint) inside Fly VM.
+- **M2 — docker-compose/docker_start network exposure**: `ports: "8765:8765"` publishes on 0.0.0.0 with no TLS (plaintext login). `scripts/docker_start.sh` binds MoA on `0.0.0.0:8085` (unauthenticated AI endpoint) inside Fly VM.
 - **M3 — No login rate limiting** (OWASP A07): `/api/auth/login` + `/api/auth/signup` have no throttle/lockout; only 100k-round PBKDF2. Brute-force feasible once internet-exposed.
 - **M4 — 500 error leaks internals** (OWASP A05/A09): `do_GET/do_POST` return `{"error":"server_error","detail": str(e)}`, exposing exception text/traceback. Checklist Error Handling violated.
 

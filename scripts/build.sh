@@ -2,11 +2,11 @@
 # ============================================================
 # LucidFence — empaquetado del entregable (100% LOCAL)
 # Genera un tarball listo para entregar al cliente.
-# Uso:  ./build.sh
+# Uso:  ./scripts/build.sh
 # Salida: dist/lucidfence-<fecha>.tar.gz
 # ============================================================
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 VERSION=$(date +%Y%m%d)
 OUT_DIR="dist"
@@ -27,7 +27,7 @@ cat > "$STAGE/MANIFEST.txt" <<EOF
 LucidFence Command Center — entregable cliente
 Generado: $(date)
 Modo: 100% local (macOS). Sin exfiltrar datos.
-Arranque: ./start_all.sh
+Arranque: ./scripts/start_all.sh
 Dashboard: http://127.0.0.1:8765
 Docs cliente: docs/product/README_CLIENTE.md
 Spec producto: docs/architecture/SPEC.md
@@ -39,4 +39,4 @@ rm -rf "$STAGE"
 
 echo "Entregable generado: $OUT_DIR/$NAME.tar.gz"
 echo "Tamaño: $(du -h "$OUT_DIR/$NAME.tar.gz" | cut -f1)"
-echo "Para entregar al cliente: descomprimir y ejecutar ./start_all.sh"
+echo "Para entregar al cliente: descomprimir y ejecutar ./scripts/start_all.sh"

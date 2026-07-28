@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 VENV_DIR="${LUCIDFENCE_VENV:-$ROOT/.venv}"
 VENV_PYTHON="$VENV_DIR/bin/python"

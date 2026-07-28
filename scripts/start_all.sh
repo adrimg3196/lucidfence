@@ -3,14 +3,14 @@
 # LucidFence — arranque completo (100% LOCAL)
 # Levanta:  MoA (127.0.0.1:8085)  +  LucidFence (127.0.0.1:8765)
 # Verifica salud y reporta estado de claves de IA.
-# Uso:  ./start_all.sh          (arranca y deja en background)
-#       ./start_all.sh stop     (para ambos)
-#       ./start_all.sh status   (estado)
+# Uso:  ./scripts/start_all.sh          (arranca y deja en background)
+#       ./scripts/start_all.sh stop     (para ambos)
+#       ./scripts/start_all.sh status   (estado)
 # ============================================================
 set -u
 
-MOA_DIR="$(cd "$(dirname "$0")/../moa" 2>/dev/null && pwd || echo "/Users/adri/moa")"
-GEO_DIR="$(cd "$(dirname "$0")" && pwd)"
+MOA_DIR="$(cd "$(dirname "$0")/../../moa" 2>/dev/null && pwd || echo "/Users/adri/moa")"
+GEO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 MOA_PORT=8085
 GEO_PORT=8765
 LOG_MOA="${GEO_DIR}/logs/moa.log"
@@ -91,7 +91,7 @@ echo
 if [ "$found" -eq 0 ]; then
   echo -e "${c_yel}IA en modo DEMO (mock):${c_off} no hay claves. Añade al menos una en:"
   echo "  $ENV_FILE"
-  echo "  (Groq recomendado: https://console.groq.com/keys) y reinicia: ./start_all.sh stop && ./start_all.sh"
+  echo "  (Groq recomendado: https://console.groq.com/keys) y reinicia: ./scripts/start_all.sh stop && ./scripts/start_all.sh"
 else
   echo -e "${c_grn}IA REAL activa${c_off} con $found proveedor(es). La mezcla MoA usará los disponibles."
 fi

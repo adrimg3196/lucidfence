@@ -3,13 +3,13 @@
 # Corre MoA (IA) + LucidFence SaaS (engine + dashboard) en tu máquina.
 #
 # Uso:
-#   ./start_local.sh            # MoA (:8085) + SaaS (:8765)
-#   MOA_DRY=false ./start_local.sh   # fuerza IA real (necesita claves en moa/.env)
+#   ./scripts/start_local.sh            # MoA (:8085) + SaaS (:8765)
+#   MOA_DRY=false ./scripts/start_local.sh   # fuerza IA real (necesita claves en moa/.env)
 #
 # Requiere: python3.11 en el venv .venv (creado con: python3.11 -m venv .venv && .venv/bin/pip install requests pytest)
 set -e
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 # MoA vive fuera del repo de LucidFence (en /Users/adri/moa por defecto).
 # Sobrescribe con MOA_DIR si tu ruta es distinta.

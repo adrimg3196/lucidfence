@@ -107,7 +107,7 @@ def test_demo_and_gateway_use_actual_bound_socket():
 
 
 def test_quick_runner_uses_supported_python_and_hash_locked_venv():
-    runner = (ROOT / "run.sh").read_text()
+    runner = (ROOT / "scripts/run.sh").read_text()
     assert "3, 11" in runner
     assert "-m venv" in runner
     assert "requirements.lock" in runner
