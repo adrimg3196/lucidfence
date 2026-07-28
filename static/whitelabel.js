@@ -1,6 +1,17 @@
 /* LucidFence Whitelabel UI — DigitalPlat FreeDomain + Atomic Mail.
    Self-contained: login, suggest DNS, save, live validate. No frameworks. */
 (function () {
+  // Intercept window.fetch to consume the versioned public API (v2) for all /api/ calls
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    if (typeof input === "string") {
+      if (input.startsWith("/api/") && !input.startsWith("/api/v1/") && !input.startsWith("/api/v2/")) {
+        input = "/api/v2" + input.substring(4);
+      }
+    }
+    return originalFetch(input, init);
+  };
+
   const $ = (id) => document.getElementById(id);
   let cookies = "";
 

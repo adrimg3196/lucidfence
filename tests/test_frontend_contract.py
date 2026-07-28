@@ -119,3 +119,19 @@ def test_compliance_pdf_export_is_wired_in_dashboard_and_cloud():
     assert "function downloadTenantCompliancePdf" in cloud
     assert "application/pdf" in server
     assert "export_compliance_pdf" in export_mod
+
+
+def test_dashboard_uses_v2_versioned_public_api_interceptor():
+    """Ensure both app.js and whitelabel.js intercept window.fetch and rewrite unversioned /api/ to /api/v2."""
+    app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    wl_js = (ROOT / "static" / "whitelabel.js").read_text(encoding="utf-8")
+
+    # Assert interceptor exists in app.js
+    assert "window.fetch" in app_js
+    assert "input.startsWith(\"/api/\")" in app_js
+    assert "\"/api/v2\" + input.substring(4)" in app_js
+
+    # Assert interceptor exists in whitelabel.js
+    assert "window.fetch" in wl_js
+    assert "input.startsWith(\"/api/\")" in wl_js
+    assert "\"/api/v2\" + input.substring(4)" in wl_js

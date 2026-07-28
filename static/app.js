@@ -4,6 +4,19 @@
    ============================================================ */
 "use strict";
 
+// Intercept window.fetch to consume the versioned public API (v2) for all /api/ calls
+(function() {
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init) {
+    if (typeof input === "string") {
+      if (input.startsWith("/api/") && !input.startsWith("/api/v1/") && !input.startsWith("/api/v2/")) {
+        input = "/api/v2" + input.substring(4);
+      }
+    }
+    return originalFetch(input, init);
+  };
+})();
+
 const App = {
   status: null,        // último /api/status
   org: null,           // /api/org
