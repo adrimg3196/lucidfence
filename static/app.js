@@ -91,7 +91,11 @@ function toast(title, sub, kind="info"){
 
 /* ---------- API ---------- */
 async function api(path, opts={}){
-  const r = await fetch(path, opts);
+  let url = path;
+  if (path.startsWith("/api/") && !path.startsWith("/api/auth/")) {
+    url = "/api/v2" + path.slice(4);
+  }
+  const r = await fetch(url, opts);
   if(r.status === 401){
     // Sin sesión (o expiró). Mostramos el modal de login REAL del SaaS
     // multi-tenant en lugar de un auto-login demo: el backend gestiona la
@@ -623,7 +627,7 @@ function renderOverview(){
 function openAiFromOverview(){ goView("ai"); }
 
 function downloadCompliancePdf(){
-  window.location.href = "/api/export?kind=compliance&format=pdf";
+  window.location.href = "/api/v2/export?kind=compliance&format=pdf";
 }
 
 function renderDonut(node, pct, fg, total){
@@ -1001,7 +1005,7 @@ async function renderIncidents(){
       <div class="bd"><div class="alist" id="incList"><div class="sk" style="height:120px"></div></div></div></div>`;
   $$("#incFilters .chip").forEach(c=>c.onclick=()=>{ incidentFilter=c.dataset.f; renderIncidents(); });
   $("#incReload").onclick=()=>renderIncidents();
-  $("#incExport").onclick=()=>{ window.location.href="/api/incidents/export?format=csv"; };
+  $("#incExport").onclick=()=>{ window.location.href="/api/v2/incidents/export?format=csv"; };
   try{
     const data = await api("/api/incidents");
     try{ const an = await api("/api/incidents/analytics");
@@ -1883,7 +1887,7 @@ function stateTag(s){
   return '<span class="tag"><span class="d"></span>desconocido</span>';
 }
 async function exportReport(kind, format){
-  const url = `/api/export?kind=${kind}&format=${format}`;
+  const url = `/api/v2/export?kind=${kind}&format=${format}`;
   toast("Exportando", `${kind} (${format})`, "info");
   // open in new tab so the browser downloads/prints
   window.open(url, "_blank");

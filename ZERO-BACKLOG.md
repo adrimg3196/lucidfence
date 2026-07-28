@@ -35,7 +35,7 @@ Directriz de producto de Adri (2026-07-28, vigente siempre): LucidFence se dise�
 API-first con tecnología 100% actual, contemplando TODOS los escenarios de consumo.
 Progreso de cada frente se registra aquí.
 
-- [ ] **API pública**: spec OpenAPI versionada en el repo como contrato único; el
+- [x] **API pública**: spec OpenAPI versionada en el repo como contrato único; el
       dashboard consume la misma API (sin rutas privadas duplicadas).
 - [ ] **SDKs oficiales**: Python y/o JS, ligeros, generados sobre la spec,
       publicables gratis (PyPI/npm).
