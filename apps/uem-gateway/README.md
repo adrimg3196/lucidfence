@@ -14,7 +14,7 @@ Gateway read-only para conectar la PWA pública con un UEM que requiera secreto 
 ## Despliegue
 
 ```bash
-cd edge/uem-gateway
+cd apps/uem-gateway
 npx wrangler secret put UPSTREAM_TOKEN
 npx wrangler deploy
 ```

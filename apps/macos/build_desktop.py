@@ -16,7 +16,7 @@ import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MACOS = ROOT / "macos"
+MACOS = ROOT / "apps" / "macos"
 BUILD = ROOT / "build" / "macos-desktop"
 DIST = ROOT / "dist"
 DEFAULT_VERSION = "1.2.0"

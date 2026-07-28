@@ -139,7 +139,7 @@ lucidfence/
 ├── docs/                   # documentación (ver docs/README.md)
 ├── data/                   # seeds públicos read-only + estado local
 ├── analysis/               # notebooks reproducibles con outputs verificados
-├── macos/                  # app Swift/WebKit + builder PyInstaller/DMG
+├── apps/                   # app de escritorio macOS + gateway edge opcional
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
 ```
