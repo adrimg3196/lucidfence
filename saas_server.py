@@ -63,8 +63,8 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "core"))
 
-import config_loader
-import cloud_publisher
+from core import config_loader
+from core import cloud_publisher
 from saas.tenant import TenantStore, FREE_PLAN
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
@@ -1116,7 +1116,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/openapi.json" and method == "GET":
             try:
-                schema = json.loads((ROOT / "docs" / "openapi.json").read_text(encoding="utf-8"))
+                schema = json.loads((ROOT / "docs" / "architecture" / "openapi.json").read_text(encoding="utf-8"))
                 return _send_json(self, schema)
             except (OSError, json.JSONDecodeError):
                 return _send_json(self, {"error": "openapi no disponible"}, 503)
@@ -1145,7 +1145,7 @@ class Handler(BaseHTTPRequestHandler):
             return _send_json(self, {"user": user,
                                      "orgs": [o.to_dict() for o in _tenants.list_for_user(user["id"])]})
 
-        # ---- Healthcheck sin auth (para monitoreo externo / start_all.sh) ----
+        # ---- Healthcheck sin auth (para monitoreo externo / scripts/start_all.sh) ----
         if route in ("/api/health", "/api/healthz") and method == "GET":
             return _send_json(self, {"status": "ok", "service": "lucidfence",
                                      "desktop_nonce": os.environ.get("LUCIDFENCE_DESKTOP_NONCE", ""),
@@ -1219,7 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
         # an owner browser session so an automation key cannot rewrite the repo.
         if route == "/api/roadmap" and method == "GET":
             try:
-                import roadmap_tooling as _rm
+                from core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
@@ -1230,7 +1230,7 @@ class Handler(BaseHTTPRequestHandler):
             if role != "owner" or user.get("auth_type") == "api_key":
                 return _send_json(self, {"error": "solo owner con sesion"}, 403)
             try:
-                import roadmap_tooling as _rm
+                from core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)

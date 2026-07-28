@@ -11,7 +11,7 @@ import time as _time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config_loader  # noqa: E402
+from core import config_loader  # noqa: E402
 from saas.tenant import TenantStore  # noqa: E402
 from core.engine import Engine  # noqa: E402
 from core.policies import Policy  # noqa: E402

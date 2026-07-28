@@ -7,7 +7,7 @@ import shlex
 from pathlib import Path
 from typing import Callable
 
-import roadmap_tooling
+from core import roadmap_tooling
 from core.location_source import SimulationLocationSource
 from core.product import build_product
 

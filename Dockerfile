@@ -43,7 +43,7 @@ COPY . /app
 VOLUME ["/app/data"]
 
 # Arranque unificado: MoA + SaaS.
-COPY docker_start.sh /app/docker_start.sh
+COPY scripts/docker_start.sh /app/docker_start.sh
 RUN chmod +x /app/docker_start.sh
 
 EXPOSE 8765
