@@ -26,10 +26,10 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 ## Notas para el siguiente turno
 
-- **PRIORIDAD nº1 (orden de Adri 2026-07-28): frente DDM-DSC** — ver sección
-  `## DDM-DSC` abajo. Issues #40 (Apple DDM) y #41 (Windows DSC) ya sembrados
-  con label `agent-ready`. Nightly y Jules deben avanzar esto ANTES que el
-  resto de ideas.
+- **PRIORIDAD nº1 (orden de Adri 2026-07-28): frente declarativo DDM-DSC-AMAPI**
+  — ver sección `## DDM-DSC` abajo. Issues #40 (Apple DDM), #41 (Windows DSC)
+  y #42 (Android AMAPI) ya sembrados con label `agent-ready`. Nightly y Jules
+  deben avanzar esto ANTES que el resto de ideas.
 - Rama de trabajo: `zero-nightly`. La rama local `gt/migrar-a-gratis-donaciones` quedó obsoleta (sin commits propios) — borrar cuando el PR se mergee.
 - La suite se ejecuta con `python3 tests/run_tests.py` (hermética: exige el puerto 8765 libre; mata cualquier `saas_server.py` colgado antes).
 
@@ -67,7 +67,15 @@ imperativos del servidor.
       clásico. Idempotente (re-apply sin cambios = no-op), readback de
       compliance al pipeline de device state. Flag `supports_dsc` en
       `windows_conformidad`.
+- [ ] **Android AMAPI** (issue #42): `lucidfence/core/amapi.py` genera el patch
+      de policy AMAPI (restricciones por estado de geocerca) con
+      `policyEnforcementRules` para escalado gradual; flag
+      `supports_amapi_policy` en adapters con backend Android (applivery,
+      intune, workspace_one). Readback vía `policyCompliant` /
+      `nonComplianceDetails`. Matriz COBO vs work profile obligatoria — muchas
+      restricciones dependen del modo de gestión.
 - [ ] Matriz de soporte documentada en `docs/` (versiones OS, DDM vs legacy,
-      DSC v2 vs v3) y fixtures golden en tests (sin red, sin host Windows).
+      DSC v2 vs v3, AMAPI COBO/BYOD) y fixtures golden en tests (sin red, sin
+      host Windows, sin proyecto enterprise de Google).
 
 Regla transversal: capacidad aditiva — la ruta imperativa actual no se rompe.
