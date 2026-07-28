@@ -70,6 +70,10 @@ class JamfAdapter(MDMAdapter):
 
     name = "jamf"
 
+    #: Jamf Pro expone DDM; el resto de adapters se quedan en el camino
+    #: imperativo hasta que su MDM lo documente.
+    supports_ddm = True
+
     def __init__(
         self,
         org_id: str = "",
@@ -174,6 +178,8 @@ class JamfAdapter(MDMAdapter):
     # --- public API per MDMAdapter ---
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
+        if action == "apply_ddm":
+            return self._apply_ddm(device, params)
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
         try:
@@ -184,6 +190,50 @@ class JamfAdapter(MDMAdapter):
             return self._err("jamf", device, action, "transport_error", str(exc))
         except Exception as exc:  # noqa: BLE001 — contract: never raise
             return self._err("jamf", device, action, "unknown_error", repr(exc))
+
+    # --- DDM (declarativo) ---
+
+    def _apply_ddm(self, device: Any, params: dict) -> dict:
+        """Construye las declarations DDM de una policy para este dispositivo.
+
+        Offline: genera los documentos, no los sube. La entrega al canal de
+        declarations la hace el MDM; aquí solo producimos el contrato.
+        Si el dispositivo no soporta DDM devuelve ``fallback="imperative"``
+        para que el llamante siga por el camino de comandos de siempre.
+        """
+        from lucidfence.core.ddm import build_declarations, supports_ddm
+
+        device_id = self._dev_id_str(device)
+        if not supports_ddm(device):
+            return {
+                "adapter": "jamf", "ok": False, "device_id": device_id,
+                "action": "apply_ddm", "error": "ddm_unsupported",
+                "fallback": "imperative",
+            }
+        policy = params.get("policy")
+        if not policy:
+            return self._err("jamf", device, "apply_ddm",
+                             "missing_parameter", "Missing 'policy' parameter")
+        profile_url = str(params.get("profile_url", "") or "")
+        try:
+            declarations = build_declarations(
+                policy,
+                str(self._dev_get(device, "fence_state", "unknown") or "unknown"),
+                profile_url,
+                predicate=params.get("predicate"),
+            )
+        except ValueError as exc:
+            return self._err("jamf", device, "apply_ddm", "invalid_profile_url", str(exc))
+        return {
+            "adapter": "jamf", "ok": True, "device_id": device_id,
+            "action": "apply_ddm", "declarations": declarations,
+        }
+
+    @staticmethod
+    def _dev_get(device: Any, key: str, default=None):
+        if isinstance(device, dict):
+            return device.get(key, default)
+        return getattr(device, key, default)
 
     # --- live mode ---
 
