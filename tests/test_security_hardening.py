@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
+from lucidfence.saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
 
 
 def test_admin_cannot_grant_owner_or_admin_role():

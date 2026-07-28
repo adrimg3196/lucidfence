@@ -134,7 +134,7 @@ lucidfence/
 ├── lucidfence/core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
 ├── lucidfence/             # SDK Python público (envuelve lucidfence/core/)
 ├── saas/                   # auth local, RBAC y aislamiento
-├── mcp/lucidfence_mcp.py   # MCP local read-only
+├── lucidfence/mcp/         # servidores MCP locales read-only
 ├── static/                 # interfaz local, assets vendorizados
 ├── scripts/                # utilidades de build, arranque, despliegue y QA
 ├── docs/                   # documentación (ver docs/README.md)

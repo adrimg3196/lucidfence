@@ -64,8 +64,8 @@ sys.path.insert(0, str(ROOT))
 
 from lucidfence.core import config_loader
 from lucidfence.core import cloud_publisher
-from saas.tenant import TenantStore, FREE_PLAN
-from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
+from lucidfence.saas.tenant import TenantStore, FREE_PLAN
+from lucidfence.saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from lucidfence.core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
 from lucidfence.core.engine import Engine
@@ -2028,7 +2028,7 @@ class Handler(BaseHTTPRequestHandler):
         # existing tenant must go through an authenticated invite
         # (POST /api/users), never through public signup. This closes the
         # "self-add as viewer to any org" escalation.
-        from saas.tenant import slugify
+        from lucidfence.saas.tenant import slugify
         if _tenants.get_by_slug(slugify(org_name)):
             return _send_json(self, {"error": "el nombre de organización ya existe; pide una invitación al propietario"}, 409)
         org = _tenants.create(org_name, owner_id="")

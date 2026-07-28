@@ -45,7 +45,7 @@ def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
         with tempfile.TemporaryDirectory(prefix="lucidfence-cloud-cve-") as tmp:
             feed_path = Path(tmp) / "cve_feed_nvd.json"
             # Aislar el feed para que el test no toque data/cve_feed_nvd.json del repo.
-            from saas.tenant import TenantStore
+            from lucidfence.saas.tenant import TenantStore
             from lucidfence.core.engine import Engine
 
             workdir = Path(tmp) / "tenant"

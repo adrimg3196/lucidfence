@@ -59,7 +59,7 @@ Gateway local:
 
 ## 4. MCP local
 
-`mcp/lucidfence_mcp.py`, stdio JSON-RPC, cero dependencias extra.
+`lucidfence/mcp/lucidfence_mcp.py`, stdio JSON-RPC, cero dependencias extra.
 
 Tools read-only:
 - `lucidfence_status`
@@ -81,5 +81,5 @@ No se exponen wipe/lock/reboot en 1.1. El MCP no acepta API keys UEM en argument
 - MCP responde initialize, tools/list y tools/call por stdin/stdout.
 - UEM settings renderiza catálogo Applivery/Intune/Jamf y Demo.
 - Suite completa verde.
-- Homebrew incluye `mcp/lucidfence_mcp.py` y muestra comando de registro.
+- Homebrew incluye `lucidfence/mcp/lucidfence_mcp.py` y muestra comando de registro.
 - Documentación `docs/architecture/AI_AND_MCP.md` con ejemplos sin secretos reales.

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def _rpc(messages):
     payload = "\n".join(json.dumps(m) for m in messages) + "\n"
     proc = subprocess.run(
-        [sys.executable, str(ROOT / "mcp" / "lucidfence_mcp.py")],
+        [sys.executable, str(ROOT / "lucidfence" / "mcp" / "lucidfence_mcp.py")],
         input=payload, text=True, capture_output=True, timeout=15,
     )
     assert proc.returncode == 0, proc.stderr

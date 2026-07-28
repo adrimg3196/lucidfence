@@ -4,7 +4,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from saas.auth import AuthStore
+from lucidfence.saas.auth import AuthStore
 
 
 def test_concurrent_session_persistence_is_atomic():

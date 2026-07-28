@@ -1,6 +1,6 @@
 """Local provider plugin discovery for LucidFence's improvement loop.
 
-A plugin is one Python file in ``plugins/providers`` exposing ``PROVIDER`` as a
+A plugin is one Python file in ``lucidfence/plugins/providers`` exposing ``PROVIDER`` as a
 plain dict with name/env/base/model. Discovery is explicit, bounded, and skips
 invalid files without breaking the product.
 """

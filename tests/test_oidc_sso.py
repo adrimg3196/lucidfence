@@ -38,7 +38,7 @@ from lucidfence.core.oidc import (
     validate_callback_params,
     validate_return_path,
 )
-from saas.auth import AuthStore
+from lucidfence.saas.auth import AuthStore
 
 
 ISSUER = "https://idp.example.test"

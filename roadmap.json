@@ -5,7 +5,7 @@
     "title": "LucidFence — Roadmap anual de mejora (tooling)",
     "tool": "geofencing",
     "created": "2026-07-20",
-    "updated": "2026-07-27",
+    "updated": "2026-07-28",
     "horizon": "12 meses · Q3-2026 → Q2-2027",
     "principles": [
       "Local-first & soberano: los datos del tenant nunca salen de su maquina.",
@@ -285,8 +285,8 @@
             },
             "_phase_id": "Q4-2026",
             "completion_evidence": [
-              "core/ai.py alert_blurb",
-              "core/alerts.py",
+              "lucidfence/core/ai.py alert_blurb",
+              "lucidfence/core/alerts.py",
               "Atomic Mail + signed webhook channels",
               "tenant-local AI settings"
             ]
@@ -323,7 +323,7 @@
             },
             "_phase_id": "Q4-2026",
             "completion_evidence": [
-              "core/predictive.py explainable short-horizon forecast",
+              "lucidfence/core/predictive.py explainable short-horizon forecast",
               "weekly_summary + anomaly detection",
               "Intelligence UI KPIs",
               "tests/test_predictive_movement.py"
@@ -443,8 +443,8 @@
             },
             "_phase_id": "Q1-2027",
             "completion_evidence": [
-              "core/provider_plugins.py",
-              "plugins/providers one-file contract",
+              "lucidfence/core/provider_plugins.py",
+              "lucidfence/plugins/providers one-file contract",
               "auto-discovery + validation",
               "tests/test_provider_plugins.py"
             ]

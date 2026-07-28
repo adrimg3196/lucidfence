@@ -79,7 +79,7 @@ FREE_PROVIDERS = [
 
 
 def _provider_catalog():
-    plugins = discover_provider_plugins(_ROOT / "plugins" / "providers")
+    plugins = discover_provider_plugins(_ROOT / "lucidfence" / "plugins" / "providers")
     return merge_providers(FREE_PROVIDERS, plugins)
 
 

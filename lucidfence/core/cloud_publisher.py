@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from saas.tenant import TenantStore  # noqa: E402
+from lucidfence.saas.tenant import TenantStore  # noqa: E402
 from lucidfence.core.engine import Engine  # noqa: E402
 from lucidfence.core.location_source import SimulationLocationSource, LocationReport  # noqa: E402
 from lucidfence.core.adapters import ios_geofence_compliance  # noqa: E402

@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def verify_index(root: Path) -> dict:
-    path = root / "plugins" / "adapters" / "index.json"
+    path = root / "lucidfence" / "plugins" / "adapters" / "index.json"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

@@ -24,7 +24,7 @@ def build_index() -> dict:
 
 
 def main() -> int:
-    output = ROOT / "plugins" / "adapters" / "index.json"
+    output = ROOT / "lucidfence" / "plugins" / "adapters" / "index.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(build_index(), indent=2) + "\n", encoding="utf-8")
     print(output)
