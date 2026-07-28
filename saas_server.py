@@ -6,8 +6,8 @@ This server wraps the existing single-fleet engine and adds the SaaS layer:
 - Multi-tenant organizations, each with its own isolated data dir + engine
 - RBAC enforced per endpoint
 - REST API for every product module (map, devices, fences, risk, policies,
-  compliance, analytics, reports, billing, users, settings)
-- Plan limits (mock billing) enforced on write paths
+  compliance, analytics, reports, users, settings)
+- Free forever: no paid plans, no billing (donations via .github/FUNDING.yml)
 
 Nothing leaves the machine. Runs on 127.0.0.1.
 
@@ -33,8 +33,6 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/analytics
   GET  /api/compliance
   GET  /api/report
-  GET  /api/plan             (billing mock)
-  POST /api/plan/upgrade     (owner) switch plan
   GET  /api/users            (owner/admin) list org users
   POST /api/users            (owner/admin) invite user
   GET  /api/settings/status
@@ -67,7 +65,7 @@ sys.path.insert(0, str(ROOT / "core"))
 
 import config_loader
 import cloud_publisher
-from saas.tenant import TenantStore, PLAN_LIMITS
+from saas.tenant import TenantStore, FREE_PLAN
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
@@ -159,7 +157,7 @@ try:
                 _demo_org = o
                 break
         if _demo_org is None:
-            _demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed", "free")
+            _demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed")
         _auth.create_user("ciso@acme.test", "CISCO Acme (demo)", "demo1234",
                           _demo_org.id, "owner")
 except Exception:
@@ -980,7 +978,10 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
 
     def log_message(self, fmt, *args):
-        safe_args = tuple(_redact_access_path(str(arg)) for arg in args)
+        # Solo se redactan los args de texto: send_error() pasa el código como
+        # int con formato %d y convertirlo a str rompería el logging (500s).
+        safe_args = tuple(_redact_access_path(a) if isinstance(a, str) else a
+                          for a in args)
         super().log_message(fmt, *safe_args)
 
     def do_GET(self):
@@ -1430,7 +1431,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if route == "/api/org" and method == "GET":
             o = _tenants.get(org)
-            return _send_json(self, {"org": o.to_dict(), "plan": PLAN_LIMITS.get(o.plan),
+            return _send_json(self, {"org": o.to_dict(), "plan": FREE_PLAN,
                                      "role": user["org_roles"].get(org)})
 
         if route.startswith("/api/orgs/") and route.endswith("/switch") and method == "POST":
@@ -1532,21 +1533,6 @@ class Handler(BaseHTTPRequestHandler):
                      "/api/policies", "/api/analytics", "/api/activation",
                      "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
-
-        # billing (mock)
-        if route == "/api/plan" and method == "GET":
-            o = _tenants.get(org)
-            return _send_json(self, {"plan": o.plan, "limits": PLAN_LIMITS.get(o.plan),
-                                     "plans": PLAN_LIMITS})
-        if route == "/api/plan/upgrade" and method == "POST":
-            if not AuthStore.can(user["org_roles"].get(org), "org:billing"):
-                return _send_json(self, {"error": "sin permiso de facturación"}, 403)
-            body = _read_body(self)
-            new_plan = body.get("plan")
-            if new_plan not in PLAN_LIMITS:
-                return _send_json(self, {"error": "plan inválido"}, 400)
-            o = _tenants.update_plan(org, new_plan)
-            return _send_json(self, {"ok": True, "plan": o.plan, "limits": PLAN_LIMITS.get(o.plan)})
 
         # users
         if route == "/api/users" and method == "GET":
@@ -2046,10 +2032,7 @@ class Handler(BaseHTTPRequestHandler):
         from saas.tenant import slugify
         if _tenants.get_by_slug(slugify(org_name)):
             return _send_json(self, {"error": "el nombre de organización ya existe; pide una invitación al propietario"}, 409)
-        plan = body.get("plan", "free")
-        if plan not in PLAN_LIMITS:
-            return _send_json(self, {"error": "plan inválido"}, 400)
-        org = _tenants.create(org_name, owner_id="", plan=plan)
+        org = _tenants.create(org_name, owner_id="")
         role = "owner"
         user = _auth.create_user(email, name or email, password, org.id, role)
         org.owner_id = user.id
@@ -2060,7 +2043,7 @@ class Handler(BaseHTTPRequestHandler):
         _set_cookie(self, COOKIE_ORG, org.id)
         welcome_email = _send_signup_welcome_email(email, name or email, org)
         _send_json(self, {"ok": True, "token": token, "user": user.to_public(),
-                          "org": org.to_dict(), "plan": PLAN_LIMITS.get(org.plan),
+                          "org": org.to_dict(), "plan": FREE_PLAN,
                           "welcome_email": welcome_email})
 
     def _login(self):
@@ -2094,7 +2077,7 @@ class Handler(BaseHTTPRequestHandler):
                     demo_org = org
                     break
             if demo_org is None:
-                demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed", "free")
+                demo_org = _tenants.create("Acme Logistics (demo)", "usr_demo_seed")
             user = _auth.create_user(email, "CISO Acme (demo)", "demo1234", demo_org.id, "owner")
             demo_org.owner_id = user.id
             _tenants._save()
@@ -2102,7 +2085,7 @@ class Handler(BaseHTTPRequestHandler):
             first_org = next(iter(user.org_roles), None)
             current_org = _tenants.get(first_org) if first_org else None
             if current_org is None:
-                demo_org = _tenants.create("Acme Logistics (demo)", user.id, "free")
+                demo_org = _tenants.create("Acme Logistics (demo)", user.id)
                 _auth.add_org_role(user.id, demo_org.id, "owner")
                 user = _auth.get(user.id) or user
             elif current_org.owner_id != user.id:

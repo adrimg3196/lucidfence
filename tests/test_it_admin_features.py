@@ -50,7 +50,7 @@ def check(label, cond, extra=""):
 print("=== LucidFence — IT admin features QA ===")
 s, _, ck = call("POST", "/api/auth/signup",
                 {"email": OWNER, "password": "SuperSecret1", "name": "IT Admin",
-                 "org_name": ORG, "plan": "pro"})
+                 "org_name": ORG})
 check("signup owner", s == 200, f"http={s}")
 # force a cycle so the simulated fleet is populated (dashboard "Forzar ciclo")
 call("POST", "/api/run-once", cookies=ck)

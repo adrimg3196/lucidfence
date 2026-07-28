@@ -31,7 +31,7 @@ class Org:
     id: str
     name: str
     slug: str
-    plan: str = "free"          # free | pro | enterprise
+    plan: str = "free"          # único plan: LucidFence es gratis (donaciones)
     created_at: str = ""
     owner_id: str = ""
     settings: dict = field(default_factory=dict)
@@ -60,6 +60,7 @@ class TenantStore:
                 raw = json.loads(self.index_path.read_text(encoding="utf-8"))
                 for o in raw:
                     org = Org(**o)
+                    org.plan = "free"   # migra orgs legacy (pro/enterprise)
                     self._orgs[org.id] = org
                     self._by_slug[org.slug] = org.id
             except Exception:
@@ -72,7 +73,7 @@ class TenantStore:
         tmp.replace(self.index_path)
 
     # ---- CRUD -----------------------------------------------------------
-    def create(self, name: str, owner_id: str, plan: str = "free") -> Org:
+    def create(self, name: str, owner_id: str) -> Org:
         org_id = f"org_{uuid.uuid4().hex[:10]}"
         slug = slugify(name)
         # ensure unique slug
@@ -80,9 +81,8 @@ class TenantStore:
         while slug in self._by_slug:
             slug = f"{base}-{i}"
             i += 1
-        org = Org(id=org_id, name=name, slug=slug, plan=plan,
-                  created_at=now_iso(), owner_id=owner_id,
-                  limits=PLAN_LIMITS.get(plan, PLAN_LIMITS["free"]))
+        org = Org(id=org_id, name=name, slug=slug,
+                  created_at=now_iso(), owner_id=owner_id)
         # create isolated data dir
         (self.tenants_dir / org_id).mkdir(parents=True, exist_ok=True)
         (self.tenants_dir / org_id / "data").mkdir(parents=True, exist_ok=True)
@@ -102,15 +102,6 @@ class TenantStore:
         # In a real SaaS this is a membership query; here owner_id is the link.
         return [o for o in self._orgs.values() if o.owner_id == user_id]
 
-    def update_plan(self, org_id: str, plan: str) -> Optional[Org]:
-        org = self._orgs.get(org_id)
-        if not org:
-            return None
-        org.plan = plan
-        org.limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
-        self._save()
-        return org
-
     def data_dir(self, org_id: str) -> Path:
         return self.tenants_dir / org_id / "data"
 
@@ -118,35 +109,12 @@ class TenantStore:
         return list(self._orgs.values())
 
 
-# Plan catalogue (mock billing — no real payment, 100% local).
-PLAN_LIMITS: dict[str, dict] = {
-    "free": {
-        "max_devices": 5,
-        "max_fences": 3,
-        "retention_days": 7,
-        "features": ["map", "devices", "basic_actions", "risk_center"],
-        "label": "Free",
-        "price": "0€/mes",
-    },
-    "pro": {
-        "max_devices": 250,
-        "max_fences": 50,
-        "retention_days": 90,
-        "features": ["map", "devices", "all_actions", "risk_center", "policies",
-                     "compliance", "export", "webhooks", "sso_mock"],
-        "label": "Pro",
-        "price": "49€/mes",
-    },
-    "enterprise": {
-        "max_devices": 10000,
-        "max_fences": 1000,
-        "retention_days": 365,
-        "features": ["map", "devices", "all_actions", "risk_center", "policies",
-                     "compliance", "export", "webhooks", "sso_mock",
-                     "audit_log", "multi_region_mock", "priority_support"],
-        "label": "Enterprise",
-        "price": "Bajo demanda",
-    },
+# LucidFence es gratis para siempre: todas las funciones, sin límites
+# artificiales. Se sostiene con donaciones (.github/FUNDING.yml).
+FREE_PLAN: dict = {
+    "label": "Free",
+    "price": "0 € — gratis para siempre",
+    "donations": "https://github.com/sponsors/adrimg3196",
 }
 
 

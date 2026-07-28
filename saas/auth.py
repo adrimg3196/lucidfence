@@ -33,7 +33,7 @@ from typing import Any, Optional
 # Capability matrix per role. A capability is a coarse permission string.
 ROLE_CAPS = {
     "owner": {
-        "org:read", "org:update", "org:billing", "org:delete",
+        "org:read", "org:update", "org:delete",
         "user:invite", "user:remove", "user:role",
         "device:read", "device:write", "device:action",
         "fence:read", "fence:write", "fence:delete",

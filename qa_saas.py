@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end API QA for the LucidFence SaaS using raw http.client
-(direct socket, bypasses any environment HTTP proxy that eats POSTs)."""
+(direct socket, bypasses any environment HTTP proxy that eats POSTs).
+"""
 import json, http.client, time
 
 HOST, PORT = "127.0.0.1", 8765
@@ -44,7 +45,7 @@ def check(label, cond, extra=""):
 
 
 print("=== LucidFence SaaS — QA (http.client direct) ===")
-s = call("POST", "/api/auth/signup", {"email":OWNER_EMAIL,"password":"SuperSecret1","name":"Ana","org_name":ORG_NAME,"plan":"pro"})
+s = call("POST", "/api/auth/signup", {"email":OWNER_EMAIL,"password":"SuperSecret1","name":"Ana","org_name":ORG_NAME})
 print("signup:", s[0], s[1].get("error") if isinstance(s[1], dict) else s[1])
 l = call("POST", "/api/auth/login", {"email":OWNER_EMAIL,"password":"SuperSecret1"})
 ok = isinstance(l[1], dict) and l[1].get("ok")
@@ -54,7 +55,7 @@ check("org cookie", "gf_org" in cookies)
 
 o = call("GET", "/api/org")
 pl = o[1].get("plan", {}).get("label") if isinstance(o[1], dict) else None
-check("org = Pro plan", pl == "Pro", str(pl))
+check("org = Free plan", pl == "Free", str(pl))
 
 st = call("GET", "/api/status")
 devs = st[1].get("device_count", 0) if isinstance(st[1], dict) else 0
@@ -78,8 +79,8 @@ check("analytics endpoint", isinstance(an[1], dict) and bool(an[1].get("analytic
 rp = call("GET", "/api/report")
 check("report endpoint", isinstance(rp[1], dict) and bool(rp[1].get("report")))
 
-up = call("POST", "/api/plan/upgrade", {"plan": "enterprise"})
-check("plan upgrade enterprise", up[1].get("plan") == "enterprise" if isinstance(up[1], dict) else False, f"max_dev={up[1].get('limits', {}).get('max_devices') if isinstance(up[1], dict) else '?'}")
+up = call("POST", "/api/plan/upgrade", {"plan": "pro"})
+check("billing eliminado (upgrade -> 404)", up[0] == 404, f"http={up[0]}")
 
 us = call("GET", "/api/users")
 check("users list", isinstance(us[1], dict) and len(us[1].get("users", [])) >= 1, f"users={len(us[1].get('users', [])) if isinstance(us[1], dict) else '?'}")
@@ -91,16 +92,16 @@ check("invite viewer", inv[1].get("ok") is True if isinstance(inv[1], dict) else
 vc = {}
 conn = http.client.HTTPConnection(HOST, PORT, timeout=30)
 conn.request("POST", "/api/auth/login", body=json.dumps({"email": VIEWER_EMAIL, "password": "Viewer1234"}).encode(), headers={"Content-Type": "application/json"})
-r = conn.getresponse(); 
+r = conn.getresponse()
 for k, v in r.getheaders():
     if k.lower() == "set-cookie":
         vc[v.split("=")[0]] = v.split(";")[0].split("=", 1)[1]
 conn.close()
 conn = http.client.HTTPConnection(HOST, PORT, timeout=30)
-conn.request("POST", "/api/plan/upgrade", body=json.dumps({"plan": "free"}).encode(),
+conn.request("POST", "/api/users", body=json.dumps({"email": "otro@qa.local", "name": "Otro", "role": "viewer"}).encode(),
              headers={"Content-Type": "application/json", "Cookie": "; ".join(f"{k}={v}" for k, v in vc.items())})
 r2 = conn.getresponse(); code = r2.status; conn.close()
-check("RBAC viewer blocked from billing (403)", code == 403, f"http={code}")
+check("RBAC viewer blocked from invite (403)", code == 403, f"http={code}")
 
 # unauth
 conn = http.client.HTTPConnection(HOST, PORT, timeout=10)

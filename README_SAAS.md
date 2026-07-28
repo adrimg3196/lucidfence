@@ -23,7 +23,7 @@ python3 saas_server.py
 1. **Crear cuenta** → el primer usuario se convierte en *owner* de su organización.
 2. La flota simulada arranca sola (autostart). Pulsa **Forzar ciclo** para evaluar ya.
 3. Explora Resumen, Mapa, Dispositivos, Risk Center, Políticas, Conformidad,
-   Facturación, Usuarios, Ajustes.
+   Usuarios, Ajustes.
 
 ---
 
@@ -36,16 +36,13 @@ saas/
   auth.py           Registro/login, hashing de contraseñas (PBKDF2-SHA256
                     25k vueltas, puro-python, sin dependencias nativas),
                     sesiones por cookie HttpOnly, RBAC (owner/admin/operator/viewer).
-  tenant.py         Aislamiento por inquilino: data/tenants/<org_id>/, planes.
-saas/plans.py       Planes mock Free / Pro / Enterprise con límites
-                    (dispositivos, geovallas, retención, features). Sin pasarela real.
+  tenant.py         Aislamiento por inquilino: data/tenants/<org_id>/.
+                    LucidFence es gratis: sin planes de pago ni facturación.
 core/               Motor de geofencing reutilizado (engine, fences, geo,
                     state_store, actions, compliance, risk…) — sin reescribir.
 static/
-  saas.html         Shell SPA (login + command center), tema claro/oscuro.
-  saas.js           Auth, router de vistas, helpers de API, render base.
-  saas_views.js     Vistas: overview, devices, map (Leaflet), risk.
-  saas_views2.js    Vistas: policies, compliance, billing, users, settings.
+  dashboard.html    Shell SPA (login + command center), tema claro/oscuro.
+  app.js            Auth, router de vistas, helpers de API, render de vistas.
 data/               Todo el estado. _users.json / _orgs.json / _sessions.json
                     (global) + tenants/<org_id>/ (por inquilino).
 ```
@@ -59,13 +56,13 @@ Un usuario solo accede a las orgs donde tiene un rol.
 ### RBAC (capability-scoped)
 | Rol        | capabilities                                                  |
 |------------|---------------------------------------------------------------|
-| owner      | todo + billing + gestión de usuarios                          |
-| admin      | igual que owner excepto facturación                           |
+| owner      | todo + gestión de usuarios                                    |
+| admin      | igual que owner excepto borrar la org y cambiar roles         |
 | operator   | leer flota, forzar ciclo, ver riesgo/conformidad              |
 | viewer     | solo lectura                                                 |
 
 El backend evalúa `AuthStore.can(role, capability)` en cada endpoint protegido.
-El QA verifica que un *viewer* NO puede hacer upgrade de plan (403).
+El QA verifica que un *viewer* NO puede invitar usuarios (403).
 
 ---
 
@@ -91,7 +88,6 @@ Todos los endpoints `/api/*` (excepto `/api/auth/*`) requieren cookie de sesión
 | GET    | /api/compliance      | % conformidad + serie temporal            |
 | GET    | /api/analytics       | KPIs de negocio (geofencing de producto) |
 | GET    | /api/report          | Informe ejecutivo markdown                |
-| POST   | /api/plan/upgrade    | Cambiar plan (mock)                       |
 | GET    | /api/users           | Listar usuarios de la org                |
 | POST   | /api/users           | Invitar usuario (owner/admin)            |
 | POST   | /api/users/<id>/role | Cambiar rol                               |
@@ -104,12 +100,12 @@ QA automático: `python3 qa_saas.py` (usa http.client directo, sin proxy).
 
 ## Modelo de ingresos
 
-La especificación canónica de monetización (Free freemium → Pro gestionado por suscripción → Enterprise on-prem + SLA) está en **[`docs/revenue-model.md`](docs/revenue-model.md)**. Resume el catálogo de planes (`saas/tenant.py` → `PLAN_LIMITS`), el flujo de cobro actual (mock), los puntos de integración con pasarela y el estado de enforcement de límites.
+LucidFence es **gratis para siempre**: sin planes de pago, sin límites artificiales, sin pasarela. El proyecto se sostiene con donaciones (`.github/FUNDING.yml`). Detalle en **[`docs/revenue-model.md`](docs/revenue-model.md)**.
 
 ## Calidad / QA
 
-- `python3 qa_saas.py` → 19/19 PASS (auth, cookies, multi-tenant, RBAC, geofence
-  engine, risk, policies, compliance, analytics, report, plan upgrade, invite,
+- `python3 qa_saas.py` → PASS (auth, cookies, multi-tenant, RBAC, geofence
+  engine, risk, policies, compliance, analytics, report, invite,
   protección de ruta sin auth, HTML servido).
 - JS validado con `node --check` (sin errores de sintaxis).
 - Modo simulación por defecto: ninguna llamada de red a Applivery sin token.
