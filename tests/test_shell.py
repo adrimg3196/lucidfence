@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_cli_exposes_shell_command():
-    result = subprocess.run([sys.executable, str(ROOT / "bin" / "lucidfence"), "--help"], capture_output=True, text=True, timeout=10)
+    result = subprocess.run([sys.executable, str(ROOT / "lucidfence" / "cli.py"), "--help"], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0
     assert "shell" in result.stdout
 

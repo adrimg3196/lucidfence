@@ -264,7 +264,7 @@ def cmd_open(args) -> int:
 
 
 def cmd_mcp(_args) -> int:
-    server = ROOT / "lucidfence" / "mcp" / "lucidfence_mcp.py"
+    server = Path(__file__).resolve().parent / "mcp" / "lucidfence_mcp.py"
     if not server.is_file():
         print(f"ERROR: instalación incompleta; falta {server}", file=sys.stderr)
         return 2

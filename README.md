@@ -130,7 +130,6 @@ lucidfence/
 ├── saas_server.py          # servidor HTTP local (entrypoint)
 ├── server.py               # servidor mínimo del engine
 ├── install.sh              # installer de un comando
-├── bin/lucidfence          # lifecycle portable macOS/Linux
 ├── lucidfence/core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
 ├── lucidfence/             # SDK Python público (envuelve lucidfence/core/)
 ├── saas/                   # auth local, RBAC y aislamiento
@@ -172,7 +171,7 @@ git clone https://github.com/adrimg3196/lucidfence.git
 cd lucidfence
 python3 -m pip install -r requirements.txt
 python3 tests/run_tests.py
-python3 bin/lucidfence start --no-open
+python3 -m lucidfence.cli start --no-open
 ```
 
 La suite debe terminar con un resumen explícito y cero fallos. El proyecto usa Python 3.9+ y evita frameworks web.

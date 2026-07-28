@@ -32,7 +32,7 @@ def test_mcp_initialize_list_and_learn():
 
 
 def test_cli_exposes_mcp_command():
-    proc = subprocess.run([sys.executable, str(ROOT / "bin" / "lucidfence"), "--help"],
+    proc = subprocess.run([sys.executable, str(ROOT / "lucidfence" / "cli.py"), "--help"],
                           text=True, capture_output=True, timeout=10)
     assert proc.returncode == 0
     assert "mcp" in proc.stdout
