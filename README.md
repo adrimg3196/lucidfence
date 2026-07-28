@@ -130,14 +130,18 @@ lucidfence/
 ├── saas_server.py          # servidor HTTP local (entrypoint)
 ├── server.py               # servidor mínimo del engine
 ├── install.sh              # installer de un comando
-├── lucidfence/core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
-├── lucidfence/             # SDK Python público (envuelve lucidfence/core/)
-├── saas/                   # auth local, RBAC y aislamiento
-├── lucidfence/mcp/         # servidores MCP locales read-only
+├── lucidfence/             # el paquete Python: SDK público + todo el motor
+│   ├── cli.py              #   CLI de ciclo de vida (console script)
+│   ├── shell.py            #   shell interactiva local
+│   ├── core/               #   geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
+│   ├── saas/               #   auth local, RBAC y aislamiento
+│   ├── mcp/                #   servidores MCP locales read-only
+│   └── plugins/            #   índice de adapters + contrato de providers
 ├── static/                 # interfaz local, assets vendorizados
 ├── scripts/                # utilidades de build, arranque, despliegue y QA
 ├── docs/                   # documentación (ver docs/README.md)
 ├── data/                   # seeds públicos read-only + estado local
+├── deploy/                 # bundle web autoalojable
 ├── apps/                   # app de escritorio macOS + gateway edge opcional
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
