@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-07-29 | DDM | Issue #40 cerrado: `lucidfence/core/ddm.py` genera declarations Apple (legacy + status-subscriptions + activation.simple) desde una `Policy`, con `ServerToken` determinista (idempotencia), gate `supports_ddm` por versión de OS y `parse_status_report`. Flag `MDMAdapter.supports_ddm` (False por defecto), `jamf` a True con acción `apply_ddm` offline. 14 tests golden sin red; suite 281 PASS + los 2 rojos py3.9 conocidos. |
 | 2026-07-27 | BARRENDERO | Completada la migración a "gratis + donaciones": fuera Pro/Enterprise, `/api/plan*`, capability `org:billing` y 4 ficheros `static/saas_views*.js` muertos (530 líneas). Fix de causa raíz en `log_message` (POST a ruta desconocida devolvía 500 en vez de 404). Docs de pricing reescritos. Suite 267 PASS (= baseline main). |
 
 ## Hecho (2026-07-27)
@@ -63,13 +64,15 @@ Directriz de producto de Adri (2026-07-28): capa de enforcement **declarativa**
 para mejor rendimiento — el estado converge en el dispositivo, no en bucles
 imperativos del servidor.
 
-- [ ] **Apple DDM** (issue #40): `lucidfence/core/ddm.py` genera declarations
-      (configurations + activations con predicados) desde una fence policy y
-      consume el status channel. Flag `supports_ddm` en adapters Apple
-      (ios_geofence, jamf, applivery), fallback imperativo intacto.
-      Límite honesto: DDM no tiene primitivas de geolocalización — el trigger
-      sigue en nuestro agente; DDM es la capa de config/enforcement.
-      Validar contra schemas de `apple/device-management` (iOS 15+/macOS 13+).
+- [x] **Apple DDM** (issue #40) — HECHO 2026-07-29. `lucidfence/core/ddm.py`
+      + `docs/operations/apple_ddm.md` + `tests/test_ddm.py` (14 golden, sin red).
+      Flag `supports_ddm` solo en `jamf`: la doc pública de Applivery no
+      describe superficie DDM (verificado vía MCP `applivery-docs` 2026-07-29),
+      así que NO se marca — se activará cuando lo documenten.
+      `Predicate` es passthrough a propósito: Apple no publica las variables de
+      predicado en su repo de schemas y no inventamos sintaxis.
+      Pendiente derivado: quien conecte Jamf de verdad tiene que subir las
+      declarations por el canal del MDM — `apply_ddm` hoy solo las construye.
 - [ ] **Windows PowerShell DSC** (issue #41): `lucidfence/core/dsc.py` emite
       documentos DSC v3 (manifests JSON/YAML) con emisor fallback .ps1/MOF
       clásico. Idempotente (re-apply sin cambios = no-op), readback de
