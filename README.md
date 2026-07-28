@@ -138,7 +138,6 @@ lucidfence/
 ├── scripts/                # utilidades de build, arranque, despliegue y QA
 ├── docs/                   # documentación (ver docs/README.md)
 ├── data/                   # seeds públicos read-only + estado local
-├── analysis/               # notebooks reproducibles con outputs verificados
 ├── apps/                   # app de escritorio macOS + gateway edge opcional
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
