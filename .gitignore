@@ -53,3 +53,7 @@ moa/
 
 .worktrees/
 .superpowers/
+
+# graphify knowledge graph (local tooling, not product)
+graphify-out/
+.graphify_chunk_*.json
