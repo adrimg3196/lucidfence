@@ -3,12 +3,16 @@
 # git archive respeta export-ignore al generar el tarball del release.
 
 # Desarrollo interno de la empresa (no del cliente).
-# docs/ entero se excluye y luego se re-incluyen las guías que el cliente sí baja.
-docs/                            export-ignore
-docs/README.en.md               -export-ignore
-docs/architecture/SPEC.md       -export-ignore
-docs/operations/RUNBOOK.md      -export-ignore
-docs/product/                   -export-ignore
+# Se excluyen las carpetas internas de docs/, no docs/ entero: git archive no
+# desciende en un directorio excluido, así que un -export-ignore de un fichero
+# de dentro nunca lo re-incluiría. El cliente se lleva docs/architecture,
+# docs/operations y docs/product, que son las guías que enlaza el README.
+docs/internal/          export-ignore
+docs/roadmap/           export-ignore
+docs/gtm/               export-ignore
+docs/agents/            export-ignore
+docs/references/        export-ignore
+docs/superpowers/       export-ignore
 mcp/applivery_mcp.py    export-ignore
 skills/                  export-ignore
 Formula/                 export-ignore
