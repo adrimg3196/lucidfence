@@ -30,6 +30,9 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
   — ver sección `## DDM-DSC` abajo. Issues #40 (Apple DDM), #41 (Windows DSC)
   y #42 (Android AMAPI) ya sembrados con label `agent-ready`. Nightly y Jules
   deben avanzar esto ANTES que el resto de ideas.
+- **Graphify disponible**: `graphify-out/graph.json` (grafo AST del repo, 3225
+  nodos). Antes de grepear, consultar: `graphify explain "X"` · `graphify path A B`
+  · `graphify query "pregunta"`. Regenerar tras merges grandes: `graphify .`
 - Rama de trabajo: `zero-nightly`. La rama local `gt/migrar-a-gratis-donaciones` quedó obsoleta (sin commits propios) — borrar cuando el PR se mergee.
 - La suite se ejecuta con `python3 tests/run_tests.py` (hermética: exige el puerto 8765 libre; mata cualquier `saas_server.py` colgado antes).
 
