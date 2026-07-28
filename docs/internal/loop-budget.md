@@ -19,14 +19,14 @@ Enforced manually by the maintainer and (where possible) by CI.
 
 ## No-progress detection
 
-- If a fix attempt fails the verifier 3×, write a short note to `loop-run-log.md`
+- If a fix attempt fails the verifier 3×, write a short note to `docs/internal/loop-run-log.md`
   and stop. A human decides next steps.
 - If readiness score drops >10 points week-over-week, open a maintenance issue.
 
 ## Allowlist (auto-merge)
 
 Only these are auto-mergeable by a loop:
-- Loop scaffolding docs (STATE.md, LOOP.md, loop-budget.md, loop-run-log.md).
+- Loop scaffolding docs (docs/internal/STATE.md, docs/internal/LOOP.md, docs/internal/loop-budget.md, docs/internal/loop-run-log.md).
 - `loop-audit` CI workflow and dependabot patches for loop tooling.
 
 Everything else (adapters, engine, desktop, security) requires human merge.

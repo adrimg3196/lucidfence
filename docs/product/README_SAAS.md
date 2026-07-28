@@ -100,7 +100,7 @@ QA automático: `python3 qa_saas.py` (usa http.client directo, sin proxy).
 
 ## Modelo de ingresos
 
-LucidFence es **gratis para siempre**: sin planes de pago, sin límites artificiales, sin pasarela. El proyecto se sostiene con donaciones (`.github/FUNDING.yml`). Detalle en **[`docs/revenue-model.md`](docs/revenue-model.md)**.
+LucidFence es **gratis para siempre**: sin planes de pago, sin límites artificiales, sin pasarela. El proyecto se sostiene con donaciones (`.github/FUNDING.yml`). Detalle en **[`docs/gtm/revenue-model.md`](docs/gtm/revenue-model.md)**.
 
 ## Calidad / QA
 

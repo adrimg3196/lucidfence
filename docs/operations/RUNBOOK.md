@@ -226,7 +226,7 @@ python3 tests/test_sdk_contract.py
 
 | If you want to… | Read this file first |
 |---|---|
-| Install the app | `README_CLIENTE.md` (es) or `README.en.md` (en) |
+| Install the app | `docs/product/README_CLIENTE.md` (es) or `docs/README.en.md` (en) |
 | Understand the engine | `core/engine.py` (top-level scheduler) |
 | Add a fence | `core/fences.py` + `fences.json` |
 | Add an MDM | `core/adapters/ADAPTER.md` + `core/adapters/_template_adapter.py` |

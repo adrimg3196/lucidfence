@@ -2,15 +2,15 @@
 # El repo mantiene estos archivos para nuestro desarrollo; el cliente NO los baja.
 # git archive respeta export-ignore al generar el tarball del release.
 
-# Desarrollo interno de la empresa (no del cliente)
-KANBAN.md                export-ignore
-ROADMAP_Q3_2026.md      export-ignore
+# Desarrollo interno de la empresa (no del cliente).
+# docs/ entero se excluye y luego se re-incluyen las guías que el cliente sí baja.
+docs/                            export-ignore
+docs/README.en.md               -export-ignore
+docs/architecture/SPEC.md       -export-ignore
+docs/operations/RUNBOOK.md      -export-ignore
+docs/product/                   -export-ignore
 mcp/applivery_mcp.py    export-ignore
 skills/                  export-ignore
-agents/                  export-ignore
-gtm/                     export-ignore
-docs/                    export-ignore
-references/              export-ignore
 Formula/                 export-ignore
 data/cloud_tenants/      export-ignore
 data/actions_log.jsonl   export-ignore

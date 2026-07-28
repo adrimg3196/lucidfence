@@ -1,4 +1,4 @@
-# ROADMAP_TOOLING.md — Estructura de mejora a nivel de herramienta (LucidFence)
+# docs/roadmap/ROADMAP_TOOLING.md — Estructura de mejora a nivel de herramienta (LucidFence)
 
 Este documento define **la estructura de mejora a nivel de herramienta** de
 LucidFence (la herramienta de geofencing UEM) y su plan de 12 meses. No es un

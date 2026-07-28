@@ -1,7 +1,7 @@
 # Loop constraints
 
 Structured constraints for the LucidFence improvement loop. Enforced by the
-maintainer and the PR verifier (see `LOOP.md`).
+maintainer and the PR verifier (see `docs/internal/LOOP.md`).
 
 ## Denylist (never auto-merge / reject)
 

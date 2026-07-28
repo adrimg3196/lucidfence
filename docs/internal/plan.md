@@ -1,7 +1,7 @@
 # Plan — LucidFence (lifecycle tasks)
 
-Generado por `/plan` sobre `SPEC.md`. Ordenado por dependencia. Cada tarea tiene
-verificación runtime. La barra de calidad es `references/definition-of-done.md`.
+Generado por `/plan` sobre `docs/architecture/SPEC.md`. Ordenado por dependencia. Cada tarea tiene
+verificación runtime. La barra de calidad es `docs/references/definition-of-done.md`.
 
 ## T1 — Vitrina multi-tenant serverless ✅ DONE
 - Obj: engine-cron publica estado de N tenants a `data/cloud_state.json`; cloud.html lo consume.
@@ -14,13 +14,13 @@ verificación runtime. La barra de calidad es `references/definition-of-done.md`
 - Estado: COMPLETADO.
 
 ## T3 — Installer para clientes ✅ DONE
-- Obj: docker-compose.yml + install.sh + CLIENTE.md para que el cliente despliegue always-on en su infra.
-- Verif: `docker compose config` válido; CLIENTE.md sirve en Pages (HTTP 200).
+- Obj: docker-compose.yml + install.sh + docs/product/CLIENTE.md para que el cliente despliegue always-on en su infra.
+- Verif: `docker compose config` válido; docs/product/CLIENTE.md sirve en Pages (HTTP 200).
 - Estado: COMPLETADO (Docker no disponible en este entorno para runtime, pero sintaxis validada).
 
 ## T4 — Definition of Done + agent-skills framework ✅ DONE (este plan)
 - Obj: aplicar el marco agent-skills (addyosmani/agent-skills) a LucidFence.
-- Entregables: SPEC.md, references/*, .claude/.gemini commands, agents/*, AGENTS.md, tasks/plan.md.
+- Entregables: docs/architecture/SPEC.md, references/*, .claude/.gemini commands, agents/*, AGENTS.md, docs/internal/plan.md.
 - Verif: `/review` y `/ship` corren sobre el estado actual (abajo).
 
 ## T5 — CI honesto + test runner (anteriores, consolidado)

@@ -1,4 +1,4 @@
-# SPEC.md — LucidFence (replanteado con agent-skills)
+# docs/architecture/SPEC.md — LucidFence (replanteado con agent-skills)
 
 > Spec-driven development. Este documento es la fuente de verdad del proyecto.
 > Vive en version control mientras el trabajo está en curso.
@@ -46,7 +46,7 @@ geofence-uem/
 ├── .claude/ .gemini/ .agents/ # comandos y agents del marco agent-skills
 ├── references/               # definition-of-done, testing-patterns, security-checklist
 ├── agents/                   # code-reviewer, security-auditor, test-engineer
-├── SPEC.md  tasks/plan.md    # spec-driven + planning
+├── docs/architecture/SPEC.md  docs/internal/plan.md    # spec-driven + planning
 └── CLAUDE.md  AGENTS.md      # reglas de proyecto (context-engineering)
 ```
 

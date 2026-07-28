@@ -29,8 +29,8 @@ Generado: $(date)
 Modo: 100% local (macOS). Sin exfiltrar datos.
 Arranque: ./start_all.sh
 Dashboard: http://127.0.0.1:8765
-Docs cliente: README_CLIENTE.md
-Spec producto: SPEC.md
+Docs cliente: docs/product/README_CLIENTE.md
+Spec producto: docs/architecture/SPEC.md
 EOF
 
 # --- tarball ---

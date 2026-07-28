@@ -1,7 +1,7 @@
 # Roadmap Q3 2026 — LucidFence
 
 > PM: priorización del backlog del board `lucidfence`.
-> Principios que rigen el orden (de `SPEC.md`): **local-first & soberano**, **$0**
+> Principios que rigen el orden (de `docs/architecture/SPEC.md`): **local-first & soberano**, **$0**
 > (solo free tiers), **datos del tenant en máquina del cliente**, y **verificar en
 > runtime, no solo "compila"**.
 

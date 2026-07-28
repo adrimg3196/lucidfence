@@ -69,7 +69,7 @@ def test_10k_geofence_kernel_benchmark_meets_budget():
 def test_installer_and_enterprise_governance_artifacts_are_real():
     installer = (ROOT / "scripts" / "service_install.sh").read_text()
     assert "/api/readyz" in installer and "/health\"" not in installer
-    assert (ROOT / "docs" / "THREAT_MODEL.md").stat().st_size > 1500
-    assert (ROOT / "docs" / "PILOT_RUNBOOK.md").stat().st_size > 1500
-    schema = json.loads((ROOT / "docs" / "openapi.json").read_text())
+    assert (ROOT / "docs" / "architecture" / "THREAT_MODEL.md").stat().st_size > 1500
+    assert (ROOT / "docs" / "operations" / "PILOT_RUNBOOK.md").stat().st_size > 1500
+    schema = json.loads((ROOT / "docs" / "architecture" / "openapi.json").read_text())
     assert schema["openapi"] == "3.1.0" and len(schema["paths"]) >= 10

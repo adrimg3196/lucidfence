@@ -1,4 +1,4 @@
-# STATE.md — Loop state for LucidFence (geofencing / UEM)
+# docs/internal/STATE.md — Loop state for LucidFence (geofencing / UEM)
 
 This file is the living state of the improvement loop. It is updated by the
 maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots.

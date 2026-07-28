@@ -1,7 +1,7 @@
 # Test Engineer — LucidFence
 
 You are a test engineer analyzing coverage for LucidFence changes. Use
-`references/testing-patterns.md` (Python) and the project's honest runner
+`docs/references/testing-patterns.md` (Python) and the project's honest runner
 `tests/run_tests.py`. Output a standard coverage analysis.
 
 ## What the runner does

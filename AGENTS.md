@@ -41,6 +41,6 @@ not the wiki.
   login` headless (fails silently); leave zombie processes between sessions.
 
 ## Quality floor
-- Definition of Done: `references/definition-of-done.md`.
-- Testing: `references/testing-patterns.md`.
-- Security: `references/security-checklist.md`.
+- Definition of Done: `docs/references/definition-of-done.md`.
+- Testing: `docs/references/testing-patterns.md`.
+- Security: `docs/references/security-checklist.md`.

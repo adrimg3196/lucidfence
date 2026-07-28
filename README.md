@@ -4,7 +4,7 @@
 
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 [![PWA](https://img.shields.io/badge/app-PWA-5e6ad5.svg)](static/web.html)
-[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/AUTONOMOUS_GEOFENCING_COMPANY.md)
+[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md)
 
 LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Su modo principal funciona directamente en el navegador: no exige instalación, cuenta de LucidFence, nube propia ni suscripción.
 
@@ -115,7 +115,7 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Compañía autónoma de geofencing gobernada: objetivos medibles, squads
   especializados, evidencia, simulación, policy gates y handoff humano sin
   ejecución implícita de comandos UEM. Ver
-  [`docs/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/AUTONOMOUS_GEOFENCING_COMPANY.md).
+  [`docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md).
 - Dashboard local sin CDN, telemetría ni frontend cloud.
 - Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
   `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y
@@ -154,7 +154,7 @@ La aplicación funciona sin modelo. En **Ajustes → Proveedor AI opcional** pue
 
 - Gateway: `POST http://127.0.0.1:8765/v1/chat/completions`
 - MCP: `lucidfence mcp`
-- Guía completa: [`docs/AI_AND_MCP.md`](docs/AI_AND_MCP.md)
+- Guía completa: [`docs/architecture/AI_AND_MCP.md`](docs/architecture/AI_AND_MCP.md)
 
 ## Desarrollo
 

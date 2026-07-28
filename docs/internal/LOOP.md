@@ -1,4 +1,4 @@
-# LOOP.md — Improvement loop for LucidFence
+# docs/internal/LOOP.md — Improvement loop for LucidFence
 
 LucidFence is a local-first, free, open-source geofencing / UEM product. This
 file documents the improvement loop used to maintain it, adapting the
@@ -34,20 +34,20 @@ file documents the improvement loop used to maintain it, adapting the
 - **Least privilege:** CI uses read-only `GITHUB_TOKEN`; no deploy secrets in
   loop workflows.
 - **MCP usage:** not required for this loop. If a connector is added later, it
-  MUST be read-only (issue/PR discovery) and scoped in `LOOP.md` before use.
+  MUST be read-only (issue/PR discovery) and scoped in `docs/internal/LOOP.md` before use.
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier
   or human escalation.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the
-  same fix, stop and escalate to a human (see `loop-budget.md`). Never repeat the
-  same failing action — write a note to `loop-run-log.md` instead.
+  same fix, stop and escalate to a human (see `docs/internal/loop-budget.md`). Never repeat the
+  same failing action — write a note to `docs/internal/loop-run-log.md` instead.
 - **Human escalation:** any PR touching the adapter contract, the Desktop build,
   or security posture MUST be reviewed by the maintainer before merge.
 
 ## Budget & observability
 
-- Token caps and kill switch: `loop-budget.md`.
-- Run history: `loop-run-log.md` (append-only).
+- Token caps and kill switch: `docs/internal/loop-budget.md`.
+- Run history: `docs/internal/loop-run-log.md` (append-only).
 - `loop-audit` is the readiness signal; score regressions are reviewed, not
   auto-reverted.
 

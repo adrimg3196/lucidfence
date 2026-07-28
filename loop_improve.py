@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """loop_improve.py — El /loop de mejora continua de LucidFence (MoA).
 
-Arquitectura (ver AGENTS.md / ROADMAP_TOOLING.md):
+Arquitectura (ver AGENTS.md / docs/roadmap/ROADMAP_TOOLING.md):
   - PROPOSERS (paralelos): todos los modelos gratis disponibles. Se leen de
     config_loader / .env (LF_PROVIDER_*). Si hay API key, se llama al free tier
     real (OpenRouter/Nous, Groq, NVIDIA, Together, Fireworks, DeepInfra, GitHub,

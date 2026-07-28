@@ -10,10 +10,10 @@ using the five-axis model. Be concrete: file:line, severity, fix.
    `python3 tests/run_tests.py` stay green?
 2. **Readability** — names reveal intent (Spanish domain terms ok: geocerca,
    conformidad)? no comments explaining the *what*?
-3. **Architecture** — fits `SPEC.md` structure? no duplicated business logic
+3. **Architecture** — fits `docs/architecture/SPEC.md` structure? no duplicated business logic
    (risk scoring, fence eval)? changes scoped to the task?
 4. **Security** — untrusted input validated? auth on every endpoint? multi-tenant
-   isolation? no secrets? (see `references/security-checklist.md`)
+   isolation? no secrets? (see `docs/references/security-checklist.md`)
 5. **Performance** — engine `run_once` loops, `store.snapshot()`, SVG render in
    cloud.html — any hot-path regression?
 

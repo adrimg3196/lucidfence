@@ -82,4 +82,4 @@ No se exponen wipe/lock/reboot en 1.1. El MCP no acepta API keys UEM en argument
 - UEM settings renderiza catálogo Applivery/Intune/Jamf y Demo.
 - Suite completa verde.
 - Homebrew incluye `mcp/lucidfence_mcp.py` y muestra comando de registro.
-- Documentación `docs/AI_AND_MCP.md` con ejemplos sin secretos reales.
+- Documentación `docs/architecture/AI_AND_MCP.md` con ejemplos sin secretos reales.

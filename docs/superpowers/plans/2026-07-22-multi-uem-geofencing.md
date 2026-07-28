@@ -492,7 +492,7 @@ git commit -m "feat(auth): add secure Google and generic OIDC SSO"
 - Modify: `bin/lucidfence` only if bind validation is not already centralized
 - Modify: `static/app.js`
 - Modify: `static/i18n.js`
-- Modify: `docs/openapi.json`
+- Modify: `docs/architecture/openapi.json`
 - Create: `tests/test_multiuem_api.py`
 - Create: `tests/test_deployment_auth_modes.py`
 - Modify: `tests/test_webapp_e2e_dashboard.py`
@@ -580,7 +580,7 @@ Expected: all pass and no JS syntax errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add saas_server.py saas/auth.py bin/lucidfence static/app.js static/i18n.js docs/openapi.json tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py
+git add saas_server.py saas/auth.py bin/lucidfence static/app.js static/i18n.js docs/architecture/openapi.json tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py
 git commit -m "feat(ui): support hosted login and local Multi-UEM ownership"
 ```
 
