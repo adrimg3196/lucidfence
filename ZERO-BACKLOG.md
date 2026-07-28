@@ -30,6 +30,11 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
   — ver sección `## DDM-DSC` abajo. Issues #40 (Apple DDM), #41 (Windows DSC)
   y #42 (Android AMAPI) ya sembrados con label `agent-ready`. Nightly y Jules
   deben avanzar esto ANTES que el resto de ideas.
+- **PRIORIDAD nº2 (decisión Adri+Zero 2026-07-28): SSO login opcional OIDC**
+  — issue #44 (`agent-ready`), ver sección `## SSO-OIDC` abajo. Se evaluó y
+  DESCARTÓ Clerk (rompe el "100% local, nothing leaves the machine" y duplica
+  la auth existente); la mejora correcta es OIDC opt-in por organización sobre
+  `lucidfence/saas/auth.py`, con login local siempre como fallback.
 - **Graphify disponible**: `graphify-out/graph.json` (grafo AST del repo, 3225
   nodos). Antes de grepear, consultar: `graphify explain "X"` · `graphify path A B`
   · `graphify query "pregunta"`. Regenerar tras merges grandes: `graphify .`
@@ -82,3 +87,23 @@ imperativos del servidor.
       host Windows, sin proyecto enterprise de Google).
 
 Regla transversal: capacidad aditiva — la ruta imperativa actual no se rompe.
+
+## SSO-OIDC
+
+Decisión de producto (Adri delegó, Zero decidió, 2026-07-28): login enterprise
+vía **OIDC opcional por organización**, NO Clerk ni ningún IdP cloud obligatorio.
+Los compradores UEM quieren entrar con SU IdP (Entra ID, Google Workspace, Okta,
+Keycloak); el modo 100% local sigue siendo el default intacto.
+
+- [ ] **OIDC opt-in** (issue #44): `lucidfence/saas/oidc.py` — Authorization
+      Code Flow + PKCE, stdlib-first, discovery `.well-known`, validación JWKS
+      de id_token. Rutas `GET /api/auth/oidc/login|callback` en `saas_server.py`
+      que desembocan en la sesión LOCAL normal (RBAC de `auth.py` sin cambios).
+      Config por org en Settings (issuer, client_id, client_secret cifrado,
+      dominio permitido, rol JIT por defecto). Botón "Continuar con SSO" en
+      `static/` solo si la org lo tiene configurado; login local con contraseña
+      SIEMPRE disponible (break-glass). Tests con IdP mock (JWKS estático) +
+      negativos (state/nonce/iss inválidos, dominio no permitido).
+
+Guardarraíl: sin OIDC configurado, cero llamadas de red — la promesa
+"nothing leaves the machine" no se toca.
