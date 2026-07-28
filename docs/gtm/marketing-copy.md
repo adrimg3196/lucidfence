@@ -19,7 +19,7 @@
 
 **H1:** Geofencing y riesgo de flota, explicados — en tu máquina, no en la nube.
 **Sub:** Correlaciona geovallas, CVE y SOAR en un Risk Engine que justifica cada decisión. Conecta Intune, Jamf, Applivery o Fleet con un PR. 100% local, multi-tenant, 0 exfiltración.
-**Primary CTA:** `git clone` + `./start_all.sh`  (valor: arranca en 1 comando)
+**Primary CTA:** `git clone` + `./scripts/start_all.sh`  (valor: arranca en 1 comando)
 **Secondary CTA:** Ver demo en vivo
 
 ## 4. POSICIONAMIENTO (cómo hablar de esto sin parecer vaporware)
@@ -47,7 +47,7 @@ Nada sale de tu máquina. El dashboard corre en 127.0.0.1. Para MSPs: cada clien
 
 | Dónde | CTA primario | CTA secundario |
 |-------|-------------|----------------|
-| GitHub README | `./start_all.sh` (arranca demo) | "Cómo escribir un adapter" |
+| GitHub README | `./scripts/start_all.sh` (arranca demo) | "Cómo escribir un adapter" |
 | Landing MSP | "Agenda demo MSP" | "Lee la arquitectura" |
 | Enterprise | "Habla con ventas" | "Ver Enterprise on-prem" |
 

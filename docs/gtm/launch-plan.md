@@ -28,7 +28,7 @@
 ## 5 Fases
 
 ### F1 · Internal (ahora)
-- Recruir 3-5 MSPs piloto 1:1 para testear `./start_all.sh` + adapter Applivery.
+- Recruir 3-5 MSPs piloto 1:1 para testear `./scripts/start_all.sh` + adapter Applivery.
 - Validar que el claim "local-first, 0 exfil" es real (auditoría).
 - Congelar interfaz `MDMAdapter` (DevRel: congelar o rompe el core).
 
@@ -48,7 +48,7 @@
 - Encuesta PMF a MSPs piloto para refinar mensaje.
 
 ### F5 · Full Launch
-- Self-serve: `git clone` + `./start_all.sh`.
+- Self-serve: `git clone` + `./scripts/start_all.sh`.
 - Show HN + post r/selfhosted + Jamf Nation + foros Intune.
 - Blog post: "Por qué tu MDM nativo no explica el riesgo".
 - Adapter Bounty Sprint results → Hall of Fame público.

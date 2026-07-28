@@ -22,7 +22,7 @@ Coste total: **$0**. Sin tarjeta de pago en ningún eslabón.
 ```bash
 cd /Users/adri/geofence-uem
 python3.11 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
-./start_local.sh
+./scripts/start_local.sh
 # landing:   http://127.0.0.1:8765/
 # dashboard: http://127.0.0.1:8765/app
 ```
@@ -36,7 +36,7 @@ flyctl auth login
 flyctl auth whoami
 
 # 2) El agente (o tú) ejecuta:
-./deploy_fly.sh
+./scripts/deploy_fly.sh
 #   → flyctl launch --no-deploy
 #   → flyctl deploy   (Dockerfile: MoA + SaaS + SQLite, always-on)
 #   → flyctl status
