@@ -12,7 +12,13 @@ not the wiki.
 
 ## Directory meaning
 - `core/` — engine, policies (risk), state_store, adapters (Applivery/Intune/Jamf),
-  cve_feed_nvd, location_source (simulation).
+  cve_feed_nvd, location_source (simulation), config_loader, cloud_publisher,
+  roadmap_tooling.
+- `scripts/` — utilidades de build, arranque, despliegue, QA y ops. Nada de
+  librería vive aquí; si algo se importa, va a `core/`.
+- `docs/` — toda la documentación; índice en `docs/README.md`. La raíz solo
+  conserva README, LICENSE, CONTRIBUTING, SECURITY, CHANGELOG y este AGENTS.md
+  (su ruta es la convención que leen los agentes: no moverla).
 - `static/` — `dashboard.html` (SPA local, habla con `:8765`), `cloud.html` (vitrina
   serverless que lee `data/cloud_state.json` vía raw.githubusercontent), `app.js`.
 - `data/cloud_state.json` — estado publicado para la vitrina (commiteado, lo sirve Pages).

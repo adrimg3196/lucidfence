@@ -170,7 +170,7 @@ def render_csv(report: dict) -> str:
 
 def main():
     ap = argparse.ArgumentParser(description="LucidFence local compliance report")
-    ap.add_argument("--out", default="reports", help="output directory")
+    ap.add_argument("--out", default="data/reports", help="output directory")
     ap.add_argument("--fences", default="fences.json", help="fences config path")
     ap.add_argument("--data-dir", default="data", help="state store dir")
     ap.add_argument("--format", choices=["md", "csv", "json", "all"], default="all")

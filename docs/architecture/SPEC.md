@@ -30,24 +30,31 @@ comercial siempre-on ($0, fuera de nuestra máquina).
 ## 3. Project Structure
 
 ```
-geofence-uem/
-├── saas_server.py            # SaaS + API HTTP + engine loop
-├── core/                     # engine, policies, state_store, adapters, cve_feed, location_source
-├── static/                   # dashboard.html (SPA local), cloud.html (vitrina), app.js, vendor/
+lucidfence/
+├── saas_server.py                # SaaS + API HTTP + engine loop
+├── core/                         # engine, policies, state_store, adapters, cve_feed, location_source
+│   ├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
+│   ├── config_loader.py          # carga de config y .env
+│   └── roadmap_tooling.py        # motor del roadmap (GET /api/roadmap)
+├── static/                       # dashboard.html (SPA local), cloud.html (vitrina), app.js, vendor/
 ├── data/
-│   ├── cloud_state.json      # estado publicado para la vitrina (lo sirve Pages vía raw)
-│   └── cloud_tenants/        # tenants de la nube creados vía saas-api (multi-tenant real)
-├── tests/                    # test_*.py descubiertos por run_tests.py
-├── scripts/saas_api_op.py    # operaciones serverless (create_tenant/add_fence/remove_tenant)
-├── core/cloud_publisher.py        # backend serverless: engine → cloud_state.json
-├── docker-compose.yml        # stack always-on para clientes
-├── install.sh                # installer de un comando para clientes
-├── .github/workflows/        # engine-cron, deploy-pages, saas-api, deploy-fly, ci
-├── .claude/ .gemini/ .agents/ # comandos y agents del marco agent-skills
-├── references/               # definition-of-done, testing-patterns, security-checklist
-├── agents/                   # code-reviewer, security-auditor, test-engineer
-├── docs/architecture/SPEC.md  docs/internal/plan.md    # spec-driven + planning
-└── CLAUDE.md  AGENTS.md      # reglas de proyecto (context-engineering)
+│   ├── cloud_state.json          # estado publicado para la vitrina (lo sirve Pages vía raw)
+│   ├── cloud_tenants/            # tenants de la nube creados vía saas-api (multi-tenant real)
+│   └── reports/                  # salida de scripts/reports.py
+├── tests/                        # test_*.py descubiertos por run_tests.py
+├── scripts/                      # build, arranque, despliegue, QA y ops
+│   ├── saas_api_op.py            # operaciones serverless (create_tenant/add_fence/remove_tenant)
+│   └── reports.py                # reporte de compliance offline
+├── docker-compose.yml            # stack always-on para clientes
+├── install.sh                    # installer de un comando para clientes
+├── .github/workflows/            # engine-cron, deploy-pages, saas-api, deploy-fly, ci
+├── .claude/ .gemini/ .agents/    # comandos y agents del marco agent-skills
+├── docs/                         # documentación (índice en docs/README.md)
+│   ├── architecture/SPEC.md      # esta especificación
+│   ├── internal/plan.md          # planning
+│   ├── references/               # definition-of-done, testing-patterns, security-checklist
+│   └── agents/                   # code-reviewer, security-auditor, test-engineer
+└── CLAUDE.md  AGENTS.md          # reglas de proyecto (context-engineering)
 ```
 
 ## 4. Code Style

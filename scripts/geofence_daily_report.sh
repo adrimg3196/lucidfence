@@ -10,7 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-OUT_DIR="${1:-reports}"
+OUT_DIR="${1:-data/reports}"
 
 # Genera el reporte completo a partir de data/ + fences.json (modo offline).
 RESULT="$(python3 scripts/reports.py --out "$OUT_DIR")"

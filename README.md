@@ -127,20 +127,29 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 
 ```text
 lucidfence/
+├── saas_server.py          # servidor HTTP local (entrypoint)
+├── server.py               # servidor mínimo del engine
+├── install.sh              # installer de un comando
 ├── bin/lucidfence          # lifecycle portable macOS/Linux
-├── saas_server.py          # servidor HTTP local
-├── core/                   # geofencing, riesgo, CVE, SOAR, adapters
-├── mcp/lucidfence_mcp.py   # MCP local read-only
+├── core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
+├── lucidfence/             # SDK Python público (envuelve core/)
 ├── saas/                   # auth local, RBAC y aislamiento
+├── mcp/lucidfence_mcp.py   # MCP local read-only
 ├── static/                 # interfaz local, assets vendorizados
+├── scripts/                # utilidades de build, arranque, despliegue y QA
+├── docs/                   # documentación (ver docs/README.md)
+├── data/                   # seeds públicos read-only + estado local
 ├── analysis/               # notebooks reproducibles con outputs verificados
-├── data/                   # seeds públicos read-only del paquete
-├── macos/                   # app Swift/WebKit + builder PyInstaller/DMG
+├── macos/                  # app Swift/WebKit + builder PyInstaller/DMG
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
 ```
 
 La capa histórica se sigue llamando `saas/` internamente por compatibilidad, pero no implica un servicio cloud: es la capa local de usuarios, organizaciones y RBAC.
+
+La documentación vive en [`docs/`](docs/README.md): `architecture/`, `operations/`,
+`roadmap/`, `product/`, `references/` y material interno. `AGENTS.md` se queda en
+la raíz porque su ruta es la convención que leen los agentes.
 
 ## Integrar un MDM
 

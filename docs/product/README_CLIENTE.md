@@ -59,4 +59,4 @@ brew install lucidfence
 lucidfence
 ```
 
-Consulta [README.md](README.md) y [docs/operations/DESKTOP_APP.md](docs/operations/DESKTOP_APP.md) para CLI, build, firma y QA.
+Consulta [README.md](../../README.md) y [docs/operations/DESKTOP_APP.md](../operations/DESKTOP_APP.md) para CLI, build, firma y QA.
