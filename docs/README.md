@@ -33,6 +33,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/DESKTOP_APP.md`](operations/DESKTOP_APP.md) | App de escritorio macOS |
 | [`operations/FREEDOMAIN_WHITELABEL.md`](operations/FREEDOMAIN_WHITELABEL.md) | Dominio propio y whitelabel |
 | [`operations/health-monitor.md`](operations/health-monitor.md) | Monitor de salud |
+| [`operations/OSQUERY.md`](operations/OSQUERY.md) | Posture real del endpoint vía osquery |
 | [`operations/self-service-sla-2026-07-14.md`](operations/self-service-sla-2026-07-14.md) | SLA de self-service |
 
 ## Roadmap
