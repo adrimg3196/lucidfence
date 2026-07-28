@@ -13,7 +13,7 @@ ciclo) las dispara el agente vía gh/API o workflow_dispatch, y se reflejan
 en el próximo ciclo.
 
 Uso:
-    python3 cloud_publisher.py [--cycles N] [--tenant TENANT_ID]
+    python3 core/cloud_publisher.py [--cycles N] [--tenant TENANT_ID]
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from saas.tenant import TenantStore  # noqa: E402

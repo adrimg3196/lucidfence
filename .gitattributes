@@ -32,7 +32,7 @@ scripts/geofence_daily_report.sh export-ignore
 
 # Tests / QA internos (el cliente no los corre)
 tests/                   export-ignore
-qa_saas.py               export-ignore
+scripts/qa_saas.py       export-ignore
 
 # Build nuestro
 scripts/build.sh                 export-ignore

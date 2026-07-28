@@ -36,19 +36,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE))
+_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(_ROOT))
 
-import roadmap_tooling as rm
+from core import roadmap_tooling as rm
 from core.provider_plugins import discover_provider_plugins, merge_providers
 from core.loop_governance import KillSwitch
 
 _CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI") or shutil.which("claude") or ""
-_HISTORY = _HERE / "data" / "loop_history.jsonl"
+_HISTORY = _ROOT / "data" / "loop_history.jsonl"
 
 
 def _kill_switch() -> KillSwitch:
-    return KillSwitch(Path(os.environ.get("LUCIDFENCE_DATA_DIR", str(_HERE / "data"))))
+    return KillSwitch(Path(os.environ.get("LUCIDFENCE_DATA_DIR", str(_ROOT / "data"))))
 _LOOP_CFG = {
     "max_iterations": 3,
     "temp_start": 0.7,
@@ -79,7 +79,7 @@ FREE_PROVIDERS = [
 
 
 def _provider_catalog():
-    plugins = discover_provider_plugins(_HERE / "plugins" / "providers")
+    plugins = discover_provider_plugins(_ROOT / "plugins" / "providers")
     return merge_providers(FREE_PROVIDERS, plugins)
 
 
@@ -87,7 +87,7 @@ def _available_providers():
     """Devuelve los providers con API key presente (los que se pueden llamar de verdad)."""
     out = []
     for p in _provider_catalog():
-        if os.environ.get(p["env"]) or (Path(_HERE / ".env").exists() and _env_has(_HERE / ".env", p["env"])):
+        if os.environ.get(p["env"]) or (Path(_ROOT / ".env").exists() and _env_has(_ROOT / ".env", p["env"])):
             out.append(p)
     return out
 
@@ -124,8 +124,8 @@ def _call_provider(provider, prompt, temperature):
     """Llamada real a un free tier (OpenAI-compatible). Timeout corto. Retorna texto o None."""
     import urllib.request
     key = os.environ.get(provider["env"])
-    if not key and Path(_HERE / ".env").exists():
-        for line in Path(_HERE / ".env").read_text(encoding="utf-8").splitlines():
+    if not key and Path(_ROOT / ".env").exists():
+        for line in Path(_ROOT / ".env").read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith(provider["env"] + "="):
                 key = line.split("=", 1)[1].strip().strip('"\'')
@@ -175,7 +175,7 @@ def _aggregate(proposals, feature, temperature):
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
         "Consenso: implementar subtareas en orden, verificar con tests/run_tests.py y "
-        "roadmap_tooling.py --validate. " + merged[:1500]
+        "core/roadmap_tooling.py --validate. " + merged[:1500]
     )
     return summary
 
@@ -203,7 +203,7 @@ def _verify():
     try:
         r = subprocess.run(
             [sys.executable, "tests/run_tests.py"],
-            capture_output=True, text=True, timeout=300, cwd=str(_HERE),
+            capture_output=True, text=True, timeout=300, cwd=str(_ROOT),
         )
         ok = r.returncode == 0
         # Extraer conteo si aparece

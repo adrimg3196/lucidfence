@@ -88,7 +88,7 @@ def test_self_service_issue_to_tenant_to_vitrina_playwright():
         # tenant -> cloud_state: publicador real, pero apuntando a un cwd temporal.
         out = tmp / "data" / "cloud_state.json"
         result = subprocess.run(
-            [sys.executable, str(ROOT / "cloud_publisher.py"), "--cycles", "1", "--out", str(out)],
+            [sys.executable, str(ROOT / "core" / "cloud_publisher.py"), "--cycles", "1", "--out", str(out)],
             cwd=tmp,
             capture_output=True,
             text=True,

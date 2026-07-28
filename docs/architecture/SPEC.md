@@ -21,7 +21,7 @@ comercial siempre-on ($0, fuera de nuestra máquina).
 | Comando | Qué hace |
 |---|---|
 | `python3 tests/run_tests.py` | Corre TODOS los `test_*.py` (runner honesto, tally real). 105 pass = verde. |
-| `python3 cloud_publisher.py --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
+| `python3 core/cloud_publisher.py --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
 | `python3 saas_server.py` | Levanta el SaaS local en `:8765` (dashboard + API + engine). |
 | `./install.sh` | Instala LucidFence en la máquina del cliente (Docker o Python). |
 | `docker compose up -d` | Levanta el stack siempre-on del cliente. |
@@ -39,7 +39,7 @@ geofence-uem/
 │   └── cloud_tenants/        # tenants de la nube creados vía saas-api (multi-tenant real)
 ├── tests/                    # test_*.py descubiertos por run_tests.py
 ├── scripts/saas_api_op.py    # operaciones serverless (create_tenant/add_fence/remove_tenant)
-├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
+├── core/cloud_publisher.py        # backend serverless: engine → cloud_state.json
 ├── docker-compose.yml        # stack always-on para clientes
 ├── install.sh                # installer de un comando para clientes
 ├── .github/workflows/        # engine-cron, deploy-pages, saas-api, deploy-fly, ci

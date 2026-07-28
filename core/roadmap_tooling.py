@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""roadmap_tooling.py — Motor del roadmap anual de mejora tooling para LucidFence.
+"""core/roadmap_tooling.py — Motor del roadmap anual de mejora tooling para LucidFence.
 
 Fuente de verdad: roadmap.json (4 fases Q3-2026 -> Q2-2027, ~20 features de
 mejora CLI/API/Dashboard/Engine/QA/loop). Cada feature tiene impacto, esfuerzo,
 criterios y subtareas. El schema es la ley.
 
 Uso:
-  python3 roadmap_tooling.py --validate
-  python3 roadmap_tooling.py [--phase Q3-2026] [--status in_progress]
-  python3 roadmap_tooling.py --mark F1.1 status done
-  python3 roadmap_tooling.py --export
+  python3 core/roadmap_tooling.py --validate
+  python3 core/roadmap_tooling.py [--phase Q3-2026] [--status in_progress]
+  python3 core/roadmap_tooling.py --mark F1.1 status done
+  python3 core/roadmap_tooling.py --export
 Integracion:
   - saas_server.py: GET /api/roadmap (lee + anade progress computado)
   - loop_improve.py: lee roadmap para priorizar iteraciones
@@ -20,8 +20,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent
-_ROADMAP_JSON = _HERE / "roadmap.json"
+_ROOT = Path(__file__).resolve().parents[1]
+_ROADMAP_JSON = _ROOT / "roadmap.json"
 
 _VALID_PHASES = {"Q3-2026", "Q4-2026", "Q1-2027", "Q2-2027"}
 _VALID_IMPACTS = {"p0_must", "p1_should", "p2_nice"}

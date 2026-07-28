@@ -96,7 +96,7 @@ INTUNE_CLIENT_SECRET=<client-secret-value>
 ```
 
 `config_loader.load()` merges `.env` into `mdm.<adapter>.*` automatically
-(see `config_loader.py`).
+(see `core/config_loader.py`).
 
 ### R1.3 Restart the engine
 

@@ -94,7 +94,7 @@ Todos los endpoints `/api/*` (excepto `/api/auth/*`) requieren cookie de sesión
 | DELETE | /api/users/<id>      | Revocar acceso                           |
 | GET/POST| /api/settings        | Token Applivery + modo live/sim/dry_run   |
 
-QA automático: `python3 qa_saas.py` (usa http.client directo, sin proxy).
+QA automático: `python3 scripts/qa_saas.py` (usa http.client directo, sin proxy).
 
 ---
 
@@ -104,7 +104,7 @@ LucidFence es **gratis para siempre**: sin planes de pago, sin límites artifici
 
 ## Calidad / QA
 
-- `python3 qa_saas.py` → PASS (auth, cookies, multi-tenant, RBAC, geofence
+- `python3 scripts/qa_saas.py` → PASS (auth, cookies, multi-tenant, RBAC, geofence
   engine, risk, policies, compliance, analytics, report, invite,
   protección de ruta sin auth, HTML servido).
 - JS validado con `node --check` (sin errores de sintaxis).

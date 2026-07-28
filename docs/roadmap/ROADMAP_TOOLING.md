@@ -3,7 +3,7 @@
 Este documento define **la estructura de mejora a nivel de herramienta** de
 LucidFence (la herramienta de geofencing UEM) y su plan de 12 meses. No es un
 PDF olvidado: es la fuente de verdad de `roadmap.json`, se auto-reporta con
-`python3 roadmap_tooling.py`, se expone en `GET /api/roadmap` (cuando el
+`python3 core/roadmap_tooling.py`, se expone en `GET /api/roadmap` (cuando el
 dashboard lo sirve) y se mejora en bucle con `python3 loop_improve.py` (el
 `/loop` de Mixture-of-Agents).
 
@@ -23,8 +23,8 @@ La mejora continua es ciudadano de primera clase. Se sostiene en 6 capas:
 | # | Capa | Qué es | Dónde vive |
 |---|------|--------|-----------|
 | 1 | **Persistencia** | `roadmap.json` con schema estricto (fases → features → subtasks, cada una con impacto/esfuerzo/criterios) | `roadmap.json` |
-| 2 | **Motor** | `roadmap_tooling.py`: load/save/validate/format/update; el schema es la ley | `roadmap_tooling.py` |
-| 3 | **CLI** | `python3 roadmap_tooling.py [--validate/--status/--phase/--mark/--export]` | `roadmap_tooling.py` |
+| 2 | **Motor** | `core/roadmap_tooling.py`: load/save/validate/format/update; el schema es la ley | `core/roadmap_tooling.py` |
+| 3 | **CLI** | `python3 core/roadmap_tooling.py [--validate/--status/--phase/--mark/--export]` | `core/roadmap_tooling.py` |
 | 4 | **API** | `GET /api/roadmap` (read + progress) + `PATCH /api/roadmap` (update) | `saas_server.py` |
 | 5 | **Dashboard** | Pestaña Roadmap: fases, features con badge de estado, barra de progreso global | `static/dashboard.html` + `app.js` |
 | 6 | **Loop** | `/loop` (Mixture-of-Agents): proposers gratis + Opus 4.8 como agregador, con verify | `loop_improve.py` |
@@ -122,10 +122,10 @@ Roadmap vivo, `/loop` operativo, dashboard de mejora.
 
 ```bash
 cd ~/geofence-uem
-python3 roadmap_tooling.py --validate     # valida el schema (debe decir "valido")
-python3 roadmap_tooling.py                # muestra el plan + barra de progreso
-python3 roadmap_tooling.py --phase Q3-2026
-python3 roadmap_tooling.py --mark F1.1 status done   # marca y persiste
+python3 core/roadmap_tooling.py --validate     # valida el schema (debe decir "valido")
+python3 core/roadmap_tooling.py                # muestra el plan + barra de progreso
+python3 core/roadmap_tooling.py --phase Q3-2026
+python3 core/roadmap_tooling.py --mark F1.1 status done   # marca y persiste
 python3 loop_improve.py                   # /loop sobre la proxima feature
 python3 loop_improve.py --feature F1.2 --dry-run
 python3 tests/run_tests.py                # suite honesta (debe seguir verde)

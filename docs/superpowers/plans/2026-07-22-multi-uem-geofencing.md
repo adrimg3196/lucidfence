@@ -211,7 +211,7 @@ git commit -m "feat(multiuem): orchestrate providers with safe identity merge"
 **Files:**
 - Create: `core/multiuem_providers.py`
 - Create: `core/outbound_security.py`
-- Modify: `config_loader.py`
+- Modify: `core/config_loader.py`
 - Modify: `core/secrets.py`
 - Modify: `saas_server.py` (`_apply_tenant_integration`, connector persistence only)
 - Modify: `core/location_source.py`
@@ -288,7 +288,7 @@ Expected: all pass; frozen adapter contract unchanged.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/multiuem_providers.py core/outbound_security.py config_loader.py core/secrets.py saas_server.py core/location_source.py core/adapters .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py
+git add core/multiuem_providers.py core/outbound_security.py core/config_loader.py core/secrets.py saas_server.py core/location_source.py core/adapters .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py
 git commit -m "feat(multiuem): connect tenant providers with hardened transport"
 ```
 

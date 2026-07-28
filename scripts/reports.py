@@ -6,10 +6,10 @@ offline: reads only `data/` and `fences.json`, writes to a local `--out` dir.
 No network, no credentials, no device contact.
 
 Usage:
-  python3 reports.py --out /tmp/reports/            # full fleet report
-  python3 reports.py --fence restricted-zone --out /tmp/reports/
-  python3 reports.py --format csv --out /tmp/reports/
-  python3 reports.py --violations-only --out /tmp/reports/
+  python3 scripts/reports.py --out /tmp/reports/            # full fleet report
+  python3 scripts/reports.py --fence restricted-zone --out /tmp/reports/
+  python3 scripts/reports.py --format csv --out /tmp/reports/
+  python3 scripts/reports.py --violations-only --out /tmp/reports/
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from core.fences import load_fences  # noqa: E402

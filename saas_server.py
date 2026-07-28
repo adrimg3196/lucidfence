@@ -63,8 +63,8 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "core"))
 
-import config_loader
-import cloud_publisher
+from core import config_loader
+from core import cloud_publisher
 from saas.tenant import TenantStore, FREE_PLAN
 from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
 from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
@@ -1219,7 +1219,7 @@ class Handler(BaseHTTPRequestHandler):
         # an owner browser session so an automation key cannot rewrite the repo.
         if route == "/api/roadmap" and method == "GET":
             try:
-                import roadmap_tooling as _rm
+                from core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
@@ -1230,7 +1230,7 @@ class Handler(BaseHTTPRequestHandler):
             if role != "owner" or user.get("auth_type") == "api_key":
                 return _send_json(self, {"error": "solo owner con sesion"}, 403)
             try:
-                import roadmap_tooling as _rm
+                from core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)

@@ -15,7 +15,7 @@ You are a test engineer analyzing coverage for LucidFence changes. Use
    geocerca con radio 0, device exactamente en el límite.
 3. **Error paths** — auth fallida (401), input inválido, engine sin seed.
 4. **Concurrency** — engine `run_once` while another cycle in progress
-   (`cycle_in_progress`); multiple tenants processed in `cloud_publisher.py`.
+   (`cycle_in_progress`); multiple tenants processed in `core/cloud_publisher.py`.
 
 ## Output template
 ```

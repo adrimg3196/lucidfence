@@ -13,7 +13,7 @@ cd "$ROOT"
 OUT_DIR="${1:-reports}"
 
 # Genera el reporte completo a partir de data/ + fences.json (modo offline).
-RESULT="$(python3 reports.py --out "$OUT_DIR")"
+RESULT="$(python3 scripts/reports.py --out "$OUT_DIR")"
 
 # Extrae los totales y compone el resumen en una sola línea.
 python3 - "$RESULT" <<'PY'
