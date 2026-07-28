@@ -104,6 +104,9 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Geovallas circulares y poligonales.
 - Rutas y detección de desvíos.
 - Inventario y postura de dispositivos.
+- Postura opcional con osquery: SO, almacenamiento, cifrado y batería,
+  correlacionados con el riesgo geoespacial. Ver
+  [`docs/integrations/OSQUERY.md`](docs/integrations/OSQUERY.md).
 - Risk Engine 0–100 con `reasons`, `provenance` y evidence gate.
 - Incidentes, lifecycle y auditoría.
 - Workflows y acciones UEM con cooldown para acciones destructivas.
@@ -142,6 +145,7 @@ lucidfence/
 ├── docs/                   # documentación (ver docs/README.md)
 ├── data/                   # seeds públicos read-only + estado local
 ├── deploy/                 # bundle web autoalojable
+│   └── osquery/             # pack de postura multiplataforma
 ├── apps/                   # app de escritorio macOS + gateway edge opcional
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
