@@ -13,8 +13,9 @@ docs/gtm/               export-ignore
 docs/agents/            export-ignore
 docs/references/        export-ignore
 docs/superpowers/       export-ignore
-mcp/applivery_mcp.py    export-ignore
-skills/                  export-ignore
+lucidfence/mcp/applivery_mcp.py export-ignore
+.agents/                 export-ignore
+.claude/                 export-ignore
 Formula/                 export-ignore
 data/cloud_tenants/      export-ignore
 data/actions_log.jsonl   export-ignore
@@ -40,7 +41,7 @@ scripts/qa_saas.py       export-ignore
 
 # Build nuestro
 scripts/build.sh                 export-ignore
-macos/                   export-ignore
+apps/macos/              export-ignore
 artifact.tar              export-ignore
 
 # Metadatos

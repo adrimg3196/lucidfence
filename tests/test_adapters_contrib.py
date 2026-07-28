@@ -11,11 +11,11 @@ from __future__ import annotations
 import sys, types
 sys.path.insert(0, ".")
 
-from core.adapters import (
+from lucidfence.core.adapters import (
     MDMAdapter, SimulationAdapter, AppliveryAdapter, IntuneAdapter,
     JamfAdapter, VALID_ACTIONS, ADAPTER_REGISTRY, build_adapter,
 )
-from core.actions import LiveAdapter  # alias histórico
+from lucidfence.core.actions import LiveAdapter  # alias histórico
 
 
 def check(cond, msg):

@@ -16,7 +16,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from core.cve_feed_nvd import sync_nvd_feed, load_nvd_feed_into_cve
+from lucidfence.core.cve_feed_nvd import sync_nvd_feed, load_nvd_feed_into_cve
 
 if __name__ == "__main__":
     try:

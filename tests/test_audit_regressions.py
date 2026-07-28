@@ -107,7 +107,7 @@ def test_zero_fleet_offline_map_accessibility_and_monitor_contracts():
 
 def test_doctor_validates_installation_even_when_runtime_is_stopped():
     import subprocess
-    result = subprocess.run([str(ROOT / "bin" / "lucidfence"), "doctor", "--port", "65534", "--json"],
+    result = subprocess.run([str(ROOT / "lucidfence" / "cli.py"), "doctor", "--port", "65534", "--json"],
                             cwd=ROOT, capture_output=True, text=True, timeout=30)
     report = json.loads(result.stdout)
     assert result.returncode == 0 and report["ok"] is True

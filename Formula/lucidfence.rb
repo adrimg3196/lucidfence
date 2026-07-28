@@ -38,7 +38,8 @@ class Lucidfence < Formula
     libexec.install Dir["*"]
     venv = virtualenv_create(libexec/"venv", "python3.11")
     venv.pip_install resources
-    (bin/"lucidfence").write_env_script libexec/"bin/lucidfence",
+    (bin/"lucidfence").write_env_script libexec/"venv/bin/python3",
+      "\"#{libexec}/lucidfence/cli.py\"",
       PATH: "#{libexec}/venv/bin:$PATH"
   end
 

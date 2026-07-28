@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.product import build_product  # noqa: E402
+from lucidfence.core.product import build_product  # noqa: E402
 
 
 def _status(**over):

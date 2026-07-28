@@ -58,29 +58,28 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from typing import Optional
 
-# make sure sibling 'core' and 'saas' importable
+# make sure the 'lucidfence' package and its siblings are importable
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "core"))
 
-from core import config_loader
-from core import cloud_publisher
-from saas.tenant import TenantStore, FREE_PLAN
-from saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
-from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
+from lucidfence.core import config_loader
+from lucidfence.core import cloud_publisher
+from lucidfence.saas.tenant import TenantStore, FREE_PLAN
+from lucidfence.saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
+from lucidfence.core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
-from core.engine import Engine
-from core.product import build_product
-from core import secrets as core_secrets
-from core import ai_provider
-from core import workflows as WF  # workflows module (templates + custom builder)
-from core.actions import VALID_ACTIONS
-from core.alerts import ALERT_TYPES, CHANNELS, ALERT_TYPE_LABELS
-from core.app_paths import ensure_data_dir
-from core.api_keys import APIKeyStore, append_audit, verify_audit
-from core.compliance_controls import map_controls
-from core.cluster import ClusterLease
-from core.autonomous_company import CompanyControlPlane
+from lucidfence.core.engine import Engine
+from lucidfence.core.product import build_product
+from lucidfence.core import secrets as core_secrets
+from lucidfence.core import ai_provider
+from lucidfence.core import workflows as WF  # workflows module (templates + custom builder)
+from lucidfence.core.actions import VALID_ACTIONS
+from lucidfence.core.alerts import ALERT_TYPES, CHANNELS, ALERT_TYPE_LABELS
+from lucidfence.core.app_paths import ensure_data_dir
+from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
+from lucidfence.core.compliance_controls import map_controls
+from lucidfence.core.cluster import ClusterLease
+from lucidfence.core.autonomous_company import CompanyControlPlane
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
@@ -908,7 +907,7 @@ def _send_signup_welcome_email(email: str, name: str, org) -> dict:
     if _test_or_placeholder_email(email):
         return {"attempted": False, "sent": False, "reason": "destinatario_test"}
     try:
-        from core.atomicmail_client import build_tenant_mailbox
+        from lucidfence.core.atomicmail_client import build_tenant_mailbox
         tdir = _tenants.data_dir(org.id)
         runtime = _tenant_runtime(tdir)
         am = runtime.get("atomicmail") or {}
@@ -1219,7 +1218,7 @@ class Handler(BaseHTTPRequestHandler):
         # an owner browser session so an automation key cannot rewrite the repo.
         if route == "/api/roadmap" and method == "GET":
             try:
-                from core import roadmap_tooling as _rm
+                from lucidfence.core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
@@ -1230,7 +1229,7 @@ class Handler(BaseHTTPRequestHandler):
             if role != "owner" or user.get("auth_type") == "api_key":
                 return _send_json(self, {"error": "solo owner con sesion"}, 403)
             try:
-                from core import roadmap_tooling as _rm
+                from lucidfence.core import roadmap_tooling as _rm
                 data = _rm.load_roadmap()
                 if not data:
                     return _send_json(self, {"error": "roadmap.json no encontrado"}, 404)
@@ -1782,7 +1781,7 @@ class Handler(BaseHTTPRequestHandler):
             domain = (body.get("domain") or "").strip()
             if not domain:
                 return _send_json(self, {"ok": False, "error": "requiere domain"}, 400)
-            from core.freedomain import suggest_dns_records
+            from lucidfence.core.freedomain import suggest_dns_records
             try:
                 sug = suggest_dns_records(
                     domain,
@@ -1853,7 +1852,7 @@ class Handler(BaseHTTPRequestHandler):
             domain = (body.get("domain") or runtime.get("whitelabel", {}).get("domain") or "").strip()
             if not domain:
                 return _send_json(self, {"ok": False, "error": "sin dominio configurado"}, 400)
-            from core.freedomain import validate
+            from lucidfence.core.freedomain import validate
             report = validate(domain, dkim_selector=(runtime.get("whitelabel", {}).get("dkim_selector") or "atomicmail"))
             # Persist last validation in the whitelabel config (non-secret).
             wl = runtime.get("whitelabel") or {}
@@ -1875,7 +1874,7 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             kind = (qs.get("kind", ["inventory"])[0]).lower()
             fmt = (qs.get("format", ["csv"])[0]).lower()
-            from core import export as EXP
+            from lucidfence.core import export as EXP
             if kind == "actions":
                 actions = eng.store.recent_actions(5000)
                 if fmt == "html":
@@ -1946,7 +1945,7 @@ class Handler(BaseHTTPRequestHandler):
             if not ticket["subject"] and not ticket["body"]:
                 return _send_json(self, {"ok": False, "error": "requiere subject/body"}, 400)
             try:
-                from core import ai
+                from lucidfence.core import ai
                 reply = ai.support_reply(ticket, dry=True)
             except Exception as exc:
                 return _send_json(self, {"ok": False,
@@ -2029,7 +2028,7 @@ class Handler(BaseHTTPRequestHandler):
         # existing tenant must go through an authenticated invite
         # (POST /api/users), never through public signup. This closes the
         # "self-add as viewer to any org" escalation.
-        from saas.tenant import slugify
+        from lucidfence.saas.tenant import slugify
         if _tenants.get_by_slug(slugify(org_name)):
             return _send_json(self, {"error": "el nombre de organización ya existe; pide una invitación al propietario"}, 409)
         org = _tenants.create(org_name, owner_id="")
@@ -2124,7 +2123,7 @@ class Handler(BaseHTTPRequestHandler):
             fmt = (qs.get("format", ["csv"])[0] or "csv").lower()
             rows = eng.incidents.list()
             if fmt == "csv":
-                from core.incidents import to_csv
+                from lucidfence.core.incidents import to_csv
                 csv_text = to_csv(rows)
                 payload = csv_text.encode("utf-8")
                 self.send_response(200)
@@ -2156,7 +2155,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 summary = dict(summary)
                 try:
-                    from core import cve as _cve
+                    from lucidfence.core import cve as _cve
                     nvd_keys = [k for k, v in _cve._FEED.items() if v]
                     summary["demo"] = False
                     summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
@@ -2166,7 +2165,7 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/soar" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
-            from core.soar import DEFAULT_PLAYBOOKS, evaluate_soar
+            from lucidfence.core.soar import DEFAULT_PLAYBOOKS, evaluate_soar
             devs = list(eng.store.snapshot().values())
             soar_ctx = {"cycle": getattr(eng, "cycle_count", 0), "on_error": None}
             recent = []

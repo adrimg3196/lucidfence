@@ -36,4 +36,4 @@ verificación runtime. La barra de calidad es `docs/references/definition-of-don
 
 ## Orden de ejecución futura (greenfield para nuevas features)
 /spec → /plan → /build (TDD, incremental) → /review → /ship
-Legado en `core/`: characterization tests antes de cambiar (brownfield rule).
+Legado en `lucidfence/core/`: characterization tests antes de cambiar (brownfield rule).

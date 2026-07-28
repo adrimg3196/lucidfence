@@ -5,7 +5,7 @@ geofencing). Use `docs/references/security-checklist.md` (OWASP Top 10 + LLM/AI
 security for the local MoA). Output a standard audit report.
 
 ## Scope
-- Auth/session: cookie-based, `core/auth.py`. No `/api/auth/demo` in production.
+- Auth/session: cookie-based, `lucidfence/core/auth.py`. No `/api/auth/demo` in production.
 - Multi-tenant: `data/cloud_tenants/<id>/` isolation; one tenant must not read
   another's devices/geocercas/incidents.
 - Secrets: none in repo; `.env.example` placeholders only. Atomic Mail + FreeDomain

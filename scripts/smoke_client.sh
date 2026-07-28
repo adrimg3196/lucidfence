@@ -30,7 +30,7 @@ tar xzf "$WORK/$ASSET" -C "$WORK"
 APP="$WORK/lucidfence"
 
 echo "2. Arranca el server on-prem (en TU maquina)..."
-LUCIDFENCE_PORT="$PORT" nohup "$APP/bin/lucidfence" serve >"$WORK/server.log" 2>&1 &
+LUCIDFENCE_PORT="$PORT" nohup python3 "$APP/lucidfence/cli.py" serve >"$WORK/server.log" 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true; rm -rf "$WORK"' EXIT
 

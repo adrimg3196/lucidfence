@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Se corrigieron únicamente `core/multiuem.py` y sus pruebas focales. No se modificaron providers, engine, auth, frontend ni documentación de producto.
+Se corrigieron únicamente `lucidfence/core/multiuem.py` y sus pruebas focales. No se modificaron providers, engine, auth, frontend ni documentación de producto.
 
 ## Evidencia TDD (RED → GREEN)
 

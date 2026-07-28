@@ -11,10 +11,10 @@ file documents the improvement loop used to maintain it, adapting the
 - **Maker:** contributor (or maintainer) proposes the change.
 - **Verifier (checker / maker-split):** the change is verified by the honest test
   runner `python3 tests/run_tests.py`, a `gitleaks` secret scan, and a
-  frozen-contract check (`core/adapters/base.py` must not change). All three MUST
+  frozen-contract check (`lucidfence/core/adapters/base.py` must not change). All three MUST
   pass before human merge. This file itself is the verifier contract.
 - **Checks (verifier):** secrets scan (`gitleaks`), frozen `MDMAdapter` contract
-  (`core/adapters/base.py` must NOT change), offline mode preserved, tests green
+  (`lucidfence/core/adapters/base.py` must NOT change), offline mode preserved, tests green
   without real credentials, `.env.example` only placeholders.
 - **Gate:** NO auto-merge. Maintainer reviews and merges.
 - **Duplicate/spam policy:** close duplicate PRs; reject PRs that embed wallet
@@ -29,7 +29,7 @@ file documents the improvement loop used to maintain it, adapting the
 
 - **No auto-merge to `main`** except trivial doc/loop-scaffolding changes.
 - **Denylist:** secrets in `config.json`/`data/`; modifications to
-  `core/adapters/base.py` without a major version bump; publish of
+  `lucidfence/core/adapters/base.py` without a major version bump; publish of
   `data/cloud_state.json` with real tenant data.
 - **Least privilege:** CI uses read-only `GITHUB_TOKEN`; no deploy secrets in
   loop workflows.

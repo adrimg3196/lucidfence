@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from core.predictive import forecast_movements
-from core.product import build_analytics
+from lucidfence.core.predictive import forecast_movements
+from lucidfence.core.product import build_analytics
 
 
 def _ts(seconds: int) -> str:

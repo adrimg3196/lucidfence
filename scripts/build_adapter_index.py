@@ -13,7 +13,7 @@ ADAPTERS = ["applivery", "intune", "jamf", "chromeos", "windows_conformidad", "w
 def build_index() -> dict:
     entries = []
     for name in ADAPTERS:
-        path = ROOT / "core" / "adapters" / f"{name}.py"
+        path = ROOT / "lucidfence" / "core" / "adapters" / f"{name}.py"
         if not path.is_file():
             raise FileNotFoundError(path)
         entries.append({"name": name, "version": "1.0.0", "api": "MDMAdapter/v1",
@@ -24,7 +24,7 @@ def build_index() -> dict:
 
 
 def main() -> int:
-    output = ROOT / "plugins" / "adapters" / "index.json"
+    output = ROOT / "lucidfence" / "plugins" / "adapters" / "index.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(build_index(), indent=2) + "\n", encoding="utf-8")
     print(output)

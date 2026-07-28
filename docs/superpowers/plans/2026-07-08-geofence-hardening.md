@@ -4,7 +4,7 @@
 
 **Goal:** Take the local LucidFence SaaS from "feature-complete but unverified" to "verified, hardened, code-reviewed" — completing the route-adherence module with real TDD, killing the residual 500 bug, and proving every endpoint end-to-end with a green QA suite. No push, 100% local.
 
-**Architecture:** Keep the existing layered core (`core/engine.py`, `core/routes.py`, `core/policies.py`, `core/state_store.py`) and the SaaS HTTP layer (`saas_server.py`, `saas/auth.py`, `saas/tenant.py`). Add a real pytest suite under `tests/` that exercises the engine and the HTTP API over `http.client` (the local proxy eats POST to 127.0.0.1, so QA uses raw `http.client`, not `requests`). Frontend (vanilla JS) gets the Routes view. RBAC stays capability-based. All changes are local; nothing is published.
+**Architecture:** Keep the existing layered core (`lucidfence/core/engine.py`, `lucidfence/core/routes.py`, `lucidfence/core/policies.py`, `lucidfence/core/state_store.py`) and the SaaS HTTP layer (`saas_server.py`, `saas/auth.py`, `saas/tenant.py`). Add a real pytest suite under `tests/` that exercises the engine and the HTTP API over `http.client` (the local proxy eats POST to 127.0.0.1, so QA uses raw `http.client`, not `requests`). Frontend (vanilla JS) gets the Routes view. RBAC stays capability-based. All changes are local; nothing is published.
 
 **Tech Stack:** Python 3.9 (stdlib only — no new deps; `os.urandom` OK, `secrets`/`scrypt` absent on this macOS), `http.client` for QA, vanilla JS + Leaflet for UI, `pytest` for the test runner (add a `requirements.txt` with `pytest` only).
 
@@ -23,8 +23,8 @@
 
 **Files:**
 - Create: `tests/test_routes.py`
-- Modify: `core/routes.py` (already has `Route`, `load_routes`, `route_for_device`, `save_routes`, `distance_to_route`)
-- Modify: `core/geo.py` (already has `distance_to_segment_m`)
+- Modify: `lucidfence/core/routes.py` (already has `Route`, `load_routes`, `route_for_device`, `save_routes`, `distance_to_route`)
+- Modify: `lucidfence/core/geo.py` (already has `distance_to_segment_m`)
 
 **Interfaces:**
 - Consumes: `core.routes.Route`, `core.geo.Point`, `core.geo.distance_to_segment_m`
@@ -72,11 +72,11 @@ def test_load_routes_roundtrip(tmp_path):
 - [ ] **Step 2: Run test to verify it fails (only if impl missing)**
 
 Run: `python3 -m pytest tests/test_routes.py -v`
-Expected: collection OK; if `core/routes.py` already implements these, tests may already pass — that is acceptable; the task's value is locking behavior.
+Expected: collection OK; if `lucidfence/core/routes.py` already implements these, tests may already pass — that is acceptable; the task's value is locking behavior.
 
 - [ ] **Step 3: Implement minimal code (if any function missing)**
 
-`core/routes.py` already defines `distance_to` and `route_for_device`. If `distance_to` is absent, add:
+`lucidfence/core/routes.py` already defines `distance_to` and `route_for_device`. If `distance_to` is absent, add:
 
 ```python
 def distance_to(self, loc) -> float:
@@ -94,7 +94,7 @@ Expected: PASSED (4 tests)
 - [ ] **Step 5: Commit (local only, no push)**
 
 ```bash
-git add tests/test_routes.py core/routes.py core/geo.py 2>/dev/null || true
+git add tests/test_routes.py lucidfence/core/routes.py lucidfence/core/geo.py 2>/dev/null || true
 ```
 
 ---
@@ -103,7 +103,7 @@ git add tests/test_routes.py core/routes.py core/geo.py 2>/dev/null || true
 
 **Files:**
 - Create: `tests/test_engine_routes.py`
-- Modify: `core/engine.py` (already computes `route_state`/`route_deviation_m` in `run_once`; already has `add_route`/`delete_route`)
+- Modify: `lucidfence/core/engine.py` (already computes `route_state`/`route_deviation_m` in `run_once`; already has `add_route`/`delete_route`)
 
 **Interfaces:**
 - Consumes: `core.engine.Engine`, `config_loader.load`, `saas.tenant.TenantStore`
@@ -145,7 +145,7 @@ def test_engine_assigns_route_state():
 - [ ] **Step 2: Run test to verify (fails only if integration broken)**
 
 Run: `python3 -m pytest tests/test_engine_routes.py -v`
-Expected: PASSED (if Task from prior session intact) — otherwise FIX `core/engine.py` `run_once` to set `route_state`/`route_deviation_m` from `route_for_device(self.routes, rep.device_id)`.
+Expected: PASSED (if Task from prior session intact) — otherwise FIX `lucidfence/core/engine.py` `run_once` to set `route_state`/`route_deviation_m` from `route_for_device(self.routes, rep.device_id)`.
 
 - [ ] **Step 3: Add_route / delete_route test**
 
@@ -221,7 +221,7 @@ After several `run-once` cycles, query `/api/status` and assert `recent_events` 
 
 - [ ] **Step 1: Self-review the diff surface**
 
-Review `core/routes.py`, `core/engine.py` (route block), `saas_server.py` (`/api/routes`), `saas/auth.py` (caps). Check: no bare `except:`, no hardcoded secrets, RBAC enforced on every new endpoint, `to_dict()` exposes `route_state`/`route_deviation_m`/`route_id`.
+Review `lucidfence/core/routes.py`, `lucidfence/core/engine.py` (route block), `saas_server.py` (`/api/routes`), `saas/auth.py` (caps). Check: no bare `except:`, no hardcoded secrets, RBAC enforced on every new endpoint, `to_dict()` exposes `route_state`/`route_deviation_m`/`route_id`.
 
 - [ ] **Step 2: Dispatch a code-reviewer subagent** (via `delegate_task`, general-purpose) with the concrete checklist above and the file list. Act on Critical/Important findings before proceeding. Minor findings noted.
 

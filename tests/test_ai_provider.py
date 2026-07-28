@@ -6,7 +6,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from core import ai_provider
+from lucidfence.core import ai_provider
 
 
 class FakeOpenAI(BaseHTTPRequestHandler):

@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 sys.path.insert(0, ".")
 
-from core.adapters import WindowsConformidadAdapter
+from lucidfence.core.adapters import WindowsConformidadAdapter
 
 
 class _Device:
@@ -91,7 +91,7 @@ def test_deterministic_mock_per_device():
 
 
 def test_build_from_config_helper():
-    from core.adapters import build_windows_conformidad_adapter_from_config
+    from lucidfence.core.adapters import build_windows_conformidad_adapter_from_config
     a = build_windows_conformidad_adapter_from_config({
         "mdm": {"windows": {"live": True, "tenant_id": "t-uuid", "client_id": "c",
                             "client_secret": "s"}}

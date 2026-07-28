@@ -29,7 +29,7 @@ import re
 import sys
 sys.path.insert(0, ".")
 
-from core.adapters import (
+from lucidfence.core.adapters import (
     MDMAdapter, SimulationAdapter, AppliveryAdapter, IntuneAdapter,
     JamfAdapter, ADAPTER_REGISTRY, build_adapter,
 )
@@ -144,7 +144,7 @@ def test_known_adapters_handle_missing_credentials_live():
 def test_sdk_template_helper():
     """Verify the SDK template example still imports and runs."""
     import importlib
-    template = importlib.import_module("core.adapters._template_adapter")
+    template = importlib.import_module("lucidfence.core.adapters._template_adapter")
     TemplateMdmAdapter = template.TemplateMdmAdapter
     a = TemplateMdmAdapter()
     assert a.name == "template_mdm"

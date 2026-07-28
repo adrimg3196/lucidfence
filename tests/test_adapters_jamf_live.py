@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 sys.path.insert(0, ".")
 
-from core.adapters.jamf import JamfAdapter, AuthError, TransportError, JAMF_VERB
+from lucidfence.core.adapters.jamf import JamfAdapter, AuthError, TransportError, JAMF_VERB
 
 
 class _Resp:

@@ -44,7 +44,7 @@ Eliminar la app no elimina datos. Para borrar también el estado local, cierra L
 Requiere macOS, Command Line Tools y red para instalar las dependencias del entorno builder la primera vez:
 
 ```bash
-python3 macos/build_desktop.py --version 1.2.0 --allow-adhoc
+python3 apps/macos/build_desktop.py --version 1.2.0 --allow-adhoc
 ```
 
 Salidas:
@@ -73,7 +73,7 @@ Para una distribución de doble clic sin advertencias:
 ```bash
 export LUCIDFENCE_CODESIGN_IDENTITY='Developer ID Application: Example Corp (TEAMID)'
 export LUCIDFENCE_NOTARY_PROFILE='LucidFence'
-python3 macos/build_desktop.py --version 1.2.0
+python3 apps/macos/build_desktop.py --version 1.2.0
 ```
 
 El perfil se crea una vez con `xcrun notarytool store-credentials`. El builder envía el DMG, espera el resultado y aplica el ticket con `stapler`.
