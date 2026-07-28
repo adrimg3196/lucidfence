@@ -48,20 +48,6 @@ def test_adapter_marketplace_manifest_is_hash_verified():
 def test_sbom_contains_locked_dependencies_and_source_manifest():
     sbom = build_sbom(ROOT)
     committed = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
-    if committed != sbom:
-        import hashlib
-        print("--- PROPERTIES DIFF ---")
-        print("Committed properties:", committed.get("properties"))
-        print("Generated properties:", sbom.get("properties"))
-        print("--- FILES LIST ---")
-        files = []
-        for path in sorted(ROOT.rglob("*.py")):
-            if any(part.startswith(".") or part in {"build", "dist", "__pycache__"} for part in path.relative_to(ROOT).parts):
-                continue
-            files.append({"path": str(path.relative_to(ROOT)),
-                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-        for f in files:
-            print(f"{f['path']}:{f['sha256']}")
     assert committed == sbom
     assert sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.5"
     purls = {item["purl"] for item in sbom["components"]}
