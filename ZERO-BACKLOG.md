@@ -26,6 +26,10 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 ## Notas para el siguiente turno
 
+- **PRIORIDAD nº1 (orden de Adri 2026-07-28): frente DDM-DSC** — ver sección
+  `## DDM-DSC` abajo. Issues #40 (Apple DDM) y #41 (Windows DSC) ya sembrados
+  con label `agent-ready`. Nightly y Jules deben avanzar esto ANTES que el
+  resto de ideas.
 - Rama de trabajo: `zero-nightly`. La rama local `gt/migrar-a-gratis-donaciones` quedó obsoleta (sin commits propios) — borrar cuando el PR se mergee.
 - La suite se ejecuta con `python3 tests/run_tests.py` (hermética: exige el puerto 8765 libre; mata cualquier `saas_server.py` colgado antes).
 
@@ -44,3 +48,26 @@ Progreso de cada frente se registra aquí.
 - [ ] **Webhooks/eventos** para integraciones de terceros.
 
 Restricción transversal: coste 0 (free tiers), sin dependencias obsoletas.
+
+## DDM-DSC
+
+Directriz de producto de Adri (2026-07-28): capa de enforcement **declarativa**
+para mejor rendimiento — el estado converge en el dispositivo, no en bucles
+imperativos del servidor.
+
+- [ ] **Apple DDM** (issue #40): `lucidfence/core/ddm.py` genera declarations
+      (configurations + activations con predicados) desde una fence policy y
+      consume el status channel. Flag `supports_ddm` en adapters Apple
+      (ios_geofence, jamf, applivery), fallback imperativo intacto.
+      Límite honesto: DDM no tiene primitivas de geolocalización — el trigger
+      sigue en nuestro agente; DDM es la capa de config/enforcement.
+      Validar contra schemas de `apple/device-management` (iOS 15+/macOS 13+).
+- [ ] **Windows PowerShell DSC** (issue #41): `lucidfence/core/dsc.py` emite
+      documentos DSC v3 (manifests JSON/YAML) con emisor fallback .ps1/MOF
+      clásico. Idempotente (re-apply sin cambios = no-op), readback de
+      compliance al pipeline de device state. Flag `supports_dsc` en
+      `windows_conformidad`.
+- [ ] Matriz de soporte documentada en `docs/` (versiones OS, DDM vs legacy,
+      DSC v2 vs v3) y fixtures golden en tests (sin red, sin host Windows).
+
+Regla transversal: capacidad aditiva — la ruta imperativa actual no se rompe.
