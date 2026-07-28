@@ -95,7 +95,7 @@ No se ejecutarán proveedores en paralelo en el primer slice: el aislamiento sec
 
 ## 5. Integración con el motor de geofencing
 
-El motor consumirá una colección de reportes normalizados. La lógica geométrica de círculos, polígonos y rutas seguirá en `core/fences.py`, `core/geo.py` y `core/routes.py`.
+El motor consumirá una colección de reportes normalizados. La lógica geométrica de círculos, polígonos y rutas seguirá en `lucidfence/core/fences.py`, `lucidfence/core/geo.py` y `lucidfence/core/routes.py`.
 
 Antes de evaluar geometría se aplicará el gate de evidencia. Las transiciones válidas serán:
 
@@ -230,7 +230,7 @@ Cada test nuevo debe observarse fallar por la ausencia del comportamiento antes 
 - validación live con credenciales reales que el usuario no haya configurado;
 - certificar precisión que el proveedor no informa;
 - billing, adquisición o campañas;
-- reescritura general de `saas_server.py` o `core/engine.py` no necesaria para este objetivo.
+- reescritura general de `saas_server.py` o `lucidfence/core/engine.py` no necesaria para este objetivo.
 
 ## 12. Riesgos y mitigaciones
 

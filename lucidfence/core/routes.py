@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from core.geo import Point, distance_to_segment_m, haversine_m
+from lucidfence.core.geo import Point, distance_to_segment_m, haversine_m
 
 
 @dataclass

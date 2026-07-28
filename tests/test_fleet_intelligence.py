@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 
-from core.product import build_analytics, build_product
+from lucidfence.core.product import build_analytics, build_product
 
 
 ROOT = Path(__file__).resolve().parents[1]

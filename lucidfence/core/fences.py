@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from core.geo import Point, haversine_m, point_in_polygon
+from lucidfence.core.geo import Point, haversine_m, point_in_polygon
 
 
 @dataclass

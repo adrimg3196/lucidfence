@@ -1,6 +1,6 @@
 ---
 name: mdm-adapter-guide
-description: Cómo escribir un adaptador MDM nuevo para LucidFence implementando la interfaz MDMAdapter, dónde ubicarlo (core/adapters/), cómo testearlo contra mock y el flujo de Pull Request. Usa cuando el usuario quiere añadir soporte para un nuevo UEM (Intune, Jamf, Fleet, etc.), crear un adapter, o entender la interfaz MDMAdapter.
+description: Cómo escribir un adaptador MDM nuevo para LucidFence implementando la interfaz MDMAdapter, dónde ubicarlo (lucidfence/core/adapters/), cómo testearlo contra mock y el flujo de Pull Request. Usa cuando el usuario quiere añadir soporte para un nuevo UEM (Intune, Jamf, Fleet, etc.), crear un adapter, o entender la interfaz MDMAdapter.
 ---
 
 # Guía de adaptadores MDM para LucidFence
@@ -11,19 +11,19 @@ de `MDMAdapter`, sin conocer el proveedor.
 
 ## Dónde vive el código
 
-- Interfaz base: **`core/adapters/base.py`** → clase `MDMAdapter` (abstracta).
-- Adaptadores concretos: **`core/adapters/<mdm>.py`** (p. ej. `applivery.py`).
+- Interfaz base: **`lucidfence/core/adapters/base.py`** → clase `MDMAdapter` (abstracta).
+- Adaptadores concretos: **`lucidfence/core/adapters/<mdm>.py`** (p. ej. `applivery.py`).
 - Tests: **`tests/test_adapter_<mdm>.py`**.
 
 ## Pasos para crear un adaptador
 
 1. **Copia la referencia**:
    ```bash
-   cp core/adapters/applivery.py core/adapters/<mdm>.py
+   cp lucidfence/core/adapters/applivery.py lucidfence/core/adapters/<mdm>.py
    ```
    `<mdm>` en minúsculas (intune, jamf, fleet…).
 
-2. **Implementa `MDMAdapter`** de `core/adapters/base.py`. Debes cubrir todos los
+2. **Implementa `MDMAdapter`** de `lucidfence/core/adapters/base.py`. Debes cubrir todos los
    métodos abstractos con la misma firma y semántica que Applivery:
    - `authenticate()` — gestiona credenciales/tokens del UEM.
    - `get_devices()` — lista la flota de dispositivos.
@@ -64,11 +64,11 @@ para no romper el motor ni el contrato del frontend.
 
 ## Convenciones
 
-- Sin credenciales hardcodeadas; usa el módulo `core/secrets.py` o variables de
+- Sin credenciales hardcodeadas; usa el módulo `lucidfence/core/secrets.py` o variables de
   entorno.
 - Nunca imprimas secretos; usa `logging`.
 - Mantén el adaptador aislado: el core no debe importar lógica específica del UEM
-  fuera de `core/adapters/`.
+  fuera de `lucidfence/core/adapters/`.
 
 ## Flujo de PR
 

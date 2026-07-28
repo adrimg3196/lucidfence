@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-HIGH_RISK = {"saas/auth.py", "core/secrets.py", "core/api_keys.py", "saas_server.py", ".github/workflows"}
-MEDIUM_RISK = {"core/", "saas/", "bin/", "scripts/"}
+HIGH_RISK = {"lucidfence/saas/auth.py", "lucidfence/core/secrets.py",
+             "lucidfence/core/api_keys.py", "saas_server.py", ".github/workflows"}
+MEDIUM_RISK = {"lucidfence/", "scripts/"}
 
 
 def classify_risk(paths: list[str]) -> str:

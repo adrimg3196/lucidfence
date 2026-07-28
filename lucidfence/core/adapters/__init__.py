@@ -9,21 +9,21 @@ herede MDMAdapter y regístrala en ADAPTER_REGISTRY. Ver ADAPTER.md.
 """
 from __future__ import annotations
 
-from core.adapters.base import MDMAdapter
-from core.adapters.simulation import SimulationAdapter
-from core.adapters.applivery import AppliveryAdapter
-from core.adapters.intune import IntuneAdapter
-from core.adapters.jamf import JamfAdapter
-from core.adapters.ios_geofence import is_ios_device, ios_geofence_compliance
-from core.adapters.windows_conformidad import (
+from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.simulation import SimulationAdapter
+from lucidfence.core.adapters.applivery import AppliveryAdapter
+from lucidfence.core.adapters.intune import IntuneAdapter
+from lucidfence.core.adapters.jamf import JamfAdapter
+from lucidfence.core.adapters.ios_geofence import is_ios_device, ios_geofence_compliance
+from lucidfence.core.adapters.windows_conformidad import (
     WindowsConformidadAdapter,
     build_windows_conformidad_adapter_from_config,
 )
-from core.adapters.chromeos import (
+from lucidfence.core.adapters.chromeos import (
     ChromeOSAdapter,
     build_chromeos_adapter_from_config,
 )
-from core.adapters.workspace_one import (
+from lucidfence.core.adapters.workspace_one import (
     WorkspaceONEAdapter,
     build_workspace_one_adapter_from_config,
 )

@@ -14,7 +14,7 @@ vía `LiveAdapter`. Lo que falta es la CAPA DE PRESENTACIÓN:
      campos simples (disparador + condición + acción) SIN tocar JSON.
 
 ## Diseño
-- `core/workflows.py` (nuevo):
+- `lucidfence/core/workflows.py` (nuevo):
   - `APPLIVERY_ACTIONS`: catálogo de acciones con label ES + params por defecto.
   - `TEMPLATES`: workflows comunes listos (Bloqueo al salir de ruta,
     Wipe si rooteado fuera de geocerca, Notificar CISO si desviación > 500m,
@@ -40,7 +40,7 @@ vía `LiveAdapter`. Lo que falta es la CAPA DE PRESENTACIÓN:
    catálogo de acciones completo.
 2. [TEST] e2e `test_qa_workflows.py`: GET /api/workflows 200, apply plantilla
    200 y aparece en active, custom 200, RBAC (viewer 403 en write).
-3. [CODE] `saas/auth.py` caps workflow:*; `core/workflows.py`; endpoints en
+3. [CODE] `saas/auth.py` caps workflow:*; `lucidfence/core/workflows.py`; endpoints en
    `saas_server.py`; vista UI + nav.
 4. [DEBUG] systematic-debugging si algún test falla.
 5. [REVIEW] subagente reviewer senior sobre workflows.py + endpoints + auth caps.

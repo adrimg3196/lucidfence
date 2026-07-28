@@ -15,8 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.notifier import IncidentNotifier  # noqa: E402
-from core.incidents import IncidentStore  # noqa: E402
+from lucidfence.core.notifier import IncidentNotifier  # noqa: E402
+from lucidfence.core.incidents import IncidentStore  # noqa: E402
 
 
 def _make_store(tmp: Path):
@@ -60,8 +60,8 @@ def test_notifier_swallows_http_errors():
 def test_notifier_fires_during_run_once_not_only_on_poll():
     """New incidents must notify at cycle time, independent of the dashboard."""
     import tempfile
-    from core.engine import Engine
-    from core.location_source import LocationReport
+    from lucidfence.core.engine import Engine
+    from lucidfence.core.location_source import LocationReport
     from helpers import make_temp_engine
     sent = []
     def fake_post(url, payload):

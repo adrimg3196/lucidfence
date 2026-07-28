@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 _VALID_ACTIONS_FOR_TEMPLATE = {"lock", "wipe", "message", "locate", "reboot", "clear_passcode", "custom"}

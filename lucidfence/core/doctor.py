@@ -21,7 +21,7 @@ def run_doctor(root: Path, data_root: Path, port: int = 8765) -> dict:
     missing = [name for name in required if not (root / name).is_file()]
     add("installation", not missing, "complete" if not missing else "missing: " + ", ".join(missing))
     try:
-        from core import config_loader
+        from lucidfence.core import config_loader
         config_path = root / "config.json"
         config_loader.load(config_path)
         detail = "valid JSON" if config_path.is_file() else "safe simulation defaults"
@@ -36,7 +36,7 @@ def run_doctor(root: Path, data_root: Path, port: int = 8765) -> dict:
     except OSError as exc:
         add("data_directory", False, f"{type(exc).__name__}: {exc.errno}")
     try:
-        from core import roadmap_tooling
+        from lucidfence.core import roadmap_tooling
         errors = roadmap_tooling.validate_roadmap(roadmap_tooling.load_roadmap())
         add("roadmap", not errors, "valid" if not errors else "; ".join(errors[:3]))
     except Exception as exc:

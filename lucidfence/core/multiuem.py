@@ -497,7 +497,7 @@ class MultiUEMOrchestrator:
         return (-observed, float(accuracy), location.provider)
 
     def fetch(self, now: datetime | None = None):
-        from core.location_source import LocationReport
+        from lucidfence.core.location_source import LocationReport
 
         sync = self.sync(now)
         reports: list[LocationReport] = []

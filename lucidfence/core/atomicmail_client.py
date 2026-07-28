@@ -43,8 +43,8 @@ _HERE = Path(__file__).resolve().parent
 _SHARED_DIR = str(_HERE / "atomicmail" / "vendor_shared")
 os.environ.setdefault("ATOMIC_MAIL_SHARED_DIR", _SHARED_DIR)
 
-from core.atomicmail.session import create_agent_session  # noqa: E402
-from core.atomicmail.credentials import (  # noqa: E402
+from lucidfence.core.atomicmail.session import create_agent_session  # noqa: E402
+from lucidfence.core.atomicmail.credentials import (  # noqa: E402
     Credentials,
     write_credentials,
     read_credentials,

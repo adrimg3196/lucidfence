@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 class SimulationAdapter(MDMAdapter):
@@ -39,7 +39,7 @@ class SimulationAdapter(MDMAdapter):
         local demo can show Apple/iOS geofence compliance without contacting any
         real MDM tenant or forcing community adapters to implement new methods.
         """
-        from core.adapters.ios_geofence import is_ios_device
+        from lucidfence.core.adapters.ios_geofence import is_ios_device
 
         if not is_ios_device(device):
             return None

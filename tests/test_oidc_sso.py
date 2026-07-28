@@ -27,7 +27,7 @@ except ImportError:
         pytest_module.skip("optional OIDC test dependencies unavailable", allow_module_level=True)
     raise SystemExit(0)
 
-from core.oidc import (
+from lucidfence.core.oidc import (
     IDTokenValidator,
     OIDCClient,
     OIDCError,
@@ -534,7 +534,7 @@ def test_http_disabled_sso_user_gets_generic_redirect_and_old_session_survives(t
 
 
 def test_oidc_dependency_is_optional_until_a_provider_is_enabled():
-    import core.oidc as oidc
+    import lucidfence.core.oidc as oidc
     import saas_server as server
     old_jwt = oidc.jwt
     old_check = server.oidc_dependencies_available

@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 import requests
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 # Mapeo acción UEM -> operación Graph + endpoint pattern.

@@ -34,7 +34,7 @@ class MiMdmAdapter(MDMAdapter):
 
 ## Cómo registrarlo
 
-En `core/adapters/__init__.py`:
+En `lucidfence/core/adapters/__init__.py`:
 
 ```python
 from core.adapters.mimdm import MiMdmAdapter
@@ -190,7 +190,7 @@ def test_my_adapter_contract():
     assert_response_shape(r, a.name)
 ```
 
-## SDK template — `core/adapters/_template_adapter.py`
+## SDK template — `lucidfence/core/adapters/_template_adapter.py`
 
 Drop-in starter for a new community adapter. The template runs in mock
 mode out of the box (returns `ok: True`, `mock: True`) so the new adapter

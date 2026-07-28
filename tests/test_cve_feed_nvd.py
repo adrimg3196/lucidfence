@@ -8,8 +8,8 @@ from __future__ import annotations
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import cve
-from core.cve_feed_nvd import _nvd_to_feed_entry, _cvss_severity, load_nvd_feed_into_cve
+from lucidfence.core import cve
+from lucidfence.core.cve_feed_nvd import _nvd_to_feed_entry, _cvss_severity, load_nvd_feed_into_cve
 
 
 def check(cond, msg):

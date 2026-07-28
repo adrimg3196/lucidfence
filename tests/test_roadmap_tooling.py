@@ -32,7 +32,7 @@ def check(label, cond):
 
 def test_schema():
     print("[roadmap tooling / schema]")
-    from core import roadmap_tooling as rm
+    from lucidfence.core import roadmap_tooling as rm
     d = rm.load_roadmap()
     check("roadmap.json cargado", bool(d))
     errs = rm.validate_roadmap(d)
@@ -51,26 +51,26 @@ def test_schema():
 def test_cli():
     print("[roadmap tooling / CLI]")
     def run(args):
-        return subprocess.run([sys.executable, "core/roadmap_tooling.py"] + args,
+        return subprocess.run([sys.executable, "-m", "lucidfence.core.roadmap_tooling"] + args,
                               capture_output=True, text=True, cwd=ROOT, timeout=60)
     r = run(["--validate"])
-    check("core/roadmap_tooling.py --validate exit 0", r.returncode == 0 and "valido" in r.stdout)
+    check("lucidfence.core.roadmap_tooling --validate exit 0", r.returncode == 0 and "valido" in r.stdout)
     r = run([])
-    check("core/roadmap_tooling.py muestra plan", r.returncode == 0 and "ROADMAP" in r.stdout)
+    check("lucidfence.core.roadmap_tooling muestra plan", r.returncode == 0 and "ROADMAP" in r.stdout)
     r = run(["--export"])
     try:
         json.loads(r.stdout)
         ok = True
     except Exception:
         ok = False
-    check("core/roadmap_tooling.py --export es JSON valido", ok and r.returncode == 0)
+    check("lucidfence.core.roadmap_tooling --export es JSON valido", ok and r.returncode == 0)
     # --mark actualiza y persiste
-    from core import roadmap_tooling as rm
+    from lucidfence.core import roadmap_tooling as rm
     d0 = rm.load_roadmap()
     original = next(f["status"] for f in rm.all_features(d0) if f["id"] == "F4.5")
     try:
         r = run(["--mark", "F4.5", "status", "blocked"])
-        check("core/roadmap_tooling.py --mark persiste", r.returncode == 0 and "F4.5" in r.stdout)
+        check("lucidfence.core.roadmap_tooling --mark persiste", r.returncode == 0 and "F4.5" in r.stdout)
     finally:
         # Restore the exact state observed before the test. Never hard-code
         # "planned": doing so silently regressed a completed roadmap to 94%.

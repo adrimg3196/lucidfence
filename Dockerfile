@@ -4,7 +4,7 @@
 # contenedor:
 #   1) MoA local  (IA, OpenAI-compatible, 127.0.0.1:8085)
 #   2) LucidFence SaaS + engine (127.0.0.1:8765)
-# El engine ya consume MoA via core/ai.py (http.client a 127.0.0.1:8085).
+# El engine ya consume MoA via lucidfence/core/ai.py (http.client a 127.0.0.1:8085).
 # El email sale por Atomic Mail Agentic (sin SMTP propio) y el dominio
 # del tenant es DigitalPlat FreeDomain (whitelabel). $0 en todos lados.
 #

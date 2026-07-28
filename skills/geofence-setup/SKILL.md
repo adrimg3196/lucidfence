@@ -62,4 +62,4 @@ la mezcla MoA.
 
 - El script instala `requests` automáticamente si falta.
 - No ejecuta acciones reales contra dispositivos en modo simulación.
-- No toques `core/` ni `saas_server.py` para arrancar; solo usa este script.
+- No toques `lucidfence/core/` ni `saas_server.py` para arrancar; solo usa este script.

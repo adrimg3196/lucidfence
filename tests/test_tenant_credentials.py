@@ -3,9 +3,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from core import secrets as core_secrets
-from core.actions import LiveAdapter
-from core.location_source import LiveLocationSource
+from lucidfence.core import secrets as core_secrets
+from lucidfence.core.actions import LiveAdapter
+from lucidfence.core.location_source import LiveLocationSource
 
 
 def test_credentials_are_isolated_by_root():

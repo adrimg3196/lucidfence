@@ -13,7 +13,7 @@ import math
 from statistics import median
 from typing import Any
 
-from core.predictive import forecast_movements
+from lucidfence.core.predictive import forecast_movements
 
 
 MAX_HISTORY_POINTS = 4096

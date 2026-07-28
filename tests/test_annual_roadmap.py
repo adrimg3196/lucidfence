@@ -4,9 +4,9 @@ import json
 import tempfile
 from pathlib import Path
 
-from core.adapter_marketplace import verify_index
-from core.cluster import ClusterLease
-from core.compliance_controls import map_controls
+from lucidfence.core.adapter_marketplace import verify_index
+from lucidfence.core.cluster import ClusterLease
+from lucidfence.core.compliance_controls import map_controls
 from saas.auth import AuthStore, ROLE_CAPS
 from scripts.benchmark_10k import benchmark
 from scripts.generate_sbom import build_sbom

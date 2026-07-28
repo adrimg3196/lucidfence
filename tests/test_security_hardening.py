@@ -97,8 +97,8 @@ def test_soar_webhook_hmac_requires_valid_signature_and_fresh_timestamp():
 
 
 def test_webhook_non_2xx_is_not_treated_as_delegated():
-    from core.actions import LiveAdapter
-    import core.adapters.applivery as P
+    from lucidfence.core.actions import LiveAdapter
+    import lucidfence.core.adapters.applivery as P
 
     class _Resp:
         status_code = 500

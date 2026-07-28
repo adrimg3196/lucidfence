@@ -7,7 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from core.api_keys import APIKeyStore, append_audit, verify_audit
+from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
 
 HOST, PORT = "127.0.0.1", 8765
 

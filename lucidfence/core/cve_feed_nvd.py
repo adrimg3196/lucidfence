@@ -11,7 +11,7 @@ JSON que core/cve.load_feed() consume al arrancar.
 - NUNCA hace raise: si la red falla, devuelve 0 y deja el feed anterior.
 
 Uso:
-    from core.cve_feed_nvd import sync_nvd_feed
+    from lucidfence.core.cve_feed_nvd import sync_nvd_feed
     n = sync_nvd_feed()   # consulta NVD, escribe data/cve_feed_nvd.json
 """
 from __future__ import annotations
@@ -22,11 +22,13 @@ import sys
 import time
 from typing import Any, Optional
 
-# Permite ejecutar el script directamente (python3 core/cve_feed_nvd.py)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT = os.path.join(os.path.dirname(HERE), "data", "cve_feed_nvd.json")
+_REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
+
+# Permite ejecutar el módulo directamente (python3 -m lucidfence.core.cve_feed_nvd)
+sys.path.insert(0, _REPO_ROOT)
+
+DEFAULT_OUT = os.path.join(_REPO_ROOT, "data", "cve_feed_nvd.json")
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 # Apps a consultar (las del CVE_DB + las mas comunes de flota frontline).
 DEFAULT_APPS = [
@@ -153,7 +155,7 @@ def load_nvd_feed_into_cve(out_path: str = DEFAULT_OUT) -> int:
         data = json.load(open(out_path, encoding="utf-8"))
     except Exception:
         return 0
-    from core import cve
+    from lucidfence.core import cve
     added = 0
     for app, entries in (data.get("apps") or {}).items():
         for e in entries:

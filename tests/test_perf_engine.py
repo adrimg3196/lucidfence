@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.engine import Engine
+from lucidfence.core.engine import Engine
 
 
 def _build_tenant(tmp: Path) -> Path:

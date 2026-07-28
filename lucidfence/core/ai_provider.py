@@ -46,7 +46,7 @@ def _load_config(root: Path) -> Dict[str, Any]:
 
 
 def _read_env(root: Path) -> Dict[str, str]:
-    from core.config_loader import _load_env  # ponytail: parser único de .env, compartido con config_loader
+    from lucidfence.core.config_loader import _load_env  # ponytail: parser único de .env, compartido con config_loader
     return _load_env(Path(root) / ENV_FILE)
 
 

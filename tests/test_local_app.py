@@ -6,7 +6,7 @@ import sys
 import tempfile
 import urllib.request
 
-from core.app_paths import data_dir
+from lucidfence.core.app_paths import data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 

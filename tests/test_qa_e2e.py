@@ -102,8 +102,8 @@ def test_e2e():
     print("== Part B: engine ==")
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from helpers import make_temp_engine
-    from core.location_source import LocationReport
-    from core.routes import Point, Route, load_routes, save_routes
+    from lucidfence.core.location_source import LocationReport
+    from lucidfence.core.routes import Point, Route, load_routes, save_routes
 
     eng = make_temp_engine(cooldown_seconds=0)
 

@@ -15,7 +15,7 @@ Verified contract (2026-07-09, live contra api.applivery.io con token real):
 """
 from __future__ import annotations
 
-from core.adapters import (  # noqa: F401
+from lucidfence.core.adapters import (  # noqa: F401
     MDMAdapter,
     SimulationAdapter,
     AppliveryAdapter,
@@ -28,8 +28,8 @@ from core.adapters import (  # noqa: F401
 
 # Live config builders (community adapters). Re-exported so callers can
 # construct a live adapter directly from a config dict.
-from core.adapters.intune import build_intune_adapter_from_config  # noqa: F401
-from core.adapters.jamf import build_jamf_adapter_from_config  # noqa: F401
+from lucidfence.core.adapters.intune import build_intune_adapter_from_config  # noqa: F401
+from lucidfence.core.adapters.jamf import build_jamf_adapter_from_config  # noqa: F401
 
 # Alias para no romper referencias históricas (LiveAdapter === AppliveryAdapter).
 LiveAdapter = AppliveryAdapter

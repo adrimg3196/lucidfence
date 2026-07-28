@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import math
 from typing import Any
 
-from core.geo import Point, haversine_m, point_in_polygon
+from lucidfence.core.geo import Point, haversine_m, point_in_polygon
 
 MAX_TRAIL_POINTS = 20_000
 MAX_SPEED_KMH = 220.0

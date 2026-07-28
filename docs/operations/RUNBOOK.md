@@ -54,7 +54,7 @@ curl -sf http://127.0.0.1:8765/health
 
 ### R1.1 Pick the adapter
 
-The supported MDM adapters (from `core/adapters/`) are:
+The supported MDM adapters (from `lucidfence/core/adapters/`) are:
 
 | Adapter | When to use | Live creds env-var |
 |---|---|---|
@@ -96,7 +96,7 @@ INTUNE_CLIENT_SECRET=<client-secret-value>
 ```
 
 `config_loader.load()` merges `.env` into `mdm.<adapter>.*` automatically
-(see `core/config_loader.py`).
+(see `lucidfence/core/config_loader.py`).
 
 ### R1.3 Restart the engine
 
@@ -204,14 +204,14 @@ curl -sf -X POST http://127.0.0.1:8765/api/actions \
 
 ## R6 — Add a new community MDM adapter (1 day)
 
-This is documented in detail in `core/adapters/ADAPTER.md`. Short version:
+This is documented in detail in `lucidfence/core/adapters/ADAPTER.md`. Short version:
 
 ```bash
 # 1. Copy the SDK template
-cp core/adapters/_template_adapter.py core/adapters/<your_mdm>.py
+cp lucidfence/core/adapters/_template_adapter.py lucidfence/core/adapters/<your_mdm>.py
 # 2. Rename the class + set `name`
 # 3. Wire `_build_request` + the live-path branch in `execute()`
-# 4. Register in core/adapters/__init__.py:
+# 4. Register in lucidfence/core/adapters/__init__.py:
 #    ADAPTER_REGISTRY["<your_mdm>"] = <YourMdm>Adapter
 # 5. Add tests:
 cp tests/test_template_contract.py tests/test_<your_mdm>.py
@@ -227,12 +227,12 @@ python3 tests/test_sdk_contract.py
 | If you want to… | Read this file first |
 |---|---|
 | Install the app | `docs/product/README_CLIENTE.md` (es) or `docs/README.en.md` (en) |
-| Understand the engine | `core/engine.py` (top-level scheduler) |
-| Add a fence | `core/fences.py` + `fences.json` |
-| Add an MDM | `core/adapters/ADAPTER.md` + `core/adapters/_template_adapter.py` |
-| Read incidents | `core/incidents.py` + `tests/test_incidents.py` |
-| Wire AI | `core/ai_provider.py` + `.env.example` (`OPENAI_API_KEY` / etc.) |
-| Triage CVE feed | `core/cve_feed_nvd.py` + `data/cve_cache.json` |
+| Understand the engine | `lucidfence/core/engine.py` (top-level scheduler) |
+| Add a fence | `lucidfence/core/fences.py` + `fences.json` |
+| Add an MDM | `lucidfence/core/adapters/ADAPTER.md` + `lucidfence/core/adapters/_template_adapter.py` |
+| Read incidents | `lucidfence/core/incidents.py` + `tests/test_incidents.py` |
+| Wire AI | `lucidfence/core/ai_provider.py` + `.env.example` (`OPENAI_API_KEY` / etc.) |
+| Triage CVE feed | `lucidfence/core/cve_feed_nvd.py` + `data/cve_cache.json` |
 | Run the test suite | `tests/run_tests.py` (zero-deps runner) |
 
 ---

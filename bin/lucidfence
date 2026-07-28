@@ -19,7 +19,7 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.app_paths import ensure_data_dir  # noqa: E402
+from lucidfence.core.app_paths import ensure_data_dir  # noqa: E402
 
 VERSION = "1.2.0"
 DEFAULT_HOST = "127.0.0.1"
@@ -279,8 +279,8 @@ def cmd_shell(_args) -> int:
 
 
 def cmd_doctor(args) -> int:
-    from core.app_paths import ensure_data_dir
-    from core.doctor import run_doctor
+    from lucidfence.core.app_paths import ensure_data_dir
+    from lucidfence.core.doctor import run_doctor
     report = run_doctor(ROOT, ensure_data_dir(), _port(args.port))
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

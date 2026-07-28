@@ -24,10 +24,11 @@ PYINSTALLER_VERSION = "6.16.0"
 MINIMUM_MACOS = "14.0"
 SAFE_SEEDS = ("fleet_seed.json", "fences.json", "routes.json", "policies.json")
 ATOMICMAIL_MODULES = (
-    "core.atomicmail.auth_http", "core.atomicmail.config", "core.atomicmail.constants",
-    "core.atomicmail.credentials", "core.atomicmail.help", "core.atomicmail.jmap_request",
-    "core.atomicmail.jwt_utils", "core.atomicmail.pow", "core.atomicmail.session",
-    "core.atomicmail.shared_assets",
+    "lucidfence.core.atomicmail.auth_http", "lucidfence.core.atomicmail.config",
+    "lucidfence.core.atomicmail.constants", "lucidfence.core.atomicmail.credentials",
+    "lucidfence.core.atomicmail.help", "lucidfence.core.atomicmail.jmap_request",
+    "lucidfence.core.atomicmail.jwt_utils", "lucidfence.core.atomicmail.pow",
+    "lucidfence.core.atomicmail.session", "lucidfence.core.atomicmail.shared_assets",
 )
 
 
@@ -75,10 +76,10 @@ def build_backend(python: Path) -> Path:
         str(python), "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir",
         "--name", "LucidFenceBackend", "--distpath", str(backend_dist),
         "--workpath", str(work), "--specpath", str(spec), "--paths", str(ROOT),
-        "--collect-submodules", "core", "--collect-submodules", "saas",
+        "--collect-submodules", "lucidfence",
         "--add-data", f"{ROOT / 'static'}:static",
         "--add-data", f"{MACOS / 'config.desktop.json'}:.",
-        "--add-data", f"{ROOT / 'core' / 'atomicmail' / 'vendor_shared'}:core/atomicmail/vendor_shared",
+        "--add-data", f"{ROOT / 'lucidfence' / 'core' / 'atomicmail' / 'vendor_shared'}:lucidfence/core/atomicmail/vendor_shared",
     ]
     for module in ATOMICMAIL_MODULES:
         command += ["--hidden-import", module]
@@ -92,7 +93,7 @@ def build_backend(python: Path) -> Path:
         "PATH": os.environ.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
         "HOME": str(Path.home()),
         "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
-        "ATOMIC_MAIL_SHARED_DIR": str(ROOT / "core" / "atomicmail" / "vendor_shared"),
+        "ATOMIC_MAIL_SHARED_DIR": str(ROOT / "lucidfence" / "core" / "atomicmail" / "vendor_shared"),
     }
     for key in ("LANG", "LC_ALL"):
         if key in os.environ:

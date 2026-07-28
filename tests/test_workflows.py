@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import core.workflows as WF  # noqa: E402
+import lucidfence.core.workflows as WF  # noqa: E402
 
 
 def test_templates_well_formed():

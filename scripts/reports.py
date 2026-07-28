@@ -23,8 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from core.fences import load_fences  # noqa: E402
-from core.state_store import StateStore, now_iso  # noqa: E402
+from lucidfence.core.fences import load_fences  # noqa: E402
+from lucidfence.core.state_store import StateStore, now_iso  # noqa: E402
 
 
 def build_report(store: StateStore, fences: list, fence_id: str | None,

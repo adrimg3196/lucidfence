@@ -6,16 +6,16 @@ not the wiki.
 ## Stack & commands
 - Python 3.11, stdlib-first. No web frameworks (HTTP propio en `saas_server.py`).
 - Test: `python3 tests/run_tests.py` (honest runner; 105 pass = green).
-- Cloud vitrina: `python3 core/cloud_publisher.py --cycles 2` → `data/cloud_state.json`.
+- Cloud vitrina: `python3 lucidfence/core/cloud_publisher.py --cycles 2` → `data/cloud_state.json`.
 - Local SaaS: `python3 saas_server.py` (`:8765`).
 - Client install: `./install.sh` or `docker compose up -d`.
 
 ## Directory meaning
-- `core/` — engine, policies (risk), state_store, adapters (Applivery/Intune/Jamf),
+- `lucidfence/core/` — engine, policies (risk), state_store, adapters (Applivery/Intune/Jamf),
   cve_feed_nvd, location_source (simulation), config_loader, cloud_publisher,
   roadmap_tooling.
 - `scripts/` — utilidades de build, arranque, despliegue, QA y ops. Nada de
-  librería vive aquí; si algo se importa, va a `core/`.
+  librería vive aquí; si algo se importa, va a `lucidfence/core/`.
 - `docs/` — toda la documentación; índice en `docs/README.md`. La raíz solo
   conserva README, LICENSE, CONTRIBUTING, SECURITY, CHANGELOG y este AGENTS.md
   (su ruta es la convención que leen los agentes: no moverla).
@@ -30,7 +30,7 @@ not the wiki.
 - `tests/run_tests.py` MUST stay honest. A `test_*.py` that does `raise SystemExit`
   at import used to abort discovery of all later files, hiding 11 failures. The
   runner catches SystemExit per-module — never reintroduce the hiding bug.
-- `core/cloud_publisher.py` processes only `data/cloud_tenants/<id>/data/` that have
+- `lucidfence/core/cloud_publisher.py` processes only `data/cloud_tenants/<id>/data/` that have
   BOTH `fleet_seed.json` AND `fences.json`. Don't mix with `data/tenants/` (basura de tests).
 - GitHub Pages serves under `/lucidfence/` subpath → use relative links in static/,
   never absolute `/app`, `/cloud.html`, `/static/...` (causaba 404).

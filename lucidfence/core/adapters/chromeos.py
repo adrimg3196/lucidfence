@@ -16,7 +16,7 @@ import time
 import uuid
 from typing import Any, Optional
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 class ChromeOSAdapter(MDMAdapter):

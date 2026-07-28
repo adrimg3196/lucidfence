@@ -20,7 +20,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[1]
+_ROOT = Path(__file__).resolve().parents[2]
 _ROADMAP_JSON = _ROOT / "roadmap.json"
 
 _VALID_PHASES = {"Q3-2026", "Q4-2026", "Q1-2027", "Q2-2027"}

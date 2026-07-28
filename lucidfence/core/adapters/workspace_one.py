@@ -14,7 +14,7 @@ from urllib.parse import quote
 
 import requests
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 COMMANDS = {

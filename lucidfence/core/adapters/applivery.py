@@ -23,7 +23,7 @@ from typing import Any, Optional
 
 import requests
 
-from core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.base import MDMAdapter
 
 
 def _safe_text(r: requests.Response) -> str:

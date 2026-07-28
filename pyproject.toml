@@ -26,5 +26,5 @@ Homepage = "https://github.com/adrimg3196/lucidfence"
 Documentation = "https://adrimg3196.github.io/lucidfence/"
 
 [tool.setuptools.packages.find]
-include = ["lucidfence*", "core*"]
+include = ["lucidfence*"]
 exclude = ["tests*", "data*"]

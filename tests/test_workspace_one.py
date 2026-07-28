@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.adapters import ADAPTER_REGISTRY
-from core.adapters.workspace_one import WorkspaceONEAdapter, build_workspace_one_adapter_from_config
+from lucidfence.core.adapters import ADAPTER_REGISTRY
+from lucidfence.core.adapters.workspace_one import WorkspaceONEAdapter, build_workspace_one_adapter_from_config
 
 
 def test_workspace_one_is_registered_and_mock_ready():

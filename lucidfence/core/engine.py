@@ -21,18 +21,18 @@ from typing import Any, Optional
 
 _time = time  # alias so tests can monkeypatch time.time deterministically
 
-from core.actions import build_adapter
-from core.actions import VALID_ACTIONS
-from core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
-from core.geo import Point
-from core.location_source import build_location_source
-from core.state_store import StateStore, DeviceState, now_iso
-from core.policies import RiskEngine, load_policies, Policy, save_policies
-from core.routes import load_routes, route_for_device, save_routes
-from core.incidents import IncidentStore
-from core import product as _product_mod
-from core.cve import enrich_apps
-from core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
+from lucidfence.core.actions import build_adapter
+from lucidfence.core.actions import VALID_ACTIONS
+from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
+from lucidfence.core.geo import Point
+from lucidfence.core.location_source import build_location_source
+from lucidfence.core.state_store import StateStore, DeviceState, now_iso
+from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
+from lucidfence.core.routes import load_routes, route_for_device, save_routes
+from lucidfence.core.incidents import IncidentStore
+from lucidfence.core import product as _product_mod
+from lucidfence.core.cve import enrich_apps
+from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -67,7 +67,7 @@ class Engine:
         # if configured. Both are tenant-local and never raise.
         webhook_url = config.get("incident_webhook_url", "") or ""
         if webhook_url:
-            from core.notifier import IncidentNotifier
+            from lucidfence.core.notifier import IncidentNotifier
             self.incidents.notifier = IncidentNotifier(webhook_url=webhook_url)
         # Atomic Mail Agentic: real email for the SaaS (alerts + incidents +
         # digest). Opt-in per tenant: requires atomicmail config in integration.
@@ -105,7 +105,7 @@ class Engine:
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
         # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
         try:
-            from core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
+            from lucidfence.core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
             cve_feed_path = config.get("cve_feed_path")
             if not cve_feed_path:
                 cve_feed_path = os.path.join(
@@ -143,7 +143,7 @@ class Engine:
         self._cycle_actions: list[dict] = []
         self._cycle_fired: dict[str, set] = {}
         # --- Configurable threshold alerts (MDM/UEM alerting) ---
-        from core.alerts import AlertEngine
+        from lucidfence.core.alerts import AlertEngine
         self.alerts = AlertEngine(self.data_dir, mailer=self.mailbox)
 
     # ---- Atomic Mail Agentic wiring ------------------------------------
@@ -156,7 +156,7 @@ class Engine:
         Never raises — a bad/missing config simply disables the channel.
         """
         try:
-            from core.atomicmail_client import build_tenant_mailbox
+            from lucidfence.core.atomicmail_client import build_tenant_mailbox
             am = config.get("atomicmail") or {}
             if not isinstance(am, dict):
                 return
@@ -180,7 +180,7 @@ class Engine:
             # fan out to both channels so real-time geofence exits still reach
             # email instead of being shadowed by the webhook notifier.
             if email_to:
-                from core.notifier import AtomicMailNotifier, IncidentFanoutNotifier
+                from lucidfence.core.notifier import AtomicMailNotifier, IncidentFanoutNotifier
                 email_notifier = AtomicMailNotifier(self.mailbox, to=email_to)
                 if self.incidents.notifier is None:
                     self.incidents.notifier = email_notifier
@@ -679,7 +679,7 @@ class Engine:
             elif data.get("address"):
                 # Free geocoding (Nominatim/OSM, no API key) -> coords.
                 try:
-                    from core import geocode
+                    from lucidfence.core import geocode
                     hit = geocode.geocode(data["address"])
                     if hit:
                         raw["center"] = {"lat": hit["lat"], "lng": hit["lon"]}
@@ -711,7 +711,7 @@ class Engine:
     # ---- routes ---------------------------------------------------------
     def add_route(self, data: dict):
         """Create a route from API payload and persist it."""
-        from core.routes import Route, save_routes
+        from lucidfence.core.routes import Route, save_routes
         if not data.get("name"):
             raise ValueError("name es obligatorio")
         waypoint_data = list(data.get("waypoints") or [])
@@ -740,21 +740,21 @@ class Engine:
         save_routes(self.routes_path, self.routes)
 
     def delete_route(self, route_id: str):
-        from core.routes import save_routes
+        from lucidfence.core.routes import save_routes
         self.routes = [r for r in self.routes if r.id != route_id]
         save_routes(self.routes_path, self.routes)
 
     # ---- policies / workflows (persisted to the tenant's policies.json) ----
     def add_policy(self, policy_dict: dict):
         """Persist a new policy (from a workflow template or custom builder)."""
-        from core.policies import save_policies
+        from lucidfence.core.policies import save_policies
         # drop any existing policy with the same id (idempotent apply)
         self.policies = [p for p in self.policies if p.id != policy_dict.get("id")]
         self.policies.append(Policy(**_policy_kwargs(policy_dict)))
         save_policies(self.policies_path, self.policies)
 
     def delete_policy(self, policy_id: str):
-        from core.policies import save_policies
+        from lucidfence.core.policies import save_policies
         self.policies = [p for p in self.policies if p.id != policy_id]
         save_policies(self.policies_path, self.policies)
 

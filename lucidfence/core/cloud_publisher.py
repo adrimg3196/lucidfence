@@ -13,7 +13,7 @@ ciclo) las dispara el agente vía gh/API o workflow_dispatch, y se reflejan
 en el próximo ciclo.
 
 Uso:
-    python3 core/cloud_publisher.py [--cycles N] [--tenant TENANT_ID]
+    python3 -m lucidfence.core.cloud_publisher [--cycles N] [--tenant TENANT_ID]
 """
 from __future__ import annotations
 
@@ -25,13 +25,13 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from saas.tenant import TenantStore  # noqa: E402
-from core.engine import Engine  # noqa: E402
-from core.location_source import SimulationLocationSource, LocationReport  # noqa: E402
-from core.adapters import ios_geofence_compliance  # noqa: E402
+from lucidfence.core.engine import Engine  # noqa: E402
+from lucidfence.core.location_source import SimulationLocationSource, LocationReport  # noqa: E402
+from lucidfence.core.adapters import ios_geofence_compliance  # noqa: E402
 
 
 # Flota simulada representativa (dispositivos frontline multi-plataforma).

@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.cve import enrich_apps, app_cve_risk_score, CVE_DB  # noqa: E402
-from core.soar import evaluate_soar, SOARPlaybook, DEFAULT_PLAYBOOKS  # noqa: E402
+from lucidfence.core.cve import enrich_apps, app_cve_risk_score, CVE_DB  # noqa: E402
+from lucidfence.core.soar import evaluate_soar, SOARPlaybook, DEFAULT_PLAYBOOKS  # noqa: E402
 
 
 def test_cve_enrich_flags_vulnerable_app():
@@ -73,7 +73,7 @@ def test_soar_does_not_fire_without_match():
 def test_soar_executes_action_in_run_once():
     """A matched SOAR playbook must produce a real UEM action during the cycle."""
     import tempfile, types
-    from core.engine import Engine
+    from lucidfence.core.engine import Engine
     from helpers import make_temp_engine
     eng = make_temp_engine()
     # capture executed actions
@@ -85,7 +85,7 @@ def test_soar_executes_action_in_run_once():
         )[-1]
     )
     eng.routes = []
-    from core.location_source import LocationReport
+    from lucidfence.core.location_source import LocationReport
     rep = LocationReport(
         device_id="d1", name="Riesgo1", platform="android",
         lat=40.0, lng=-3.0, status="active", compliant=False,

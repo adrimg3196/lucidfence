@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from core.provider_plugins import discover_provider_plugins, merge_providers, validate_provider
+from lucidfence.core.provider_plugins import discover_provider_plugins, merge_providers, validate_provider
 
 
 def test_provider_plugin_is_one_file_and_auto_discovered():

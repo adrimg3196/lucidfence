@@ -119,7 +119,7 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Dashboard local sin CDN, telemetría ni frontend cloud.
 - Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
   `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y
-  `jamf` (live vía Jamf Pro API, Bounty #2). Ver `core/adapters/ADAPTER.md`.
+  `jamf` (live vía Jamf Pro API, Bounty #2). Ver `lucidfence/core/adapters/ADAPTER.md`.
 - IA opcional BYO API/modelo (OpenAI, Ollama, LM Studio, Nous Portal o compatible).
 - Gateway local OpenAI-compatible y MCP read-only incluidos.
 
@@ -131,8 +131,8 @@ lucidfence/
 ├── server.py               # servidor mínimo del engine
 ├── install.sh              # installer de un comando
 ├── bin/lucidfence          # lifecycle portable macOS/Linux
-├── core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
-├── lucidfence/             # SDK Python público (envuelve core/)
+├── lucidfence/core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
+├── lucidfence/             # SDK Python público (envuelve lucidfence/core/)
 ├── saas/                   # auth local, RBAC y aislamiento
 ├── mcp/lucidfence_mcp.py   # MCP local read-only
 ├── static/                 # interfaz local, assets vendorizados
@@ -155,7 +155,7 @@ la raíz porque su ruta es la convención que leen los agentes.
 
 Desde la interfaz, abre **Ajustes** y configura el adapter y sus credenciales. Los secretos se almacenan en el directorio local de la organización, nunca en el frontend ni en Git.
 
-Para contribuir un adapter, implementa `MDMAdapter` siguiendo [`core/adapters/ADAPTER.md`](core/adapters/ADAPTER.md) y añade pruebas offline.
+Para contribuir un adapter, implementa `MDMAdapter` siguiendo [`lucidfence/core/adapters/ADAPTER.md`](lucidfence/core/adapters/ADAPTER.md) y añade pruebas offline.
 
 ## AI opcional y MCP
 
@@ -220,7 +220,7 @@ Todo el producto distribuido en este repositorio se publica bajo **Apache Licens
 ## Adapter Hall of Fame
 
 Programa de adapters de la comunidad (issue #3). El producto es agnóstico al
-MDM vía la interfaz `MDMAdapter` (`core/adapters/base.py`). Quien entregue el
+MDM vía la interfaz `MDMAdapter` (`lucidfence/core/adapters/base.py`). Quien entregue el
 primer PR **verificado** de un MDM entra al Hall of Fame y se vuelve
 *Adapter Maintainer*.
 
@@ -237,4 +237,4 @@ primer PR **verificado** de un MDM entra al Hall of Fame y se vuelve
 (Solana, BTC, USDT, ETH, XMR…), promoción de repos externos o pago de bounty
 en cripto serán cerrados sin merge. El código debe respetar `base.py` (no
 cambiar la interfaz), usar solo placeholders en `.env.example` y pasar la suite
-sin credenciales reales. Ver `core/adapters/ADAPTER.md`.
+sin credenciales reales. Ver `lucidfence/core/adapters/ADAPTER.md`.

@@ -17,8 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.alerts import AlertEngine  # noqa: E402
-from core.notifier import AtomicMailNotifier, IncidentFanoutNotifier  # noqa: E402
+from lucidfence.core.alerts import AlertEngine  # noqa: E402
+from lucidfence.core.notifier import AtomicMailNotifier, IncidentFanoutNotifier  # noqa: E402
 
 
 class FakeMailbox:
@@ -100,7 +100,7 @@ def test_incident_fanout_notifier_delivers_webhook_and_atomicmail():
         webhook_payloads.append((url, payload))
         return {"ok": True, "status": 200}
 
-    from core.notifier import IncidentNotifier
+    from lucidfence.core.notifier import IncidentNotifier
 
     mb = FakeMailbox()
     fanout = IncidentFanoutNotifier([
@@ -125,9 +125,9 @@ def test_incident_fanout_notifier_delivers_webhook_and_atomicmail():
 
 def test_engine_geofence_exit_emails_in_realtime_even_with_webhook_configured():
     """Regression: webhook config must not shadow Atomic Mail incident email."""
-    from core.engine import Engine
-    from core.location_source import LocationReport
-    import core.atomicmail_client as atomicmail_client
+    from lucidfence.core.engine import Engine
+    from lucidfence.core.location_source import LocationReport
+    import lucidfence.core.atomicmail_client as atomicmail_client
 
     old_builder = atomicmail_client.build_tenant_mailbox
     mailbox = FakeMailbox()

@@ -9,7 +9,7 @@ Todos los apartados son OBLIGATORIOS salvo los marcados como opcionales.
 ## Tipo de cambio
 - [ ] Bugfix (corrección de un comportamiento incorrecto)
 - [ ] Nueva funcionalidad del core (Apache-2.0)
-- [ ] Nuevo adaptador MDM (`core/adapters/<mdm>.py`)
+- [ ] Nuevo adaptador MDM (`lucidfence/core/adapters/<mdm>.py`)
 - [ ] Documentación
 - [ ] Refactor / mantenimiento (sin cambio de comportamiento)
 
@@ -21,7 +21,7 @@ Todos los apartados son OBLIGATORIOS salvo los marcados como opcionales.
 ## Para adaptadores MDM (obligatorio si aplica)
 **Nombre del MDM:** <!-- p. ej. Intune, Jamf, Fleet -->
 
-Checklist de la interfaz `MDMAdapter` (`core/adapters/base.py`) — marca todo lo
+Checklist de la interfaz `MDMAdapter` (`lucidfence/core/adapters/base.py`) — marca todo lo
 que implementaste y probaste contra mock:
 - [ ] `authenticate()` / gestión de credenciales
 - [ ] `get_devices()` (listado de dispositivos de la flota)

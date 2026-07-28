@@ -38,7 +38,7 @@ saas/
                     sesiones por cookie HttpOnly, RBAC (owner/admin/operator/viewer).
   tenant.py         Aislamiento por inquilino: data/tenants/<org_id>/.
                     LucidFence es gratis: sin planes de pago ni facturación.
-core/               Motor de geofencing reutilizado (engine, fences, geo,
+lucidfence/core/               Motor de geofencing reutilizado (engine, fences, geo,
                     state_store, actions, compliance, risk…) — sin reescribir.
 static/
   dashboard.html    Shell SPA (login + command center), tema claro/oscuro.

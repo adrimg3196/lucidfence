@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from core.loop_governance import KillSwitch, classify_risk, gated_merge, run_maker, verify_twice
+from lucidfence.core.loop_governance import KillSwitch, classify_risk, gated_merge, run_maker, verify_twice
 
 
 def test_loop_risk_double_verification_and_auto_merge_gate():
@@ -14,8 +14,8 @@ def test_loop_risk_double_verification_and_auto_merge_gate():
     result = verify_twice(lambda: calls.append(1) is None, ["docs/README.md"], approved=True)
     assert result.first and result.second and len(calls) == 2 and result.auto_merge
     assert classify_risk(["saas_server.py"]) == "high"
-    assert classify_risk(["core/product.py"]) == "medium"
-    high = verify_twice(lambda: True, ["saas/auth.py"], approved=True)
+    assert classify_risk(["lucidfence/core/product.py"]) == "medium"
+    high = verify_twice(lambda: True, ["lucidfence/saas/auth.py"], approved=True)
     assert high.auto_merge is False
     unapproved = verify_twice(lambda: True, ["docs/a.md"], approved=False)
     assert unapproved.auto_merge is False
