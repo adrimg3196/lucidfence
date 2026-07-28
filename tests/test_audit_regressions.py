@@ -113,3 +113,15 @@ def test_doctor_validates_installation_even_when_runtime_is_stopped():
     assert result.returncode == 0 and report["ok"] is True
     assert report["warnings"] == 1
     assert any(item["name"] == "roadmap" and item["ok"] for item in report["checks"])
+
+
+def test_dashboard_api_v2_integration_contract():
+    app_js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    white_js = (ROOT / "static" / "whitelabel.js").read_text(encoding="utf-8")
+    # Verify the dynamic versioning logic exists in app.js and whitelabel.js
+    assert 'url = "/api/v2" + path.slice(4)' in app_js
+    assert 'url = "/api/v2" + path.slice(4)' in white_js
+
+    # Verify we call v2 for exports
+    assert "/api/v2/export" in app_js
+    assert "/api/v2/incidents/export" in app_js

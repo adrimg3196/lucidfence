@@ -114,7 +114,7 @@ def test_compliance_pdf_export_is_wired_in_dashboard_and_cloud():
     export_mod = (ROOT / "core" / "export.py").read_text(encoding="utf-8")
     assert 'id="view-overview"' in html
     assert "function downloadCompliancePdf" in js
-    assert "/api/export?kind=compliance&format=pdf" in js
+    assert "/api/v2/export?kind=compliance&format=pdf" in js
     assert "Descargar reporte PDF" in cloud
     assert "function downloadTenantCompliancePdf" in cloud
     assert "application/pdf" in server

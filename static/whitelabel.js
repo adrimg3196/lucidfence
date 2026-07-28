@@ -6,7 +6,11 @@
 
   function api(path, opts) {
     opts = opts || {};
-    return fetch(path, Object.assign({
+    let url = path;
+    if (path.startsWith("/api/") && !path.startsWith("/api/auth/")) {
+      url = "/api/v2" + path.slice(4);
+    }
+    return fetch(url, Object.assign({
       method: opts.method || "GET",
       headers: Object.assign({ "Content-Type": "application/json" }, opts.headers || {}),
       credentials: "same-origin",
