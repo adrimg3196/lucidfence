@@ -28,3 +28,19 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 - Rama de trabajo: `zero-nightly`. La rama local `gt/migrar-a-gratis-donaciones` quedó obsoleta (sin commits propios) — borrar cuando el PR se mergee.
 - La suite se ejecuta con `python3 tests/run_tests.py` (hermética: exige el puerto 8765 libre; mata cualquier `saas_server.py` colgado antes).
+
+## API-SDK-MCP
+
+Directriz de producto de Adri (2026-07-28, vigente siempre): LucidFence se diseña
+API-first con tecnología 100% actual, contemplando TODOS los escenarios de consumo.
+Progreso de cada frente se registra aquí.
+
+- [ ] **API pública**: spec OpenAPI versionada en el repo como contrato único; el
+      dashboard consume la misma API (sin rutas privadas duplicadas).
+- [ ] **SDKs oficiales**: Python y/o JS, ligeros, generados sobre la spec,
+      publicables gratis (PyPI/npm).
+- [ ] **Servidor MCP oficial**: agentes IA gestionan geocercas/eventos/alertas vía
+      Model Context Protocol. Candidato ideal a prototipo de una noche.
+- [ ] **Webhooks/eventos** para integraciones de terceros.
+
+Restricción transversal: coste 0 (free tiers), sin dependencias obsoletas.
