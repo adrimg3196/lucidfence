@@ -1,6 +1,6 @@
 ---
 name: geofence-setup
-description: Cómo arrancar el producto LucidFence en local (./start_all.sh), qué levanta y cuándo usarlo. Usa cuando el usuario quiere iniciar el dashboard, poner en marcha el servidor, probar en modo demo/simulación, o verificar que LucidFence está corriendo.
+description: Cómo arrancar el producto LucidFence en local (./scripts/start_all.sh), qué levanta y cuándo usarlo. Usa cuando el usuario quiere iniciar el dashboard, poner en marcha el servidor, probar en modo demo/simulación, o verificar que LucidFence está corriendo.
 ---
 
 # LucidFence — Arranque local
@@ -11,7 +11,7 @@ message, locate, reboot) cuando un dispositivo entra/sale de una geovalla. Hoy
 funciona con Applivery; es extensible a Intune/Jamf/Fleet vía adaptadores
 `MDMAdapter`.
 
-## Qué hace `./start_all.sh`
+## Qué hace `./scripts/start_all.sh`
 
 Levanta dos servicios en background y verifica su salud:
 
@@ -36,12 +36,12 @@ y la URL del dashboard.
 
 ```bash
 cd /Users/adri/lucidfence
-./start_all.sh            # arranca MoA + Geofence en background
-./start_all.sh status     # muestra estado de ambos puertos
-./start_all.sh stop       # detiene ambos servidores
+./scripts/start_all.sh            # arranca MoA + Geofence en background
+./scripts/start_all.sh status     # muestra estado de ambos puertos
+./scripts/start_all.sh stop       # detiene ambos servidores
 ```
 
-Tras `./start_all.sh`, abre: **http://127.0.0.1:8765/**
+Tras `./scripts/start_all.sh`, abre: **http://127.0.0.1:8765/**
 
 ## Verificación de salud
 

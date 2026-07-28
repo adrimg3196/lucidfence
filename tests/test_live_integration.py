@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from core.engine import Engine
-from config_loader import load as load_config
+from core.config_loader import load as load_config
 from core.actions import LiveAdapter
 from types import SimpleNamespace
 

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import cloud_publisher  # noqa: E402
+from core import cloud_publisher  # noqa: E402
 from core import cve  # noqa: E402
 import core.cve_feed_nvd as cve_feed_nvd  # noqa: E402
 

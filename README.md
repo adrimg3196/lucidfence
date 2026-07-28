@@ -4,7 +4,7 @@
 
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 [![PWA](https://img.shields.io/badge/app-PWA-5e6ad5.svg)](static/web.html)
-[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/AUTONOMOUS_GEOFENCING_COMPANY.md)
+[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md)
 
 LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Su modo principal funciona directamente en el navegador: no exige instalación, cuenta de LucidFence, nube propia ni suscripción.
 
@@ -115,7 +115,7 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 - Compañía autónoma de geofencing gobernada: objetivos medibles, squads
   especializados, evidencia, simulación, policy gates y handoff humano sin
   ejecución implícita de comandos UEM. Ver
-  [`docs/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/AUTONOMOUS_GEOFENCING_COMPANY.md).
+  [`docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md).
 - Dashboard local sin CDN, telemetría ni frontend cloud.
 - Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
   `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y
@@ -127,20 +127,29 @@ Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails,
 
 ```text
 lucidfence/
+├── saas_server.py          # servidor HTTP local (entrypoint)
+├── server.py               # servidor mínimo del engine
+├── install.sh              # installer de un comando
 ├── bin/lucidfence          # lifecycle portable macOS/Linux
-├── saas_server.py          # servidor HTTP local
-├── core/                   # geofencing, riesgo, CVE, SOAR, adapters
-├── mcp/lucidfence_mcp.py   # MCP local read-only
+├── core/                   # geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
+├── lucidfence/             # SDK Python público (envuelve core/)
 ├── saas/                   # auth local, RBAC y aislamiento
+├── mcp/lucidfence_mcp.py   # MCP local read-only
 ├── static/                 # interfaz local, assets vendorizados
+├── scripts/                # utilidades de build, arranque, despliegue y QA
+├── docs/                   # documentación (ver docs/README.md)
+├── data/                   # seeds públicos read-only + estado local
 ├── analysis/               # notebooks reproducibles con outputs verificados
-├── data/                   # seeds públicos read-only del paquete
-├── macos/                   # app Swift/WebKit + builder PyInstaller/DMG
+├── macos/                  # app Swift/WebKit + builder PyInstaller/DMG
 ├── Formula/lucidfence.rb   # Homebrew
 └── tests/                  # suite stdlib
 ```
 
 La capa histórica se sigue llamando `saas/` internamente por compatibilidad, pero no implica un servicio cloud: es la capa local de usuarios, organizaciones y RBAC.
+
+La documentación vive en [`docs/`](docs/README.md): `architecture/`, `operations/`,
+`roadmap/`, `product/`, `references/` y material interno. `AGENTS.md` se queda en
+la raíz porque su ruta es la convención que leen los agentes.
 
 ## Integrar un MDM
 
@@ -154,7 +163,7 @@ La aplicación funciona sin modelo. En **Ajustes → Proveedor AI opcional** pue
 
 - Gateway: `POST http://127.0.0.1:8765/v1/chat/completions`
 - MCP: `lucidfence mcp`
-- Guía completa: [`docs/AI_AND_MCP.md`](docs/AI_AND_MCP.md)
+- Guía completa: [`docs/architecture/AI_AND_MCP.md`](docs/architecture/AI_AND_MCP.md)
 
 ## Desarrollo
 
