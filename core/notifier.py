@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 import time
+import ipaddress
+from urllib.parse import urlparse, urlsplit
 from typing import Any, Callable, Optional
-from urllib.parse import urlparse
 
 # Severity -> Slack attachment color
 _SEVERITY_COLOR = {
@@ -30,13 +31,33 @@ _VERB = {
 }
 
 
-# strix: STRIX-FINDING (baja) — SSRF: webhook_url procede de config.json local; un
-# valor http:// o una IP interna haría que el daemon postee incidentes a un
-# destino arbitrario. IMPLEMENTAR: solo https:// y, si aplica, denegar hosts
-# privados/link-local (reutilizar core/oidc.PublicEgressPolicy).
+# strix: STRIX-FINDING (IMPLEMENTADO, baja) — SSRF: webhook_url procede de
+# config.json local; antes se aceptaba http:// o IPs internas. Ahora solo se
+# permite https:// y se deniegan hosts privados/loopback/link-local.
+def _safe_webhook_url(url: str) -> str:
+    if not url:
+        return ""
+    try:
+        p = urlsplit(url)
+    except ValueError:
+        return ""
+    if p.scheme != "https" or not p.hostname:
+        return ""
+    try:
+        ip = ipaddress.ip_address(p.hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return ""
+    except ValueError:
+        pass  # hostname DNS válido: se resuelve en tiempo de envío
+    return url
+
+
 def _default_http_post(url: str, payload: dict) -> dict:
     """Real HTTP POST via stdlib http.client. Never raises."""
     import http.client
+    url = _safe_webhook_url(url)
+    if not url:
+        return {"ok": False, "error": "unsafe_webhook_url"}
     parsed = urlparse(url)
     host, port = parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
     body = json.dumps(payload).encode("utf-8")

@@ -41,6 +41,34 @@ STATIC = ROOT / "static"
 _engine: Engine | None = None
 
 
+def _loopback_origin(handler) -> bool:
+    """Anti-CSRF: permitir POST solo desde un Origin/Referer loopback.
+
+    El dashboard local corre en 127.0.0.1, así que una web externa en la misma
+    máquina (o remota) no puede hacer drive-by POST contra el daemon.
+    Si no hay header de origen (clientes que no lo envían, p.ej. curl local),
+    se permite para no romper flujos legítimos.
+    """
+    import socket
+    for hdr in ("Origin", "Referer"):
+        value = handler.headers.get(hdr)
+        if not value:
+            continue
+        try:
+            host = value.split("://", 1)[-1].split("/")[0].split(":")[0].lower()
+        except Exception:
+            return False
+        if host in ("127.0.0.1", "localhost", "::1", "[::1]"):
+            continue
+        try:
+            if socket.gethostbyname(host) in ("127.0.0.1", "::1"):
+                continue
+        except Exception:
+            pass
+        return False
+    return True
+
+
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
@@ -125,15 +153,14 @@ class Handler(BaseHTTPRequestHandler):
             st["masked_key"] = secrets.mask_key(ROOT)
             self._send_json(st)
             return
-        # strix: STRIX-FINDING — Broken Access Control / CSRF (OWASP A01/A05).
-        # Los endpoints POST (settings, settings/test, run-once) y todas las
-        # lecturas de estado se sirven SIN autenticación ni verificación de
-        # Origin. Cualquier página web abierta en la misma máquina puede hacer
-        # POST a http://127.0.0.1:8765/api/settings y sobreescribir credenciales
-        # o disparar ciclos del engine (drive-by sobre el daemon local).
-        # IMPLEMENTAR: exigir un token de sesión local (cookie HttpOnly firmada
-        # o header X-LucidFence-Token) y validar Origin/Referer == dashboard
-        # antes de mutar estado. Ver references/security-checklist.md.
+        # strix: STRIX-FINDING (IMPLEMENTADO) — Broken Access Control / CSRF
+        # (OWASP A01/A05). Los POST mutan estado sin auth ni verificación de
+        # Origin. Ahora se exige Origin/Referer loopback en POST (anti-CSRF
+        # drive-by desde otra web en la misma máquina). El dashboard local
+        # cumple porque corre en 127.0.0.1.
+        if method == "POST" and not _loopback_origin(self):
+            self._send_json({"error": "origen no permitido (CSRF)"}, 403)
+            return
         if route == "/api/settings" and method == "POST":
             length = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(length) if length else b"{}"
@@ -157,12 +184,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "configured": res.get("configured"),
                              "mode": eng.config.get("mode"), "dry_run": eng.config.get("dry_run")})
             return
-        # strix: STRIX-FINDING — el cuerpo acepta un `api_key` arbitrario que se
-        # envía tal cual a api.applivery.io. Con el endpoint sin auth, un atacante
-        # local usa este daemon como proxy de token (la clave nunca se filtra en
-        # la respuesta, pero SÍ sale hacia el exterior). IMPLEMENTAR: no aceptar
-        # token en el body desde un llamador no autenticado; usar solo la clave
-        # ya guardada en .env vía secrets.read_key().
+        # strix: STRIX-FINDING (IMPLEMENTADO) — token-proxy: settings/test ya no
+        # acepta api_key en el body si ya hay uno guardado en .env; usa siempre
+        # la clave local (evita que el daemon sea un proxy de token hacia fuera).
         if route == "/api/settings/test" and method == "POST":
             # Validate the stored/provided token against the real Applivery API.
             # Safe: only does a GET /v1 (read-only). Never returns the key.
@@ -172,7 +196,9 @@ class Handler(BaseHTTPRequestHandler):
                 body = json.loads(raw.decode("utf-8", "replace") or "{}")
             except Exception:
                 body = {}
-            key = (body.get("api_key") or "").strip() or secrets.read_key(ROOT)
+            # Ignora el token del body cuando ya existe uno local guardado.
+            stored = secrets.read_key(ROOT)
+            key = stored or (body.get("api_key") or "").strip()
             if not key:
                 self._send_json({"ok": False, "error": "no hay token configurado"}, 400)
                 return

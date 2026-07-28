@@ -40,9 +40,12 @@ import json
 import math
 import os
 import random
+import re
+import ssl
 import time
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -100,28 +103,24 @@ class LiveLocationSource:
 
     # ------------------------------------------------------------------ auth
     def _headers(self):
-        # strix: STRIX-FINDING — TLS no explícito: urlopen() usa el contexto por
-        # defecto del intérprete (en 3.10+ verifica certs, pero no es garantía
-        # portable ni consistente con core/secrets.py y core/oidc.py, que pasan
-        # ssl.create_default_context() con check_hostname=True). IMPLEMENTAR:
-        # pasar ssl.create_default_context() explícitamente en cada urlopen.
-        # Service-account Bearer token (verified live).
+        # strix: STRIX-FINDING (IMPLEMENTADO) — TLS explícito: urlopen() ahora usa
+        # ssl.create_default_context() con check_hostname (igual que secrets/oidc).
         key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or ""
         return {
             "Authorization": f"Bearer {key}",
             "Accept": "application/json",
         }
-
     # --------------------------------------------------------------- fetching
     def _paginate(self, path: str):
         """Follow Applivery pagination (data.nextCursor, then Link rel=next)."""
         results = []
         url = f"{self._api_base}{path}"
         seen = 0
+        _ctx = ssl.create_default_context()
         while url:
             req = urllib.request.Request(url, headers=self._headers())
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                with urllib.request.urlopen(req, timeout=self.timeout, context=_ctx) as resp:
                     body = resp.read().decode("utf-8")
                     link = resp.headers.get("Link")
             except urllib.error.HTTPError as e:
@@ -187,20 +186,25 @@ class LiveLocationSource:
                 break
         return results
 
-    @staticmethod
-    def _next_from_link(link_header: Optional[str]) -> Optional[str]:
-        # strix: STRIX-FINDING — SSRF (OWASP A10): la URL del header Link la dicta
-        # el servidor remoto y se re-pide CON el Bearer token adjunto. Un MDM
-        # comprometido o MITM puede devolver una URL interna (p.ej.
-        # http://169.254.169.254/…) y robar el token. IMPLEMENTAR: validar que la
-        # URL resuelta sea del mismo origen que api_base (mismo host/esquema) y
-        # denegar IPs privadas/link-local antes de seguirla.
+    def _next_from_link(self, link_header: Optional[str]) -> Optional[str]:
+        # strix: STRIX-FINDING (IMPLEMENTADO) — SSRF: la URL del header Link la
+        # dicta el servidor remoto y se re-pide CON el Bearer. Ahora se valida
+        # que sea del mismo origen que api_base (mismo host/esquema) y se deniega
+        # cualquier host que no coincida (bloquea 169.254.169.254 y otras internas).
         if not link_header:
             return None
         for part in link_header.split(","):
             seg = part.split(";")
             if len(seg) >= 2 and 'rel="next"' in seg[1]:
-                return seg[0].strip().strip("<>")
+                cand = seg[0].strip().strip("<>")
+                try:
+                    p = urlsplit(cand)
+                    base = urlsplit(self._api_base)
+                except ValueError:
+                    return None
+                if p.scheme != base.scheme or (p.hostname or "").lower() != (base.hostname or "").lower():
+                    return None
+                return cand
         return None
 
     # --------------------------------------------------------------- helpers
@@ -316,16 +320,17 @@ class LiveLocationSource:
 
     def fetch_one(self, device_id: str) -> Optional[LocationReport]:
         self.last_error = None
-        # strix: STRIX-FINDING — Inyección de ruta/SSRF: device_id proviene de la
-        # respuesta del MDM y se interpola en la URL vía .format(). Un id con '/'
-        # o '\\' desvía el path de la petición. IMPLEMENTAR: validar device_id
-        # contra ^[A-Za-z0-9._:@-]+$ (reutilizar patrón de core/oidc.py) antes de
-        # usarlo en la URL.
+        # strix: STRIX-FINDING (IMPLEMENTADO) — validar device_id antes de
+        # interpolarlo en la URL (evita inyección de ruta). Patrón de core/oidc.py.
+        if not isinstance(device_id, str) or not re.fullmatch(r"[A-Za-z0-9._:@-]+", device_id or ""):
+            self.last_error = {"stage": "fetch_one", "error": "invalid device_id"}
+            return None
         path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
         url = f"{self._api_base}{path}"
+        _ctx = ssl.create_default_context()
         req = urllib.request.Request(url, headers=self._headers())
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=_ctx) as resp:
                 body = resp.read().decode("utf-8")
         except Exception as e:
             self.last_error = {

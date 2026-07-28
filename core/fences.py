@@ -32,15 +32,21 @@ class Fence:
     @staticmethod
     def from_raw(raw: dict) -> "Fence":
         c = raw.get("center")
-        # strix: STRIX-FINDING — Validación de entrada: lat/lng no se acotan ni se
-        # protege float() contra ValueError. Un fences.json editado a mano con
-        # lat=999 o valor no numérico crea geometría rota en silencio o crashea el
-        # arranque del engine. IMPLEMENTAR: validar -90<=lat<=90 y -180<=lng<=180 y
-        # envolver float() en try/except saltando el punto malformado.
-        coords = [
-            Point(lat=float(p["lat"]), lng=float(p["lng"]))
-            for p in raw.get("coordinates", [])
-        ]
+
+        # strix: STRIX-FINDING (IMPLEMENTADO) — lat/lng sin acotar ni try/except
+        # en float(). Ahora _pt() valida rango [-90,90]/[-180,180] y omite el
+        # punto malformado en vez de propagar la excepción.
+        def _pt(d):
+            try:
+                lat = float(d["lat"]); lng = float(d["lng"])
+            except (TypeError, ValueError, KeyError):
+                return None
+            if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+                return None
+            return Point(lat=lat, lng=lng)
+
+        coords = [p for p in (_pt(p) for p in raw.get("coordinates", [])) if p is not None]
+        center = _pt(c) if isinstance(c, dict) else None
         actions = [
             ActionSpec(
                 action=a.get("action", "message"),
@@ -54,7 +60,7 @@ class Fence:
             id=raw["id"],
             name=raw["name"],
             type=raw.get("type", "circle"),
-            center=Point(lat=float(c["lat"]), lng=float(c["lng"])) if c else None,
+            center=center,
             radius_m=float(raw.get("radius_m", 0)),
             coordinates=coords,
             rules=raw.get("rules", {}) or {},
