@@ -266,3 +266,72 @@ def test_engine_accepts_ddm_actions_from_an_operator():
                          os_version="17.4.1", fence_state="outside")
     res = engine.run_command(device, "apply_ddm", {"policy": POLICY, "profile_url": URL})
     assert res.get("error") != "accion no valida"
+
+
+# --- Issue #70: el readback de ddm_status se persiste en el DeviceState ---
+
+class _ReadbackStub:
+    """Adapter mínimo: devuelve lo que le digas, sin red."""
+
+    def __init__(self, result):
+        self.result = result
+
+    def execute(self, device, action, params, dry_run=False):
+        return dict(self.result)
+
+
+def _engine_with_prior_state():
+    from helpers import make_temp_engine  # noqa: E402
+    from lucidfence.core.state_store import DeviceState  # noqa: E402
+
+    engine = make_temp_engine()
+    engine.dry_run = False
+    prior = DeviceState(device_id="dev-ddm", name="iPad HQ", platform="ios",
+                        os_version="17.3", serial_number="C02XYZ",
+                        fence_state="outside")
+    engine.store.upsert(prior)
+    return engine, prior
+
+
+def test_run_command_persists_ddm_readback_merge_not_replace():
+    engine, prior = _engine_with_prior_state()
+    engine.adapter = _ReadbackStub({
+        "adapter": "jamf", "ok": True, "action": "ddm_status",
+        "device_id": "dev-ddm",
+        "device_state": {
+            "os_version": "17.4.1",
+            "passcode_compliant": True,
+            "filevault_enabled": None,          # null del reporte: no pisa
+            "model_marketing_name": "iPad Pro",  # sin campo en DeviceState: se ignora
+            "ddm_errors": ["passcode"],          # visible en el action log, no en el estado
+        },
+    })
+    res = engine.run_command(prior, "ddm_status", {})
+    assert res["ok"] is True
+
+    saved = engine.store.get("dev-ddm")
+    assert saved.os_version == "17.4.1"       # actualizado por el readback
+    assert saved.passcode_compliant is True   # campo nuevo persistido
+    assert saved.filevault_enabled is None    # None no pisa
+    assert saved.serial_number == "C02XYZ"    # ausente en el readback: intacto
+    # ddm_errors no se descarta en silencio: queda en el action log.
+    assert engine.store.recent_actions()[-1]["device_state"]["ddm_errors"] == ["passcode"]
+
+
+def test_run_command_failed_or_dry_run_ddm_status_leaves_state_untouched():
+    engine, prior = _engine_with_prior_state()
+    engine.adapter = _ReadbackStub({
+        "adapter": "jamf", "ok": False, "error_type": "device_not_found",
+        "action": "ddm_status", "device_id": "dev-ddm",
+        "device_state": {"os_version": "99.9"},
+    })
+    engine.run_command(prior, "ddm_status", {})
+    assert engine.store.get("dev-ddm").os_version == "17.3"
+
+    engine.dry_run = True
+    engine.adapter = _ReadbackStub({
+        "adapter": "jamf", "ok": True, "action": "ddm_status",
+        "device_id": "dev-ddm", "device_state": {"os_version": "99.9"},
+    })
+    engine.run_command(prior, "ddm_status", {})
+    assert engine.store.get("dev-ddm").os_version == "17.3"
