@@ -5,7 +5,7 @@
     "title": "LucidFence — Roadmap anual de mejora (tooling)",
     "tool": "geofencing",
     "created": "2026-07-20",
-    "updated": "2026-07-27",
+    "updated": "2026-07-29",
     "horizon": "12 meses · Q3-2026 → Q2-2027",
     "principles": [
       "Local-first & soberano: los datos del tenant nunca salen de su maquina.",
