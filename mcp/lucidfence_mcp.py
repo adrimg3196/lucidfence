@@ -66,6 +66,7 @@ CONTRACT = {
     "setup": {"command": "lucidfence mcp", "url_env": "LUCIDFENCE_URL (default http://127.0.0.1:8765)"},
     "security": ["read-only fleet tools", "no UEM/API secrets accepted", "AI uses provider configured in LucidFence"],
     "tools": ["lucidfence_status", "lucidfence_list_devices", "lucidfence_list_incidents",
+              {"name": "lucidfence_list_pois", "description": "List POIs (points of interest) for contextual enrichment.", "inputSchema": {"type": "object", "properties": {}}},
               "lucidfence_get_risk", "lucidfence_ask_ai", "lucidfence_learn"],
 }
 
@@ -91,10 +92,13 @@ def _tool_result(value: Any, is_error: bool = False) -> Dict[str, Any]:
 def tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if name == "lucidfence_learn":
         return _tool_result(CONTRACT)
-    routes = {
-        "lucidfence_status": "/api/status", "lucidfence_list_devices": "/api/devices",
-        "lucidfence_list_incidents": "/api/incidents", "lucidfence_get_risk": "/api/risk",
-        "lucidfence_list_pois": "/api/pois",\n    }
+routes = {
+    "lucidfence_status": "/api/status",
+    "lucidfence_list_devices": "/api/devices",
+    "lucidfence_list_incidents": "/api/incidents",
+    "lucidfence_get_risk": "/api/risk",
+    "lucidfence_list_pois": "/api/pois",
+}
     if name in routes:
         result = _api("GET", routes[name])
         return _tool_result(result, result.get("ok") is False if isinstance(result, dict) else False)
