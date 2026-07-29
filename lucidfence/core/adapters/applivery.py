@@ -35,6 +35,7 @@ def _safe_text(r: requests.Response) -> str:
 
 class AppliveryAdapter(MDMAdapter):
     name = "applivery"
+    supports_amapi_policy = True
 
     def __init__(self, org_id: str, endpoint_template: str, timeout: int = 30,
                  webhook_url: str = "", api_key: str = ""):
@@ -100,8 +101,23 @@ class AppliveryAdapter(MDMAdapter):
             }
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
-        key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or os.environ.get("applivery_api_key")
         device_id = self._dev_id(device)
+        if action == "apply_amapi_policy":
+            from lucidfence.core.amapi import generate_amapi_policy_patch
+            fence_state = params.get("fence_state", "unknown")
+            fence = params.get("fence", {})
+            patch = generate_amapi_policy_patch(fence_state, fence)
+            return {
+                "adapter": self.name,
+                "ok": True,
+                "device_id": device_id,
+                "action": action,
+                "amapi_patch": patch,
+                "dry_run": dry_run,
+                "note": f"AMAPI declarative policy patch emitted for device {device_id}."
+            }
+
+        key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or os.environ.get("applivery_api_key")
         if not key:
             return {
                 "adapter": self.name,
