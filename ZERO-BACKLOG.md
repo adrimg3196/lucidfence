@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-07-30b | DEV NOCTURNO | Issue #70 cerrado: `Engine.run_command` persiste el `device_state` que devuelve el adapter (readback `ddm_status`) con merge-no-reemplazo — un report parcial no pisa campos ausentes, `ok=False` y `dry_run` no mutan, `ddm_errors` queda en el action log. Campos nuevos `passcode_compliant` y `filevault_enabled` en `DeviceState`. Hook en el punto compartido (sirve igual al readback DSC de Windows), sin tocar la ruta imperativa. Suite 289 PASS / 2 FAIL (los 2 TypeGuard py3.9, issue #51 con PRs #69/#66 en vuelo). |
 | 2026-07-30 | DEV NOCTURNO | DDM fase 2 (issue #52): canal de Jamf Pro con endpoints **verificados** contra el OpenAPI oficial v11.30 (`ddm_status` + `ddm_sync`); hueco declarado y documentado — Jamf no publica endpoint para subir declarations propias, así que `apply_ddm` sigue offline. Dos bugs de causa raíz de la fase 1: las acciones DDM no estaban en `VALID_ACTIONS` (engine y API las rechazaban: la capa declarativa era inalcanzable) y los booleanos stringificados de Jamf llegaban como `"true"` al modelo de estado. Suite 287 PASS / 2 FAIL (las 2 son el TypeGuard de Python 3.9, issue #51). |
 | 2026-07-29 | DDM | Issue #40 cerrado: `lucidfence/core/ddm.py` genera declarations Apple (legacy + status-subscriptions + activation.simple) desde una `Policy`, con `ServerToken` determinista (idempotencia), gate `supports_ddm` por versión de OS y `parse_status_report`. Flag `MDMAdapter.supports_ddm` (False por defecto), `jamf` a True con acción `apply_ddm` offline. 14 tests golden sin red; suite 281 PASS + los 2 rojos py3.9 conocidos. |
 | 2026-07-27 | BARRENDERO | Completada la migración a "gratis + donaciones": fuera Pro/Enterprise, `/api/plan*`, capability `org:billing` y 4 ficheros `static/saas_views*.js` muertos (530 líneas). Fix de causa raíz en `log_message` (POST a ruta desconocida devolvía 500 en vez de 404). Docs de pricing reescritos. Suite 267 PASS (= baseline main). |
@@ -96,7 +97,10 @@ imperativos del servidor.
       No hay hook nuevo en el engine a propósito: `apply_ddm` lee `fence_state`
       del `DeviceState` que ya recibe, así que `Engine.run_command` selecciona el
       juego correcto sin código extra.
-- [ ] **Windows PowerShell DSC** (issue #41): `lucidfence/core/dsc.py` emite
+- [x] **Windows PowerShell DSC** (issue #41) — HECHO (PR #43 mergeado):
+      `lucidfence/core/dsc.py` + `tests/test_windows_conformidad_dsc.py` +
+      `docs/operations/windows_dsc.md` ya están en main.
+      Enunciado original: `lucidfence/core/dsc.py` emite
       documentos DSC v3 (manifests JSON/YAML) con emisor fallback .ps1/MOF
       clásico. Idempotente (re-apply sin cambios = no-op), readback de
       compliance al pipeline de device state. Flag `supports_dsc` en

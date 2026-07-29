@@ -101,6 +101,12 @@ publicada es de lectura y refresco:
 reconciliar tras cambiar el juego de declarations. Ambas respetan `dry_run`
 (devuelven `would_send` sin llamar) y requieren `live=True`.
 
+Desde el issue #70, `Engine.run_command` persiste ese `device_state` en el
+store con semántica de **merge, no reemplazo**: un status report parcial
+(Apple solo manda los items suscritos que cambiaron) nunca pisa campos que no
+trae, un `ddm_status` fallido no toca el estado y `dry_run` nunca muta.
+`ddm_errors` no se persiste como campo pero queda en el action log.
+
 `clientManagementId` **no es** el id de mobile-device: sale de
 `device.management_id`. Sin él, la acción devuelve `missing_management_id` en
 vez de mandar un id que Jamf no reconoce.
