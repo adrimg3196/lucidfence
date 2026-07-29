@@ -2,22 +2,22 @@
 """Monitor operativo de LucidFence.
 
 Ejecuta dos health-checks de producto:
-  1. Suite local de tests: `python3 tests/run_tests.py` debe cerrar con 0 fallos
-     y al menos 110 tests pasados.
+  1. Suite local de tests: `poetry run python3 tests/run_tests.py` (o `.venv/bin/python3 tests/run_tests.py`)
+     debe cerrar con 0 fallos y al menos 110 tests pasados.
   2. Vitrina HTTP: `cloud.html` debe responder 2xx/3xx.
 
 Si un check falla, crea una tarjeta de fix en el board Hermes Kanban
 `lucidfence` con idempotency-key estable para no duplicar incidentes abiertos.
 
 Uso recomendado:
-  python3 scripts/lucidfence_monitor.py
-  python3 scripts/lucidfence_monitor.py --dry-run
+  poetry run python3 scripts/lucidfence_monitor.py
+  poetry run python3 scripts/lucidfence_monitor.py --dry-run
 
 Variables útiles:
   LUCIDFENCE_ROOT=/ruta/proyecto
   LUCIDFENCE_BOARD=lucidfence
   LUCIDFENCE_VITRINA_URL=https://...
-  LUCIDFENCE_TEST_COMMAND="python3 tests/run_tests.py"
+  LUCIDFENCE_TEST_COMMAND="poetry run python3 tests/run_tests.py"
   LUCIDFENCE_MIN_TESTS=110
 """
 from __future__ import annotations

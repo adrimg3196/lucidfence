@@ -172,12 +172,12 @@ La aplicación funciona sin modelo. En **Ajustes → Proveedor AI opcional** pue
 ```bash
 git clone https://github.com/adrimg3196/lucidfence.git
 cd lucidfence
-python3 -m pip install -r requirements.txt
-python3 tests/run_tests.py
-python3 -m lucidfence.cli start --no-open
+poetry install
+poetry run python3 tests/run_tests.py
+poetry run python3 -m lucidfence.cli start --no-open
 ```
 
-La suite debe terminar con un resumen explícito y cero fallos. El proyecto usa Python 3.9+ y evita frameworks web.
+La suite debe terminar con un resumen explícito y cero fallos. El proyecto requiere Python 3.11+ (los tests fallarán de inmediato si se ejecutan bajo un intérprete no soportado) y evita frameworks web.
 
 ## Operación y monitoreo always-on
 

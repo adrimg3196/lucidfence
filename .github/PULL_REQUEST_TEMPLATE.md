@@ -14,7 +14,7 @@ Todos los apartados son OBLIGATORIOS salvo los marcados como opcionales.
 - [ ] Refactor / mantenimiento (sin cambio de comportamiento)
 
 ## Tests contra mock (CI)
-- [ ] `python3 tests/run_tests.py` pasa en local (sin datos de tenants reales)
+- [ ] `poetry run python3 tests/run_tests.py` (o `.venv/bin/python3 tests/run_tests.py` usando Python >=3.11) pasa en local (sin datos de tenants reales)
 - [ ] Añadí/actualicé tests contra `unittest.mock` para mi cambio
 - [ ] `node --check static/app.js` no reporta errores (si toqué el frontend)
 

@@ -10,7 +10,7 @@ Arquitectura (ver AGENTS.md / docs/roadmap/ROADMAP_TOOLING.md):
   - AGREGADOR: Claude Opus 4.8. Se invoca via `claude` CLI (Claude Code) si esta
     presente en el PATH; si no, merge heuristico local. (El server MoA en
     127.0.0.1:8085 tambien es un agregador valido cuando esta arriba.)
-  - VERIFY: corre tests/run_tests.py y valida roadmap_tooling.
+  - VERIFY: corre poetry run python3 tests/run_tests.py y valida roadmap_tooling.
   - HISTORY: cada iteracion se append-a a data/loop_history.jsonl.
 
 Control de calidad:
@@ -116,7 +116,7 @@ def _local_proposer(feature, temperature):
         f"Pasos sugeridos:\n{subtasks}\n"
         f"Criterios de aceptacion: " + "; ".join(feature.get("acceptance_criteria", [])) + "\n"
         f"Riesgo: esfuerzo {effort} y dependencias {feature.get('dependencies', [])}. "
-        f"Recomendacion: implementar subtareas en orden, verificar con tests/run_tests.py."
+        f"Recomendacion: implementar subtareas en orden, verificar con poetry run python3 tests/run_tests.py."
     )
 
 
@@ -174,7 +174,7 @@ def _aggregate(proposals, feature, temperature):
     merged = "\n".join(proposals)
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
-        "Consenso: implementar subtareas en orden, verificar con tests/run_tests.py y "
+        "Consenso: implementar subtareas en orden, verificar con poetry run python3 tests/run_tests.py y "
         "python3 -m lucidfence.core.roadmap_tooling --validate. " + merged[:1500]
     )
     return summary

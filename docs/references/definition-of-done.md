@@ -7,7 +7,7 @@ Complementa (no reemplaza) los criterios de aceptación de cada tarea.
 - [ ] Se cumplen los criterios de aceptación de la tarea.
 - [ ] El código corre y se comporta como se espera, **verificado en runtime** (server levantado / vitrina abierta en navegador), no solo importado.
 - [ ] El nuevo comportamiento tiene tests que fallan sin el cambio y pasan con él.
-- [ ] Los tests existentes siguen pasando; sin regresiones (`python3 tests/run_tests.py`).
+- [ ] Los tests existentes siguen pasando; sin regresiones (`poetry run python3 tests/run_tests.py` usando Python >=3.11).
 - [ ] Casos borde y rutas de error manejados, no solo el happy path.
 
 ## Quality
