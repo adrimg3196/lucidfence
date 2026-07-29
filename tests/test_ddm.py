@@ -155,3 +155,96 @@ def test_imperative_path_untouched():
     res = adapter.execute({"device_id": "dev-003"}, "lock", {})
     assert res["adapter"] == "jamf"
     assert "declarations" not in res
+
+
+# --- Fase 2: canal de entrega/readback de Jamf Pro (endpoints verificados) ---
+
+class _Resp:
+    def __init__(self, status=200, body=None):
+        self.status_code = status
+        self._body = body
+        self.text = ""
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("no json")
+        return self._body
+
+
+def _live_adapter():
+    a = JamfAdapter(live=True, base_url="https://acme.jamfcloud.com",
+                    client_id="c", client_secret="s")
+    a._token = "stub"
+    a._token_expires_at = float("inf")
+    return a
+
+
+DDM_DEVICE = {"device_id": "dev-003", "management_id": "mgmt-42",
+              "platform": "ios", "os_version": "17.4.1"}
+
+
+def _with_fake(method: str, resp, fn):
+    """Sustituye requests.get/post por un doble que devuelve `resp`."""
+    import requests
+    captured = {}
+
+    def fake(url, **kwargs):
+        captured["url"] = url
+        return resp
+
+    original = getattr(requests, method)
+    setattr(requests, method, fake)
+    try:
+        return fn(), captured
+    finally:
+        setattr(requests, method, original)
+
+
+def test_ddm_status_and_sync_urls_match_verified_endpoints():
+    a = _live_adapter()
+    status = a.execute(DDM_DEVICE, "ddm_status", {}, dry_run=True)
+    sync = a.execute(DDM_DEVICE, "ddm_sync", {}, dry_run=True)
+    assert status["would_send"] == {
+        "method": "GET",
+        "url": "https://acme.jamfcloud.com/api/v1/ddm/mgmt-42/status-items",
+    }
+    assert sync["would_send"] == {
+        "method": "POST",
+        "url": "https://acme.jamfcloud.com/api/v1/ddm/mgmt-42/sync",
+    }
+
+
+def test_ddm_status_feeds_device_state_from_status_items():
+    body = {"statusItems": [
+        {"key": "device.operating-system.version", "value": "17.4.1"},
+        {"key": "device.model.identifier", "value": "iPhone15,2"},
+        {"key": "unknown.thing", "value": "ignored"},
+    ]}
+    res, captured = _with_fake(
+        "get", _Resp(200, body),
+        lambda: _live_adapter().execute(DDM_DEVICE, "ddm_status", {}),
+    )
+    assert res["ok"] is True and res["status_items"] == 3
+    assert res["device_state"] == {"os_version": "17.4.1", "model": "iPhone15,2"}
+    assert captured["url"].endswith("/api/v1/ddm/mgmt-42/status-items")
+
+
+def test_ddm_sync_accepts_204_without_body():
+    res, _ = _with_fake(
+        "post", _Resp(204),
+        lambda: _live_adapter().execute(DDM_DEVICE, "ddm_sync", {}),
+    )
+    assert res["ok"] is True and res["jamf_status"] == 204
+
+
+def test_ddm_requires_management_id_and_never_raises():
+    res = _live_adapter().execute({"device_id": "dev-003"}, "ddm_status", {})
+    assert res["ok"] is False and res["error_type"] == "missing_management_id"
+
+
+def test_ddm_unknown_client_returns_structured_error():
+    res, _ = _with_fake(
+        "get", _Resp(404),
+        lambda: _live_adapter().execute(DDM_DEVICE, "ddm_status", {}),
+    )
+    assert res["ok"] is False and res["error_type"] == "device_not_found"

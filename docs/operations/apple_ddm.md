@@ -85,15 +85,55 @@ planas y anidadas, ignora items desconocidos y expone los fallos del reporte en
 Los nombres de status item suscritos por defecto salen de
 `declarative/status/` del repo de Apple; no se inventan.
 
+## Fase 2 — canal de Jamf Pro (endpoints verificados)
+
+Verificado contra el OpenAPI oficial de la Jamf Pro API **v11.30**
+(`developer.jamf.com/jamf-pro/reference/jamf-pro-api`). La superficie DDM
+publicada es de lectura y refresco:
+
+| Acción LucidFence | Endpoint Jamf | Respuesta |
+|-------------------|---------------|-----------|
+| `ddm_status` | `GET /api/v1/ddm/{clientManagementId}/status-items` | `{"statusItems":[{"key","value","lastUpdateTime"}]}` |
+| `ddm_sync` | `POST /api/v1/ddm/{clientManagementId}/sync` | `204` sin cuerpo (encola un `DeclarativeManagementCommand`) |
+
+`ddm_status` pasa los `statusItems` por `parse_status_report` y devuelve
+`device_state` con los campos del modelo; `ddm_sync` fuerza al dispositivo a
+reconciliar tras cambiar el juego de declarations. Ambas respetan `dry_run`
+(devuelven `would_send` sin llamar) y requieren `live=True`.
+
+`clientManagementId` **no es** el id de mobile-device: sale de
+`device.management_id`. Sin él, la acción devuelve `missing_management_id` en
+vez de mandar un id que Jamf no reconoce.
+
+### Hueco declarado: subir declarations propias
+
+Jamf Pro **no publica** endpoint para crear/actualizar declarations propias.
+Lo único que existe es `GET /api/v1/dss-declarations/{declarationId}`, que lee
+las que genera el propio servidor; las declarations personalizadas se
+despliegan por la UI (Blueprints), no por API. Por eso `apply_ddm` sigue
+offline: preferimos un hueco declarado a una llamada inventada. Cuando Jamf
+publique el endpoint de entrega, el cambio es local a `_apply_ddm`.
+
+### Selección del juego por estado de geocerca
+
+No hay hook nuevo en el engine, a propósito: `apply_ddm` lee `fence_state` del
+`DeviceState` que ya recibe, así que el camino genérico
+(`Engine.run_command(dev, "apply_ddm", {...})`) selecciona el juego correcto en
+cada transición. El trigger sigue siendo del engine — DDM no geolocaliza.
+
 ## Tests
 
-`tests/test_ddm.py` — 14 checks con fixtures golden, sin red: forma de las
+`tests/test_ddm.py` — 19 checks con fixtures golden, sin red: forma de las
 declarations contra el schema, gating por versión de OS, idempotencia del
 `ServerToken`, rechazo de `ProfileURL` no https, truncado del `Identifier`,
-parseo de status (plano/anidado/basura) y regresión de que el camino
+parseo de status (plano/anidado/basura), URLs de los dos endpoints DDM
+verificados, readback de `statusItems` a `device_state`, `204` sin cuerpo,
+ausencia de `management_id`, `404` del cliente y regresión de que el camino
 imperativo sigue intacto.
 
 ## Referencias
 
 - Schemas: <https://github.com/apple/device-management> (`declarative/`)
-- Issue: #40
+- Jamf Pro API v11.30: `GET /v1/ddm/{id}/status-items`, `POST /v1/ddm/{id}/sync`,
+  `GET /v1/dss-declarations/{id}`
+- Issues: #40 (fase 1), #52 (fase 2)
