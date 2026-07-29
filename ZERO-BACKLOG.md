@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-07-30 | DEV NOCTURNO | DDM fase 2 (issue #52): canal de Jamf Pro con endpoints **verificados** contra el OpenAPI oficial v11.30 (`ddm_status` + `ddm_sync`); hueco declarado y documentado — Jamf no publica endpoint para subir declarations propias, así que `apply_ddm` sigue offline. Dos bugs de causa raíz de la fase 1: las acciones DDM no estaban en `VALID_ACTIONS` (engine y API las rechazaban: la capa declarativa era inalcanzable) y los booleanos stringificados de Jamf llegaban como `"true"` al modelo de estado. Suite 287 PASS / 2 FAIL (las 2 son el TypeGuard de Python 3.9, issue #51). |
 | 2026-07-29 | DDM | Issue #40 cerrado: `lucidfence/core/ddm.py` genera declarations Apple (legacy + status-subscriptions + activation.simple) desde una `Policy`, con `ServerToken` determinista (idempotencia), gate `supports_ddm` por versión de OS y `parse_status_report`. Flag `MDMAdapter.supports_ddm` (False por defecto), `jamf` a True con acción `apply_ddm` offline. 14 tests golden sin red; suite 281 PASS + los 2 rojos py3.9 conocidos. |
 | 2026-07-27 | BARRENDERO | Completada la migración a "gratis + donaciones": fuera Pro/Enterprise, `/api/plan*`, capability `org:billing` y 4 ficheros `static/saas_views*.js` muertos (530 líneas). Fix de causa raíz en `log_message` (POST a ruta desconocida devolvía 500 en vez de 404). Docs de pricing reescritos. Suite 267 PASS (= baseline main). |
 
@@ -36,9 +37,14 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
   DESCARTÓ Clerk (rompe el "100% local, nothing leaves the machine" y duplica
   la auth existente); la mejora correcta es OIDC opt-in por organización sobre
   `lucidfence/saas/auth.py`, con login local siempre como fallback.
-- **Graphify disponible**: `graphify-out/graph.json` (grafo AST del repo, 3225
-  nodos). Antes de grepear, consultar: `graphify explain "X"` · `graphify path A B`
-  · `graphify query "pregunta"`. Regenerar tras merges grandes: `graphify .`
+- **Graphify disponible**: `graphify-out/graph.json` (grafo AST del repo, 3846
+  nodos / 8237 edges tras el turno del 2026-07-30). Antes de grepear, consultar:
+  `graphify explain "X"` · `graphify path A B` · `graphify query "pregunta"`.
+  Refrescar con `graphify update .` (incremental, sin LLM) tras cada tanda de commits.
+- **Verificar antes de escribir un endpoint de terceros**: la doc de Jamf publica
+  su OpenAPI en `developer.jamf.com/jamf-pro/reference/jamf-pro-api/llms.txt`
+  (índice completo de endpoints en markdown). Sirvió para confirmar el hueco de
+  las declarations en vez de inventar una ruta. Mismo patrón para el resto de MDMs.
 - Rama de trabajo: `zero-nightly`. La rama local `gt/migrar-a-gratis-donaciones` quedó obsoleta (sin commits propios) — borrar cuando el PR se mergee.
 - La suite se ejecuta con `python3 tests/run_tests.py` (hermética: exige el puerto 8765 libre; mata cualquier `saas_server.py` colgado antes).
 
@@ -71,8 +77,25 @@ imperativos del servidor.
       así que NO se marca — se activará cuando lo documenten.
       `Predicate` es passthrough a propósito: Apple no publica las variables de
       predicado en su repo de schemas y no inventamos sintaxis.
-      Pendiente derivado: quien conecte Jamf de verdad tiene que subir las
-      declarations por el canal del MDM — `apply_ddm` hoy solo las construye.
+- [x] **Apple DDM fase 2** (issue #52) — HECHO 2026-07-30. Canal de Jamf Pro con
+      los dos endpoints que Jamf **sí** publica, verificados contra su OpenAPI
+      v11.30 y citados en el PR y en `docs/operations/apple_ddm.md`:
+      `GET /v1/ddm/{clientManagementId}/status-items` (acción `ddm_status`, el
+      readback alimenta `device_state` vía `parse_status_report`) y
+      `POST /v1/ddm/{clientManagementId}/sync` (acción `ddm_sync`, 204 sin cuerpo).
+      **Hueco declarado**: subir declarations propias no existe por API — solo
+      `GET /v1/dss-declarations/{id}`, de lectura; las personalizadas se
+      despliegan por UI (Blueprints). Por eso `apply_ddm` sigue offline en vez de
+      inventar la llamada; cuando Jamf lo publique, el cambio es local a
+      `_apply_ddm`.
+      Dos bugs de causa raíz de la fase 1, corregidos: las acciones DDM no
+      estaban en `VALID_ACTIONS` (el engine y el endpoint de comandos las
+      rechazaban con "accion no valida" — la capa declarativa era inalcanzable
+      desde el producto) y los `StatusItem.value` de Jamf son string siempre, así
+      que `passcode.is-compliant` llegaba como `"true"` a un campo `bool`.
+      No hay hook nuevo en el engine a propósito: `apply_ddm` lee `fence_state`
+      del `DeviceState` que ya recibe, así que `Engine.run_command` selecciona el
+      juego correcto sin código extra.
 - [ ] **Windows PowerShell DSC** (issue #41): `lucidfence/core/dsc.py` emite
       documentos DSC v3 (manifests JSON/YAML) con emisor fallback .ps1/MOF
       clásico. Idempotente (re-apply sin cambios = no-op), readback de
@@ -87,7 +110,9 @@ imperativos del servidor.
       restricciones dependen del modo de gestión.
 - [ ] Matriz de soporte documentada en `docs/` (versiones OS, DDM vs legacy,
       DSC v2 vs v3, AMAPI COBO/BYOD) y fixtures golden en tests (sin red, sin
-      host Windows, sin proyecto enterprise de Google).
+      host Windows, sin proyecto enterprise de Google). Apple y Windows ya tienen
+      su matriz en `docs/operations/apple_ddm.md` y `docs/operations/windows_dsc.md`;
+      queda unificarlas cuando el AMAPI (PR #53) entre.
 
 Regla transversal: capacidad aditiva — la ruta imperativa actual no se rompe.
 
