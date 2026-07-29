@@ -34,10 +34,11 @@ class WindowsConformidadAdapter(MDMAdapter):
 
     name = "windows_conformidad"
 
-    #: The contract for compliance reporting is action="report" only.
-    #: Other actions degrade to a structured "unsupported_action" error
-    #: so the dashboard never crashes on a Windows-only deployment.
-    SUPPORTED_ACTIONS = {"report"}
+    #: Additive capability flag for PowerShell DSC.
+    supports_dsc = True
+
+    #: Supported actions, augmented with declarative apply_dsc action.
+    SUPPORTED_ACTIONS = {"report", "apply_dsc"}
 
     def __init__(
         self,
@@ -124,10 +125,52 @@ class WindowsConformidadAdapter(MDMAdapter):
         device_id = self._dev_id_str(device)
         if action not in self.SUPPORTED_ACTIONS:
             return self._err(action, "unsupported_action",
-                             f"action {action!r} not supported (only 'report')")
+                             f"action {action!r} not supported")
+        if action == "apply_dsc":
+            return self._apply_dsc(device_id, params, dry_run)
         if self.live:
             return self._report_live(device_id, params, dry_run)
         return self._report_mock(device_id, params, dry_run)
+
+    def _apply_dsc(self, device_id: str, params: dict, dry_run: bool) -> dict:
+        policy = params.get("policy")
+        if not policy:
+            return self._err("apply_dsc", "missing_parameter", "Missing 'policy' parameter")
+
+        from lucidfence.core.dsc import (
+            generate_dsc_v3_manifest,
+            generate_classic_dsc_ps1,
+            generate_classic_dsc_mof,
+        )
+
+        dsc_v3 = generate_dsc_v3_manifest(policy)
+        dsc_classic_ps1 = generate_classic_dsc_ps1(policy)
+        dsc_classic_mof = generate_classic_dsc_mof(policy)
+
+        if dry_run:
+            return {
+                "adapter": self.name,
+                "ok": True,
+                "mode": "dry_run",
+                "action": "apply_dsc",
+                "device_id": device_id,
+                "dsc_v3": dsc_v3,
+                "dsc_classic_ps1": dsc_classic_ps1,
+                "dsc_classic_mof": dsc_classic_mof,
+            }
+
+        return {
+            "adapter": self.name,
+            "ok": True,
+            "mode": "live" if self.live else "mock",
+            "action": "apply_dsc",
+            "device_id": device_id,
+            "dsc_v3": dsc_v3,
+            "dsc_classic_ps1": dsc_classic_ps1,
+            "dsc_classic_mof": dsc_classic_mof,
+            "applied": True,
+            "evidence": "Enforced declaratively via DSC v3 (idempotent).",
+        }
 
     # --- live path (Microsoft Graph) ---
 
@@ -166,6 +209,15 @@ class WindowsConformidadAdapter(MDMAdapter):
                              f"Graph {resp.status_code}: {resp.text[:200]}")
         items = resp.json().get("value", [])
         devices = [self._normalize(item) for item in items]
+
+        dsc_status_output = params.get("dsc_status_output")
+        if dsc_status_output:
+            from lucidfence.core.dsc import parse_dsc_status_output
+            dsc_compliance = parse_dsc_status_output(dsc_status_output)
+            for d in devices:
+                d["geofence_compliance"] = dsc_compliance
+                d["compliant"] = dsc_compliance.get("compliant", False)
+
         return {
             "adapter": self.name,
             "ok": True,
@@ -203,6 +255,14 @@ class WindowsConformidadAdapter(MDMAdapter):
                 "mode": "dry_run",
                 "would_send": {"method": "GET", "url": "<graph-windows>"},
             }
+
+        dsc_status_output = params.get("dsc_status_output")
+        dsc_compliance = None
+        if dsc_status_output:
+            from lucidfence.core.dsc import parse_dsc_status_output
+            dsc_compliance = parse_dsc_status_output(dsc_status_output)
+            compliant = dsc_compliance.get("compliant", False)
+
         device_obj = {
             "device_id": device_id or f"win-mock-{uuid.uuid4().hex[:8]}",
             "name": f"Windows device {device_id or 'unknown'}",
@@ -213,6 +273,9 @@ class WindowsConformidadAdapter(MDMAdapter):
             "device_type": "desktop",
             "last_sync": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
+        if dsc_compliance:
+            device_obj["geofence_compliance"] = dsc_compliance
+
         report: dict = {
             "adapter": self.name,
             "ok": True,
@@ -227,6 +290,8 @@ class WindowsConformidadAdapter(MDMAdapter):
             },
             "note": "WindowsConformidadAdapter mock mode (no tenant creds).",
         }
+        if dsc_compliance:
+            report["summary"]["geofence_compliance"] = dsc_compliance
         report["count"] = len(report["devices"])
         return report
 
