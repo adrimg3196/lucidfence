@@ -218,14 +218,18 @@ def test_ddm_status_feeds_device_state_from_status_items():
     body = {"statusItems": [
         {"key": "device.operating-system.version", "value": "17.4.1"},
         {"key": "device.model.identifier", "value": "iPhone15,2"},
+        # Jamf serializa los booleanos como string: no debe llegar "true" al
+        # modelo de estado, que espera bool.
+        {"key": "passcode.is-compliant", "value": "true"},
         {"key": "unknown.thing", "value": "ignored"},
     ]}
     res, captured = _with_fake(
         "get", _Resp(200, body),
         lambda: _live_adapter().execute(DDM_DEVICE, "ddm_status", {}),
     )
-    assert res["ok"] is True and res["status_items"] == 3
-    assert res["device_state"] == {"os_version": "17.4.1", "model": "iPhone15,2"}
+    assert res["ok"] is True and res["status_items"] == 4
+    assert res["device_state"] == {"os_version": "17.4.1", "model": "iPhone15,2",
+                                   "passcode_compliant": True}
     assert captured["url"].endswith("/api/v1/ddm/mgmt-42/status-items")
 
 

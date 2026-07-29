@@ -59,6 +59,13 @@ JAMF_DDM_SYNC_PATH = "/api/v1/ddm/{mid}/sync"
 REQUEST_TIMEOUT_SECS = 30
 
 
+def _unstringify(value: Any) -> Any:
+    """`"true"`/`"false"` -> bool. El resto se devuelve tal cual."""
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return value
+
+
 class AuthError(Exception):
     """Raised on 401/403 from the Jamf Pro API."""
 
@@ -290,7 +297,10 @@ class JamfAdapter(MDMAdapter):
             items = []
         # `statusItems` viene plano (key/value); `parse_status_report` ya acepta
         # esa forma, así que no duplicamos el mapeo a campos de estado.
-        report = {"StatusItems": {i["key"]: i.get("value") for i in items
+        # El schema de Jamf declara `value` como string SIEMPRE, también para los
+        # status items booleanos: se convierten aquí (el canal DDM nativo de
+        # Apple sí manda bool, así que parse_status_report no debe adivinar).
+        report = {"StatusItems": {i["key"]: _unstringify(i.get("value")) for i in items
                                   if isinstance(i, dict) and i.get("key")}}
         out["status_items"] = len(items)
         out["device_state"] = parse_status_report(report)
