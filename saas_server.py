@@ -73,6 +73,7 @@ from core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
 from core.engine import Engine
 from core.product import build_product
+from core.poi import POIService, POI
 from core import secrets as core_secrets
 from core import ai_provider
 from core import workflows as WF  # workflows module (templates + custom builder)
@@ -984,6 +985,12 @@ class Handler(BaseHTTPRequestHandler):
         super().log_message(fmt, *safe_args)
 
     def do_GET(self):
+        if self.path == "/api/pois":
+            self.handle_pois_get()
+            return
+        if self.path.startswith("/api/pois/"):
+            self.handle_poi_get()
+            return
         if not _host_allowed(self):
             self.send_error(400, "bad host")
             return
@@ -1000,6 +1007,29 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+
+    def handle_pois_get(self):
+        """Handle GET /api/pois"""
+        user_org = self.require("devices:read")
+        if not user_org:
+            return
+        user, org = user_org
+        pois = [_poi.__dict__ for _poi in _poi_service.all()]
+        self._send_json(pois)
+
+    def handle_poi_get(self):
+        """Handle GET /api/pois/<id>"""
+        user_org = self.require("devices:read")
+        if not user_org:
+            return
+        user, org = user_org
+        # Extract poi_id from path: /api/pois/{id}
+        poi_id = self.path.split('/')[-1]
+        poi = _poi_service.get_poi(poi_id)
+        if not poi:
+            self.send_error(404, "POI not found")
+            return
+        self._send_json(poi.__dict__)
     def do_POST(self):
         if not _host_allowed(self):
             self.send_error(400, "bad host")

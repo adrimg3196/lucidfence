@@ -94,7 +94,7 @@ def tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     routes = {
         "lucidfence_status": "/api/status", "lucidfence_list_devices": "/api/devices",
         "lucidfence_list_incidents": "/api/incidents", "lucidfence_get_risk": "/api/risk",
-    }
+        "lucidfence_list_pois": "/api/pois",\n    }
     if name in routes:
         result = _api("GET", routes[name])
         return _tool_result(result, result.get("ok") is False if isinstance(result, dict) else False)
