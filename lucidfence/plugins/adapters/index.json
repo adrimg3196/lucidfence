@@ -42,7 +42,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/windows_conformidad.py",
-      "sha256": "532d24f1297f603b15ecd1f0596d83039d0e3964bcee54d1a1e320274ffd5539",
+      "sha256": "83b0d393cc1a3a2aac59016c433ff0d0a19ebc984b12c75ea2e8c04f53afb8c2",
       "install": "bundled",
       "verified": true
     },

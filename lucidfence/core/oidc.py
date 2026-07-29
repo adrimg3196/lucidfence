@@ -122,7 +122,15 @@ class OIDCProvider:
                 raise OIDCError("invalid_client_auth")
         elif self.redirect_uri:
             p = urlsplit(self.redirect_uri)
-            if p.scheme != "https" or not p.hostname or p.username or p.password or p.query or p.fragment:
+            is_loopback = False
+            try:
+                if p.hostname in ("127.0.0.1", "::1", "localhost"):
+                    is_loopback = True
+            except Exception:
+                pass
+            if not is_loopback and p.scheme != "https":
+                raise OIDCError("invalid_redirect_uri")
+            if not p.hostname or p.username or p.password or p.query or p.fragment:
                 raise OIDCError("invalid_redirect_uri")
         if self.token_auth_method not in {"client_secret_basic", "client_secret_post", "none"}:
             raise OIDCError("invalid_client_auth")
