@@ -248,3 +248,17 @@ def test_ddm_unknown_client_returns_structured_error():
         lambda: _live_adapter().execute(DDM_DEVICE, "ddm_status", {}),
     )
     assert res["ok"] is False and res["error_type"] == "device_not_found"
+
+
+def test_engine_accepts_ddm_actions_from_an_operator():
+    """Regresión: sin las DDM en VALID_ACTIONS el engine y la API las
+    rechazaban con 'accion no valida' y la capa declarativa era inalcanzable.
+    """
+    from helpers import make_temp_engine  # noqa: E402
+    from lucidfence.core.state_store import DeviceState  # noqa: E402
+
+    engine = make_temp_engine()
+    device = DeviceState(device_id="dev-ddm", name="iPad HQ", platform="ios",
+                         os_version="17.4.1", fence_state="outside")
+    res = engine.run_command(device, "apply_ddm", {"policy": POLICY, "profile_url": URL})
+    assert res.get("error") != "accion no valida"
