@@ -335,3 +335,20 @@ def test_run_command_failed_or_dry_run_ddm_status_leaves_state_untouched():
     })
     engine.run_command(prior, "ddm_status", {})
     assert engine.store.get("dev-ddm").os_version == "17.3"
+
+
+def test_jamf_ddm_mock_mode_returns_requires_live_mode():
+    adapter = JamfAdapter(live=False)
+    device = {"device_id": "dev-003", "platform": "ios", "os_version": "17.4.1"}
+
+    status_res = adapter.execute(device, "ddm_status", {})
+    assert status_res["ok"] is False
+    assert status_res["error_type"] == "requires_live_mode"
+    assert status_res["adapter"] == "jamf"
+    assert "jamf_verb" not in status_res
+
+    sync_res = adapter.execute(device, "ddm_sync", {})
+    assert sync_res["ok"] is False
+    assert sync_res["error_type"] == "requires_live_mode"
+    assert sync_res["adapter"] == "jamf"
+    assert "jamf_verb" not in sync_res

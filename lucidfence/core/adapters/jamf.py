@@ -420,6 +420,9 @@ class JamfAdapter(MDMAdapter):
         # Mock-mode path matches the legacy JamfAdapter shape so existing
         # test_adapters_contrib assertions (mock=True, jamf_verb=...) stay green.
         import uuid as _uuid
+        if action in ("ddm_status", "ddm_sync"):
+            return self._err(self.name, device, action, "requires_live_mode", "This DDM action requires live mode")
+
         device_id = self._dev_id_str(device)
         cmd_id = f"jamf-mock-{_uuid.uuid4().hex[:12]}"
         return {

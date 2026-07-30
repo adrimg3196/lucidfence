@@ -24,7 +24,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/jamf.py",
-      "sha256": "4be51b90bf3376d4af3837bfe0ea1487a80a9f3313d6f70a85fca2dc9eda5f27",
+      "sha256": "bcc5fd62f072fe80db19ccb57225ba3eff7b30720e107876e43a88a69a0ebccb",
       "install": "bundled",
       "verified": true
     },
