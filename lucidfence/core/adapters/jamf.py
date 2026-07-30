@@ -45,7 +45,25 @@ JAMF_TOKEN_PATH = "/api/v1/auth/token"
 JAMF_DEVICES_PATH = "/api/v1/mobile-devices"
 JAMF_COMMANDS_PATH = "/api/v1/mobile-devices/{id}/commands"
 
+# Canal DDM. Verificado contra el OpenAPI oficial de la Jamf Pro API v11.30
+# (developer.jamf.com/jamf-pro/reference/jamf-pro-api):
+#   GET  /v1/ddm/{clientManagementId}/status-items -> {"statusItems":[{key,value,lastUpdateTime}]}
+#   POST /v1/ddm/{clientManagementId}/sync         -> 204 sin cuerpo (encola DeclarativeManagementCommand)
+# HUECO DECLARADO: Jamf Pro NO publica endpoint para SUBIR declarations propias
+# (solo GET /v1/dss-declarations/{id}, que lee las que genera el servidor). Por
+# eso `apply_ddm` se queda offline: generamos el contrato y lo devolvemos, no
+# inventamos una llamada. Ver docs/operations/apple_ddm.md.
+JAMF_DDM_STATUS_PATH = "/api/v1/ddm/{mid}/status-items"
+JAMF_DDM_SYNC_PATH = "/api/v1/ddm/{mid}/sync"
+
 REQUEST_TIMEOUT_SECS = 30
+
+
+def _unstringify(value: Any) -> Any:
+    """`"true"`/`"false"` -> bool. El resto se devuelve tal cual."""
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return value
 
 
 class AuthError(Exception):
@@ -69,6 +87,10 @@ class JamfAdapter(MDMAdapter):
     """
 
     name = "jamf"
+
+    #: Jamf Pro expone DDM; el resto de adapters se quedan en el camino
+    #: imperativo hasta que su MDM lo documente.
+    supports_ddm = True
 
     def __init__(
         self,
@@ -174,6 +196,8 @@ class JamfAdapter(MDMAdapter):
     # --- public API per MDMAdapter ---
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
+        if action == "apply_ddm":
+            return self._apply_ddm(device, params)
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
         try:
@@ -185,11 +209,136 @@ class JamfAdapter(MDMAdapter):
         except Exception as exc:  # noqa: BLE001 — contract: never raise
             return self._err("jamf", device, action, "unknown_error", repr(exc))
 
+    # --- DDM (declarativo) ---
+
+    def _apply_ddm(self, device: Any, params: dict) -> dict:
+        """Construye las declarations DDM de una policy para este dispositivo.
+
+        Offline: genera los documentos, no los sube. La entrega al canal de
+        declarations la hace el MDM; aquí solo producimos el contrato.
+        Si el dispositivo no soporta DDM devuelve ``fallback="imperative"``
+        para que el llamante siga por el camino de comandos de siempre.
+        """
+        from lucidfence.core.ddm import build_declarations, supports_ddm
+
+        device_id = self._dev_id_str(device)
+        if not supports_ddm(device):
+            return {
+                "adapter": "jamf", "ok": False, "device_id": device_id,
+                "action": "apply_ddm", "error": "ddm_unsupported",
+                "fallback": "imperative",
+            }
+        policy = params.get("policy")
+        if not policy:
+            return self._err("jamf", device, "apply_ddm",
+                             "missing_parameter", "Missing 'policy' parameter")
+        profile_url = str(params.get("profile_url", "") or "")
+        try:
+            declarations = build_declarations(
+                policy,
+                str(self._dev_get(device, "fence_state", "unknown") or "unknown"),
+                profile_url,
+                predicate=params.get("predicate"),
+            )
+        except ValueError as exc:
+            return self._err("jamf", device, "apply_ddm", "invalid_profile_url", str(exc))
+        return {
+            "adapter": "jamf", "ok": True, "device_id": device_id,
+            "action": "apply_ddm", "declarations": declarations,
+        }
+
+    def _ddm_live(self, device: Any, action: str, dry_run: bool) -> dict:
+        """Canal DDM de Jamf Pro: `ddm_status` (readback) y `ddm_sync` (refresco).
+
+        `clientManagementId` NO es el id de mobile-device: es el management id
+        del cliente DDM. Si el dispositivo no lo trae, fallamos explícitamente
+        en vez de mandar un id que Jamf no reconoce.
+        """
+        from lucidfence.core.ddm import parse_status_report
+
+        mid = str(
+            self._dev_get(device, "management_id", "")
+            or self._dev_get(device, "managementId", "")
+            or ""
+        )
+        if not mid:
+            return self._err(
+                "jamf", device, action, "missing_management_id",
+                "clientManagementId is required by the Jamf DDM endpoints "
+                "(device.management_id)",
+            )
+
+        sync = action == "ddm_sync"
+        path = JAMF_DDM_SYNC_PATH if sync else JAMF_DDM_STATUS_PATH
+        url = f"{self.base_url}{path.format(mid=mid)}"
+        method = "POST" if sync else "GET"
+        if dry_run:
+            return {
+                "adapter": "jamf", "ok": True, "device_id": self._dev_id_str(device),
+                "action": action, "mode": "dry_run",
+                "would_send": {"method": method, "url": url},
+            }
+
+        call = requests.post if sync else requests.get
+        resp = call(url, headers=self._auth_headers(), timeout=self.timeout)
+        err = self._resp_error(resp, device, action, f"DDM client {mid}")
+        if err:
+            return err
+
+        out = {
+            "adapter": "jamf", "ok": True, "device_id": self._dev_id_str(device),
+            "action": action, "mode": "live", "jamf_status": resp.status_code,
+        }
+        if sync:
+            return out
+        try:
+            items = (resp.json() or {}).get("statusItems") or []
+        except ValueError:
+            items = []
+        # `statusItems` viene plano (key/value); `parse_status_report` ya acepta
+        # esa forma, así que no duplicamos el mapeo a campos de estado.
+        # El schema de Jamf declara `value` como string SIEMPRE, también para los
+        # status items booleanos: se convierten aquí (el canal DDM nativo de
+        # Apple sí manda bool, así que parse_status_report no debe adivinar).
+        report = {"StatusItems": {i["key"]: _unstringify(i.get("value")) for i in items
+                                  if isinstance(i, dict) and i.get("key")}}
+        out["status_items"] = len(items)
+        out["device_state"] = parse_status_report(report)
+        return out
+
+    def _resp_error(self, resp, device: Any, action: str, what: str) -> Optional[dict]:
+        """Ladder de estados HTTP compartido. `None` = respuesta usable.
+
+        Auth y transporte suben como excepción (las mapea `execute`); el resto
+        vuelve como dict de error, porque el contrato de `MDMAdapter.execute`
+        prohíbe propagar fallos del MDM al dashboard.
+        """
+        if resp.status_code in (401, 403):
+            self._token = None  # force refresh on next call
+            raise AuthError(f"Jamf API rejected {what} ({resp.status_code}): {resp.text[:200]}")
+        if resp.status_code == 429 or resp.status_code >= 500:
+            raise TransportError(f"Jamf API {resp.status_code}: {resp.text[:200]}")
+        if resp.status_code == 404:
+            return self._err("jamf", device, action, "device_not_found",
+                             f"{what} not found in {self.base_url}")
+        if resp.status_code >= 400:
+            return self._err("jamf", device, action, "jamf_rejected",
+                             f"Jamf {resp.status_code}: {resp.text[:200]}")
+        return None
+
+    @staticmethod
+    def _dev_get(device: Any, key: str, default=None):
+        if isinstance(device, dict):
+            return device.get(key, default)
+        return getattr(device, key, default)
+
     # --- live mode ---
 
     def _execute_live(self, device: Any, action: str, params: dict, dry_run: bool) -> dict:
         if action == "list":
             return self._list_devices_live()
+        if action in ("ddm_status", "ddm_sync"):
+            return self._ddm_live(device, action, dry_run)
         device_id = self._dev_id_str(device)
         if not device_id:
             return self._err("jamf", device, action, "missing_device_id", "device_id is required")
@@ -221,17 +370,9 @@ class JamfAdapter(MDMAdapter):
 
         resp = requests.post(url, headers=self._auth_headers(), json=body, timeout=self.timeout)
 
-        if resp.status_code in (401, 403):
-            self._token = None  # force refresh on next call
-            raise AuthError(f"Jamf API rejected the command call ({resp.status_code}): {resp.text[:200]}")
-        if resp.status_code == 404:
-            return self._err("jamf", device, action, "device_not_found",
-                             f"mobile device {device_id} not found in {self.base_url}")
-        if resp.status_code == 429 or resp.status_code >= 500:
-            raise TransportError(f"Jamf API {resp.status_code}: {resp.text[:200]}")
-        if resp.status_code >= 400:
-            return self._err("jamf", device, action, "jamf_rejected",
-                             f"Jamf {resp.status_code}: {resp.text[:200]}")
+        err = self._resp_error(resp, device, action, f"mobile device {device_id}")
+        if err:
+            return err
         try:
             data = resp.json()
         except ValueError:

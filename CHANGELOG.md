@@ -4,6 +4,11 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- feat(ddm): enforcement declarativo Apple DDM para policies de geocerca (`lucidfence/core/ddm.py`, acción `apply_ddm` en el adapter Jamf) — issue #40
+- feat(ddm): canal DDM de Jamf Pro — `ddm_status` (readback de `GET /v1/ddm/{clientManagementId}/status-items`) y `ddm_sync` (`POST /v1/ddm/{clientManagementId}/sync`), endpoints verificados contra el OpenAPI oficial v11.30; subir declarations propias sigue siendo hueco declarado porque Jamf no publica endpoint — issue #52
+
 ### Changed
 
 - feat(free)!: LucidFence es gratis para siempre — eliminados los planes Pro/Enterprise, `/api/plan`, `/api/plan/upgrade` y la capability `org:billing`; `FREE_PLAN` único con enlace de donaciones (`.github/FUNDING.yml`); tenants legacy migran a `free` al cargar
@@ -11,6 +16,8 @@ All notable changes to LucidFence are documented here.
 
 ### Fixed
 
+- fix(ddm): las acciones DDM no estaban en `VALID_ACTIONS`, así que `Engine.run_command` y el endpoint de comandos las rechazaban con "accion no valida" — la capa declarativa era inalcanzable desde el producto
+- fix(ddm): los `StatusItem.value` de Jamf son string siempre; `passcode.is-compliant` llegaba como `"true"` a un campo que el modelo de estado espera `bool`
 - fix(server): el sanitizador de `log_message` convertía args numéricos a str y rompía `send_error(404)` (formato `%d`) — cualquier POST/DELETE a ruta desconocida devolvía 500 en vez de 404
 
 ### Removed

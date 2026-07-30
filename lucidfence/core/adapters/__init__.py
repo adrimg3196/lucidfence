@@ -29,6 +29,8 @@ from lucidfence.core.adapters.workspace_one import (
 )
 
 # Acciones UEM válidas (compartidas por todos los adapters).
+# Los adapters que no soportan una acción devuelven `unsupported_action`; el
+# gate de aquí solo decide qué acepta el engine/API, no qué sabe hacer el MDM.
 VALID_ACTIONS = {
     "lock",
     "wipe",
@@ -37,6 +39,12 @@ VALID_ACTIONS = {
     "reboot",
     "clear_passcode",
     "custom",
+    # Declarativas (Apple DDM). Sin ellas aquí, Engine.run_command y
+    # POST /api/devices/{id}/command las rechazaban con "accion no valida":
+    # la capa DDM quedaba inalcanzable desde el producto.
+    "apply_ddm",
+    "ddm_status",
+    "ddm_sync",
 }
 
 # Registro de adapters por nombre. La comunidad puede hacer:
