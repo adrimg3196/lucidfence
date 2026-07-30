@@ -57,3 +57,6 @@ moa/
 # graphify knowledge graph (local tooling, not product)
 graphify-out/
 .graphify_chunk_*.json
+
+# Generated SBOM
+sbom.cdx.json
