@@ -55,6 +55,9 @@ class DeviceState:
     enrolled_at: Optional[str] = None         # enrollment date (ISO)
     device_tag: Optional[str] = None          # free-text asset tag / label
     geofence_compliance: Optional[dict] = None  # simulated/live iOS geofence posture
+    # --- declarative readback (DDM status report / DSC compliance) ---
+    passcode_compliant: Optional[bool] = None  # passcode.is-compliant
+    filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -38,7 +38,9 @@
     "last_checkin": null,
     "enrolled_at": null,
     "device_tag": null,
-    "geofence_compliance": null
+    "geofence_compliance": null,
+    "passcode_compliant": null,
+    "filevault_enabled": null
   },
   {
     "device_id": "dev-002",
@@ -79,7 +81,9 @@
     "last_checkin": null,
     "enrolled_at": null,
     "device_tag": null,
-    "geofence_compliance": null
+    "geofence_compliance": null,
+    "passcode_compliant": null,
+    "filevault_enabled": null
   },
   {
     "device_id": "dev-003",
@@ -120,7 +124,9 @@
     "last_checkin": null,
     "enrolled_at": null,
     "device_tag": null,
-    "geofence_compliance": null
+    "geofence_compliance": null,
+    "passcode_compliant": null,
+    "filevault_enabled": null
   },
   {
     "device_id": "dev-1001",
@@ -139,12 +145,12 @@
     "inside_fence": "office-hq",
     "fence_state": "inside",
     "location_source": "applivery",
-    "risk_score": 25.0,
-    "risk_severity": "low",
+    "risk_score": 35.0,
+    "risk_severity": "medium",
     "route_id": null,
     "route_state": "unassigned",
     "route_deviation_m": null,
-    "last_report_ts": "2026-07-28T17:49:01.310624+00:00",
+    "last_report_ts": "2026-07-30T02:37:13.295925+00:00",
     "apps": [],
     "os_version": null,
     "model": null,
@@ -161,7 +167,9 @@
     "last_checkin": null,
     "enrolled_at": null,
     "device_tag": null,
-    "geofence_compliance": null
+    "geofence_compliance": null,
+    "passcode_compliant": null,
+    "filevault_enabled": null
   },
   {
     "device_id": "dev-1002",
@@ -180,12 +188,12 @@
     "inside_fence": "warehouse-poly",
     "fence_state": "inside",
     "location_source": "applivery",
-    "risk_score": 25.0,
-    "risk_severity": "low",
+    "risk_score": 35.0,
+    "risk_severity": "medium",
     "route_id": null,
     "route_state": "unassigned",
     "route_deviation_m": null,
-    "last_report_ts": "2026-07-28T17:49:01.312023+00:00",
+    "last_report_ts": "2026-07-30T02:37:13.298365+00:00",
     "apps": [],
     "os_version": null,
     "model": null,
@@ -202,6 +210,8 @@
     "last_checkin": null,
     "enrolled_at": null,
     "device_tag": null,
-    "geofence_compliance": null
+    "geofence_compliance": null,
+    "passcode_compliant": null,
+    "filevault_enabled": null
   }
 ]
