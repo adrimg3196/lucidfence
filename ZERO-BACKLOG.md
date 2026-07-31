@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-08-01 | MANTENEDOR | P0 #74 cerrado por la causa raíz: `sbom.cdx.json` (artefacto que hashea todos los `.py`) sale de git y muere el `assert committed == sbom`; también el paso 2 de `scripts/pre-commit.sh`, que sin el fichero habría abortado TODO commit con `.py` (hueco que el PR #75 no cubría). Verificado con `git merge-tree` que el SBOM no era el único generador: `data/cloud_state.json` — snapshot que engine-cron republica en main cada hora — conflicta en el 100% de los PRs abiertos, así que job de CI `runtime-artifacts` que lo rechaza en rama. Tercer foco: la suite dejaba sucios `roadmap.json` (restauración por bytes) y `data/actions_log.jsonl` (destrackeado). Suite 344 PASS / 0 FAIL y `git status` limpio después de correrla. |
 | 2026-07-30b | DEV NOCTURNO | Issue #70 cerrado: `Engine.run_command` persiste el `device_state` que devuelve el adapter (readback `ddm_status`) con merge-no-reemplazo — un report parcial no pisa campos ausentes, `ok=False` y `dry_run` no mutan, `ddm_errors` queda en el action log. Campos nuevos `passcode_compliant` y `filevault_enabled` en `DeviceState`. Hook en el punto compartido (sirve igual al readback DSC de Windows), sin tocar la ruta imperativa. Suite 289 PASS / 2 FAIL (los 2 TypeGuard py3.9, issue #51 con PRs #69/#66 en vuelo). |
 | 2026-07-30 | DEV NOCTURNO | DDM fase 2 (issue #52): canal de Jamf Pro con endpoints **verificados** contra el OpenAPI oficial v11.30 (`ddm_status` + `ddm_sync`); hueco declarado y documentado — Jamf no publica endpoint para subir declarations propias, así que `apply_ddm` sigue offline. Dos bugs de causa raíz de la fase 1: las acciones DDM no estaban en `VALID_ACTIONS` (engine y API las rechazaban: la capa declarativa era inalcanzable) y los booleanos stringificados de Jamf llegaban como `"true"` al modelo de estado. Suite 287 PASS / 2 FAIL (las 2 son el TypeGuard de Python 3.9, issue #51). |
 | 2026-07-29 | DDM | Issue #40 cerrado: `lucidfence/core/ddm.py` genera declarations Apple (legacy + status-subscriptions + activation.simple) desde una `Policy`, con `ServerToken` determinista (idempotencia), gate `supports_ddm` por versión de OS y `parse_status_report`. Flag `MDMAdapter.supports_ddm` (False por defecto), `jamf` a True con acción `apply_ddm` offline. 14 tests golden sin red; suite 281 PASS + los 2 rojos py3.9 conocidos. |
@@ -19,8 +20,25 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 - SBOM regenerado tras borrar los JS muertos.
 - `.github/FUNDING.yml` (github: adrimg3196) — **pendiente: Adri debe activar GitHub Sponsors** para que el botón funcione.
 
+## Hecho (2026-08-01)
+
+- Issue #74 (P0) resuelto de raíz, más los dos generadores de conflicto que el
+  issue no nombraba (`data/cloud_state.json` y la suciedad que dejaba la suite).
+- Los PRs abiertos siguen necesitando **rebase manual**: el conflicto del SBOM
+  pasa a ser `modify/delete` y se resuelve con `git rm sbom.cdx.json`; el de
+  `data/cloud_state.json` con `git checkout origin/main -- data/cloud_state.json`.
+- Rama `zero-nightly` reseteada a main: sus 9 commits huérfanos (DDM fase 2 y
+  #70) ya estaban en main por otra vía — verificado con `git diff` sobre
+  `lucidfence/core/ddm.py` (idéntico). Worktree obsoleto `/private/tmp/lf-zero`
+  eliminado.
+
 ## Ideas
 
+- El SBOM ya no se versiona: si algún día hace falta trazabilidad histórica de
+  supply chain, adjuntarlo a los releases de GitHub, no a los commits.
+- `data/cloud_tenants/**` es el mismo patrón que `cloud_state.json` (estado de
+  runtime versionado); hoy no genera conflictos, pero es candidato a la misma
+  regla si empieza a moverse.
 - Purga de menciones a planes de pago en docs legacy de marketing (`docs/launch-copy/`, `docs/marketing-copy.md`, `KANBAN.md`, `docs/PILOT_RUNBOOK.md`).
 - Capabilities `org:delete` y `user:role` están en la matriz RBAC pero ningún endpoint las comprueba — decidir: implementar endpoints o borrarlas.
 - Botón "Apoya el proyecto" (donaciones) discreto en el dashboard, alimentado por `FREE_PLAN.donations`.
