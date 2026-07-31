@@ -1360,6 +1360,30 @@ async function renderSettings(){
     const r=await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     if(r.ok){toast("UEM guardado",live?"Applivery":"Demo local","ok");refresh(false);}else toast("Error",r.error||"","bad");
   };
+  // --- Validate-config: verify the location_source mapping against the live UEM/MDM API.
+  const vcard=document.createElement("div"); vcard.className="card"; vcard.style.marginTop="14px";
+  vcard.innerHTML='<div class="hd"><h3>Validar mapeo UEM (cualquier fabricante)</h3></div>'+
+    '<div class="bd"><div class="help">Prueba tu bloque <code>location_source</code> de config.json contra la API real y ver que campos resuelven. Sirve para Fleet, Intune, Jamf, Mosyle, Workspace ONE o tu endpoint.</div>'+
+    '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn outline" id="vBtn">Validar config</button></div>'+
+    '<div id="vResult" style="margin-top:12px;font-family:monospace;white-space:pre-wrap;font-size:12px"></div></div>';
+  $("#view-settings").appendChild(vcard);
+  $("#vBtn").onclick=async()=>{
+    const out=$("#vResult"); out.textContent="validando…";
+    const r=await api("/api/config/validate");
+    if(!r){ out.textContent="sin respuesta"; return; }
+    if(r.reason){ out.textContent="SKIP: "+r.reason; return; }
+    const lines=[];
+    lines.push("URL: "+(r.url||"-"));
+    lines.push("Dispositivos: crudos "+(r.devices_raw??0)+" · con geo "+(r.devices_with_geo??0)+" · sin geo "+(r.devices_dropped_no_geo??0));
+    if(r.fetch_error) lines.push("FETCH ERROR: "+JSON.stringify(r.fetch_error));
+    lines.push("Campos:");
+    for(const [k,v] of Object.entries(r.field_resolution||{})){
+      const flag = v.resolved===v.total&&v.total ? "OK" : (v.resolved? "PARCIAL":"FALTA");
+      lines.push("  "+k.padEnd(12)+" "+v.path.padEnd(28)+" "+v.resolved+"/"+v.total+"  ["+flag+"]");
+    }
+    lines.push("RESULTADO: "+(r.ok?"OK":"REVISAR MAPEO"));
+    out.textContent=lines.join("\n");
+  };
 
   const presets=ai.presets||[];
   $("#aiSetBody").innerHTML=`

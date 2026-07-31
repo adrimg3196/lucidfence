@@ -1156,6 +1156,15 @@ class Handler(BaseHTTPRequestHandler):
                                      "leader": bool(_cluster_lease and _cluster_lease.acquired) if os.environ.get("LUCIDFENCE_CLUSTER_MODE") == "active-passive" else True,
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
+        # Validate the location_source mapping against the live UEM/MDM API.
+        # Works for any vendor configured via the generic HTTP source.
+        if route == "/api/config/validate" and method == "GET":
+            try:
+                from lucidfence.core.config_validator import validate_config
+                return _send_json(self, validate_config(str(CONFIG_FILE)))
+            except Exception as e:  # noqa: BLE001 — surface as JSON, never 500 hygiene
+                return _send_json(self, {"ok": False, "error": f"{type(e).__name__}: {e}"}, 200)
+
 
         # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
         # External SOAR tools cannot hold a browser session cookie. This endpoint
