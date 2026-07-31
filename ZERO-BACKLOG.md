@@ -34,6 +34,11 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 ## Ideas
 
+- `test_sbom_contains_locked_dependencies_and_source_manifest` quedó algo
+  auto-referencial al quitar la copia commiteada: recalcula el filtro de
+  `build_sbom` para comprobar el conteo. Anclarlo mejor: aserción de
+  determinismo (`build_sbom(ROOT) == build_sbom(ROOT)`) y que todo pin `==` de
+  `requirements.lock` aparezca en los purls.
 - El SBOM ya no se versiona: si algún día hace falta trazabilidad histórica de
   supply chain, adjuntarlo a los releases de GitHub, no a los commits.
 - `data/cloud_tenants/**` es el mismo patrón que `cloud_state.json` (estado de
