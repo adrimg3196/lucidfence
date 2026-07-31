@@ -38,6 +38,20 @@ def test_dashboard_browser_smoke() -> None:
             assert page.locator("text=OPERACIÓN").count() >= 1
             assert page.locator("text= Ciclo ").count() >= 1
 
+            # Demo auto-login can leave the auth modal up in headless when the
+            # Strict session cookie does not survive the bootstrap reload. If the
+            # nav never populates, establish the demo session from the browser
+            # context (same-origin fetch keeps the HttpOnly cookie) and reload.
+            try:
+                page.wait_for_selector("#nav a", timeout=8000)
+            except Exception:
+                page.evaluate("""async () => {
+                    await fetch('/api/auth/demo', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:'{}'});
+                }""")
+                page.reload(wait_until="load")
+                page.wait_for_selector("body >> text=Command Center", timeout=15000)
+                page.wait_for_selector("#nav a", timeout=15000)
+
             # Reset expected anonymous /api/auth/me=401 from bootstrap, then
             # traverse every active product view and demand real rendered data.
             bad_responses.clear(); request_failures.clear(); console_msgs.clear(); page_errors.clear()

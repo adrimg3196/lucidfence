@@ -234,9 +234,9 @@ const NAV = [
   {id:"goals",      label:"Objetivos",   icon:"target"},
   {id:"intelligence",label:"Inteligencia",icon:"chart-line"},
   {id:"company",     label:"Compañía autónoma",icon:"building"},
-  {id:"roi",        label:"ROI · Valor", icon:"trending-up"},
   {id:"settings",   label:"Ajustes",     icon:"settings"},
   {id:"roadmap",    label:"Roadmap",     icon:"git-branch"},
+  {id:"roi",        label:"ROI · Valor", icon:"trending-up"},
 ];
 
 function renderNav(){
@@ -280,9 +280,9 @@ function goView(id){
   if(id==="goals") renderGoals();
   if(id==="intelligence") renderIntelligence();
   if(id==="company") renderCompany();
-  if(id==="roi") renderROI();
   if(id==="settings") renderSettings();
   if(id==="roadmap") renderRoadmap();
+  if(id==="roi") renderROI();
 }
 
 /* ---------- boot ---------- */
@@ -392,67 +392,9 @@ async function renderRoadmap(){
     });
   }catch(e){
     node.innerHTML = `<div class="empty"><div class="t">No se pudo cargar el roadmap</div><div class="s">${esc(e.message)}</div></div>`;
-
-async function renderROI(){
-  const node = $("#view-roi"); if(!node) return;
-  try{
-    const [prod, loopMetrics] = await Promise.all([
-      api("/api/product"),
-      api("/api/loop/metrics").catch(()=>({iterations:0,average_score:0,below_threshold:0}))
-    ]);
-    const roi = prod.roi || {enabled:false};
-    if(!roi.enabled){
-      node.innerHTML = `<div class="empty"><div class="t">ROI no disponible</div><div class="s">Requiere al menos un dispositivo en la flota</div></div>`;
-      return;
-    }
-    const s = roi.summary;
-    const b = roi.breakdown;
-    const d = roi.drivers;
-    const a = roi.assumptions;
-    const stCls = s.compliance_score >= 80 ? "in" : s.compliance_score >= 50 ? "warn" : "bad";
-    const monthlyFmt = fmt.n(s.monthly_value_usd);
-    const annualFmt = fmt.n(s.annualized_value_usd);
-    node.innerHTML = `
-      <div class="view-head">
-        <div><h2>ROI · Valor de negocio</h2>
-          <div class="sub">Cuantificación local del valor generado por automatización y reducción de riesgo</div></div>
-        <div class="acts"><span class="tag ${stCls}"><span class="d"></span>${s.compliance_score}% compliance</span></div>
-      </div>
-      <div class="kpis">
-        <div class="kpi ok"><div class="lab">Valor mensual</div><div class="val">$${monthlyFmt}</div><div class="bot">Equivale a producto SaaS comercial</div></div>
-        <div class="kpi acc"><div class="lab">Valor anualizado</div><div class="val">$${annualFmt}</div><div class="bot">Ahorro estimado vs coste $0 local</div></div>
-        <div class="kpi"><div class="lab">Reducción de riesgo</div><div class="val ${s.risk_reduction_pct>=50?'ok':'warn'}">${s.risk_reduction_pct}%</div><div class="bot">vs flota sin geofencing</div></div>
-        <div class="kpi"><div class="lab">Compliance</div><div class="val">${s.compliance_score}%</div><div class="bot">${s.fleet_size} dispositivos</div></div>
-      </div>
-      <div class="grid-main">
-        <div class="card"><div class="hd"><h3>Desglose del valor mensual</h3></div><div class="bd">
-          <div class="grid3">
-            <div class="kpi"><div class="lab">Ahorro operacional</div><div class="val ok">$${fmt.n(b.labor_savings_monthly_usd)}</div><div class="bot">${d.hours_saved_automation}h automatización + ${d.incidents_auto_detected} incidentes auto-detectados</div></div>
-            <div class="kpi"><div class="lab">Evitación de brechas</div><div class="val acc">$${fmt.n(b.breach_avoidance_monthly_usd)}</div><div class="bot">${d.projected_breaches_prevented_yearly}/año proyectados</div></div>
-            <div class="kpi"><div class="lab">Ahorro compliance</div><div class="val">$${fmt.n(b.compliance_savings_monthly_usd)}</div><div class="bot">$${fmt.n(a.cost_per_compliance_violation_usd)}/violación · ${d.projected_monthly_incidents}/mes proyectadas</div></div>
-          </div>
-        </div></div>
-        <div class="card"><div class="hd"><h3>Drivers clave</h3></div><div class="bd">
-          <div class="row"><span>Acciones UEM automatizadas</span><b>${d.auto_actions_executed}</b></div>
-          <div class="row"><span>Horas ahorradas (automatización)</span><b>${d.hours_saved_automation}h</b></div>
-          <div class="row"><span>Incidentes críticos/altos detectados</span><b>${d.incidents_auto_detected}</b></div>
-          <div class="row"><span>Incidentes proyectados/mes</span><b>${d.projected_monthly_incidents}</b></div>
-          <div class="row"><span>Brechas prevenidas/año</span><b>${d.projected_breaches_prevented_yearly}</b></div>
-        </div></div>
-      </div>
-      <div class="card" style="margin-top:14px"><div class="hd"><h3>Supuestos (ajustables)</h3></div><div class="bd">
-        <div class="row"><span>Coste hora incidente</span><b>$${a.cost_per_incident_hour_usd}/h</b></div>
-        <div class="row"><span>Coste brecha de datos</span><b>$${fmt.n(a.cost_per_breach_usd)}</b></div>
-        <div class="row"><span>Coste violación compliance</span><b>$${fmt.n(a.cost_per_compliance_violation_usd)}</b></div>
-        <div class="row"><span>Horas/acción automática</span><b>${a.hours_saved_per_auto_action}h</b></div>
-        <div class="row"><span>Horas/incidente</span><b>${a.hours_saved_per_incident}h</b></div>
-        <div class="sub" style="margin-top:8px">${a.note}</div>
-      </div></div>
-    `;
-  }catch(e){
-    node.innerHTML = `<div class="empty"><div class="t">Error cargando ROI</div><div class="s">${esc(e.message)}</div></div>`;
   }
 }
+function updateSync(st, before){
   const syncing = !before || (st && st.last_cycle_at && (!before.last_cycle_at || st.last_cycle_at>before.last_cycle_at));
   const se = $("#sync"); se.classList.remove("stale");
   if(st && st.last_cycle_at){
@@ -2052,4 +1994,56 @@ async function sendDeviceCommand(devId, action, params){
     toast("Error", (r.error||"no enviado"), "bad");
   }
   return r;
+}
+
+/* ===================== VISTA: ROI (valor de negocio) ===================== */
+async function renderROI(){
+  const node = $("#view-roi"); if(!node) return;
+  try{
+    const prod = await api("/api/product");
+    const roi = (prod && prod.roi) || {enabled:false};
+    if(!roi.enabled){
+      node.innerHTML = `<div class="empty"><div class="t">ROI no disponible</div><div class="s">Requiere al menos un dispositivo en la flota</div></div>`;
+      return;
+    }
+    const s = roi.summary || {};
+    const b = roi.breakdown || {};
+    const d = roi.drivers || {};
+    const a = roi.assumptions || {};
+    node.innerHTML = `
+      <div class="view-head">
+        <div><h2>ROI · Valor de negocio</h2>
+        <div class="sub">Estimación local a partir del estado observado · sin llamadas externas</div></div>
+      </div>
+      <div class="card"><div class="hd"><h3>Resumen</h3></div><div class="bd">
+        <div class="metrics">
+          <div class="metric"><div class="v">${esc(fmt.n(s.total_monthly_value||0))}</div><div class="l">Valor mensual estimado</div></div>
+          <div class="metric"><div class="v">${esc(fmt.n(s.commercial_equivalent||0))}</div><div class="l">Equivalente comercial anual</div></div>
+          <div class="metric"><div class="v">${esc(s.risk_reduction_pct!=null?s.risk_reduction_pct:"-")}%</div><div class="l">Reducción de riesgo</div></div>
+        </div>
+      </div></div>
+      <div class="card"><div class="hd"><h3>Desglose</h3></div><div class="bd">
+        <ul class="alist">
+          <li><span>Ahorro laboral/mes</span><b>${esc(fmt.n(b.labor_savings_monthly||0))}</b></li>
+          <li><span>Brechas evitadas/mes</span><b>${esc(fmt.n(b.breach_avoidance_monthly||0))}</b></li>
+          <li><span>Compliance/mes</span><b>${esc(fmt.n(b.compliance_savings_monthly||0))}</b></li>
+        </ul>
+      </div></div>
+      <div class="card"><div class="hd"><h3>Impulsores</h3></div><div class="bd">
+        <ul class="alist">
+          <li><span>Acciones ejecutadas</span><b>${esc(d.actions_executed||0)}</b></li>
+          <li><span>Dispositivos fuera de geovalla</span><b>${esc(d.outside_fence||0)}</b></li>
+          <li><span>Dispositivos no conformes</span><b>${esc(d.non_compliant||0)}</b></li>
+        </ul>
+      </div></div>
+      <div class="card"><div class="hd"><h3>Supuestos</h3></div><div class="bd">
+        <ul class="alist">
+          <li><span>Coste por hora de incidente</span><b>${esc(fmt.n(a.cost_per_incident_hour||0))}</b></li>
+          <li><span>Coste por brecha</span><b>${esc(fmt.n(a.cost_per_breach||0))}</b></li>
+          <li><span>Coste por violación de compliance</span><b>${esc(fmt.n(a.cost_per_compliance_violation||0))}</b></li>
+        </ul>
+      </div></div>`;
+  }catch(e){
+    node.innerHTML = `<div class="empty"><div class="t">Error cargando ROI</div><div class="s">${esc(e.message)}</div></div>`;
+  }
 }

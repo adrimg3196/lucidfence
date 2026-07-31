@@ -1527,6 +1527,10 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": str(exc)}, 400)
             return _send_json(self, {"ok": True, "incident": incident})
 
+        # product intelligence bundle (read-only, local) — alimenta la vista ROI
+        if route == "/api/product" and method == "GET":
+            return _send_json(self, _product_bundle(eng))
+
         # product intelligence
         if route in ("/api/risk", "/api/incidents", "/api/incidents/export", "/api/incidents/analytics",
                      "/api/policies", "/api/analytics", "/api/activation",
