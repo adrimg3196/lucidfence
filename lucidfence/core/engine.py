@@ -88,6 +88,7 @@ class Engine:
         self.source = build_location_source(
             self.mode, self.org_id, config.get("sim_seed_path", "data/fleet_seed.json"),
             api_key=config.get("_applivery_api_key", ""),
+            location_cfg=config.get("location_source"),
         )
         self.adapter = build_adapter(
             self.mode if not self.dry_run else "simulation",  # never call live in dry_run
