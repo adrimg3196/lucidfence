@@ -80,11 +80,13 @@ jobs:
       # contenido con main es seguro y bloquea el merge — el mismo deadlock
       # del issue #74 por otra via.
       - name: Reject changes to files published by main
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          changed=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- data/cloud_state.json)
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- data/cloud_state.json)
           if [ -n "$changed" ]; then
             echo "::error::data/cloud_state.json es un snapshot que publica engine-cron en main." >&2
-            echo "Restauralo en la rama: git checkout origin/${{ github.base_ref }} -- data/cloud_state.json" >&2
+            echo "Restauralo en la rama: git checkout origin/$BASE_REF -- data/cloud_state.json" >&2
             exit 1
           fi
 
