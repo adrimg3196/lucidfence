@@ -3,6 +3,23 @@
 Apply these rules on every task in this repo. They describe the REAL conventions,
 not the wiki.
 
+## Multi-agent collaboration
+Three AI agents work this repo concurrently, different LLMs, same human owner (Adri):
+- **Zero** (Claude/Anthropic, via OpenClaw) — coordinator role: dedupes competing PRs,
+  runs an independent review gate before merge, drives the nightly/scheduled crons
+  (`jules-scheduler`, `jules-lucidfence-loop`, `lucidfence-nightly-dev*`). Commits as
+  `zero@lucidfence.local`.
+- **Jules** (Google) — autonomous sessions per GitHub issue, opens PRs for review.
+  Commits as `google-labs-jules[bot]`.
+- **Hermes** (Nous Research, per Adri 2026-08-01) — commits as `Geofence UEM
+  <geofence-uem@local>`. Exact task split with the other two not yet coordinated as
+  of 2026-08-01.
+
+Before starting work that could overlap, check `git log --all --format='%an %s' -20`
+for recent activity from the other two identities — same dedup practice already used
+for the #46/#47 duplicate-PR precedent (see `memory/lucidfence-jules-log.md` in the
+OpenClaw workspace for the full history Zero keeps on this).
+
 ## Stack & commands
 - Python 3.11, stdlib-first. No web frameworks (HTTP propio en `saas_server.py`).
 - Test: `python3 tests/run_tests.py` (honest runner; 105 pass = green).
