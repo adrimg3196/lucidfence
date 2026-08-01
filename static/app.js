@@ -146,12 +146,40 @@ function updateUserUI(){
   const org = (App.org && App.org.org && App.org.org.name) || (App.orgs&&App.orgs[0]&&App.orgs[0].name) || "";
   const ro = $("#sideOrg"); if(ro) ro.textContent = org || "";
 }
+async function checkOidcStatus(){
+  const ssoBtn = $("#authSSO");
+  if(!ssoBtn) return;
+  if(App._authTab === "signup"){
+    ssoBtn.style.display = "none";
+    return;
+  }
+  try {
+    const r = await api("/api/auth/oidc/status");
+    if(r.enabled){
+      ssoBtn.style.display = "inline-flex";
+    } else {
+      ssoBtn.style.display = "none";
+    }
+  } catch(e) {
+    ssoBtn.style.display = "none";
+  }
+}
 function showAuthModal(){
   const m = $("#authModal"), ov = $("#authOvl");
   if(!m) return;
   setAuthTab(App._authTab||"login");
   m.classList.add("show"); m.setAttribute("aria-hidden","false"); ov.classList.add("show");
   const e = $("#authEmail"); if(e) setTimeout(()=>e.focus(), 30);
+  checkOidcStatus();
+
+  const params = new URLSearchParams(window.location.search);
+  if(params.get("auth_error") === "sso_failed"){
+    const res = $("#authResult");
+    if(res) {
+      res.className = "test-result bad show";
+      res.textContent = "Error al iniciar sesión con SSO (OIDC). Inténtalo de nuevo o accede con contraseña.";
+    }
+  }
 }
 function hideAuthModal(){
   const m = $("#authModal"), ov = $("#authOvl");
@@ -166,6 +194,7 @@ function setAuthTab(tab){
   const sub = $("#authSub"); if(sub) sub.textContent = tab==="signup"?"Registro rápido · 100% local":"Gestiona tu flota de forma segura";
   const btn = $("#authSubmit"); if(btn) btn.textContent = tab==="signup"?"Crear cuenta":"Entrar";
   const res = $("#authResult"); if(res){ res.className="test-result"; res.textContent=""; }
+  checkOidcStatus();
 }
 async function submitAuth(){
   const tab = App._authTab||"login";
@@ -1328,9 +1357,11 @@ async function renderSettings(){
         <div class="bd" id="setBody"><div class="sk" style="height:260px"></div></div></div>
       <div class="card"><div class="hd"><h3>Proveedor AI opcional</h3><div class="grow"></div><span class="tag unk"><span class="d"></span>BYO API</span></div>
         <div class="bd" id="aiSetBody"><div class="sk" style="height:260px"></div></div></div>
-    </div>`;
-  let s={}, ai={};
-  try{ [s,ai] = await Promise.all([api("/api/settings/status"), api("/api/ai/settings")]); }catch(e){}
+    </div>
+    <div class="card" style="margin-top:14px"><div class="hd"><h3>Configuración SSO (OIDC)</h3><div class="grow"></div><span class="tag unk"><span class="d"></span>OIDC SSO</span></div>
+      <div class="bd" id="oidcSetBody"><div class="sk" style="height:200px"></div></div></div>`;
+  let s={}, ai={}, oidc={};
+  try{ [s,ai,oidc] = await Promise.all([api("/api/settings/status"), api("/api/ai/settings"), api("/api/settings/oidc").catch(()=>({}))]); }catch(e){}
   const mode = s.mode||"simulation";
   $("#setBody").innerHTML = `
     <div class="field"><label>Conector</label><select class="input" id="sProvider">
@@ -1400,6 +1431,60 @@ async function renderSettings(){
   const aiPayload=()=>({enabled:$("#aiEnabled").classList.contains("on"),provider:$("#aiPreset").value,base_url:$("#aiBase").value,model:$("#aiModel").value,api_key:$("#aiKey").value});
   $("#aiSave").onclick=async()=>{const r=await api("/api/ai/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});if(r.ok){toast("AI guardada",r.enabled?r.model:"Desactivada","ok");renderSettings();}else toast("Error",r.error||"","bad");};
   $("#aiTest").onclick=async()=>{const r=await api("/api/ai/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});const out=$("#aiResult");out.className="test-result "+(r.ok?"ok show":"bad show");out.textContent=r.ok?`Conexión correcta · ${(r.models||[]).slice(0,3).join(', ')||'endpoint activo'}`:(r.error||"Fallo de conexión");};
+
+  const oidcSetBody = $("#oidcSetBody");
+  if(oidcSetBody){
+    oidcSetBody.innerHTML = `
+      <div class="switch-row"><div style="flex:1"><div class="lab">Habilitar SSO (OIDC)</div><div class="ds">Permite a los usuarios de tu dominio iniciar sesión con tu IdP (Okta, Keycloak, Entra ID, etc.)</div></div><div class="switch ${oidc.enabled?'on':''}" id="oidcEnabled"></div></div>
+      <div class="field"><label>Issuer URL</label><input class="input" id="oidcIssuer" value="${esc(oidc.issuer||'')}" placeholder="https://accounts.google.com"></div>
+      <div class="field"><label>Client ID</label><input class="input" id="oidcClientId" value="${esc(oidc.client_id||'')}" placeholder="client-id-here"></div>
+      <div class="field"><label>Client Secret</label><div class="input-wrap"><input class="input" id="oidcSecret" type="password" placeholder="${oidc.masked_secret?'Dejar vacío para conservar':'secret-here'}"><button class="toggle" type="button" id="toggleOidcSecret">Ver</button></div><div class="help">${oidc.masked_secret?'Configurada: <b>'+esc(oidc.masked_secret)+'</b>':'Sin clave configurada'}</div></div>
+      <div class="field"><label>Dominio de email permitido</label><input class="input" id="oidcDomain" value="${esc(oidc.allowed_domain||'')}" placeholder="miempresa.com"></div>
+      <div class="field"><label>Rol por defecto para nuevos usuarios (JIT)</label>
+        <select class="input" id="oidcDefaultRole">
+          <option value="viewer" ${oidc.default_role==='viewer'?'selected':''}>Solo lectura</option>
+          <option value="operator" ${oidc.default_role==='operator'?'selected':''}>Operador</option>
+          <option value="auditor" ${oidc.default_role==='auditor'?'selected':''}>Auditor</option>
+          <option value="admin" ${oidc.default_role==='admin'?'selected':''}>Administrador</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn primary" id="oidcSave">Guardar SSO</button></div>
+      <div id="oidcResult" class="test-result" style="margin-top:14px"></div>`;
+
+    const oidcEnabled = $("#oidcEnabled");
+    if(oidcEnabled) oidcEnabled.onclick = () => oidcEnabled.classList.toggle("on");
+
+    const toggleBtn = $("#toggleOidcSecret");
+    if(toggleBtn) toggleBtn.onclick = () => toggleShow("oidcSecret", toggleBtn);
+
+    const oidcSave = $("#oidcSave");
+    if(oidcSave){
+      oidcSave.onclick = async () => {
+        const payload = {
+          enabled: $("#oidcEnabled").classList.contains("on"),
+          issuer: $("#oidcIssuer").value.trim(),
+          client_id: $("#oidcClientId").value.trim(),
+          client_secret: $("#oidcSecret").value.trim(),
+          allowed_domain: $("#oidcDomain").value.trim(),
+          default_role: $("#oidcDefaultRole").value
+        };
+        const res = $("#oidcResult");
+        try {
+          const r = await api("/api/settings/oidc", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
+          if(r.ok){
+            toast("Ajustes SSO guardados", "", "ok");
+            renderSettings();
+          } else {
+            res.className = "test-result bad show";
+            res.textContent = r.error || "Error al guardar";
+          }
+        } catch(e) {
+          res.className = "test-result bad show";
+          res.textContent = e.message || "Error al guardar";
+        }
+      };
+    }
+  }
 }
 function toggleShow(id, btn){ const i=$("#"+id); if(i.type==="password"){i.type="text";btn.textContent="Ocultar";} else {i.type="password";btn.textContent="Ver";} }
 
@@ -1793,6 +1878,9 @@ function bindGlobal(){
   $("#authEmail") && $("#authEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#authPass").focus(); });
   $("#authOrg") && $("#authOrg").addEventListener("keydown", e=>{ if(e.key==="Enter") submitAuth(); });
   $$("#authTabs button").forEach(b=>b.onclick=()=>setAuthTab(b.dataset.t));
+  $("#authSSO") && ($("#authSSO").onclick = () => {
+    window.location.href = "/api/auth/oidc/login?return_path=" + encodeURIComponent(location.hash.replace(/^#/,"") || "/app");
+  });
   $("#authOvl") && ($("#authOvl").onclick = ()=>{ /* modal auth no se cierra con backdrop: evita acceso sin sesión */ });
   $("#sideLogout") && ($("#sideLogout").onclick = logout);
   window.addEventListener("hashchange", ()=>{

@@ -31,3 +31,8 @@ Documentation = "https://adrimg3196.github.io/lucidfence/"
 [tool.setuptools.packages.find]
 include = ["lucidfence*"]
 exclude = ["tests*", "data*"]
+
+[dependency-groups]
+dev = [
+    "playwright (>=1.61.0,<2.0.0)"
+]

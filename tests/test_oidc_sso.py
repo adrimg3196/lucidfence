@@ -554,3 +554,184 @@ def test_http_callback_access_log_redacts_entire_query():
     import saas_server as server
     assert server._redact_access_path("/api/auth/sso/google/callback?code=secret&state=secret") == "/api/auth/sso/google/callback?[REDACTED]"
     assert server._redact_access_path("/api/health?verbose=1") == "/api/health?verbose=1"
+
+
+def test_per_tenant_oidc_flow_complete(tmp_path=None):
+    tmp_path = _tmp(tmp_path)
+    import saas_server as server
+    from lucidfence.saas.tenant import TenantStore
+    rsa_material = _rsa_material()
+    key, jwk = rsa_material
+
+    auth = AuthStore(tmp_path / "auth")
+    tenants = TenantStore(tmp_path / "tenants")
+
+    org = tenants.create("My Company", "usr_owner_1")
+    owner = auth.create_user("owner@mycompany.com", "Owner", "password123", org.id, "owner")
+    org.owner_id = owner.id
+    tenants._save()
+
+    old_auth, old_tenants, old_providers, old_flows = server._auth, server._tenants, server._oidc_providers, server._oidc_flows
+    server._auth = auth
+    server._tenants = tenants
+    server._oidc_flows = OIDCFlowStore(tmp_path / "flows.json", lock=auth._lock)
+
+    from lucidfence.core.oidc import PinnedHTTPSTransport
+    old_json_request = PinnedHTTPSTransport.json_request
+
+    saved_nonce = []
+
+    def mock_json_request(self, method, url, **kwargs):
+        if "/.well-known/openid-configuration" in url:
+            return {
+                "issuer": ISSUER,
+                "authorization_endpoint": ISSUER + "/authorize",
+                "token_endpoint": ISSUER + "/token",
+                "jwks_uri": ISSUER + "/jwks"
+            }
+        if url.endswith("/jwks"):
+            return {"keys": [jwk]}
+        if url.endswith("/token"):
+            nonce = saved_nonce[0] if saved_nonce else "n"
+            return {
+                "id_token": signed_token(key, nonce=nonce, email="new_user@mycompany.com"),
+                "access_token": "mock-access-token"
+            }
+        return {}
+
+    PinnedHTTPSTransport.json_request = mock_json_request
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+
+        conn.request("POST", "/api/auth/login", body=json.dumps({
+            "email": "owner@mycompany.com",
+            "password": "password123"
+        }), headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{httpd.server_port}"})
+        response = conn.getresponse()
+        assert response.status == 200
+        cookies = response.getheaders()
+        session_cookie = next(value for name, value in cookies if name == "Set-Cookie" and value.startswith("gf_session="))
+        org_cookie = next(value for name, value in cookies if name == "Set-Cookie" and value.startswith("gf_org="))
+        cookie_header = f"{session_cookie.split(';', 1)[0]}; {org_cookie.split(';', 1)[0]}"
+        response.read()
+
+        conn.request("GET", "/api/settings/oidc", headers={"Host": f"127.0.0.1:{httpd.server_port}", "Cookie": cookie_header})
+        response = conn.getresponse()
+        assert response.status == 200
+        oidc_settings = json.loads(response.read())
+        assert oidc_settings["enabled"] is False
+
+        conn.request("POST", "/api/settings/oidc", body=json.dumps({
+            "enabled": True,
+            "issuer": ISSUER,
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "allowed_domain": "mycompany.com",
+            "default_role": "viewer"
+        }), headers={"Content-Type": "application/json", "Host": f"127.0.0.1:{httpd.server_port}", "Cookie": cookie_header})
+        response = conn.getresponse()
+        assert response.status == 200
+        response.read()
+
+        conn.request("GET", "/api/settings/oidc", headers={"Host": f"127.0.0.1:{httpd.server_port}", "Cookie": cookie_header})
+        response = conn.getresponse()
+        assert response.status == 200
+        oidc_settings = json.loads(response.read())
+        assert oidc_settings["enabled"] is True
+        assert oidc_settings["issuer"] == ISSUER
+        assert oidc_settings["client_id"] == CLIENT_ID
+        assert oidc_settings["allowed_domain"] == "mycompany.com"
+        assert oidc_settings["default_role"] == "viewer"
+        assert oidc_settings["masked_secret"] != ""
+
+        conn.request("GET", "/api/auth/oidc/status", headers={"Host": f"127.0.0.1:{httpd.server_port}", "Cookie": org_cookie})
+        response = conn.getresponse()
+        assert response.status == 200
+        status_res = json.loads(response.read())
+        assert status_res["enabled"] is True
+        assert status_res["org_id"] == org.id
+
+        conn.request("GET", "/api/auth/oidc/login?return_path=%2Fapp", headers={"Host": f"127.0.0.1:{httpd.server_port}", "Cookie": org_cookie})
+        response = conn.getresponse()
+        assert response.status == 302
+        preauth_cookie = response.getheader("Set-Cookie")
+        assert "gf_oidc_pre=" in preauth_cookie
+        location_header = response.getheader("Location")
+        auth_query = parse_qs(urlparse(location_header).query)
+        state = auth_query["state"][0]
+        nonce = server._oidc_flows.peek(state)["nonce"]
+        saved_nonce.append(nonce)
+        response.read()
+
+        callback_url = f"/api/auth/oidc/callback?state={state}&code=obvious-fake-code&iss={ISSUER}"
+        conn.request("GET", callback_url, headers={
+            "Host": f"127.0.0.1:{httpd.server_port}",
+            "Cookie": f"{preauth_cookie.split(';', 1)[0]}; {org_cookie.split(';', 1)[0]}"
+        })
+        response = conn.getresponse()
+        assert response.status == 303
+        assert response.getheader("Location") == "/app"
+
+        new_user = auth.get_by_email("new_user@mycompany.com")
+        assert new_user is not None
+        assert new_user.org_roles[org.id] == "viewer"
+        response.read()
+
+        saved_nonce.clear()
+
+        def mock_json_request_link(self, method, url, **kwargs):
+            if "/.well-known/openid-configuration" in url:
+                return {
+                    "issuer": ISSUER,
+                    "authorization_endpoint": ISSUER + "/authorize",
+                    "token_endpoint": ISSUER + "/token",
+                    "jwks_uri": ISSUER + "/jwks"
+                }
+            if url.endswith("/jwks"):
+                return {"keys": [jwk]}
+            if url.endswith("/token"):
+                nonce = saved_nonce[0] if saved_nonce else "n"
+                return {
+                    "id_token": signed_token(key, nonce=nonce, email="owner@mycompany.com"),
+                    "access_token": "mock-access-token"
+                }
+            return {}
+
+        PinnedHTTPSTransport.json_request = mock_json_request_link
+
+        conn.request("GET", "/api/auth/oidc/login?return_path=%2Fapp", headers={"Host": f"127.0.0.1:{httpd.server_port}", "Cookie": org_cookie})
+        response = conn.getresponse()
+        assert response.status == 302
+        preauth_cookie = response.getheader("Set-Cookie")
+        location_header = response.getheader("Location")
+        auth_query = parse_qs(urlparse(location_header).query)
+        state = auth_query["state"][0]
+        nonce = server._oidc_flows.peek(state)["nonce"]
+        saved_nonce.append(nonce)
+        response.read()
+
+        callback_url = f"/api/auth/oidc/callback?state={state}&code=obvious-fake-code&iss={ISSUER}"
+        conn.request("GET", callback_url, headers={
+            "Host": f"127.0.0.1:{httpd.server_port}",
+            "Cookie": f"{preauth_cookie.split(';', 1)[0]}; {org_cookie.split(';', 1)[0]}"
+        })
+        response = conn.getresponse()
+        assert response.status == 303
+
+        owner_linked = auth.get_by_email("owner@mycompany.com")
+        assert len(owner_linked.external_identities) > 0
+        assert owner_linked.external_identities[0]["issuer"] == ISSUER
+        assert owner_linked.org_roles[org.id] == "owner"
+        response.read()
+
+    finally:
+        PinnedHTTPSTransport.json_request = old_json_request
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=2)
+        server._auth, server._tenants, server._oidc_providers, server._oidc_flows = old_auth, old_tenants, old_providers, old_flows

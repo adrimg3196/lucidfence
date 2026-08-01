@@ -205,7 +205,8 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
 def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
                              incident_webhook_url: str = "",
                              atomicmail: dict | None = None,
-                             whitelabel: dict | None = None) -> None:
+                             whitelabel: dict | None = None,
+                             oidc: dict | None = None) -> None:
     path = tdir / "integration.json"
     runtime = {}
     try:
@@ -236,6 +237,12 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
             runtime["whitelabel"] = cleaned
         else:
             runtime.pop("whitelabel", None)
+    if oidc is not None:
+        cleaned = {k: v for k, v in (oidc or {}).items() if v not in (None, "")}
+        if cleaned:
+            runtime["oidc"] = cleaned
+        else:
+            runtime.pop("oidc", None)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
@@ -1121,6 +1128,130 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": "openapi no disponible"}, 503)
 
         # ---- auth ----
+        if route == "/api/auth/oidc/status" and method == "GET":
+            org_id = _cookie(self, COOKIE_ORG)
+            if not org_id:
+                return _send_json(self, {"enabled": False})
+            tdir = _tenants.data_dir(org_id)
+            if not tdir or not _tenants.get(org_id):
+                return _send_json(self, {"enabled": False})
+            runtime = _tenant_runtime(tdir)
+            oidc_config = runtime.get("oidc") or {}
+            return _send_json(self, {
+                "enabled": bool(oidc_config.get("enabled")),
+                "org_id": org_id,
+                "org_name": _tenants.get(org_id).name
+            })
+        if route == "/api/auth/oidc/login" and method == "GET":
+            org_id = _cookie(self, COOKIE_ORG) or qs.get("org", [""])[0]
+            if not org_id:
+                return _send_json(self, {"error": "no_org_selected"}, 400)
+            tdir = _tenants.data_dir(org_id)
+            if not tdir or not _tenants.get(org_id):
+                return _send_json(self, {"error": "invalid_org"}, 400)
+            runtime = _tenant_runtime(tdir)
+            oidc_config = runtime.get("oidc") or {}
+            if not oidc_config.get("enabled"):
+                return _send_json(self, {"error": "oidc_disabled"}, 400)
+            try:
+                provider = OIDCProvider(
+                    name="oidc",
+                    label="SSO OIDC",
+                    issuer=oidc_config["issuer"],
+                    client_id=oidc_config["client_id"],
+                    client_secret=oidc_config["client_secret"],
+                    redirect_uri=oidc_config.get("redirect_uri") or f"http://127.0.0.1:8765/api/auth/oidc/callback",
+                    authorization_endpoint=oidc_config["authorization_endpoint"],
+                    token_endpoint=oidc_config["token_endpoint"],
+                    jwks_uri=oidc_config["jwks_uri"],
+                    enabled=True,
+                    allowed_domains=(oidc_config["allowed_domain"],),
+                    provision_org_id=org_id,
+                    provision_role=oidc_config.get("default_role", "viewer")
+                )
+                browser = _cookie(self, COOKIE_OIDC_PREAUTH) or os.urandom(32).hex()
+                client = OIDCClient({"oidc": provider}, _oidc_flows, PinnedHTTPSTransport())
+                started = client.start("oidc", browser, qs.get("return_path", ["/app"])[0], "login")
+                _set_oidc_cookie(self, COOKIE_OIDC_PREAUTH, browser, 600)
+                return _send_redirect(self, started.authorization_url, 302)
+            except OIDCError as exc:
+                return _send_json(self, {"error": exc.code}, 400)
+        if route == "/api/auth/oidc/callback" and method == "GET":
+            browser = _cookie(self, COOKIE_OIDC_PREAUTH) or ""
+            return_path = _oidc_client.callback_return_path("oidc", parsed.query, browser)
+            try:
+                query_params = parse_qs(parsed.query)
+                state = query_params.get("state", [""])[0]
+                if not state:
+                    raise OIDCError("invalid_state")
+                flow = _oidc_flows.peek(state)
+                if not flow:
+                    raise OIDCError("invalid_state")
+                matching_org_id = None
+                for tenant in _tenants.all():
+                    tdir = _tenants.data_dir(tenant.id)
+                    rt = _tenant_runtime(tdir)
+                    oidc_cfg = rt.get("oidc") or {}
+                    if (oidc_cfg.get("enabled") and
+                        oidc_cfg.get("issuer") == flow.get("issuer") and
+                        oidc_cfg.get("client_id") == flow.get("client_id")):
+                        matching_org_id = tenant.id
+                        break
+                if not matching_org_id:
+                    raise OIDCError("provider_mixup")
+                tdir = _tenants.data_dir(matching_org_id)
+                runtime = _tenant_runtime(tdir)
+                oidc_config = runtime["oidc"]
+                provider = OIDCProvider(
+                    name="oidc",
+                    label="SSO OIDC",
+                    issuer=oidc_config["issuer"],
+                    client_id=oidc_config["client_id"],
+                    client_secret=oidc_config["client_secret"],
+                    redirect_uri=oidc_config.get("redirect_uri") or f"http://127.0.0.1:8765/api/auth/oidc/callback",
+                    authorization_endpoint=oidc_config["authorization_endpoint"],
+                    token_endpoint=oidc_config["token_endpoint"],
+                    jwks_uri=oidc_config["jwks_uri"],
+                    enabled=True,
+                    allowed_domains=(oidc_config["allowed_domain"],),
+                    provision_org_id=matching_org_id,
+                    provision_role=oidc_config.get("default_role", "viewer")
+                )
+                client = OIDCClient({"oidc": provider}, _oidc_flows, PinnedHTTPSTransport())
+                result = client.callback("oidc", parsed.query, browser)
+                if result.purpose != "login":
+                    raise OIDCError("unsupported_flow_purpose")
+                claims = result.claims
+                email = str(claims.get("email") or "").strip().lower()
+                issuer = str(claims.get("iss") or "").strip()
+                subject = str(claims.get("sub") or "").strip()
+                existing = _auth.get_by_external_identity(issuer, subject)
+                if existing is None:
+                    domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+                    if claims.get("email_verified") is not True or domain != oidc_config["allowed_domain"].strip().lower():
+                        raise OIDCError("provisioning_denied")
+                    existing_by_email = _auth.get_by_email(email)
+                    if existing_by_email is not None:
+                        _auth.link_external_identity(existing_by_email.id, issuer, subject)
+                        if matching_org_id not in existing_by_email.org_roles:
+                            _auth.add_org_role(existing_by_email.id, matching_org_id, oidc_config.get("default_role", "viewer"))
+                old_session = _cookie(self, COOKIE_SESSION) or ""
+                user, token = _auth.complete_oidc_login(
+                    issuer, subject, email,
+                    str(claims.get("name") or email),
+                    matching_org_id, oidc_config.get("default_role", "viewer"),
+                    old_session=old_session
+                )
+                _clear_cookie(self, COOKIE_OIDC_PREAUTH)
+                _set_oidc_cookie(self, COOKIE_SESSION, token, _auth.session_ttl)
+                _set_oidc_cookie(self, COOKIE_ORG, matching_org_id, _auth.session_ttl)
+                _log_event("oidc_login", provider="oidc", outcome="success", user_id=user.id)
+                return _send_redirect(self, result.return_path, 303, no_referrer=True)
+            except Exception as exc:
+                _clear_cookie(self, COOKIE_OIDC_PREAUTH)
+                _log_event("oidc_login", provider="oidc", outcome="failure", reason=str(exc))
+                return _send_redirect(self, return_path + "?auth_error=sso_failed", 303, no_referrer=True)
+
         if route == "/api/auth/sso/providers" and method == "GET":
             return _send_json(self, {"providers": [p.public_dict() for p in _oidc_providers.values()]})
         if route.startswith("/api/auth/sso/") and route.endswith("/start") and method == "GET":
@@ -1593,6 +1724,82 @@ class Handler(BaseHTTPRequestHandler):
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
+        if route == "/api/settings/oidc" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            oidc_config = runtime.get("oidc") or {}
+            client_secret = oidc_config.get("client_secret", "")
+            masked_secret = _masked_secret(client_secret)
+            return _send_json(self, {
+                "enabled": bool(oidc_config.get("enabled")),
+                "issuer": oidc_config.get("issuer", ""),
+                "client_id": oidc_config.get("client_id", ""),
+                "masked_secret": masked_secret,
+                "allowed_domain": oidc_config.get("allowed_domain", ""),
+                "default_role": oidc_config.get("default_role", "viewer")
+            })
+        if route == "/api/settings/oidc" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            enabled = bool(body.get("enabled"))
+            issuer = (body.get("issuer") or "").strip()
+            client_id = (body.get("client_id") or "").strip()
+            client_secret = (body.get("client_secret") or "").strip()
+            allowed_domain = (body.get("allowed_domain") or "").strip()
+            default_role = (body.get("default_role") or "viewer").strip()
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            existing_oidc = runtime.get("oidc") or {}
+            if not client_secret:
+                client_secret = existing_oidc.get("client_secret") or ""
+            if enabled or issuer or client_id or allowed_domain:
+                if not issuer or not client_id or not allowed_domain:
+                    return _send_json(self, {"error": "issuer, client_id y allowed_domain son obligatorios para habilitar OIDC"}, 400)
+                if not client_secret:
+                    return _send_json(self, {"error": "client_secret es obligatorio"}, 400)
+                if default_role not in ROLE_CAPS:
+                    return _send_json(self, {"error": "rol por defecto inválido"}, 400)
+                try:
+                    transport = PinnedHTTPSTransport()
+                    discovery_url = issuer.rstrip('/') + '/.well-known/openid-configuration'
+                    metadata = transport.json_request("GET", discovery_url)
+                    validated = transport.validator.validate_metadata(issuer, metadata)
+                    authorization_endpoint = validated["authorization_endpoint"]
+                    token_endpoint = validated["token_endpoint"]
+                    jwks_uri = validated["jwks_uri"]
+                except Exception as exc:
+                    return _send_json(self, {"error": f"Error de autodescubrimiento OIDC: {str(exc)}"}, 400)
+            else:
+                authorization_endpoint = ""
+                token_endpoint = ""
+                jwks_uri = ""
+            oidc_payload = {
+                "enabled": enabled,
+                "issuer": issuer,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "allowed_domain": allowed_domain,
+                "default_role": default_role,
+                "authorization_endpoint": authorization_endpoint,
+                "token_endpoint": token_endpoint,
+                "jwks_uri": jwks_uri
+            }
+            _save_tenant_integration(
+                tdir, eng.config.get("mode", "simulation"),
+                eng.config.get("dry_run", True),
+                incident_webhook_url=eng.config.get("incident_webhook_url", ""),
+                atomicmail=eng.config.get("atomicmail"),
+                whitelabel=runtime.get("whitelabel"),
+                oidc=oidc_payload
+            )
+            try:
+                reload_engine(org)
+            except Exception:
+                pass
+            return _send_json(self, {"ok": True, "enabled": enabled})
         if route == "/api/settings" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -2117,7 +2324,6 @@ class Handler(BaseHTTPRequestHandler):
         if token:
             _auth.destroy_session(token)
         _clear_cookie(self, COOKIE_SESSION)
-        _clear_cookie(self, COOKIE_ORG)
         _send_json(self, {"ok": True})
 
     # ---- product intelligence ------------------------------------------
