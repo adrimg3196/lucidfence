@@ -19,8 +19,17 @@
       try{const raw=localStorage.getItem(DB);return raw?JSON.parse(raw):LucidFenceWeb.initialState();}catch(ignore){return LucidFenceWeb.initialState();}
     }
   }
+  const SETTINGS_SECRET_KEYS=['uemCredsB64','secCredsB64'];
   async function save(state){
-    const clean=state; // ponytail: la persistencia interna no necesita sanitizeImport (ese es para import de archivos externos); state ya excluye secretos en claro
+    // ponytail: sanitizeImport es para import de archivos externos (lanza si ve un secreto);
+    // aqui necesitamos guardar el resto del estado igual, solo sin los campos de credenciales -
+    // uemCredsB64/secCredsB64 viven en memoria (state.settings) para la sesion actual, nunca en disco.
+    let clean=state;
+    if(state&&state.settings&&SETTINGS_SECRET_KEYS.some(k=>k in state.settings)){
+      const settings={...state.settings};
+      SETTINGS_SECRET_KEYS.forEach(k=>delete settings[k]);
+      clean={...state,settings};
+    }
     try{
       const db=await open();
       if(!db) throw new Error('IndexedDB unavailable');

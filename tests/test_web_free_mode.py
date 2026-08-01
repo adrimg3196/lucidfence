@@ -111,3 +111,34 @@ def test_free_web_app_goal_cycle_and_indexeddb_persistence():
             assert not errors and not failed and not bad, (errors, failed, bad)
         finally:
             browser.close()
+
+
+def test_uem_wizard_credentials_never_reach_indexeddb():
+    # regresion: uemCredsB64/secCredsB64 son solo base64 (no cifrado) y el propio
+    # wizard promete "en memoria, no persistidos" -- si persist() los guarda,
+    # cualquiera con acceso al perfil del navegador lee el token en claro.
+    base = os.environ.get("LUCIDFENCE_WEB_URL", "http://127.0.0.1:8765/static/web.html")
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        try:
+            landing = base.rsplit("/", 1)[0] + "/index.html"
+            page.goto(landing, wait_until="networkidle")
+            if page.title() != "LucidFence Web · Geofencing gratis":
+                page.locator('a[href="web.html#company"]').first.click()
+                page.wait_for_load_state("networkidle")
+            page.get_by_role("button", name="Conectar", exact=True).click()
+            page.locator("#uemNext1").click()
+            page.locator("#uemGateway").fill("https://example.com")
+            page.locator("#uem_bearerToken").fill("SECRET_BEARER_TOKEN_ABCDEF123456")
+            page.locator("#uemNext2").click()
+            page.wait_for_selector('[data-wstep="3"]:not([hidden])')
+            page.wait_for_timeout(300)  # persist() es async
+            stored = page.evaluate(
+                "async () => { const s = await WebStore.load(); return s.settings || {}; }"
+            )
+            assert "uemCredsB64" not in stored, "credencial UEM persistida en IndexedDB"
+            assert "secCredsB64" not in stored, "credencial de seguridad persistida en IndexedDB"
+            assert stored.get("gatewayUrl") == "https://example.com"  # el resto de settings sí debe sobrevivir
+        finally:
+            browser.close()
