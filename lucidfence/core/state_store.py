@@ -58,6 +58,10 @@ class DeviceState:
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
+    # AMAPI: Device.policyCompliant / nonComplianceDetails / appliedPolicyVersion
+    amapi_policy_compliant: Optional[bool] = None
+    amapi_non_compliance: Optional[list] = None
+    amapi_applied_policy_version: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)

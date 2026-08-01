@@ -46,6 +46,10 @@ VALID_ACTIONS = {
     "apply_ddm",
     "ddm_status",
     "ddm_sync",
+    # Declarativa (Android AMAPI). Mismo motivo que las de DDM: sin la acción
+    # aquí, el engine y el endpoint de comandos la rechazan y la capa queda
+    # inalcanzable desde el producto.
+    "apply_amapi_policy",
 }
 
 # Registro de adapters por nombre. La comunidad puede hacer:

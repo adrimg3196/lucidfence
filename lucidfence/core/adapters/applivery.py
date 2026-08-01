@@ -36,6 +36,13 @@ def _safe_text(r: requests.Response) -> str:
 class AppliveryAdapter(MDMAdapter):
     name = "applivery"
 
+    #: Applivery publica el passthrough de política de Android Enterprise
+    #: (verificado 2026-08-02 vía el MCP de su doc oficial):
+    #:   PUT /v1/organizations/{org}/mdm/android/enterprise/policies/{emmPolicyId}
+    #: cuyo campo `config` es, literalmente, el "Google Android Enterprise
+    #: policy configuration object". Por eso aquí sí marcamos la capacidad.
+    supports_amapi_policy = True
+
     def __init__(self, org_id: str, endpoint_template: str, timeout: int = 30,
                  webhook_url: str = "", api_key: str = ""):
         self.org_id = org_id
@@ -99,7 +106,77 @@ class AppliveryAdapter(MDMAdapter):
                 "error": f"webhook failed: {type(exc).__name__}: {exc}",
             }
 
+    # --- AMAPI (declarativo) ---
+
+    def _apply_amapi_policy(self, device: Any, params: dict) -> dict:
+        """Genera el documento de política AMAPI para el estado de geocerca.
+
+        Offline a propósito, igual que `apply_ddm` en Jamf: producimos el
+        contrato, no lo publicamos. Publicar exigiría el `emmPolicyId` del
+        tenant y mutaría la política de un cliente real; esa entrega la decide
+        quien integra, con el cuerpo que devolvemos aquí.
+
+        Si el dispositivo no es Android gestionado por AMAPI (o no sabemos su
+        modo de gestión) devuelve ``fallback="imperative"`` para que el llamante
+        siga por el camino de comandos de siempre.
+        """
+        from lucidfence.core.amapi import (
+            build_fence_patch,
+            management_mode_of,
+            parse_device_compliance,
+            supports_amapi,
+        )
+
+        device_id = self._dev_id(device)
+        if not supports_amapi(device):
+            return {
+                "adapter": self.name, "ok": False, "device_id": device_id,
+                "action": "apply_amapi_policy", "error": "amapi_unsupported",
+                "fallback": "imperative",
+            }
+        policy = (params or {}).get("policy")
+        if not policy:
+            return {
+                "adapter": self.name, "ok": False, "device_id": device_id,
+                "action": "apply_amapi_policy", "error": "missing_parameter",
+                "detail": "Missing 'policy' parameter",
+            }
+        fence_state = str(
+            (device.get("fence_state") if isinstance(device, dict)
+             else getattr(device, "fence_state", None)) or "unknown"
+        )
+        try:
+            built = build_fence_patch(policy, fence_state, device)
+        except ValueError as exc:
+            return {
+                "adapter": self.name, "ok": False, "device_id": device_id,
+                "action": "apply_amapi_policy", "error": "invalid_restrictions",
+                "detail": str(exc),
+            }
+
+        result = {
+            "adapter": self.name, "ok": True, "device_id": device_id,
+            "action": "apply_amapi_policy",
+            "management_mode": management_mode_of(device),
+            "fence_state": fence_state,
+            "patch": built["patch"],
+            # `update_mask` es para el PATCH directo de AMAPI. El passthrough de
+            # Applivery es un PUT que reemplaza `config` entero, así que allí se
+            # envía el objeto completo, no la máscara.
+            "update_mask": built["update_mask"],
+            "skipped": built["skipped"],
+            "delivery": "offline",
+        }
+        # Readback: si el llamante ya trae el recurso Device de AMAPI, lo
+        # traducimos al estado persistido (el engine hace merge, no reemplazo).
+        readback = parse_device_compliance((params or {}).get("device_resource"))
+        if readback:
+            result["device_state"] = readback
+        return result
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
+        if action == "apply_amapi_policy":
+            return self._apply_amapi_policy(device, params or {})
         key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or os.environ.get("applivery_api_key")
         device_id = self._dev_id(device)
         if not key:
