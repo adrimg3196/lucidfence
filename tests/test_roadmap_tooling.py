@@ -66,15 +66,17 @@ def test_cli():
     check("lucidfence.core.roadmap_tooling --export es JSON valido", ok and r.returncode == 0)
     # --mark actualiza y persiste
     from lucidfence.core import roadmap_tooling as rm
-    # Restore the exact bytes observed before the test. Round-tripping through
-    # update_feature() restores the status but leaves meta.updated stamped with
-    # today's date, so el fichero versionado quedaba sucio en cada ejecución.
-    before = rm._ROADMAP_JSON.read_text(encoding="utf-8")
+    d0 = rm.load_roadmap()
+    original = next(f["status"] for f in rm.all_features(d0) if f["id"] == "F4.5")
     try:
         r = run(["--mark", "F4.5", "status", "blocked"])
         check("lucidfence.core.roadmap_tooling --mark persiste", r.returncode == 0 and "F4.5" in r.stdout)
     finally:
-        rm._ROADMAP_JSON.write_text(before, encoding="utf-8")
+        # Restore the exact state observed before the test. Never hard-code
+        # "planned": doing so silently regressed a completed roadmap to 94%.
+        restored = rm.load_roadmap()
+        rm.update_feature(restored, "F4.5", "status", original)
+        rm.save_roadmap(restored)
 
 
 def test_loop_local():

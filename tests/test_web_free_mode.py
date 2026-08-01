@@ -83,7 +83,7 @@ def test_free_web_app_goal_cycle_and_indexeddb_persistence():
             }""")
             parsed = urlsplit(base)
             gateway_origin = f"{parsed.scheme}://{parsed.netloc}"
-            page.get_by_role("button", name="Conectar").click()
+            page.get_by_role("button", name="Conectar", exact=True).click()
             page.locator("#gatewayUrl").fill(gateway_origin)
             page.locator("#saveGateway").click()
             page.wait_for_selector("text=URL pública guardada")

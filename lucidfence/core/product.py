@@ -84,7 +84,6 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     )
     insights = build_insights(devices, events, actions, incidents, risk, stats)
     report = build_report(status, devices, incidents, risk, insights, analytics)
-    roi = build_roi_analytics(status, devices, incidents, risk, analytics)
     activation = build_activation(status, devices, fences, actions)
 
     return {
@@ -104,7 +103,6 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
         "analytics": analytics,
         "insights": insights,
         "report": report,
-        "roi": roi,
         "events": events,
         "actions": actions,
     }
@@ -677,91 +675,6 @@ def build_report(
             "Exportar reporte ejecutivo para auditoría local",
         ],
         "insights": insights,
-    }
-
-
-def build_roi_analytics(
-    status: dict[str, Any],
-    devices: list[dict[str, Any]],
-    incidents: list[dict[str, Any]],
-    risk: list[dict[str, Any]],
-    analytics: dict[str, Any],
-) -> dict[str, Any]:
-    """Business-value quantification for IT admins to justify the tool.
-
-    All numbers are local estimates derived from observed state — no external calls.
-    """
-    fleet_size = len(devices)
-    if fleet_size == 0:
-        return {"enabled": False, "reason": "no_devices"}
-
-    # Assumptions (conservative, adjustable by tenant in future)
-    COST_PER_INCIDENT_HOUR = 75      # IT admin time $/hr
-    COST_PER_BREACH = 15000          # Avg cost of data breach from lost device (Ponemon-ish)
-    COST_PER_COMPLIANCE_VIOLATION = 2500  # Audit finding remediation
-    HOURS_SAVED_PER_AUTO_ACTION = 0.5     # Manual lock/wipe vs automated
-    HOURS_SAVED_PER_INCIDENT = 2          # Auto-detection vs manual discovery
-
-    # Current state metrics
-    critical_incidents = len([i for i in incidents if i.get("severity") == "critical"])
-    high_incidents = len([i for i in incidents if i.get("severity") == "high"])
-    non_compliant = len([d for d in devices if d.get("compliant") is False])
-    outside_fence = len([d for d in devices if d.get("fence_state") == "outside"])
-    actions_executed = status.get("stats", {}).get("actions_executed", 0)
-
-    # Risk reduction from automation
-    auto_prevented = actions_executed  # Each auto-action = one manual intervention saved
-    hours_saved = auto_prevented * HOURS_SAVED_PER_AUTO_ACTION
-    incident_hours_saved = (critical_incidents + high_incidents) * HOURS_SAVED_PER_INCIDENT
-
-    # Monthly projections (assuming 15-min cycle = 96 cycles/day)
-    cycles_per_month = 96 * 30
-    projected_incidents_month = (critical_incidents + high_incidents) * max(1, cycles_per_month / max(1, status.get("interval_seconds", 900) // 60))
-    projected_breaches_prevented = min(fleet_size, projected_incidents_month // 10)  # Conservative
-
-    # Dollar values
-    labor_savings_monthly = (hours_saved + incident_hours_saved) * COST_PER_INCIDENT_HOUR * 30
-    breach_avoidance_monthly = projected_breaches_prevented * COST_PER_BREACH / 12
-    compliance_savings_monthly = non_compliant * COST_PER_COMPLIANCE_VIOLATION / 12
-    total_monthly_value = labor_savings_monthly + breach_avoidance_monthly + compliance_savings_monthly
-
-    # ROI vs tool cost (tool is $0 local, so infinite ROI; show "equivalent commercial value")
-    commercial_equivalent = total_monthly_value * 12  # Annualized
-
-    # Compliance posture
-    compliance_pct = analytics.get("compliance_series", [])[-1].get("compliance_percent", 100) if analytics.get("compliance_series") else 100
-    risk_reduction = min(100, int((outside_fence / max(1, fleet_size)) * 100 + (non_compliant / max(1, fleet_size)) * 100))
-
-    return {
-        "enabled": True,
-        "generated_at": _now(),
-        "summary": {
-            "fleet_size": fleet_size,
-            "monthly_value_usd": round(total_monthly_value),
-            "annualized_value_usd": round(commercial_equivalent),
-            "risk_reduction_pct": max(0, 100 - risk_reduction),
-            "compliance_score": compliance_pct,
-        },
-        "breakdown": {
-            "labor_savings_monthly_usd": round(labor_savings_monthly),
-            "breach_avoidance_monthly_usd": round(breach_avoidance_monthly),
-            "compliance_savings_monthly_usd": round(compliance_savings_monthly),
-        },
-        "drivers": {
-            "auto_actions_executed": auto_prevented,
-            "hours_saved_automation": round(hours_saved, 1),
-            "incidents_auto_detected": critical_incidents + high_incidents,
-            "projected_monthly_incidents": round(projected_incidents_month),
-            "projected_breaches_prevented_yearly": round(projected_breaches_prevented * 12),
-        },
-        "assumptions": {
-            "cost_per_incident_hour_usd": COST_PER_INCIDENT_HOUR,
-            "cost_per_breach_usd": COST_PER_BREACH,
-            "cost_per_compliance_violation_usd": COST_PER_COMPLIANCE_VIOLATION,
-            "hours_saved_per_auto_action": HOURS_SAVED_PER_AUTO_ACTION,
-            "hours_saved_per_incident": HOURS_SAVED_PER_INCIDENT,
-            "note": "Estimaciones conservadoras basadas en estado local observado. Ajustables por tenant en futuro.",
-        },
     }
 
 

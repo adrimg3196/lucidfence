@@ -236,7 +236,6 @@ const NAV = [
   {id:"company",     label:"Compañía autónoma",icon:"building"},
   {id:"settings",   label:"Ajustes",     icon:"settings"},
   {id:"roadmap",    label:"Roadmap",     icon:"git-branch"},
-  {id:"roi",        label:"ROI · Valor", icon:"trending-up"},
 ];
 
 function renderNav(){
@@ -282,7 +281,6 @@ function goView(id){
   if(id==="company") renderCompany();
   if(id==="settings") renderSettings();
   if(id==="roadmap") renderRoadmap();
-  if(id==="roi") renderROI();
 }
 
 /* ---------- boot ---------- */
@@ -1360,30 +1358,6 @@ async function renderSettings(){
     const r=await api("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     if(r.ok){toast("UEM guardado",live?"Applivery":"Demo local","ok");refresh(false);}else toast("Error",r.error||"","bad");
   };
-  // --- Validate-config: verify the location_source mapping against the live UEM/MDM API.
-  const vcard=document.createElement("div"); vcard.className="card"; vcard.style.marginTop="14px";
-  vcard.innerHTML='<div class="hd"><h3>Validar mapeo UEM (cualquier fabricante)</h3></div>'+
-    '<div class="bd"><div class="help">Prueba tu bloque <code>location_source</code> de config.json contra la API real y ver que campos resuelven. Sirve para Fleet, Intune, Jamf, Mosyle, Workspace ONE o tu endpoint.</div>'+
-    '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn outline" id="vBtn">Validar config</button></div>'+
-    '<div id="vResult" style="margin-top:12px;font-family:monospace;white-space:pre-wrap;font-size:12px"></div></div>';
-  $("#view-settings").appendChild(vcard);
-  $("#vBtn").onclick=async()=>{
-    const out=$("#vResult"); out.textContent="validando…";
-    const r=await api("/api/config/validate");
-    if(!r){ out.textContent="sin respuesta"; return; }
-    if(r.reason){ out.textContent="SKIP: "+r.reason; return; }
-    const lines=[];
-    lines.push("URL: "+(r.url||"-"));
-    lines.push("Dispositivos: crudos "+(r.devices_raw??0)+" · con geo "+(r.devices_with_geo??0)+" · sin geo "+(r.devices_dropped_no_geo??0));
-    if(r.fetch_error) lines.push("FETCH ERROR: "+JSON.stringify(r.fetch_error));
-    lines.push("Campos:");
-    for(const [k,v] of Object.entries(r.field_resolution||{})){
-      const flag = v.resolved===v.total&&v.total ? "OK" : (v.resolved? "PARCIAL":"FALTA");
-      lines.push("  "+k.padEnd(12)+" "+v.path.padEnd(28)+" "+v.resolved+"/"+v.total+"  ["+flag+"]");
-    }
-    lines.push("RESULTADO: "+(r.ok?"OK":"REVISAR MAPEO"));
-    out.textContent=lines.join("\n");
-  };
 
   const presets=ai.presets||[];
   $("#aiSetBody").innerHTML=`
@@ -2018,56 +1992,4 @@ async function sendDeviceCommand(devId, action, params){
     toast("Error", (r.error||"no enviado"), "bad");
   }
   return r;
-}
-
-/* ===================== VISTA: ROI (valor de negocio) ===================== */
-async function renderROI(){
-  const node = $("#view-roi"); if(!node) return;
-  try{
-    const prod = await api("/api/product");
-    const roi = (prod && prod.roi) || {enabled:false};
-    if(!roi.enabled){
-      node.innerHTML = `<div class="empty"><div class="t">ROI no disponible</div><div class="s">Requiere al menos un dispositivo en la flota</div></div>`;
-      return;
-    }
-    const s = roi.summary || {};
-    const b = roi.breakdown || {};
-    const d = roi.drivers || {};
-    const a = roi.assumptions || {};
-    node.innerHTML = `
-      <div class="view-head">
-        <div><h2>ROI · Valor de negocio</h2>
-        <div class="sub">Estimación local a partir del estado observado · sin llamadas externas</div></div>
-      </div>
-      <div class="card"><div class="hd"><h3>Resumen</h3></div><div class="bd">
-        <div class="metrics">
-          <div class="metric"><div class="v">${esc(fmt.n(s.total_monthly_value||0))}</div><div class="l">Valor mensual estimado</div></div>
-          <div class="metric"><div class="v">${esc(fmt.n(s.commercial_equivalent||0))}</div><div class="l">Equivalente comercial anual</div></div>
-          <div class="metric"><div class="v">${esc(s.risk_reduction_pct!=null?s.risk_reduction_pct:"-")}%</div><div class="l">Reducción de riesgo</div></div>
-        </div>
-      </div></div>
-      <div class="card"><div class="hd"><h3>Desglose</h3></div><div class="bd">
-        <ul class="alist">
-          <li><span>Ahorro laboral/mes</span><b>${esc(fmt.n(b.labor_savings_monthly||0))}</b></li>
-          <li><span>Brechas evitadas/mes</span><b>${esc(fmt.n(b.breach_avoidance_monthly||0))}</b></li>
-          <li><span>Compliance/mes</span><b>${esc(fmt.n(b.compliance_savings_monthly||0))}</b></li>
-        </ul>
-      </div></div>
-      <div class="card"><div class="hd"><h3>Impulsores</h3></div><div class="bd">
-        <ul class="alist">
-          <li><span>Acciones ejecutadas</span><b>${esc(d.actions_executed||0)}</b></li>
-          <li><span>Dispositivos fuera de geovalla</span><b>${esc(d.outside_fence||0)}</b></li>
-          <li><span>Dispositivos no conformes</span><b>${esc(d.non_compliant||0)}</b></li>
-        </ul>
-      </div></div>
-      <div class="card"><div class="hd"><h3>Supuestos</h3></div><div class="bd">
-        <ul class="alist">
-          <li><span>Coste por hora de incidente</span><b>${esc(fmt.n(a.cost_per_incident_hour||0))}</b></li>
-          <li><span>Coste por brecha</span><b>${esc(fmt.n(a.cost_per_breach||0))}</b></li>
-          <li><span>Coste por violación de compliance</span><b>${esc(fmt.n(a.cost_per_compliance_violation||0))}</b></li>
-        </ul>
-      </div></div>`;
-  }catch(e){
-    node.innerHTML = `<div class="empty"><div class="t">Error cargando ROI</div><div class="s">${esc(e.message)}</div></div>`;
-  }
 }

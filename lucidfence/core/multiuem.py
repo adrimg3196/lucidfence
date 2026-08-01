@@ -8,12 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import RLock
-try:
-    from typing import TypeGuard
-except ImportError:
-    # Fallback for Python < 3.10
-    TypeGuard = bool  # type: ignore
-from typing import Callable
+from typing import Callable, TypeGuard
 
 
 _UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}

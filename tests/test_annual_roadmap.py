@@ -46,10 +46,9 @@ def test_adapter_marketplace_manifest_is_hash_verified():
 
 
 def test_sbom_contains_locked_dependencies_and_source_manifest():
-    # El SBOM es un artefacto de build (lo genera CI y lo sube como artifact),
-    # no un fichero versionado: se valida el recién construido, no una copia
-    # commiteada que cada PR tendría que regenerar (issue #74).
     sbom = build_sbom(ROOT)
+    committed = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
+    assert committed == sbom
     assert sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.5"
     purls = {item["purl"] for item in sbom["components"]}
     assert "pkg:pypi/requests@2.33.0" in purls and "pkg:pypi/urllib3@2.7.0" in purls

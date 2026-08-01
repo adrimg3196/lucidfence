@@ -458,19 +458,12 @@ class SimulationLocationSource:
 
 # ----------------------------------------------------------------------- factory
 def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fleet_seed.json",
-                          api_key: str = "", location_cfg: dict = None):
+                          api_key: str = ""):
     """Return a location source for the given mode.
 
     mode == "live"       -> LiveLocationSource(org_id)  (reads APPLIVERY_API_KEY)
-    mode == "generic"    -> GenericHTTPLocationSource(location_cfg)
     mode == "simulation" -> SimulationLocationSource(sim_seed_path)
-
-    If `location_cfg` carries a `url` and mode is not simulation, the generic
-    source wins (bring-your-own UEM API), regardless of the mode label.
     """
-    if location_cfg and location_cfg.get("url") and mode != "simulation":
-        from lucidfence.core.generic_http_source import GenericHTTPLocationSource
-        return GenericHTTPLocationSource(location_cfg)
     if mode == "live":
         return LiveLocationSource(org_id=org_id, api_key=api_key)
     return SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)

@@ -111,9 +111,6 @@ class MockHandler(BaseHTTPRequestHandler):
 
 
 def _start_mock():
-    # allow_reuse_address tolerates TIME_WAIT leftovers if a prior run didn't
-    # shut down cleanly (e.g. the runner interrupted mid-test).
-    HTTPServer.allow_reuse_address = True
     srv = HTTPServer(("127.0.0.1", 8799), MockHandler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv

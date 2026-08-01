@@ -200,7 +200,6 @@ and uncomment the live-path branch to wire up your MDM.
 Reference implementations in this repo:
 * `IntuneAdapter` — Microsoft Graph OAuth client_credentials + REST (merged in #13).
 * `JamfAdapter` — Jamf Pro API Basic auth + REST (merged in #21).
-* `FleetAdapter` — Fleet REST API, Bearer token (see `docs/adapters/FLEET.md`).
 * `TemplateMdmAdapter` — the SDK template itself; community adapters
   start by copying this file and renaming.
 

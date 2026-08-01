@@ -33,10 +33,6 @@ class MDMAdapter(ABC):
     #: Identificador estable del MDM (p.ej. "applivery", "intune", "jamf").
     name: str = "base"
 
-    #: Capacidad aditiva: el MDM expone Apple Declarative Device Management.
-    #: False por defecto — el camino imperativo actual sigue siendo el fallback.
-    supports_ddm: bool = False
-
     @abstractmethod
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         """Ejecuta una acción UEM remota y devuelve un dict normalizado.

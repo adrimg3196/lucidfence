@@ -20,7 +20,7 @@
     }
   }
   async function save(state){
-    const clean=state; // ponytail: la persistencia interna no necesita sanitizeImport (ese es para import de archivos externos); state ya excluye secretos en claro
+    const clean=LucidFenceWeb.sanitizeImport(state);
     try{
       const db=await open();
       if(!db) throw new Error('IndexedDB unavailable');

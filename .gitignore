@@ -35,23 +35,6 @@ data/_sessions.json
 data/_users.json
 data/_roles.json
 
-# Runtime state volátil (se regenera al arrancar; nunca versionar)
-data/*.jsonl
-data/device_states.json
-data/dwell.json
-data/events.jsonl
-data/stats_history.jsonl
-data/traction_history.json
-
-# Escaneos de seguridad y herramientas externas (no son del producto)
-strix_runs/
-.strix*
-.strix-venv/
-.strix_instruction.md
-.strix_run.sh
-ROADMAP.md
-loop_improve.py.bak
-
 # Build output
 dist/
 build/
@@ -74,6 +57,3 @@ moa/
 # graphify knowledge graph (local tooling, not product)
 graphify-out/
 .graphify_chunk_*.json
-
-# SBOM: artefacto de build, lo genera CI (issue #74)
-sbom.cdx.json

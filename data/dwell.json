@@ -1,0 +1,31 @@
+{
+  "dev-001": {
+    "seconds": 0,
+    "cycles": 0
+  },
+  "dev-002": {
+    "seconds": 9000,
+    "cycles": 10
+  },
+  "dev-003": {
+    "seconds": 4500,
+    "cycles": 5
+  },
+  "dev-1001": {
+<<<<<<< HEAD
+    "seconds": 242100,
+    "cycles": 269
+  },
+  "dev-1002": {
+    "seconds": 242100,
+    "cycles": 269
+=======
+    "seconds": 243000,
+    "cycles": 270
+  },
+  "dev-1002": {
+    "seconds": 243000,
+    "cycles": 270
+>>>>>>> c41ca7a (feat(android): AMAPI declarative policy enforcement (#42))
+  }
+}
