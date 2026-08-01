@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from typing import Any
 
 from lucidfence.core.amapi import generate_amapi_policy_patch
