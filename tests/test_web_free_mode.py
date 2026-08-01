@@ -140,5 +140,16 @@ def test_uem_wizard_credentials_never_reach_indexeddb():
             assert "uemCredsB64" not in stored, "credencial UEM persistida en IndexedDB"
             assert "secCredsB64" not in stored, "credencial de seguridad persistida en IndexedDB"
             assert stored.get("gatewayUrl") == "https://example.com"  # el resto de settings sí debe sobrevivir
+
+            # mismo secreto, segunda salida: el botón "Exportar" descarga state.settings tal cual
+            # (sigue en memoria en esta misma sesión) -- no debe llevarse la credencial tampoco.
+            with page.expect_download() as download_info:
+                page.locator("#exportBtn").click()
+            download = download_info.value
+            exported = json.loads(Path(download.path()).read_text(encoding="utf-8"))
+            exported_settings = exported.get("settings", {})
+            assert "uemCredsB64" not in exported_settings, "credencial UEM en el JSON exportado"
+            assert "secCredsB64" not in exported_settings, "credencial de seguridad en el JSON exportado"
+            assert exported_settings.get("gatewayUrl") == "https://example.com"
         finally:
             browser.close()
