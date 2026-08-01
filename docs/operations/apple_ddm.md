@@ -35,26 +35,7 @@ token/identifier.
 
 ## Matriz de soporte
 
-Disponibilidad de DDM (`declarationbase.yaml`) — `supports_ddm(device)` la
-aplica y devuelve `False` si falta `os_version`, para no enviar declarations a
-un dispositivo que no las entiende:
-
-| Plataforma | Mínimo |
-|------------|--------|
-| iOS / iPadOS | 15.0 |
-| macOS | 13.0 |
-| tvOS | 16.0 |
-| visionOS | 1.1 |
-| watchOS | 10.0 |
-
-Flag de capacidad por adapter (`MDMAdapter.supports_ddm`, `False` por defecto):
-
-| Adapter | `supports_ddm` | Motivo |
-|---------|----------------|--------|
-| `jamf` | ✅ | Jamf Pro expone DDM; acción `apply_ddm`. |
-| `applivery` | ❌ | Su documentación pública no describe superficie DDM (verificado 2026-07-29). Se activará cuando la documenten. |
-| `ios_geofence` | ❌ | Módulo de vitrina, no habla con ningún MDM real. |
-| resto | ❌ | Sin DDM: camino imperativo intacto. |
+Para consultar la compatibilidad de plataformas de Apple DDM (iOS, iPadOS, macOS, tvOS, visionOS y watchOS), los modos de gestión necesarios, los flags en los adapters y los límites de la tecnología, por favor diríjase a la [Matriz de Soporte Declarativa Unificada](declarative-support-matrix.md).
 
 ## Uso
 

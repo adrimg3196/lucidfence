@@ -17,21 +17,7 @@ While standard configuration checks on Windows endpoints are traditionally execu
 
 ## Support Matrix
 
-| OS / Component | PowerShell Version | DSC Version | Enforcement Style | Emitter Formats |
-|---|---|---|---|---|
-| **Windows 11** | PowerShell 7.2+ | DSC v3 | Native Declarative | JSON Manifest, PS1 |
-| **Windows 10** | PowerShell 7.2+ | DSC v3 | Native Declarative | JSON Manifest, PS1 |
-| **Windows 10/11** | PowerShell 5.1 | DSC v2 (Legacy) | Local LCM / MOF | PS1 Script, MOF File |
-
-### PowerShell 7 + DSC v3 (Preferred)
-In modern Windows deployments running PowerShell 7, **DSC v3** is the preferred engine.
-- It uses declarative **JSON / YAML resource manifests** for desired state documents.
-- Configuration is processed directly by the DSC v3 engine, aligning with the OpenAPI specs and cloud deployment methods.
-
-### PowerShell 5.1 + DSC v2 (Fallback)
-On standard Windows endpoints where only PowerShell 5.1 is present:
-- Desired state is generated as classic DSC **PowerShell scripts (`.ps1`)** and compiled into **Managed Object Format (`.mof`)** documents.
-- The built-in Local Configuration Manager (LCM) processes the MOF to verify and correct compliance.
+Para consultar el detalle de compatibilidad de Windows, DSC v3 vs v2, los requisitos de PowerShell, así como el soporte de otras plataformas MDM y adapters en LucidFence, consulte la [Matriz de Soporte Declarativa Unificada](declarative-support-matrix.md).
 
 ---
 
