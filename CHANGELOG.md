@@ -19,6 +19,9 @@ All notable changes to LucidFence are documented here.
 - fix(ddm): las acciones DDM no estaban en `VALID_ACTIONS`, así que `Engine.run_command` y el endpoint de comandos las rechazaban con "accion no valida" — la capa declarativa era inalcanzable desde el producto
 - fix(ddm): los `StatusItem.value` de Jamf son string siempre; `passcode.is-compliant` llegaba como `"true"` a un campo que el modelo de estado espera `bool`
 - fix(server): el sanitizador de `log_message` convertía args numéricos a str y rompía `send_error(404)` (formato `%d`) — cualquier POST/DELETE a ruta desconocida devolvía 500 en vez de 404
+- fix(build)!: `sbom.cdx.json` deja de estar versionado (lo genera CI como artifact) y desaparece el `assert committed == sbom` — un artefacto que hashea todos los `.py` fijado por igualdad exacta hacía que main y toda rama tocaran las mismas dos líneas, conflicto garantizado en el 100% de los PRs — issue #74
+- fix(tests): `test_roadmap_tooling` restaura los bytes exactos de `roadmap.json` (el round-trip por `update_feature()` re-estampaba `meta.updated`) y `data/actions_log.jsonl` se destrackea — correr la suite dejaba el árbol sucio en dos ficheros versionados
+- ci(runtime-artifacts): un PR que modifique `data/cloud_state.json` falla en CI — ese snapshot lo republica `engine-cron` en main cada hora, así que toda rama que lo toque conflicta con main
 
 ### Removed
 

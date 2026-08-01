@@ -1587,6 +1587,40 @@
           }
         }
       }
+    },
+    "/config/validate": {
+      "get": {
+        "summary": "Validate the location_source mapping against the live UEM/MDM API",
+        "description": "Validate the active integration and location_source mapping configuration against the live UEM/MDM API.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/product": {
+      "get": {
+        "summary": "Product intelligence bundle",
+        "description": "Retrieve read-only product intelligence bundle for ROI analysis and fleet security overview.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
     }
   }
 }
