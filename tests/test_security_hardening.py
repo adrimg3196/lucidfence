@@ -15,12 +15,27 @@ def test_admin_cannot_grant_owner_or_admin_role():
     # Mirror server-side guard: user:invite alone must not allow escalation.
     assert "user:invite" in ROLE_CAPS["admin"]
     assert "user:invite" in ROLE_CAPS["owner"]
-    # owner-only grant of privileged roles is enforced in the /api/users handler;
-    # here we assert the capability model itself keeps org:delete/user:role
-    # exclusive to owner so a minted admin can't destroy the org or escalate.
-    assert "org:delete" in ROLE_CAPS["owner"]
-    assert "org:delete" not in ROLE_CAPS["admin"]
-    assert "user:role" not in ROLE_CAPS["admin"]
+    # Issue #33: org:delete / user:role were phantom caps with no enforcing
+    # endpoint. They must be gone from the matrix (removed, not silently kept).
+    for role, caps in ROLE_CAPS.items():
+        assert "org:delete" not in caps, f"{role} must not carry dead org:delete"
+        assert "user:role" not in caps, f"{role} must not carry dead user:role"
+
+
+def test_every_rbac_capability_is_enforced():
+    # (issue #33) Every capability in ROLE_CAPS must be enforced by at least one
+    # AuthStore.can(...) check in the server; dead caps are removed, not left as
+    # phantom permissions. This statically blocks dead caps from creeping back.
+    import re
+    from pathlib import Path
+
+    server_src = (Path(__file__).resolve().parent.parent / "saas_server.py").read_text(encoding="utf-8")
+    all_caps = {cap for caps in ROLE_CAPS.values() for cap in caps}
+    for cap in sorted(all_caps):
+        # First arg may contain parentheses (e.g. user["org_roles"].get(org));
+        # each AuthStore.can(...) call is single-line, so .*? stays on the line.
+        pattern = re.compile(r'AuthStore\.can\(.*?,\s*"' + re.escape(cap) + r'"\)')
+        assert pattern.search(server_src), f"capability {cap!r} declared but never enforced"
 
 
 def test_viewer_has_no_write_capabilities():
