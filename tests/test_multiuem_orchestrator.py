@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
-from core.multiuem import (
+from lucidfence.core.multiuem import (
     LocationEvidence,
     MultiUEMOrchestrator,
     NormalizedDevice,

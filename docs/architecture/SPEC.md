@@ -21,7 +21,7 @@ comercial siempre-on ($0, fuera de nuestra máquina).
 | Comando | Qué hace |
 |---|---|
 | `python3 tests/run_tests.py` | Corre TODOS los `test_*.py` (runner honesto, tally real). 105 pass = verde. |
-| `python3 core/cloud_publisher.py --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
+| `python3 -m lucidfence.core.cloud_publisher --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
 | `python3 saas_server.py` | Levanta el SaaS local en `:8765` (dashboard + API + engine). |
 | `./install.sh` | Instala LucidFence en la máquina del cliente (Docker o Python). |
 | `docker compose up -d` | Levanta el stack siempre-on del cliente. |
@@ -32,7 +32,7 @@ comercial siempre-on ($0, fuera de nuestra máquina).
 ```
 lucidfence/
 ├── saas_server.py                # SaaS + API HTTP + engine loop
-├── core/                         # engine, policies, state_store, adapters, cve_feed, location_source
+├── lucidfence/core/                         # engine, policies, state_store, adapters, cve_feed, location_source
 │   ├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
 │   ├── config_loader.py          # carga de config y .env
 │   └── roadmap_tooling.py        # motor del roadmap (GET /api/roadmap)

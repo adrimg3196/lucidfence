@@ -34,7 +34,7 @@ console.log(JSON.stringify({rejected, goal:goal.id, tasks:result.tasks, state}))
 
 def test_optional_edge_gateway_is_read_only_and_origin_scoped():
     script = r'''
-import worker from './edge/uem-gateway/worker.mjs';
+import worker from './apps/uem-gateway/worker.mjs';
 const env={ALLOWED_ORIGIN:'https://adrimg3196.github.io'};
 const health=await worker.fetch(new Request('https://gateway.test/health'),env);
 const denied=await worker.fetch(new Request('https://gateway.test/v1/fleet',{headers:{origin:'https://evil.test'}}),env);

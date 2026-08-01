@@ -15,7 +15,7 @@ Adaptado de agent-skills/references/security-checklist.md al stack Python/UEM.
 - [ ] `.env.example` usa placeholders (no secretos reales).
 
 ## Authentication (LucidFence usa sesiones por cookie)
-- [ ] Passwords hasheados (bcrypt/scrypt/argon2) — ver `core/auth.py`.
+- [ ] Passwords hasheados (bcrypt/scrypt/argon2) — ver `lucidfence/core/auth.py`.
 - [ ] Cookie de sesión: `HttpOnly`, `Secure` (en prod), `SameSite=Lax`.
 - [ ] Expiración de sesión configurada.
 - [ ] Rate limiting en login.

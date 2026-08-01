@@ -7,9 +7,9 @@ import shlex
 from pathlib import Path
 from typing import Callable
 
-from core import roadmap_tooling
-from core.location_source import SimulationLocationSource
-from core.product import build_product
+from lucidfence.core import roadmap_tooling
+from lucidfence.core.location_source import SimulationLocationSource
+from lucidfence.core.product import build_product
 
 
 class LucidFenceShell(cmd.Cmd):

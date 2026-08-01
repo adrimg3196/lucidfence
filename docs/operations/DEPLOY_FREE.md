@@ -7,12 +7,12 @@ agente maneja todo por CLI (sin consola web de pago).
 |------|----------------|-------------------------------|
 | Landing + dashboard web | Local + Fly.io static | `flyctl` (deploy) / `scripts/start_local.sh` |
 | Hosting always-on (VM) | Fly.io free tier (shared-cpu, min 1 siempre on) | `flyctl deploy` |
-| Email saliente | Atomic Mail Agentic (`@atomicmail.ai`, JMAP + PoW, sin tarjeta) | vendored en `core/atomicmail/`, facade `core/atomicmail_client.py` |
-| Dominio / branding | DigitalPlat FreeDomain (`.dpdns.org` etc.) | `core/freedomain.py` + UI `/static/whitelabel.html` |
-| IA (MoA) | Motor local Mixture-of-Agents (free tiers) | `/Users/adri/moa/server.py` en `127.0.0.1:8085`, consumido por `core/ai.py` |
-| Geocoding | Nominatim / OpenStreetMap (sin API key) | `core/geocode.py` + cache SQLite |
-| Storage de reportes | Volumen local (Fly) + Cloudflare R2 free (10GB, opcional) | `core/storage.py` |
-| DB + auth multi-tenant | SQLite local + auth propia | `core/state_store.py`, `saas_server.py` |
+| Email saliente | Atomic Mail Agentic (`@atomicmail.ai`, JMAP + PoW, sin tarjeta) | vendored en `lucidfence/core/atomicmail/`, facade `lucidfence/core/atomicmail_client.py` |
+| Dominio / branding | DigitalPlat FreeDomain (`.dpdns.org` etc.) | `lucidfence/core/freedomain.py` + UI `/static/whitelabel.html` |
+| IA (MoA) | Motor local Mixture-of-Agents (free tiers) | `/Users/adri/moa/server.py` en `127.0.0.1:8085`, consumido por `lucidfence/core/ai.py` |
+| Geocoding | Nominatim / OpenStreetMap (sin API key) | `lucidfence/core/geocode.py` + cache SQLite |
+| Storage de reportes | Volumen local (Fly) + Cloudflare R2 free (10GB, opcional) | `lucidfence/core/storage.py` |
+| DB + auth multi-tenant | SQLite local + auth propia | `lucidfence/core/state_store.py`, `saas_server.py` |
 | DNS + CDN + SSL | Cloudflare Free | `wrangler` (opcional, para apuntar el dominio FreeDomain) |
 
 Coste total: **$0**. Sin tarjeta de pago en ningún eslabón.
@@ -65,5 +65,5 @@ Sin red → fallback a coords manuales.
 
 Ningún secreto se commitea. Las API keys de MoA viven en `/app/moa/.env`
 (en Fly, montadas con `flyctl secrets set`); las credenciales de Atomic Mail
-en `data/tenants/<org>/atomicmail/` (chmod 600, gitignored). `core/storage.py`
+en `data/tenants/<org>/atomicmail/` (chmod 600, gitignored). `lucidfence/core/storage.py`
 lee R2 solo de env vars y nunca las imprime.

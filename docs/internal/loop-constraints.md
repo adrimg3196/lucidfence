@@ -6,7 +6,7 @@ maintainer and the PR verifier (see `docs/internal/LOOP.md`).
 ## Denylist (never auto-merge / reject)
 
 - Any commit or PR that adds secrets to `config.json`, `data/`, or `.env`.
-- Modifications to `core/adapters/base.py` (the frozen `MDMAdapter` contract)
+- Modifications to `lucidfence/core/adapters/base.py` (the frozen `MDMAdapter` contract)
   without a major version bump.
 - Publishing `data/cloud_state.json` with real tenant data (it is demo-only).
 - PRs that embed cryptocurrency wallet addresses, payout instructions, or
@@ -25,4 +25,4 @@ maintainer and the PR verifier (see `docs/internal/LOOP.md`).
 - Adapter contract change → human.
 - Desktop build / packaging change → human.
 - Security posture change → human.
-- Any change touching `saas_server.py` auth or `core/notifier.py` → human.
+- Any change touching `saas_server.py` auth or `lucidfence/core/notifier.py` → human.

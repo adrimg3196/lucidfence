@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from core.multiuem import (
+from lucidfence.core.multiuem import (
     LocationEvidence,
     NormalizedDevice,
     ProviderCapabilities,

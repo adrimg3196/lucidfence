@@ -46,7 +46,7 @@ O copia los archivos a cualquier Nginx/Caddy/S3 compatible con hosting estático
 
 ## UEM live
 
-Las API keys no deben entrar en este bundle. Para datos live, el cliente despliega `edge/uem-gateway` en su propia cuenta y configura `ALLOWED_ORIGIN`, `UPSTREAM_BASE_URL` y el secreto `UPSTREAM_TOKEN`. El gateway es read-only.
+Las API keys no deben entrar en este bundle. Para datos live, el cliente despliega `apps/uem-gateway` en su propia cuenta y configura `ALLOWED_ORIGIN`, `UPSTREAM_BASE_URL` y el secreto `UPSTREAM_TOKEN`. El gateway es read-only.
 
 ## Actualizaciones y salida
 

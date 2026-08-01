@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from core.actions import LiveAdapter, SimulationAdapter, build_adapter
+from lucidfence.core.actions import LiveAdapter, SimulationAdapter, build_adapter
 
 PORT_CMD = 8801
 PORT_WH = 8802

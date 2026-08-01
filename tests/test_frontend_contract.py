@@ -111,7 +111,7 @@ def test_compliance_pdf_export_is_wired_in_dashboard_and_cloud():
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     cloud = (ROOT / "static" / "cloud.html").read_text(encoding="utf-8")
     server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
-    export_mod = (ROOT / "core" / "export.py").read_text(encoding="utf-8")
+    export_mod = (ROOT / "lucidfence" / "core" / "export.py").read_text(encoding="utf-8")
     assert 'id="view-overview"' in html
     assert "function downloadCompliancePdf" in js
     assert "/api/export?kind=compliance&format=pdf" in js

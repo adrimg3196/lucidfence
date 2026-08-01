@@ -7,7 +7,7 @@ Invocado por .github/workflows/saas-api.yml con env:
   PAYLOAD    JSON con los datos
 
 Escribe el estado del tenant en data/cloud_tenants/<id>/data/*.json de forma
-que core/cloud_publisher.py lo procese y lo publique en la vitrina cloud.
+que lucidfence/core/cloud_publisher.py lo procese y lo publique en la vitrina cloud.
 
 Paylodads:
   create_tenant:

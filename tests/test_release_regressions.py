@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _load_cli():
     name = "lucidfence_cli_regression_%s" % os.getpid()
-    return importlib.machinery.SourceFileLoader(name, str(ROOT / "bin" / "lucidfence")).load_module()
+    return importlib.machinery.SourceFileLoader(name, str(ROOT / "lucidfence" / "cli.py")).load_module()
 
 
 def test_stop_refuses_unrelated_reused_pid():

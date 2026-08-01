@@ -39,9 +39,9 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(_ROOT))
 
-from core import roadmap_tooling as rm
-from core.provider_plugins import discover_provider_plugins, merge_providers
-from core.loop_governance import KillSwitch
+from lucidfence.core import roadmap_tooling as rm
+from lucidfence.core.provider_plugins import discover_provider_plugins, merge_providers
+from lucidfence.core.loop_governance import KillSwitch
 
 _CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI") or shutil.which("claude") or ""
 _HISTORY = _ROOT / "data" / "loop_history.jsonl"
@@ -79,7 +79,7 @@ FREE_PROVIDERS = [
 
 
 def _provider_catalog():
-    plugins = discover_provider_plugins(_ROOT / "plugins" / "providers")
+    plugins = discover_provider_plugins(_ROOT / "lucidfence" / "plugins" / "providers")
     return merge_providers(FREE_PROVIDERS, plugins)
 
 
@@ -175,7 +175,7 @@ def _aggregate(proposals, feature, temperature):
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
         "Consenso: implementar subtareas en orden, verificar con tests/run_tests.py y "
-        "core/roadmap_tooling.py --validate. " + merged[:1500]
+        "python3 -m lucidfence.core.roadmap_tooling --validate. " + merged[:1500]
     )
     return summary
 

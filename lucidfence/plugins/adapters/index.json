@@ -1,0 +1,59 @@
+{
+  "schema": "lucidfence-adapter-index/v1",
+  "entries": [
+    {
+      "name": "applivery",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/applivery.py",
+      "sha256": "dc2891e01638aa217c65a0b138d12029b718fa412f71ec592c02ca7315572e2c",
+      "install": "bundled",
+      "verified": true
+    },
+    {
+      "name": "intune",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/intune.py",
+      "sha256": "ca4a90560d97261d7499023d12761968a74f2af8caeec6de8d732d13e0a9d605",
+      "install": "bundled",
+      "verified": true
+    },
+    {
+      "name": "jamf",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/jamf.py",
+      "sha256": "4be51b90bf3376d4af3837bfe0ea1487a80a9f3313d6f70a85fca2dc9eda5f27",
+      "install": "bundled",
+      "verified": true
+    },
+    {
+      "name": "chromeos",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/chromeos.py",
+      "sha256": "ee5155780597f43d343ac65a86a4f36b537a3475b831f90b94ef1b1d4279cc27",
+      "install": "bundled",
+      "verified": true
+    },
+    {
+      "name": "windows_conformidad",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/windows_conformidad.py",
+      "sha256": "83b0d393cc1a3a2aac59016c433ff0d0a19ebc984b12c75ea2e8c04f53afb8c2",
+      "install": "bundled",
+      "verified": true
+    },
+    {
+      "name": "workspace_one",
+      "version": "1.0.0",
+      "api": "MDMAdapter/v1",
+      "path": "lucidfence/core/adapters/workspace_one.py",
+      "sha256": "93b008dd75d23225a02261d027847c8ed64cf0a4b4534de30329caf87bd50b4d",
+      "install": "bundled",
+      "verified": true
+    }
+  ]
+}

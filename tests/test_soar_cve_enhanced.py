@@ -10,11 +10,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from core.soar import (
+from lucidfence.core.soar import (
     DEFAULT_PLAYBOOKS, evaluate_soar, validate_playbooks,
     compile_condition, SOARPlaybook,
 )
-from core.cve import enrich_apps, load_feed, device_cve_summary, CVE_DB
+from lucidfence.core.cve import enrich_apps, load_feed, device_cve_summary, CVE_DB
 
 
 def test_soar_declarative_and_or_not():
@@ -70,7 +70,7 @@ def test_cve_epss_weighted_risk():
     # mismo severity, distinto EPSS -> distinto riesgo
     low = {"name": "x", "cves": [{"id": "C1", "severity": "critical", "epss": 0.01}]}
     high = {"name": "x", "cves": [{"id": "C1", "severity": "critical", "epss": 0.97}]}
-    from core.cve import app_cve_risk_score
+    from lucidfence.core.cve import app_cve_risk_score
     assert app_cve_risk_score(high) > app_cve_risk_score(low), "EPSS debe elevar riesgo"
     print("  PASS test_cve_epss_weighted_risk")
 

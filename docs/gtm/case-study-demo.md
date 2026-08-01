@@ -11,7 +11,7 @@ La demo incluida representa 6 dispositivos multi-plataforma y tres geovallas.
 
 ## Recorrido reproducible
 
-1. Ejecutar `./bin/lucidfence start --no-open`.
+1. Ejecutar `python3 -m lucidfence.cli start --no-open`.
 2. Abrir `http://127.0.0.1:8765/` y usar el acceso demo local.
 3. Forzar varios ciclos desde “Ciclo”.
 4. Revisar “Inteligencia”: calidad de señal, anomalías GPS y riesgo de cruce.
