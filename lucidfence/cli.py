@@ -263,6 +263,11 @@ def cmd_open(args) -> int:
     return 0
 
 
+def cmd_validate_config(args) -> int:
+    from lucidfence.core.config_validator import _main as validate_main
+    return validate_main(["--config", args.config] + (["--json"] if args.json else []))
+
+
 def cmd_mcp(_args) -> int:
     server = Path(__file__).resolve().parent / "mcp" / "lucidfence_mcp.py"
     if not server.is_file():
@@ -335,6 +340,12 @@ def build_parser() -> argparse.ArgumentParser:
     _common(doctor)
     doctor.add_argument("--json", action="store_true", help="salida estructurada")
     doctor.set_defaults(func=cmd_doctor)
+
+    validate = sub.add_parser("validate-config",
+                              help="valida el mapeo location_source contra la API real (cualquier UEM)")
+    validate.add_argument("--config", default="config.json", help="ruta a config.json")
+    validate.add_argument("--json", action="store_true", help="salida estructurada")
+    validate.set_defaults(func=cmd_validate_config)
 
     mcp = sub.add_parser("mcp", help="ejecuta el MCP local read-only por stdio")
     mcp.set_defaults(func=cmd_mcp)

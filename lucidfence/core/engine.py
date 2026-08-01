@@ -88,6 +88,7 @@ class Engine:
         self.source = build_location_source(
             self.mode, self.org_id, config.get("sim_seed_path", "data/fleet_seed.json"),
             api_key=config.get("_applivery_api_key", ""),
+            location_cfg=config.get("location_source"),
         )
         self.adapter = build_adapter(
             self.mode if not self.dry_run else "simulation",  # never call live in dry_run
@@ -606,6 +607,25 @@ class Engine:
         res["operator"] = operator
         res["manual"] = True
         self.store.log_action(res)
+        # Readback declarativo (issue #70): si el adapter devolvió
+        # `device_state` (p.ej. `ddm_status`), se fusiona con el estado
+        # persistido. Merge, no reemplazo: el status report puede llegar
+        # parcial (Apple solo manda los items suscritos que cambiaron), así
+        # que un campo ausente no pisa nada, un fallo (ok=False) no toca el
+        # estado y dry_run nunca muta. Las claves sin campo en DeviceState
+        # (p.ej. `ddm_errors`) no se persisten aquí pero quedan registradas
+        # en el action log de la línea anterior.
+        readback = res.get("device_state")
+        if res.get("ok") and not self.dry_run and isinstance(readback, dict):
+            target = self.store.get(dev.device_id) or dev
+            merged = False
+            for key, value in readback.items():
+                if value is None or key == "device_id" or not hasattr(target, key):
+                    continue
+                setattr(target, key, value)
+                merged = True
+            if merged:
+                self.store.upsert(target)
         effective = bool(res.get("dry_run") or res.get("ok") or res.get("delegated"))
         if action in self.DESTRUCTIVE_ACTIONS and effective:
             self.store.record_action_at(dev.device_id, action, now)
