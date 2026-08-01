@@ -31,9 +31,9 @@ Fuentes verificadas:
 
 ~~El mensaje de producto “en ≤15 min tu tenant aparece” se cumplió en la prueba observada. Aun así, la publicación no quedó demostrada como dependiente exclusivamente del cron `engine-cron.yml`: durante la ventana de prueba hubo pushes concurrentes y el snapshot publicado (`generated_at=2026-07-14T15:27:16Z`) apareció antes del siguiente cron visible en `gh run list --workflow engine-cron.yml`.~~
 
-**Resuelto por t_ada1c510 (2026-07-14):** el SLA ya es determinista. El workflow `saas-signup.yml` ahora **regenera `data/cloud_state.json` con `core/cloud_publisher.py` y lo commitea/pushea en el MISMO run** que crea el tenant, inmediatamente después del commit del tenant. Ya no depende de un push concurrente ni de esperar al cron `engine-cron.yml` (que sigue corriendo cada 15 min solo para mantener viva la flota demo). El commit de publicación lleva el número de issue (`cloud: publicar vitrina tras signup (#N)`) y el paso está condicionado a `steps.parse.outputs.tenant_created == 'yes'`, de modo que issues sin bloque de signup no regeneran la vitrina.
+**Resuelto por t_ada1c510 (2026-07-14):** el SLA ya es determinista. El workflow `saas-signup.yml` ahora **regenera `data/cloud_state.json` con `lucidfence/core/cloud_publisher.py` y lo commitea/pushea en el MISMO run** que crea el tenant, inmediatamente después del commit del tenant. Ya no depende de un push concurrente ni de esperar al cron `engine-cron.yml` (que sigue corriendo cada 15 min solo para mantener viva la flota demo). El commit de publicación lleva el número de issue (`cloud: publicar vitrina tras signup (#N)`) y el paso está condicionado a `steps.parse.outputs.tenant_created == 'yes'`, de modo que issues sin bloque de signup no regeneran la vitrina.
 
-Con esto, el SLA efectivo pasa de "5–15 min (cadencia del cron)" a **segundos tras el commit de tenant** (el tiempo de un ciclo de `core/cloud_publisher.py` + push), eliminando la dependencia de la cadencia de Actions scheduled.
+Con esto, el SLA efectivo pasa de "5–15 min (cadencia del cron)" a **segundos tras el commit de tenant** (el tiempo de un ciclo de `lucidfence/core/cloud_publisher.py` + push), eliminando la dependencia de la cadencia de Actions scheduled.
 
 ## SLA documentado
 
@@ -43,6 +43,6 @@ SLA técnico observado en esta validación (antes del cambio): 4m34s desde creac
 
 ## Próximos pasos
 
-1. ✅ **Hecho (t_ada1c510):** SLA determinista. `saas-signup.yml` ejecuta `core/cloud_publisher.py` y commitea `data/cloud_state.json` en el mismo run (sin depender del cron `engine-cron.yml`).
+1. ✅ **Hecho (t_ada1c510):** SLA determinista. `saas-signup.yml` ejecuta `lucidfence/core/cloud_publisher.py` y commitea `data/cloud_state.json` en el mismo run (sin depender del cron `engine-cron.yml`).
 2. ✅ **Hecho (t_ada1c510):** el commit de tenant ahora propaga `ISSUE_NUMBER` (`cloud: tenant desde signup (#N)`) y hay un commit de publicación `cloud: publicar vitrina tras signup (#N)`.
 3. Añadir monitor SLA: crear una alerta si `cloud_state.json` no contiene el tenant N minutos después del comentario automático en el issue.

@@ -12,7 +12,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import freedomain  # noqa: E402
+from lucidfence.core import freedomain  # noqa: E402
 
 
 def test_suggest_builds_expected_records():

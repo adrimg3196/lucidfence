@@ -67,7 +67,7 @@ def test_create_tenant_device_sin_lat_lng_no_crashea():
 
 
 def test_serialize_0_devices_compliance_0():
-    mod = _load(ROOT / "core" / "cloud_publisher.py")
+    mod = _load(ROOT / "lucidfence" / "core" / "cloud_publisher.py")
     import types
     eng = types.SimpleNamespace(org_id="x", status=lambda: {"fences": [], "incidents": [],
                                                             "cve_summary": {}, "soar": {}})
@@ -80,7 +80,7 @@ def test_serialize_0_devices_compliance_0():
 def test_publisher_filtra_tenant_sin_seed():
     # El bucle de main() solo procesa tenants con fleet_seed.json Y fences.json.
     # Verificamos el gate leyendo el helper de filtrado del publisher.
-    mod = _load(ROOT / "core" / "cloud_publisher.py")
+    mod = _load(ROOT / "lucidfence" / "core" / "cloud_publisher.py")
     tmp = Path(tempfile.mkdtemp())
     (tmp / "incompleto" / "data").mkdir(parents=True)
     (tmp / "incompleto" / "data" / "fleet_seed.json").write_text("{}")  # falta fences.json

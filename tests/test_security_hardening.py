@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
+from lucidfence.saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
 
 
 def test_admin_cannot_grant_owner_or_admin_role():
@@ -97,8 +97,8 @@ def test_soar_webhook_hmac_requires_valid_signature_and_fresh_timestamp():
 
 
 def test_webhook_non_2xx_is_not_treated_as_delegated():
-    from core.actions import LiveAdapter
-    import core.adapters.applivery as P
+    from lucidfence.core.actions import LiveAdapter
+    import lucidfence.core.adapters.applivery as P
 
     class _Resp:
         status_code = 500

@@ -6,7 +6,7 @@ Convertir el repositorio en una única app local open source para macOS/Linux. E
 ## Tareas y pruebas
 
 1. Directorios portables
-- Crear `core/app_paths.py`.
+- Crear `lucidfence/core/app_paths.py`.
 - Test: override `LUCIDFENCE_DATA_DIR` gana.
 - Test: macOS usa `~/Library/Application Support/LucidFence`.
 - Test: Linux respeta `$XDG_STATE_HOME/lucidfence`.

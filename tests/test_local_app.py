@@ -6,7 +6,7 @@ import sys
 import tempfile
 import urllib.request
 
-from core.app_paths import data_dir
+from lucidfence.core.app_paths import data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +35,7 @@ def test_server_uses_portable_data_root_and_dashboard_home():
 
 
 def test_cli_version_and_managed_lifecycle():
-    cli = ROOT / "bin" / "lucidfence"
+    cli = ROOT / "lucidfence" / "cli.py"
     version = subprocess.run([sys.executable, str(cli), "--version"], capture_output=True, text=True)
     assert version.returncode == 0
     assert version.stdout.strip() == "lucidfence 1.2.0"

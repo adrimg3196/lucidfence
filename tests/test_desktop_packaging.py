@@ -4,17 +4,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_desktop_is_native_webkit_not_shell_wrapper():
-    swift = (ROOT / "macos" / "LucidFenceApp.swift").read_text()
-    plist = (ROOT / "macos" / "Info.plist").read_text()
+    swift = (ROOT / "apps" / "macos" / "LucidFenceApp.swift").read_text()
+    plist = (ROOT / "apps" / "macos" / "Info.plist").read_text()
     assert "WKWebView" in swift
     assert "Process()" in swift
     assert 'CFBundleExecutable</key>\n    <string>LucidFence</string>' in plist
     assert "NSAllowsLocalNetworking" in plist
-    assert not (ROOT / "macos" / "LucidFence.app" / "Contents" / "MacOS" / "lucidfence-launcher").exists()
+    assert not (ROOT / "apps" / "macos" / "LucidFence.app" / "Contents" / "MacOS" / "lucidfence-launcher").exists()
 
 
 def test_desktop_launcher_owns_only_its_embedded_backend():
-    swift = (ROOT / "macos" / "LucidFenceApp.swift").read_text()
+    swift = (ROOT / "apps" / "macos" / "LucidFenceApp.swift").read_text()
     assert 'appendingPathComponent("backend/LucidFenceBackend")' in swift
     assert "startedBackend = true" in swift
     assert "/api/health" in swift
@@ -36,7 +36,7 @@ def test_desktop_launcher_owns_only_its_embedded_backend():
 
 
 def test_desktop_build_includes_only_safe_seed_files():
-    build = (ROOT / "macos" / "build_desktop.py").read_text()
+    build = (ROOT / "apps" / "macos" / "build_desktop.py").read_text()
     for name in ("fleet_seed.json", "fences.json", "routes.json", "policies.json"):
         assert name in build
     for forbidden in ("_users.json", "_sessions.json", "cloud_state.json", "device_states.json", "trails.jsonl"):
@@ -74,7 +74,7 @@ def test_desktop_gateway_help_uses_current_origin():
 
 
 def test_desktop_release_has_drag_to_applications_contract():
-    build = (ROOT / "macos" / "build_desktop.py").read_text()
+    build = (ROOT / "apps" / "macos" / "build_desktop.py").read_text()
     assert 'os.symlink("/Applications"' in build
     assert "LucidFence-{version}-{arch}.dmg" in build
     assert 'MINIMUM_MACOS = "14.0"' in build

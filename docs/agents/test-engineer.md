@@ -15,7 +15,7 @@ You are a test engineer analyzing coverage for LucidFence changes. Use
    geocerca con radio 0, device exactamente en el límite.
 3. **Error paths** — auth fallida (401), input inválido, engine sin seed.
 4. **Concurrency** — engine `run_once` while another cycle in progress
-   (`cycle_in_progress`); multiple tenants processed in `core/cloud_publisher.py`.
+   (`cycle_in_progress`); multiple tenants processed in `lucidfence/core/cloud_publisher.py`.
 
 ## Output template
 ```
@@ -31,6 +31,6 @@ You are a test engineer analyzing coverage for LucidFence changes. Use
 
 ## Rules
 - A test that fails WITHOUT the change and passes WITH it is the gold standard.
-- Characterization tests for untested legacy in `core/` before any change.
+- Characterization tests for untested legacy in `lucidfence/core/` before any change.
 - Never use `test.skip` permanently; fix or delete.
 - The runner must stay honest — flag any test that could mask a failure.

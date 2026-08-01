@@ -13,7 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import ai  # noqa: E402
+from lucidfence.core import ai  # noqa: E402
 
 
 def _fake_post(data, *, dry=True, rounds=2, agg_mode="synthesize", stream=False):

@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.autonomous_company import CompanyControlPlane
+from lucidfence.core.autonomous_company import CompanyControlPlane
 
 
 def test_company_goal_is_structured_persistent_and_measurable():

@@ -22,7 +22,7 @@ Evidence-based stabilization checkpoint (no claims without runtime proof):
 - **E2E auth:** signup crea user+org owner con token; demo-auth alimenta KPIs reales:
   6 devices, risk{risk,summary}, cve{cve_summary,devices}, 5 incidents, fences/routes OK.
 - **Secretos:** `gitleaks` — 210 commits escaneados, **no leaks found**.
-- **Vitrina serverless:** `core/cloud_publisher.py` publica `data/cloud_state.json`
+- **Vitrina serverless:** `lucidfence/core/cloud_publisher.py` publica `data/cloud_state.json`
   (9 dispositivos / 3 tenants / compliance 66.7%).
 - **Docker:** no disponible en el entorno de build (macOS sin Docker) → sintaxis se
   valida en cliente/CI, según boundary de AGENTS.md.

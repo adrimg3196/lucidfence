@@ -29,11 +29,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from core import config_loader
-import core.secrets as secrets
-from core.secrets import test_applivery_token
-from core.engine import Engine
-from core.product import build_product
+from lucidfence.core import config_loader
+import lucidfence.core.secrets as secrets
+from lucidfence.core.secrets import test_applivery_token
+from lucidfence.core.engine import Engine
+from lucidfence.core.product import build_product
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"

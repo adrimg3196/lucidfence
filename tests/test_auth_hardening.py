@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from saas.auth import AuthStore  # noqa: E402
+from lucidfence.saas.auth import AuthStore  # noqa: E402
 
 
 def _store():
