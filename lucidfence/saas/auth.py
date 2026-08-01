@@ -31,49 +31,49 @@ from typing import Any, Optional
 
 
 # Capability matrix per role. A capability is a coarse permission string.
+# Every capability listed here MUST be enforced by an AuthStore.can(...) check
+# in saas_server.py (see tests/test_security_hardening.py::
+# test_every_rbac_capability_is_enforced). Dead capabilities are removed, not
+# left as phantom permissions (issue #33).
 ROLE_CAPS = {
     "owner": {
-        "org:read", "org:update", "org:delete",
-        "user:invite", "user:remove", "user:role",
-        "device:read", "device:write", "device:action",
+        "user:invite",
+        "device:read", "device:action",
         "fence:read", "fence:write", "fence:delete",
-        "engine:run", "engine:config", "policy:read", "policy:write",
+        "engine:run", "engine:config",
         "route:read", "route:write", "route:delete",
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
-        "report:read", "report:export",
+        "report:export",
         "company:read", "company:write", "company:run", "company:approve",
     },
     "admin": {
-        "org:read", "org:update",
-        "user:invite", "user:remove",
-        "device:read", "device:write", "device:action",
+        "user:invite",
+        "device:read", "device:action",
         "fence:read", "fence:write", "fence:delete",
-        "engine:run", "engine:config", "policy:read", "policy:write",
+        "engine:run", "engine:config",
         "route:read", "route:write", "route:delete",
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
-        "report:read", "report:export",
+        "report:export",
         "company:read", "company:write", "company:run", "company:approve",
     },
     "operator": {
-        "org:read",
         "device:read", "device:action",
         "fence:read", "fence:write",
-        "engine:run", "policy:read",
+        "engine:run",
         "route:read", "route:write",
         "workflow:read", "workflow:write",
         "incident:read", "incident:write",
-        "report:read", "company:read", "company:run",
+        "company:read", "company:run",
     },
     "viewer": {
-        "org:read", "device:read", "fence:read", "policy:read",
-        "route:read", "workflow:read", "incident:read", "report:read", "company:read",
+        "device:read", "fence:read", "route:read", "workflow:read",
+        "incident:read", "company:read",
     },
     "auditor": {
-        "org:read", "device:read", "fence:read", "policy:read",
-        "route:read", "workflow:read", "incident:read", "report:read",
-        "report:export", "audit:read", "company:read",
+        "device:read", "fence:read", "route:read", "workflow:read",
+        "incident:read", "report:export", "company:read",
     },
 }
 

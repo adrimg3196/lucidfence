@@ -27,7 +27,7 @@ def test_active_passive_cluster_lease_fails_over_cleanly():
 
 def test_auditor_is_read_only_with_export_and_audit_capability():
     caps = ROLE_CAPS["auditor"]
-    assert {"report:read", "report:export", "audit:read"} <= caps
+    assert {"report:export"} <= caps
     assert not any(cap in caps for cap in ("device:write", "device:action", "fence:write", "workflow:write"))
     assert AuthStore.can("auditor", "report:export") is True
 
