@@ -83,11 +83,12 @@ def test_free_web_app_goal_cycle_and_indexeddb_persistence():
             }""")
             parsed = urlsplit(base)
             gateway_origin = f"{parsed.scheme}://{parsed.netloc}"
-            page.get_by_role("button", name="Conectar").click()
-            page.locator("#gatewayUrl").fill(gateway_origin)
-            page.locator("#saveGateway").click()
-            page.wait_for_selector("text=URL pública guardada")
-            page.locator("#syncGateway").click()
+            page.get_by_role("button", name="Conectar", exact=True).click()
+            page.locator("#uemNext1").click()
+            page.locator("#uemGateway").fill(gateway_origin)
+            page.locator("#uemNext2").click()
+            page.wait_for_selector('[data-wstep="3"]:not([hidden])')
+            page.locator("#uemTest").click()
             page.wait_for_selector("text=Tablet del cliente")
             cycle_before = page.locator("#cycleValue").inner_text()
             assert int(cycle_before) >= 1
