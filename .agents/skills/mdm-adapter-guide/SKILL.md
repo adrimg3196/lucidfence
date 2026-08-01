@@ -41,11 +41,11 @@ de `MDMAdapter`, sin conocer el proveedor.
    - No uses datos de tenants reales.
 
    ```bash
-   python3 tests/run_tests.py
+   poetry run python3 tests/run_tests.py
    ```
 
 5. **Abre el PR** usando `.github/PULL_REQUEST_TEMPLATE.md`. El CI ejecuta
-   `python3 tests/run_tests.py` (Python 3.9/3.11) y `node --check static/app.js`.
+   `poetry run python3 tests/run_tests.py` (Python 3.11+) y `node --check static/app.js`.
 
 ## Contrato de la interfaz (resumen)
 
@@ -74,7 +74,7 @@ para no romper el motor ni el contrato del frontend.
 
 1. Fork → rama `feature/adapter-<mdm>`.
 2. Implementa + tests contra mock.
-3. `python3 tests/run_tests.py` en verde localmente.
+3. `poetry run python3 tests/run_tests.py` en verde localmente (con Python >=3.11).
 4. PR con la plantilla: tipo de cambio, tests pasando, y para adapters el
    **nombre del MDM** + checklist de `MDMAdapter`.
 

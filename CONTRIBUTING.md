@@ -2,7 +2,7 @@
 
 Quesitos minimos antes de abrir PR o pedir merge:
 
-- `python3 tests/run_tests.py` verde.
+- `poetry run python3 tests/run_tests.py` (o `.venv/bin/python3 tests/run_tests.py` con Python >=3.11) verde.
 - `git diff --stat` acotado al scope del issue/feature.
 - No hay secretos, tokens, cookies ni credenciales; `.env.example` con placeholders.
 - Si toca frontend: probar `http://127.0.0.1:8765/static/dashboard.html` y `cloud.html` en headless o browser real.

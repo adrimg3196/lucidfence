@@ -77,7 +77,7 @@ Prompt inicial → Proposers paralelos (gratis) → Opus 4.8 merge
    → ¿calidad >= 7/10? ── No ─→ repite (temp -0.1, max 3)
         │ Sí
         ▼
-Implementar (marcar subtasks/feature) → Verificar (tests/run_tests.py)
+Implementar (marcar subtasks/feature) → Verificar (poetry run python3 tests/run_tests.py)
    → QA PASS → feature DONE + persistir en roadmap.json
 ```
 
@@ -128,7 +128,7 @@ python3 -m lucidfence.core.roadmap_tooling --phase Q3-2026
 python3 -m lucidfence.core.roadmap_tooling --mark F1.1 status done   # marca y persiste
 python3 loop_improve.py                   # /loop sobre la proxima feature
 python3 loop_improve.py --feature F1.2 --dry-run
-python3 tests/run_tests.py                # suite honesta (debe seguir verde)
+poetry run python3 tests/run_tests.py                # suite honesta (debe seguir verde)
 ```
 
 ## Métrica de éxito

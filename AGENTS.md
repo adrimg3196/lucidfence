@@ -5,7 +5,7 @@ not the wiki.
 
 ## Stack & commands
 - Python 3.11, stdlib-first. No web frameworks (HTTP propio en `saas_server.py`).
-- Test: `python3 tests/run_tests.py` (honest runner; 105 pass = green).
+- Test: `poetry run python3 tests/run_tests.py` (honest runner; >= 3.11 required; 105 pass = green).
 - Cloud vitrina: `python3 -m lucidfence.core.cloud_publisher --cycles 2` → `data/cloud_state.json`.
   **No commitees ese fichero desde una rama**: lo republica `engine-cron` en main cada hora, así
   que tu PR conflictaría siempre (el job `runtime-artifacts` de CI lo rechaza). Si lo has tocado:

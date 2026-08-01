@@ -7,9 +7,19 @@ Run:  python3 tests/run_tests.py
 """
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 11):
+    sys.stderr.write(
+        f"ERROR: LucidFence tests/run_tests.py requires Python 3.11 or superior.\n"
+        f"Current Python interpreter: '{sys.executable}'\n"
+        f"Current Python version: {sys.version.split()[0]}\n"
+        f"Please run the tests using Python >= 3.11 (e.g., via poetry run python3 tests/run_tests.py or .venv/bin/python3 tests/run_tests.py)\n"
+    )
+    sys.exit(1)
+
 import importlib.util
 import os
-import sys
 import tempfile
 import time
 import traceback
