@@ -74,16 +74,20 @@ BLOCK_SCOPES = frozenset({
     "BLOCK_SCOPE_DEVICE",
 })
 
-#: Alcance por modo de cada restricción que emitimos. Solo se codifica lo que la
-#: referencia afirma; nada inferido. La clave es el campo top-level de `Policy`.
+#: Alcance por modo de cada restricción que emitimos. La clave es el campo
+#: top-level de `Policy`. Todas las filas salen de una frase literal de la
+#: referencia salvo `kioskCustomLauncherEnabled`, que va marcada como inferida.
 #:
 #: - `cameraAccess`: soportado en ambos modos. En perfil de trabajo solo afecta
 #:   a las apps del perfil ("applies device-wide on fully managed devices and
 #:   only within the work profile on devices with a work profile").
 #: - `locationMode`: "on work profile and fully managed devices" -> ambos.
 #: - `applications`: ambos modos.
-#: - `kioskCustomLauncherEnabled`: el modo kiosco es el solution set de
-#:   dispositivo dedicado, que es un dispositivo totalmente gestionado.
+#: - `kioskCustomLauncherEnabled`: INFERIDO, no citado. La referencia describe el
+#:   campo sin acotar el modo; lo restringimos a fully managed porque el modo
+#:   kiosco es el solution set de dispositivo dedicado, que se aprovisiona como
+#:   totalmente gestionado. Si Google lo documenta en perfil de trabajo, se
+#:   amplía aquí y cae `test_kiosk_is_skipped_on_work_profile`.
 #: - `deviceConnectivityManagement`: los valores restrictivos de `configureWifi`
 #:   están soportados "on fully managed devices and work profile on
 #:   company-owned devices" -> excluye BYOD (PROFILE_OWNER + PERSONALLY_OWNED).
@@ -158,10 +162,16 @@ def _enum(table: dict, value: Any, field: str) -> str:
 
 
 def _applications(apps: Any) -> list:
-    """Normaliza la lista de apps a `ApplicationPolicy` mínima y válida."""
+    """Normaliza la lista de apps a `ApplicationPolicy` mínima y válida.
+
+    OJO: `applications` es un reemplazo de lista entera en AMAPI. La política
+    resultante contiene exactamente estas apps; las que no aparezcan dejan de
+    estar gestionadas. `update_mask` protege los campos hermanos, no el
+    contenido de la lista.
+    """
     if not isinstance(apps, (list, tuple)):
         raise ValueError("applications: se esperaba una lista")
-    out = []
+    by_package: dict = {}
     for index, app in enumerate(apps):
         if isinstance(app, str):
             package, install_type = app, "FORCE_INSTALLED"
@@ -179,14 +189,23 @@ def _applications(apps: Any) -> list:
                 f"applications[{index}].installType: '{install_type}' no es un "
                 f"InstallType de AMAPI ({sorted(INSTALL_TYPES)})"
             )
-        out.append({"packageName": package, "installType": install_type})
+        # Un paquete repetido con installType distinto es un conflicto real: al
+        # fusionar una lista base con una regla de bloqueo por geocerca, dejar
+        # las dos entradas haría que el bloqueo no se aplicara. Falla ruidoso.
+        previous = by_package.get(package)
+        if previous is not None and previous != install_type:
+            raise ValueError(
+                f"applications: '{package}' aparece con installType en conflicto "
+                f"('{previous}' y '{install_type}')"
+            )
+        by_package[package] = install_type
     # Orden estable: el parche debe ser determinista para que reaplicarlo sin
     # cambios no incremente `Policy.version` en el servidor.
-    out.sort(key=lambda a: a["packageName"])
-    return out
+    return [{"packageName": pkg, "installType": by_package[pkg]}
+            for pkg in sorted(by_package)]
 
 
-def build_enforcement_rules(rules: Any) -> list:
+def build_enforcement_rules(rules: Any, *, company_owned: bool = True) -> list:
     """Construye `policyEnforcementRules` con las invariantes que Google exige.
 
     La referencia es explícita en dos puntos que un parche mal formado incumple
@@ -198,6 +217,13 @@ def build_enforcement_rules(rules: Any) -> list:
 
     Se validan aquí, no en el adapter: es la única puerta por la que pasan
     todas las reglas.
+
+    Args:
+        rules: lista de reglas en vocabulario LucidFence.
+        company_owned: False si el dispositivo es personal. `blockScope` "Only
+            applicable to devices that are company-owned" y `preserveFrp`
+            "doesn't apply to work profiles", así que en ese caso se omiten en
+            vez de emitir un campo que el dispositivo no puede honrar.
 
     Raises:
         ValueError: si falta una de las dos acciones, si los plazos no son
@@ -245,11 +271,14 @@ def build_enforcement_rules(rules: Any) -> list:
                     f"enforcement[{index}].blockScope: '{scope}' no es un BlockScope "
                     f"({sorted(BLOCK_SCOPES)})"
                 )
-            block["blockScope"] = scope
+            # "Only applicable to devices that are company-owned."
+            if company_owned:
+                block["blockScope"] = scope
 
         wipe: dict = {"wipeAfterDays": wipe_days}
         preserve = rule.get("preserve_frp", rule.get("preserveFrp"))
-        if preserve is not None:
+        # "This setting doesn't apply to work profiles."
+        if preserve is not None and company_owned:
             wipe["preserveFrp"] = bool(preserve)
 
         out.append({"settingName": setting, "blockAction": block, "wipeAction": wipe})
@@ -349,8 +378,12 @@ def build_policy_patch(
             continue
         patch[field] = value
 
-    if enforcement:
-        patch["policyEnforcementRules"] = build_enforcement_rules(enforcement)
+    if enforcement is not None:
+        # Un dispositivo personal solo es "no company-owned" cuando lo sabemos:
+        # con `ownership` desconocida no inventamos que lo sea.
+        patch["policyEnforcementRules"] = build_enforcement_rules(
+            enforcement, company_owned=(own != PERSONALLY_OWNED)
+        )
 
     return {
         "patch": patch,
@@ -366,20 +399,28 @@ def build_fence_patch(policy: Any, fence_state: str, device: Any, **kwargs) -> d
     `when` coincide con el estado (`inside` -> `on_enter`, `outside` ->
     `on_exit`, `unknown` -> `on_unknown`). Si la policy no declara ninguna,
     devuelve un parche vacío: es un no-op explícito, no un error.
+
+    Acepta acciones como dict o como objeto (`ActionSpec` de `fences.py`): una
+    `Fence` construida con `Fence.from_raw` trae dataclasses, y descartarlas
+    silenciosamente dejaría la restricción sin aplicar sin avisar.
+
+    El `when` ausente significa `on_enter`, igual que `ActionSpec.when` y que
+    `Engine._fire_actions`. Un comodín aquí haría que "cámara permitida dentro
+    de la geocerca" también desbloqueara la cámara fuera.
     """
     state = _norm(fence_state).lower() or "unknown"
     when = {"inside": "on_enter", "outside": "on_exit"}.get(state, "on_unknown")
     restrictions: dict = {}
     enforcement = kwargs.pop("enforcement", None)
     for act in (_get(policy, "actions", None) or []):
-        if not isinstance(act, dict) or act.get("action") != "apply_amapi_policy":
+        if _get(act, "action") != "apply_amapi_policy":
             continue
-        if act.get("when") not in (None, when):
+        if (_get(act, "when") or "on_enter") != when:
             continue
-        params = act.get("params") or {}
-        restrictions = params.get("restrictions") or {}
+        params = _get(act, "params") or {}
+        restrictions = _get(params, "restrictions") or {}
         if enforcement is None:
-            enforcement = params.get("enforcement")
+            enforcement = _get(params, "enforcement")
         break
     return build_policy_patch(
         restrictions,

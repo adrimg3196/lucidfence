@@ -5,7 +5,7 @@ Cierra el frente declarativo junto a [Apple DDM](apple_ddm.md) y
 diseño: el servidor publica un documento `Policy` con el estado deseado y
 Android Device Policy converge en el dispositivo, sin bucles de comandos.
 
-Módulo: `lucidfence/core/amapi.py` · Tests: `tests/test_amapi.py` (49, sin red).
+Módulo: `lucidfence/core/amapi.py` · Tests: `tests/test_amapi.py` (51, sin red).
 
 ## Límite honesto
 
@@ -83,8 +83,12 @@ Notas de la referencia que sostienen la tabla:
 - `DISALLOW_ADD_WIFI_CONFIG` / `DISALLOW_CONFIGURING_WIFI`: *"Supported on fully
   managed devices and work profile on company-owned devices"* → excluye BYOD.
   `ALLOW_CONFIGURING_WIFI` no restringe nada, así que no exige company-owned.
-- El modo kiosco es el solution set de *dedicated device*, que es un dispositivo
-  totalmente gestionado.
+- `kioskCustomLauncherEnabled`: **inferido**, no citado. La referencia describe
+  el campo sin acotar el modo; lo restringimos a fully managed porque el modo
+  kiosco es el solution set de *dedicated device*, que se aprovisiona como
+  dispositivo totalmente gestionado. Es la única fila de la tabla que no sale de
+  una frase literal — si Google documenta kiosco en perfil de trabajo, se
+  amplía `_SETTING_SCOPE` y cae el test que lo fija.
 
 COPE y BYOD son ambos `PROFILE_OWNER`: se distinguen por `Ownership`
 (`COMPANY_OWNED` / `PERSONALLY_OWNED`). Sin `ownership` conocida, las
@@ -131,8 +135,21 @@ build_enforcement_rules([{
 ```
 
 El engine mapea `inside → on_enter`, `outside → on_exit`,
-`unknown → on_unknown`. Una policy sin acción `apply_amapi_policy` produce un
-parche vacío: no-op explícito, no error.
+`unknown → on_unknown`, y pasa `params` al adapter tal cual. Un `when` ausente
+significa `on_enter`, igual que en el resto del modelo de acciones — no es un
+comodín. Una policy sin acción `apply_amapi_policy` produce un parche vacío:
+no-op explícito, no error.
+
+Llamando a mano se puede pasar la policy entera y dejar que el módulo elija el
+juego según el estado: `execute(device, "apply_amapi_policy", {"policy": pol})`.
+
+### Requisito en el estado del dispositivo
+
+El gate `supports_amapi` necesita `management_mode` (y `ownership` para
+distinguir COPE de BYOD) en el `DeviceState`. Sin ellos el adapter devuelve
+`fallback: "imperative"` y no genera nada: la mitad de las restricciones son
+mode-scoped, así que emitir un parche sin saber el modo sería adivinar el
+alcance. Es el equivalente de `os_version` en el gate de DDM.
 
 ## Soporte por adapter
 
@@ -153,9 +170,31 @@ criterio que dejó `supports_ddm` solo en `jamf`.
 decisión es de quien integra. La respuesta trae `patch`, `update_mask`,
 `skipped` y `delivery: "offline"`. Mismo criterio que `apply_ddm` en Jamf.
 
-Ojo con la diferencia de verbo: el passthrough de Applivery es un **PUT** que
-reemplaza `config` entero, así que allí se envía el objeto completo. La
-`update_mask` es para el **PATCH** directo contra `androidmanagement.googleapis.com`.
+### ⚠️ Cómo entregar el parche sin borrar la política del tenant
+
+`build_policy_patch` devuelve un parche **parcial**: solo los campos que la
+geocerca cambia. Cómo se entrega depende del canal, y equivocarse aquí borra
+configuración del cliente:
+
+| Canal | Verbo | Qué enviar |
+|---|---|---|
+| AMAPI directo (`androidmanagement.googleapis.com`) | `PATCH` | el parche tal cual + `updateMask` = `update_mask` |
+| Passthrough de Applivery | `PUT` | **`config` actual del tenant con el parche fusionado encima** |
+
+El PUT de Applivery reemplaza `config` entero y **no acepta `updateMask`**.
+Enviar ahí el parche a secas dejaría la política con solo esos campos y tiraría
+el resto. Hay que hacer `GET` de la política, fusionar las claves del parche
+sobre el `config` existente y hacer `PUT` del objeto completo.
+
+El módulo **no** trae helper de fusión a propósito: requiere leer el estado
+remoto, y esa llamada es del integrador (aquí no hacemos red). Un `dict.update`
+de primer nivel basta, porque todas las claves del parche son campos top-level
+de `Policy`.
+
+Ojo también con `applications`: en AMAPI es un **reemplazo de lista entera**. La
+política resultante contiene exactamente las apps del parche; las que no
+aparezcan dejan de estar gestionadas. `update_mask` protege los campos hermanos,
+no el contenido de la lista.
 
 ## Readback
 

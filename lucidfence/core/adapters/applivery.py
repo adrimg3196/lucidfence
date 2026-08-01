@@ -122,7 +122,9 @@ class AppliveryAdapter(MDMAdapter):
         """
         from lucidfence.core.amapi import (
             build_fence_patch,
+            build_policy_patch,
             management_mode_of,
+            ownership_of,
             parse_device_compliance,
             supports_amapi,
         )
@@ -134,19 +136,34 @@ class AppliveryAdapter(MDMAdapter):
                 "action": "apply_amapi_policy", "error": "amapi_unsupported",
                 "fallback": "imperative",
             }
-        policy = (params or {}).get("policy")
-        if not policy:
-            return {
-                "adapter": self.name, "ok": False, "device_id": device_id,
-                "action": "apply_amapi_policy", "error": "missing_parameter",
-                "detail": "Missing 'policy' parameter",
-            }
+        params = params or {}
         fence_state = str(
             (device.get("fence_state") if isinstance(device, dict)
              else getattr(device, "fence_state", None)) or "unknown"
         )
+        # Dos formas de invocación, ambas reales:
+        #   - `params` = los params del action tal cual los pasa el engine
+        #     (`{"restrictions": {...}, "enforcement": [...]}`). El engine ya
+        #     eligió el action por su `when`, así que aquí no hay que reelegir.
+        #   - `params["policy"]` = la policy entera, para quien llame a mano y
+        #     quiera que seleccionemos el juego según el estado de geocerca.
+        policy = params.get("policy")
         try:
-            built = build_fence_patch(policy, fence_state, device)
+            if policy:
+                built = build_fence_patch(policy, fence_state, device)
+            elif "restrictions" in params or "enforcement" in params:
+                built = build_policy_patch(
+                    params.get("restrictions") or {},
+                    management_mode=management_mode_of(device),
+                    ownership=ownership_of(device),
+                    enforcement=params.get("enforcement"),
+                )
+            else:
+                return {
+                    "adapter": self.name, "ok": False, "device_id": device_id,
+                    "action": "apply_amapi_policy", "error": "missing_parameter",
+                    "detail": "Missing 'restrictions' (o 'policy') parameter",
+                }
         except ValueError as exc:
             return {
                 "adapter": self.name, "ok": False, "device_id": device_id,
@@ -169,7 +186,7 @@ class AppliveryAdapter(MDMAdapter):
         }
         # Readback: si el llamante ya trae el recurso Device de AMAPI, lo
         # traducimos al estado persistido (el engine hace merge, no reemplazo).
-        readback = parse_device_compliance((params or {}).get("device_resource"))
+        readback = parse_device_compliance(params.get("device_resource"))
         if readback:
             result["device_state"] = readback
         return result

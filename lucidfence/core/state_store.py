@@ -58,7 +58,13 @@ class DeviceState:
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
-    # AMAPI: Device.policyCompliant / nonComplianceDetails / appliedPolicyVersion
+    # AMAPI: entrada (gate de capacidad) y readback.
+    # `management_mode`/`ownership` NO son cosmética: la mitad de las
+    # restricciones de AMAPI son mode-scoped, así que sin ellas el generador no
+    # puede decidir el alcance y cae al camino imperativo. Son el equivalente
+    # de `os_version` para el gate de DDM.
+    management_mode: Optional[str] = None      # DEVICE_OWNER | PROFILE_OWNER
+    ownership: Optional[str] = None            # COMPANY_OWNED | PERSONALLY_OWNED
     amapi_policy_compliant: Optional[bool] = None
     amapi_non_compliance: Optional[list] = None
     amapi_applied_policy_version: Optional[str] = None

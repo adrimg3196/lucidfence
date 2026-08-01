@@ -390,3 +390,119 @@ def test_readback_fields_exist_on_device_state():
     for field in ("amapi_policy_compliant", "amapi_non_compliance",
                   "amapi_applied_policy_version"):
         assert hasattr(state, field), field
+
+
+# --------------------------------------------------------------------------
+# Regresiones de la revisión de código (2026-08-02). Cada una reproduce un
+# fallo real que la primera versión tenía; sin ellas, la capa parecía
+# funcionar en los tests y no funcionaba con un dispositivo de verdad.
+# --------------------------------------------------------------------------
+def test_a_real_device_state_can_pass_the_capability_gate():
+    # REGRESIÓN: `supports_amapi` lee `management_mode`/`ownership`, pero
+    # `DeviceState` no los tenía, así que TODO dispositivo real caía al camino
+    # imperativo y la capa declarativa era inalcanzable en producción.
+    state = DeviceState(device_id="d1", name="tablet", platform="android")
+    assert hasattr(state, "management_mode") and hasattr(state, "ownership")
+    assert supports_amapi(state) is False        # sin modo: fallback correcto
+    state.management_mode = DEVICE_OWNER
+    state.ownership = COMPANY_OWNED
+    assert supports_amapi(state) is True
+
+
+def test_adapter_accepts_the_params_shape_the_engine_emits():
+    # REGRESIÓN: el engine pasa `act["params"]` tal cual, así que el adapter
+    # nunca recibía `params["policy"]` y el ejemplo documentado devolvía
+    # "missing_parameter".
+    state = DeviceState(device_id="d1", name="tablet", platform="android")
+    state.management_mode = DEVICE_OWNER
+    state.ownership = COMPANY_OWNED
+    state.fence_state = "outside"
+    res = _adapter().execute(state, "apply_amapi_policy",
+                             {"restrictions": {"camera": "block"}})
+    assert res["ok"] is True
+    assert res["patch"] == {"cameraAccess": "CAMERA_ACCESS_DISABLED"}
+
+
+def test_fence_action_objects_are_not_silently_dropped():
+    # REGRESIÓN: `Fence.from_raw` produce `ActionSpec` (dataclass), no dicts.
+    # Exigir `isinstance(act, dict)` descartaba la acción y devolvía un parche
+    # vacío con ok=True: una restricción de seguridad perdida sin aviso.
+    from lucidfence.core.fences import Fence
+    fence = Fence.from_raw({
+        "id": "f1", "name": "almacen", "type": "circle",
+        "center": {"lat": 40.4, "lng": -3.7}, "radius_m": 100,
+        "actions": [{"action": "apply_amapi_policy", "when": "on_exit",
+                     "params": {"restrictions": {"camera": "block"}}}],
+    })
+    out = build_fence_patch(fence, "outside", MANAGED_DEVICE)
+    assert out["patch"] == {"cameraAccess": "CAMERA_ACCESS_DISABLED"}
+
+
+def test_missing_when_means_on_enter_not_every_state():
+    # REGRESIÓN: tratar `when` ausente como comodín desbloqueaba la cámara
+    # FUERA de la geocerca en una policy que solo la permitía dentro.
+    # `ActionSpec.when` y `Engine._fire_actions` usan on_enter.
+    policy = {"id": "p", "actions": [{
+        "action": "apply_amapi_policy",
+        "params": {"restrictions": {"camera": "user_choice"}}}]}
+    assert build_fence_patch(policy, "inside", MANAGED_DEVICE)["patch"] == {
+        "cameraAccess": "CAMERA_ACCESS_USER_CHOICE"}
+    assert build_fence_patch(policy, "outside", MANAGED_DEVICE)["patch"] == {}
+    assert build_fence_patch(policy, "unknown", MANAGED_DEVICE)["patch"] == {}
+
+
+def test_conflicting_install_type_for_the_same_package_raises():
+    # REGRESIÓN: al fusionar una lista base con un bloqueo por geocerca se
+    # emitían dos entradas del mismo paquete y el BLOCKED no se aplicaba.
+    msg = _raises(build_policy_patch,
+                  {"applications": [{"package": "com.whatsapp"},
+                                    {"package": "com.whatsapp", "install_type": "BLOCKED"}]},
+                  management_mode=DEVICE_OWNER)
+    assert "conflicto" in msg
+    # Repetir el MISMO installType no es conflicto: se deduplica.
+    out = build_policy_patch({"applications": ["com.a", "com.a"]},
+                             management_mode=DEVICE_OWNER)
+    assert out["patch"]["applications"] == [
+        {"packageName": "com.a", "installType": "FORCE_INSTALLED"}]
+
+
+def test_enforcement_respects_the_ownership_matrix():
+    # REGRESIÓN: `blockScope` ("Only applicable to devices that are
+    # company-owned") y `preserveFrp` ("doesn't apply to work profiles") se
+    # emitían en BYOD con `skipped` vacío, justo lo que el módulo promete no
+    # hacer.
+    rule = {"setting_name": "applications", "block_after_days": 1,
+            "wipe_after_days": 3, "block_scope": "BLOCK_SCOPE_DEVICE",
+            "preserve_frp": True}
+    byod = build_policy_patch({}, management_mode=PROFILE_OWNER,
+                              ownership=PERSONALLY_OWNED, enforcement=[rule])
+    emitted = byod["patch"]["policyEnforcementRules"][0]
+    assert "blockScope" not in emitted["blockAction"]
+    assert "preserveFrp" not in emitted["wipeAction"]
+    # Los plazos, que sí aplican en cualquier modo, se mantienen.
+    assert emitted["blockAction"]["blockAfterDays"] == 1
+    cope = build_policy_patch({}, management_mode=PROFILE_OWNER,
+                              ownership=COMPANY_OWNED, enforcement=[rule])
+    assert cope["patch"]["policyEnforcementRules"][0]["blockAction"]["blockScope"] == \
+        "BLOCK_SCOPE_DEVICE"
+
+
+def test_negative_deadlines_are_rejected():
+    _raises(build_enforcement_rules,
+            [{"setting_name": "applications", "block_after_days": -1,
+              "wipe_after_days": 3}])
+
+
+def test_preserve_frp_false_is_emitted_not_dropped():
+    rules = build_enforcement_rules([{
+        "setting_name": "applications", "block_after_days": 1,
+        "wipe_after_days": 2, "preserve_frp": False}])
+    assert rules[0]["wipeAction"]["preserveFrp"] is False
+
+
+def test_empty_enforcement_list_is_an_explicit_empty_ruleset():
+    # Distinto de "sin enforcement": borra las reglas anteriores a propósito.
+    out = build_policy_patch({}, management_mode=DEVICE_OWNER, enforcement=[])
+    assert out["patch"]["policyEnforcementRules"] == []
+    assert out["update_mask"] == "policyEnforcementRules"
+    assert build_policy_patch({}, management_mode=DEVICE_OWNER)["patch"] == {}
