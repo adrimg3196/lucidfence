@@ -29,6 +29,7 @@ COMMANDS = {
 
 class WorkspaceONEAdapter(MDMAdapter):
     name = "workspace_one"
+    supports_amapi_policy = True
 
     def __init__(self, org_id: str = "", endpoint_template: str = "", webhook_url: str = "",
                  api_key: str = "", live: bool = False, base_url: str = "", tenant_code: str = "",
@@ -54,6 +55,22 @@ class WorkspaceONEAdapter(MDMAdapter):
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         try:
+            device_id = self._device_id(device)
+            if action == "apply_amapi_policy":
+                from lucidfence.core.amapi import generate_amapi_policy_patch
+                fence_state = params.get("fence_state", "unknown")
+                fence = params.get("fence", {})
+                patch = generate_amapi_policy_patch(fence_state, fence)
+                return {
+                    "adapter": self.name,
+                    "ok": True,
+                    "device_id": device_id,
+                    "action": action,
+                    "amapi_patch": patch,
+                    "dry_run": dry_run,
+                    "note": f"AMAPI declarative policy patch emitted for device {device_id}."
+                }
+
             if not self.live:
                 return self._mock(device, action, params, dry_run)
             if not (self.base_url and self.tenant_code and self.username and self.password):

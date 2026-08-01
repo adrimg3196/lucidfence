@@ -71,6 +71,7 @@ class IntuneAdapter(MDMAdapter):
     """
 
     name = "intune"
+    supports_amapi_policy = True
 
     def __init__(
         self,
@@ -181,6 +182,22 @@ class IntuneAdapter(MDMAdapter):
     # --- public API per MDMAdapter ---
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
+        device_id = self._dev_id_str(device)
+        if action == "apply_amapi_policy":
+            from lucidfence.core.amapi import generate_amapi_policy_patch
+            fence_state = params.get("fence_state", "unknown")
+            fence = params.get("fence", {})
+            patch = generate_amapi_policy_patch(fence_state, fence)
+            return {
+                "adapter": self.name,
+                "ok": True,
+                "device_id": device_id,
+                "action": action,
+                "amapi_patch": patch,
+                "dry_run": dry_run,
+                "note": f"AMAPI declarative policy patch emitted for device {device_id}."
+            }
+
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
         try:

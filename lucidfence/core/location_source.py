@@ -81,6 +81,8 @@ class LocationReport:
     enrolled_at: Optional[str] = None
     device_tag: Optional[str] = None
     geofence_compliance: Optional[dict] = None
+    amapi_policy_compliant: Optional[bool] = None
+    amapi_non_compliance_details: list[dict] = field(default_factory=list)
 
 
 class LiveLocationSource:
@@ -264,6 +266,14 @@ class LiveLocationSource:
             parts = [p.strip() for p in addr.split(",")]
             city = parts[0] if parts else None
             country = parts[-1] if len(parts) > 1 else None
+        # Mapping AMAPI policy compliance and nonComplianceDetails if present
+        amapi_policy_compliant = dev.get("policyCompliant") or dev.get("amapi_policy_compliant")
+        if amapi_policy_compliant is not None:
+            amapi_policy_compliant = bool(amapi_policy_compliant)
+        non_compliance_details = dev.get("nonComplianceDetails") or dev.get("amapi_non_compliance_details") or []
+        if not isinstance(non_compliance_details, list):
+            non_compliance_details = []
+
         return LocationReport(
             device_id=dev.get("id") or dev.get("deviceId") or "",
             name=name or "unknown",
@@ -295,6 +305,8 @@ class LiveLocationSource:
             last_checkin=dev.get("sortDate") or last_seen,
             enrolled_at=summary.get("enrolledAt") or dev.get("enrolledAt"),
             device_tag=summary.get("tag") or dev.get("tag"),
+            amapi_policy_compliant=amapi_policy_compliant,
+            amapi_non_compliance_details=non_compliance_details,
         )
 
     # -------------------------------------------------------------- public API
@@ -379,6 +391,26 @@ class SimulationLocationSource:
             model_default = {"android": "Dispositivo Android", "ios": "iPhone",
                               "windows": "PC Windows", "macos": "Mac",
                               "chromeos": "Chromebook Enterprise"}.get(plat, "Dispositivo")
+            # Simulate AMAPI compliance for Android devices
+            amapi_policy_compliant = None
+            amapi_non_compliance_details = []
+            if plat == "android":
+                amapi_policy_compliant = dev.get("policyCompliant") or dev.get("amapi_policy_compliant")
+                if amapi_policy_compliant is None:
+                    amapi_policy_compliant = dev.get("compliant") is not False
+                else:
+                    amapi_policy_compliant = bool(amapi_policy_compliant)
+
+                if amapi_policy_compliant is False:
+                    amapi_non_compliance_details = dev.get("nonComplianceDetails") or dev.get("amapi_non_compliance_details") or [
+                        {
+                            "settingName": "cameraDisabled",
+                            "nonComplianceReason": "USER_REJECTED",
+                            "packageName": "",
+                            "currentValue": "enabled"
+                        }
+                    ]
+
             out.append(LocationReport(
                 device_id=dev.get("id", ""),
                 name=dev.get("name", "unknown"),
@@ -412,6 +444,8 @@ class SimulationLocationSource:
                 enrolled_at=dev.get("enrolled_at") or "2026-01-01T00:00:00Z",
                 device_tag=dev.get("device_tag") or dev.get("id"),
                 geofence_compliance=dev.get("geofence_compliance") if plat in ("ios", "ipados") else None,
+                amapi_policy_compliant=amapi_policy_compliant,
+                amapi_non_compliance_details=amapi_non_compliance_details,
             ))
         return out
 

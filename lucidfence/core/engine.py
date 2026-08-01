@@ -371,6 +371,8 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    amapi_policy_compliant=getattr(rep, "amapi_policy_compliant", None),
+                    amapi_non_compliance_details=getattr(rep, "amapi_non_compliance_details", []) or [],
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
