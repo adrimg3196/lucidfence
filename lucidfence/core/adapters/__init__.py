@@ -27,6 +27,7 @@ from lucidfence.core.adapters.workspace_one import (
     WorkspaceONEAdapter,
     build_workspace_one_adapter_from_config,
 )
+from lucidfence.core.adapters.fleet import FleetAdapter
 
 # Acciones UEM válidas (compartidas por todos los adapters).
 # Los adapters que no soportan una acción devuelven `unsupported_action`; el
@@ -58,6 +59,7 @@ ADAPTER_REGISTRY = {
     "windows_conformidad": WindowsConformidadAdapter,
     "chromeos": ChromeOSAdapter,
     "workspace_one": WorkspaceONEAdapter,
+    "fleet": FleetAdapter,
 }
 
 
