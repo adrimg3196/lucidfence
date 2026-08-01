@@ -25,8 +25,9 @@ def build_sbom(root: Path) -> dict:
     for path in sorted(root.rglob("*.py")):
         if any(part.startswith(".") or part in {"build", "dist", "__pycache__"} for part in path.relative_to(root).parts):
             continue
+        content = path.read_bytes().replace(b"\r\n", b"\n")
         files.append({"path": str(path.relative_to(root)),
-                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+                      "sha256": hashlib.sha256(content).hexdigest()})
     return {
         "bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1,
         "metadata": {"component": {"type": "application", "name": "lucidfence", "version": "1.3.1"}},

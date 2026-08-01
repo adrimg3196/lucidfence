@@ -1,0 +1,1626 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LucidFence Local API",
+    "version": "2.1.0",
+    "description": "Versioned, tenant-isolated local API with a governed autonomous geofencing company. Browser sessions or lf_ bearer API keys are required except for health and schema endpoints."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765/api/v2"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerApiKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "lf_ API key"
+      },
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "gf_session"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "const": "ok"
+          },
+          "service": {
+            "const": "lucidfence"
+          }
+        }
+      },
+      "CompanyGoal": {
+        "type": "object",
+        "required": [
+          "title",
+          "outcome",
+          "metrics"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object"
+            }
+          },
+          "priority": {
+            "enum": [
+              "p0",
+              "p1",
+              "p2"
+            ]
+          },
+          "autonomy": {
+            "enum": [
+              "observe",
+              "recommend",
+              "simulate",
+              "execute_safe"
+            ]
+          }
+        }
+      },
+      "CompanyTask": {
+        "type": "object",
+        "required": [
+          "id",
+          "action",
+          "risk",
+          "status",
+          "evidence",
+          "acceptance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "forbidden"
+            ]
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "executed",
+              "blocked",
+              "ready_for_handoff",
+              "rejected"
+            ]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "acceptance": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "requires_approvals": {
+            "type": "integer"
+          },
+          "result": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerApiKey": []
+    },
+    {
+      "browserSession": []
+    }
+  ],
+  "paths": {
+    "/status": {
+      "get": {
+        "summary": "Fleet status",
+        "responses": {
+          "200": {
+            "description": "Tenant fleet snapshot"
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "summary": "Device inventory",
+        "responses": {
+          "200": {
+            "description": "Devices"
+          }
+        }
+      }
+    },
+    "/fences": {
+      "get": {
+        "summary": "List geofences",
+        "responses": {
+          "200": {
+            "description": "Geofences"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create geofence",
+        "responses": {
+          "200": {
+            "description": "Created"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/routes": {
+      "get": {
+        "summary": "List routes",
+        "responses": {
+          "200": {
+            "description": "Routes"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create route",
+        "responses": {
+          "200": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/risk": {
+      "get": {
+        "summary": "Explainable fleet risk",
+        "responses": {
+          "200": {
+            "description": "Risk bundle"
+          }
+        }
+      }
+    },
+    "/analytics": {
+      "get": {
+        "summary": "Descriptive and predictive analytics",
+        "responses": {
+          "200": {
+            "description": "Analytics"
+          }
+        }
+      }
+    },
+    "/incidents": {
+      "get": {
+        "summary": "List incidents",
+        "responses": {
+          "200": {
+            "description": "Incidents"
+          }
+        }
+      }
+    },
+    "/workflows": {
+      "get": {
+        "summary": "List workflows",
+        "responses": {
+          "200": {
+            "description": "Workflows"
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "summary": "List alert rules",
+        "responses": {
+          "200": {
+            "description": "Rules"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a threshold alert rule",
+        "description": "Create a threshold alert rule",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/compliance": {
+      "get": {
+        "summary": "Compliance report",
+        "responses": {
+          "200": {
+            "description": "Compliance"
+          }
+        }
+      }
+    },
+    "/roadmap": {
+      "get": {
+        "summary": "Authenticated roadmap",
+        "responses": {
+          "200": {
+            "description": "Roadmap"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update authenticated roadmap",
+        "description": "Update authenticated roadmap",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "summary": "List tenant API keys (owner)",
+        "responses": {
+          "200": {
+            "description": "Keys"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create API key",
+        "responses": {
+          "201": {
+            "description": "Token shown once"
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "JSON/CEF audit export",
+        "responses": {
+          "200": {
+            "description": "Hash-chained events"
+          }
+        }
+      }
+    },
+    "/company": {
+      "get": {
+        "summary": "Tenant-scoped autonomous company state",
+        "responses": {
+          "200": {
+            "description": "Goals, agents, tasks, decisions and evidence metrics"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/goals": {
+      "post": {
+        "summary": "Create a measurable company goal (owner/admin session)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyGoal"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Goal created"
+          },
+          "400": {
+            "description": "Invalid goal"
+          },
+          "403": {
+            "description": "Session/RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/cycle": {
+      "post": {
+        "summary": "Run one bounded evidence-driven cycle",
+        "responses": {
+          "200": {
+            "description": "Cycle decision and created tasks"
+          },
+          "409": {
+            "description": "Paused or no active goal"
+          },
+          "403": {
+            "description": "RBAC denied"
+          }
+        }
+      }
+    },
+    "/company/pause": {
+      "post": {
+        "summary": "Fail-close the company control plane",
+        "responses": {
+          "200": {
+            "description": "Paused"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/resume": {
+      "post": {
+        "summary": "Resume the company control plane",
+        "responses": {
+          "200": {
+            "description": "Resumed"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/tasks/{task_id}/approve": {
+      "post": {
+        "summary": "Record distinct human approval; never executes UEM commands",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task ready for human handoff"
+          },
+          "409": {
+            "description": "Blocked, duplicate or terminal task"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/company/tasks/{task_id}/reject": {
+      "post": {
+        "summary": "Reject a proposed company task",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task rejected"
+          },
+          "403": {
+            "description": "Owner/admin session required"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "Get current OpenAPI contract",
+        "description": "Get current OpenAPI contract",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/sso/providers": {
+      "get": {
+        "summary": "List OIDC SSO providers",
+        "description": "List OIDC SSO providers",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/sso/{provider}/start": {
+      "get": {
+        "summary": "Start OIDC login flow",
+        "description": "Start OIDC login flow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OIDC Provider name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/sso/{provider}/callback": {
+      "get": {
+        "summary": "Handle OIDC login callback",
+        "description": "Handle OIDC login callback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OIDC Provider name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Register a new organization and owner account",
+        "description": "Register a new organization and owner account",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/demo": {
+      "post": {
+        "summary": "One-click local demo login",
+        "description": "One-click local demo login",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate with email and password",
+        "description": "Authenticate with email and password",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Destroy active session",
+        "description": "Destroy active session",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get current user and organization list",
+        "description": "Get current user and organization list",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Basic health status",
+        "description": "Basic health status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Basic health status alias",
+        "description": "Basic health status alias",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Service readiness status",
+        "description": "Service readiness status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/soar/webhook/{org_id}": {
+      "post": {
+        "summary": "Incoming SOAR command webhook",
+        "description": "Incoming SOAR command webhook",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Tenant Organization ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/loop/metrics": {
+      "get": {
+        "summary": "Get loop optimization and প্রস্তাবক metrics",
+        "description": "Get loop optimization and প্রস্তাবক metrics",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/api-keys/{id}": {
+      "delete": {
+        "summary": "Revoke a tenant API key",
+        "description": "Revoke a tenant API key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "API key ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/fences/{id}": {
+      "delete": {
+        "summary": "Delete a geofence",
+        "description": "Delete a geofence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Geofence ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/routes/{id}/delete": {
+      "post": {
+        "summary": "Delete a route by ID",
+        "description": "Delete a route by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Route ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/workflows/apply": {
+      "post": {
+        "summary": "Apply a declarative geofence template",
+        "description": "Apply a declarative geofence template",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/workflows/custom": {
+      "post": {
+        "summary": "Apply a custom trigger/action geofence policy",
+        "description": "Apply a custom trigger/action geofence policy",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/workflows/{id}/delete": {
+      "post": {
+        "summary": "Delete a custom policy or workflow",
+        "description": "Delete a custom policy or workflow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Policy ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/orgs/{id}/switch": {
+      "post": {
+        "summary": "Switch the active organization cookie",
+        "description": "Switch the active organization cookie",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Target Organization ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/devices/{id}": {
+      "get": {
+        "summary": "Get full state and history for a single device",
+        "description": "Get full state and history for a single device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/devices/{id}/command": {
+      "post": {
+        "summary": "Send an on-demand MDM command to a device",
+        "description": "Send an on-demand MDM command to a device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/incidents/{id}/transition": {
+      "post": {
+        "summary": "Transition the status of an incident",
+        "description": "Transition the status of an incident",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Incident ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/incidents/export": {
+      "get": {
+        "summary": "Export incidents as CSV",
+        "description": "Export incidents as CSV",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/incidents/analytics": {
+      "get": {
+        "summary": "Get incident KPIs and analytics",
+        "description": "Get incident KPIs and analytics",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/cve": {
+      "get": {
+        "summary": "Get CVE vulnerability posture and metrics",
+        "description": "Get CVE vulnerability posture and metrics",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/soar": {
+      "get": {
+        "summary": "Get active SOAR playbooks and matches",
+        "description": "Get active SOAR playbooks and matches",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/policies": {
+      "get": {
+        "summary": "Get compiled active policies",
+        "description": "Get compiled active policies",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/report": {
+      "get": {
+        "summary": "Get generated tenant security posture report",
+        "description": "Get generated tenant security posture report",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/activation": {
+      "get": {
+        "summary": "Get tenant activation milestones",
+        "description": "Get tenant activation milestones",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List members of the organization",
+        "description": "List members of the organization",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite a new member to the organization",
+        "description": "Invite a new member to the organization",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/settings/status": {
+      "get": {
+        "summary": "Get active integration credentials status",
+        "description": "Get active integration credentials status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/settings": {
+      "post": {
+        "summary": "Save integration credentials",
+        "description": "Save integration credentials",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/settings/test": {
+      "post": {
+        "summary": "Test connection with UEM/MDM",
+        "description": "Test connection with UEM/MDM",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/settings/incident-webhook": {
+      "post": {
+        "summary": "Save incident notification webhook",
+        "description": "Save incident notification webhook",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/settings/soar-webhook-secret": {
+      "post": {
+        "summary": "Save inbound SOAR HMAC secret",
+        "description": "Save inbound SOAR HMAC secret",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/alerts/{id}/delete": {
+      "post": {
+        "summary": "Delete an alert rule by ID",
+        "description": "Delete an alert rule by ID",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Rule ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/alerts/evaluate": {
+      "post": {
+        "summary": "Trigger on-demand alert rules evaluation",
+        "description": "Trigger on-demand alert rules evaluation",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/atomicmail/status": {
+      "get": {
+        "summary": "Get sovereign mailbox setup and status",
+        "description": "Get sovereign mailbox setup and status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/atomicmail/setup": {
+      "post": {
+        "summary": "Configure sovereign Atomic Mail mailbox",
+        "description": "Configure sovereign Atomic Mail mailbox",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/atomicmail/test": {
+      "post": {
+        "summary": "Send test email via sovereign mailbox",
+        "description": "Send test email via sovereign mailbox",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/atomicmail/digest": {
+      "post": {
+        "summary": "Send manual email digest report",
+        "description": "Send manual email digest report",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/whitelabel/suggest": {
+      "post": {
+        "summary": "Get DNS suggestion records for whitelabel domain",
+        "description": "Get DNS suggestion records for whitelabel domain",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/whitelabel/setup": {
+      "post": {
+        "summary": "Configure whitelabel branding domain",
+        "description": "Configure whitelabel branding domain",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/whitelabel/status": {
+      "get": {
+        "summary": "Get whitelabel domain verification status",
+        "description": "Get whitelabel domain verification status",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/whitelabel/validate": {
+      "post": {
+        "summary": "Trigger validation of whitelabel DNS records",
+        "description": "Trigger validation of whitelabel DNS records",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/export": {
+      "get": {
+        "summary": "Export inventory or compliance reports as CSV/HTML/PDF",
+        "description": "Export inventory or compliance reports as CSV/HTML/PDF",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai/providers": {
+      "get": {
+        "summary": "Get active LLM providers",
+        "description": "Get active LLM providers",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai/settings": {
+      "get": {
+        "summary": "Get LLM integration settings",
+        "description": "Get LLM integration settings",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Save LLM integration settings",
+        "description": "Save LLM integration settings",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai/test": {
+      "post": {
+        "summary": "Test connection to LLM provider",
+        "description": "Test connection to LLM provider",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai": {
+      "post": {
+        "summary": "Run LLM prompt completion",
+        "description": "Run LLM prompt completion",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai/chat": {
+      "post": {
+        "summary": "Run OpenAI-compatible chat completion",
+        "description": "Run OpenAI-compatible chat completion",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/ai/support": {
+      "post": {
+        "summary": "Draft support reply via AI",
+        "description": "Draft support reply via AI",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden / RBAC denied"
+          }
+        }
+      }
+    },
+    "/org": {
+      "get": {
+        "summary": "Active organization profile",
+        "description": "Retrieve active organization profile, plan limits, and roles.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/run-once": {
+      "post": {
+        "summary": "Run background engine cycle once",
+        "description": "Force a background engine cycle once for geofences and compliance policies.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/config/validate": {
+      "get": {
+        "summary": "Validate the location_source mapping against the live UEM/MDM API",
+        "description": "Validate the active integration and location_source mapping configuration against the live UEM/MDM API.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/product": {
+      "get": {
+        "summary": "Product intelligence bundle",
+        "description": "Retrieve read-only product intelligence bundle for ROI analysis and fleet security overview.",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    }
+  }
+}

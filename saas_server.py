@@ -1115,7 +1115,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/openapi.json" and method == "GET":
             try:
-                schema = json.loads((ROOT / "docs" / "architecture" / "openapi.json").read_text(encoding="utf-8"))
+                schema = json.loads((ROOT / "openapi.json").read_text(encoding="utf-8"))
                 return _send_json(self, schema)
             except (OSError, json.JSONDecodeError):
                 return _send_json(self, {"error": "openapi no disponible"}, 503)
