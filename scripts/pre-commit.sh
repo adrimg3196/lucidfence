@@ -17,16 +17,8 @@ for f in static/app.js static/i18n.js; do
   fi
 done
 
-# 2) SBOM: si cambió código fuente, el SBOM commiteado debe coincidir con el generado.
-if git diff --cached --name-only | grep -qE '\.py$' && [ -f "$ROOT/scripts/generate_sbom.py" ]; then
-  gen=$(mktemp)
-  python3 "$ROOT/scripts/generate_sbom.py" --root "$ROOT" --out "$gen" >/dev/null 2>&1 || true
-  if [ -s "$gen" ] && ! diff -q "$ROOT/sbom.cdx.json" "$gen" >/dev/null 2>&1; then
-    echo "ABORT: sbom.cdx.json desactualizado. Regenera: python3 scripts/generate_sbom.py --root . --out sbom.cdx.json" >&2
-    fail=1
-  fi
-  rm -f "$gen"
-fi
+# 2) SBOM: sin comprobación. Es un artefacto de build que genera CI
+# (dependency-audit → upload-artifact); no vive en git (issue #74).
 
 # 3) Secret scan local (best-effort, no bloquea si gitleaks no está).
 if command -v gitleaks >/dev/null 2>&1; then
