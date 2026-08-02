@@ -9,7 +9,7 @@ Gateway read-only para conectar la PWA pública con un UEM que requiera secreto 
 - CORS limitado a `ALLOWED_ORIGIN`; nunca `*`.
 - Máximo 10.000 dispositivos por respuesta.
 - Normaliza únicamente campos operativos; no devuelve tokens ni payloads completos.
-- No implementa wipe, lock, delete ni otra mutación UEM. `/v1/soar/incident` (POST) no está implementado a propósito: abriría una mutación saliente hacia un SOAR de terceros sin vendor definido — contradice el diseño read-only de este Worker. Ver tarea t_f952d997.
+- No implementa wipe, lock, delete ni otra mutación UEM. `/v1/soar/incident` responde `501 not_implemented` a propósito, en vez de simularlo: implementar el envío real abriría una mutación saliente hacia un SOAR de terceros sin vendor definido — contradice el diseño read-only de este Worker. Decisión de producto pendiente (Adri, 2026-08-02): BYO endpoint con hardening SSRF, o nombrar un vendor fijo. Ver `AGENTS.md` y tarea Hermes `t_f952d997`.
 
 ## Despliegue
 
