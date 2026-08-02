@@ -29,23 +29,69 @@ def jina(url, head=300):
         return f"(err: {e})"
 
 def x_search(q):
-    # Jina Reader de x.com/search: evita el bug de twitter-cli (ClientTransaction)
-    u = f"https://x.com/search?q={requests_quote(q)}&f=live"
-    txt = jina(u, 600)
-    return txt if txt and "Blocked" not in txt and "Forbidden" not in txt else f"(X via Jina sin resultados: {txt[:120]})"
+    # curl directo a la API de X con cookies (auth_token+ct0+guest token)
+    at, ct = x_cookies()
+    if not at:
+        return "(no cookies X)"
+    bearer = ("AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH2Kr1s8T2rK"
+              "O8X2h7jU7MaxZUc0pGMKQ %3D%3D")
+    # obtener guest token
+    try:
+        g = subprocess.run([
+            "curl", "-s", "--max-time", "20",
+            "-H", f"authorization: Bearer {bearer}",
+            "-H", "User-Agent: Mozilla/5.0",
+            "https://api.twitter.com/1.1/guest/activate.json"],
+            capture_output=True, text=True, timeout=25)
+        import json as J
+        gt = J.loads(g.stdout).get("guest_token", "")
+    except Exception:
+        gt = ""
+    cookie = f"auth_token={at}; ct0={ct}"
+    if gt:
+        cookie += f"; gt={gt}"
+    try:
+        out = subprocess.run([
+            "curl", "-s", "--max-time", "25",
+            "-H", f"authorization: Bearer {bearer}",
+            "-H", f"x-csrf-token: {ct}",
+            "-H", f"x-guest-token: {gt}",
+            "-H", "x-twitter-active-user: yes",
+            "-H", "User-Agent: Mozilla/5.0",
+            "--cookie", cookie,
+            f"https://twitter.com/i/api/2/search/adaptive.json?q={requests_quote(q)}&count=5&tweet_search_mode=live"],
+            capture_output=True, text=True, timeout=30)
+        d = J.loads(out.stdout)
+        tweets = d.get("globalObjects", {}).get("tweets", {})
+        if not tweets:
+            return f"(X sin tweets: {out.stdout[:120]})"
+        return "\n".join(f"  - {t['full_text'][:90]}" for t in list(tweets.values())[:5])
+    except Exception as e:
+        return f"(X err: {e})"
+
+def x_cookies():
+    cfg = os.path.expanduser("~/.agent-reach/config.yaml")
+    try:
+        txt = open(cfg).read()
+        at = re.search(r"twitter_auth_token:\s*(\S+)", txt).group(1)
+        ct = re.search(r"twitter_ct0:\s*(\S+)", txt).group(1)
+        return at, ct
+    except Exception:
+        return None, None
 
 def reddit_search(q):
-    # curl autenticado con reddit_session guardada: evita opencli (requiere navegador)
+    # curl autenticado con reddit_session: funciona en headless
     cookie = reddit_cookie()
     if not cookie:
         return "(no cookie Reddit)"
     try:
-        out = subprocess.run(
-            ["curl", "-s", "--max-time", "20",
-             "-H", f"Cookie: {cookie}",
-             "-H", "User-Agent: Mozilla/5.0",
-             f"https://www.reddit.com/search.json?q={requests_quote(q)}&limit=5"],
-            capture_output=True, text=True, timeout=25)
+        out = subprocess.run([
+            "curl", "-sL", "--max-time", "25",
+            "-H", f"Cookie: {cookie}",
+            "-H", "User-Agent: Mozilla/5.0 (compatible; HermesAgent/1.0)",
+            "-H", "Accept: application/json",
+            f"https://www.reddit.com/search.json?q={requests_quote(q)}&limit=5"],
+            capture_output=True, text=True, timeout=30)
         import json as J
         data = J.loads(out.stdout)
         posts = data.get("data", {}).get("children", [])
@@ -57,7 +103,8 @@ def reddit_search(q):
         return f"(Reddit err: {e})"
 
 def requests_quote(s):
-    return __import__("urllib.parse").quote(s)
+    from urllib.parse import quote
+    return quote(s)
 
 def reddit_cookie():
     p = os.path.expanduser("~/.agent-reach/reddit_cookies.txt")
