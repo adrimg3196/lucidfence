@@ -19,14 +19,15 @@ RSS, V2EX, B站. NO uses `curl` crudo (HTML sucio) ni yt-dlp suelto.
 - **GitHub**: `gh` (ya con auth)
 - **RSS / V2EX / B站**: vía agent-reach
 
-## Canales que requieren cookies del usuario (pendientes)
-Twitter/X y Reddit: `agent-reach install --channels=twitter,reddit`.
-Extraccion de cookies: `agent-reach configure --from-browser <browser> --platform twitter`
-donde <browser> SOLO acepta chrome/firefox/edge/brave/opera. **Safari NO es
-soportado por agent-reach** (guarda cookies en binario, no extraible).
-Para usar sesiones de Safari: exportar manualmente las cookies a un archivo
-Netscape y `agent-reach configure twitter-cookies /ruta/cookies.txt`, o iniciar
-X en Chrome/Brave y extraer de ahi. No se usan solos.
+## Canales que requieren cookies del usuario
+Twitter/X: **CONFIGURADO** (cookies en ~/.agent-reach/config.yaml). Extraidas
+via Cookie-Editor (App-Bound Encryption de macOS 14+ impide leer Cookies.sqlite
+de Chrome fuera del navegador). Para usar: exportar TWITTER_AUTH_TOKEN y
+TWITTER_CT0 en el shell (twitter-cli no lee config.yaml solo).
+ESTADO: cookie valida (no 401) pero twitter-cli falla en handshake
+`ClientTransaction` (bug upstream con API actual de X). Canal listo; funcionara
+cuando twitter-cli lo arregle. Reddit: usar mismo flujo Cookie-Editor.
+Safari NO soportado por agent-reach (extractor solo chrome/ff/edge/brave/opera).
 
 ## Scripts del repo que ya lo usan
 - `scripts/recon_web.py` — recon de competidores (cron `recon-web-agent-reach`, 9AM).
