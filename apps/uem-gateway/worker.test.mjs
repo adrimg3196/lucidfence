@@ -35,6 +35,11 @@ test('/v1/cves/enrich sin origin permitido -> 403 (no solo /v1/fleet)', async ()
   assert.equal(res.status, 403);
 });
 
+test('/v1/soar/incident sin origin permitido -> 403, no el 501 (el gate de origin va antes)', async () => {
+  const res = await worker.fetch(new Request('https://gateway.example/v1/soar/incident', { method: 'POST' }), ENV);
+  assert.equal(res.status, 403);
+});
+
 test('POST -> 405 read_only_gateway (incluye rutas nuevas)', async () => {
   const res = await worker.fetch(req('/v1/cves/enrich', { method: 'POST' }), ENV);
   assert.equal(res.status, 405);
