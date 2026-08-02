@@ -20,8 +20,13 @@ RSS, V2EX, B站. NO uses `curl` crudo (HTML sucio) ni yt-dlp suelto.
 - **RSS / V2EX / B站**: vía agent-reach
 
 ## Canales que requieren cookies del usuario (pendientes)
-Twitter/X y Reddit: `agent-reach install --channels=twitter,reddit` (necesita
-sesión del usuario). No se usan solos.
+Twitter/X y Reddit: `agent-reach install --channels=twitter,reddit`.
+Extraccion de cookies: `agent-reach configure --from-browser <browser> --platform twitter`
+donde <browser> SOLO acepta chrome/firefox/edge/brave/opera. **Safari NO es
+soportado por agent-reach** (guarda cookies en binario, no extraible).
+Para usar sesiones de Safari: exportar manualmente las cookies a un archivo
+Netscape y `agent-reach configure twitter-cookies /ruta/cookies.txt`, o iniciar
+X en Chrome/Brave y extraer de ahi. No se usan solos.
 
 ## Scripts del repo que ya lo usan
 - `scripts/recon_web.py` — recon de competidores (cron `recon-web-agent-reach`, 9AM).
