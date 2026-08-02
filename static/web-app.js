@@ -165,6 +165,7 @@
       const b64=state.settings.secCredsB64||'',headers={'content-type':'application/json'};
       if(b64){headers['x-uem-provider']='soar';headers['x-uem-secrets']=b64;}
       const r=await fetch(state.settings.gatewayUrl+'/v1/soar/incident',{method:'POST',credentials:'omit',cache:'no-store',headers,body:JSON.stringify({...payload,action:state.settings.soarAction||'monitor'})});
+      if(r.status===501)throw new Error('Próximamente (aún no hay SOAR configurado)'); // aviso honesto, no un fallo tecnico
       if(!r.ok)throw new Error('SOAR HTTP '+r.status);
       toast('SOAR → '+(state.settings.soarAction||'monitor')+': '+payload.title);
     }

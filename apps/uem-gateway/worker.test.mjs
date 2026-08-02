@@ -35,15 +35,35 @@ test('/v1/cves/enrich sin origin permitido -> 403 (no solo /v1/fleet)', async ()
   assert.equal(res.status, 403);
 });
 
+test('/v1/soar/incident sin origin permitido -> 403, no el 501 (el gate de origin va antes)', async () => {
+  const res = await worker.fetch(new Request('https://gateway.example/v1/soar/incident', { method: 'POST' }), ENV);
+  assert.equal(res.status, 403);
+});
+
 test('POST -> 405 read_only_gateway (incluye rutas nuevas)', async () => {
   const res = await worker.fetch(req('/v1/cves/enrich', { method: 'POST' }), ENV);
   assert.equal(res.status, 405);
   assert.equal((await res.json()).error, 'read_only_gateway');
 });
 
-test('ruta desconocida -> 404', async () => {
-  const res = await worker.fetch(req('/v1/soar/incident'), ENV);
+test('ruta desconocida (de verdad) -> 404', async () => {
+  const res = await worker.fetch(req('/v1/no-existe'), ENV);
   assert.equal(res.status, 404);
+});
+
+test('/v1/soar/incident -> 501 not_implemented, honesto en vez de generico (GET o POST)', async () => {
+  const getRes = await worker.fetch(req('/v1/soar/incident'), ENV);
+  assert.equal(getRes.status, 501);
+  assert.equal((await getRes.json()).error, 'not_implemented');
+  const postRes = await worker.fetch(req('/v1/soar/incident', { method: 'POST', body: '{}' }), ENV);
+  assert.equal(postRes.status, 501);
+  assert.equal((await postRes.json()).error, 'not_implemented');
+});
+
+test('preflight OPTIONS anuncia POST (si no, el navegador nunca deja pasar el POST a /v1/soar/incident)', async () => {
+  const res = await worker.fetch(new Request('https://gateway.example/v1/soar/incident', { method: 'OPTIONS', headers: ORIGIN_HEADERS }), ENV);
+  assert.equal(res.status, 204);
+  assert.match(res.headers.get('access-control-allow-methods'), /POST/);
 });
 
 test('/v1/fleet sigue funcionando (regresion)', async () => {

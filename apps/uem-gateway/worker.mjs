@@ -41,9 +41,16 @@ async function enrichCves(env,origin){
 export default{
   async fetch(request,env){
     const url=new URL(request.url),origin=allowedOrigin(request,env);
-    if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, OPTIONS','access-control-allow-headers':'content-type','access-control-max-age':'600','vary':'origin'}});
+    if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, POST, OPTIONS','access-control-allow-headers':'content-type','access-control-max-age':'600','vary':'origin'}});
     if(url.pathname==='/health')return json({ok:true,mode:'read_only',configured:Boolean(env.UPSTREAM_BASE_URL&&env.UPSTREAM_TOKEN)},200,origin);
     if(!origin)return json({error:'origin_not_allowed'},403,'');
+    // Honesto en vez de silencioso: sin esto, el POST del wizard choca con el
+    // 405 read_only_gateway generico (o ni siquiera llega, por el preflight
+    // CORS) y el usuario ve un fallo de red generico en vez de un aviso
+    // claro. No hay vendor SOAR especificado en ningun sitio del repo (ver
+    // AGENTS.md) — implementar un relay de verdad requeriria BYO endpoint del
+    // cliente + hardening SSRF, que es una decision de producto pendiente.
+    if(url.pathname==='/v1/soar/incident')return json({error:'not_implemented',hint:'SOAR aun no configurado en este gateway'},501,origin);
     if(request.method!=='GET')return json({error:'read_only_gateway'},405,origin);
     if(url.pathname==='/v1/cves/enrich')return enrichCves(env,origin);
     if(url.pathname!=='/v1/fleet')return json({error:'not_found'},404,origin);
