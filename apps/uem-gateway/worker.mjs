@@ -12,7 +12,7 @@ function cvssSeverity(vuln){
   // hermano (fuera de cvssData) en CVSS v2 — asi lo define el schema NVD
   // oficial (cvss-v2 vs cvss-v30/v31 en cve_api_json_2.0.schema).
   const metrics=(vuln.cve&&vuln.cve.metrics)||{};
-  for(const key of['cvssMetricV31','cvssMetricV30','cvssMetricV2']){
+  for(const key of['cvssMetricV40','cvssMetricV31','cvssMetricV30','cvssMetricV2']){
     for(const m of metrics[key]||[]){
       const sev=(m.baseSeverity||(m.cvssData&&m.cvssData.baseSeverity)||'').toLowerCase();
       if(sev)return sev;

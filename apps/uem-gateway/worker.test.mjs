@@ -30,6 +30,11 @@ test('sin origin permitido -> 403', async () => {
   assert.equal(res.status, 403);
 });
 
+test('/v1/cves/enrich sin origin permitido -> 403 (no solo /v1/fleet)', async () => {
+  const res = await worker.fetch(new Request('https://gateway.example/v1/cves/enrich'), ENV);
+  assert.equal(res.status, 403);
+});
+
 test('POST -> 405 read_only_gateway (incluye rutas nuevas)', async () => {
   const res = await worker.fetch(req('/v1/cves/enrich', { method: 'POST' }), ENV);
   assert.equal(res.status, 405);
@@ -87,12 +92,35 @@ test('/v1/cves/enrich lee baseSeverity de CVSSv2 (campo hermano, fuera de cvssDa
   assert.deepEqual(body.byPlatform.ios, { cveCount: 1, cveCritical: true });
 });
 
-test('/v1/cves/enrich tolera NVD caido (rate-limit/timeout) sin romper la respuesta', async () => {
-  mockImpl = async () => { throw new Error('rate limited'); };
+test('/v1/cves/enrich lee CVSSv4.0 (NVD ya emite CVEs solo-v4, verificado en vivo con "microsoft windows")', async () => {
+  mockImpl = async (url) => {
+    const term = new URL(url).searchParams.get('keywordSearch');
+    if (term === 'microsoft windows') {
+      return new Response(JSON.stringify({ vulnerabilities: [
+        { cve: { metrics: { cvssMetricV40: [{ source: 'nvd@nist.gov', type: 'Primary', cvssData: { baseSeverity: 'CRITICAL' } }] } } },
+      ] }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ vulnerabilities: [] }), { status: 200 });
+  };
+  const res = await worker.fetch(req('/v1/cves/enrich'), ENV);
+  const body = await res.json();
+  assert.deepEqual(body.byPlatform.windows, { cveCount: 1, cveCritical: true });
+});
+
+test('/v1/cves/enrich tolera NVD caido por excepcion de red (timeout) sin romper la respuesta', async () => {
+  mockImpl = async () => { throw new Error('network error'); };
   const res = await worker.fetch(req('/v1/cves/enrich'), ENV);
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.deepEqual(body.byPlatform, {}); // best-effort: ninguna plataforma resuelta, no un 500
+});
+
+test('/v1/cves/enrich tolera NVD 429 (rate-limit real, no excepcion) sin romper la respuesta', async () => {
+  mockImpl = async () => new Response(JSON.stringify({ message: 'rate limit exceeded' }), { status: 429 });
+  const res = await worker.fetch(req('/v1/cves/enrich'), ENV);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.byPlatform, {});
 });
 
 test('/v1/cves/enrich envia NVD_API_KEY como header apiKey cuando esta configurada', async () => {
