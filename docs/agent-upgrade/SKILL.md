@@ -66,6 +66,15 @@ NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
 - [ ] ¿Hay checkpoint si la tarea puede interrumpirse?
 
 ## Referencias (repos de recon)
+- obra/superpowers (skill TDD + verification-before-completion (superpowers))
+- langchain-ai/langchain (revisar manualmente)
+- FoundationAgents/MetaGPT (role-play SOP + nested agents (MetaGPT/xagent))
+- microsoft/autogen (revisar manualmente)
+- badlogic/lemmy (revisar manualmente)
+- zhongyu09/openchatbi (revisar manualmente)
+- alexfazio/crewAI-quickstart (role-play SOP + nested agents (MetaGPT/xagent))
+- xorbitsai/xagent (DAG plan-execute + checkpoint (xagent))
+
 - obra/superpowers (skills TDD, verification)
 - xorbitsai/xagent (plan-execute, nested, checkpoint, memory)
 - microsoft/autogen -> Microsoft Agent Framework (A2A/MCP multi-agent)
