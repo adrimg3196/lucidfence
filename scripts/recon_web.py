@@ -5,7 +5,7 @@ el bug de twitter-cli), Reddit (curl autenticado con cookies guardadas).
 Todos funcionan en headless/produccion sin navegador.
 
 Usado por cron recon-web-agent-reach (9AM). Uso: python3 scripts/recon_web.py"""
-import subprocess, os, re
+import subprocess, os, re, json
 
 VENV = os.path.expanduser("~/.agent-reach-venv")
 PY = os.path.join(VENV, "bin", "python")
@@ -29,62 +29,35 @@ def jina(url, head=300):
         return f"(err: {e})"
 
 def x_search(q):
-    # curl directo a la API de X con cookies (auth_token+ct0+twid+guest token)
+    # twscrape (en el venv de agent-reach) genera ClientTransaction y usa
+    # auth_token+ct0: funciona en headless. Se ejecuta en subprocess con el venv
+    # para no requerir twscrape en el python del sistema.
     at, ct = x_cookies()
     if not at:
         return "(no cookies X)"
-    twid = x_twid()
-    bearer = ("AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH2Kr1s8T2rK"
-              "O8X2h7jU7MaxZUc0pGMKQ %3D%3D")
+    code = (
+        "import asyncio,json,sys\n"
+        "from twscrape import API\n"
+        "c=json.load(open('/tmp/x_cookies.json')); d={x['name']:x['value'] for x in c}\n"
+        "twid=d.get('twid','')\n"
+        f"ck='auth_token={at}; ct0={ct}'" + ("+'; twid='+twid if twid else ''") + "\n"
+        "async def run():\n"
+        "  api=API(); await api.pool.add_account_cookies('xuser',ck)\n"
+        "  out=[]\n"
+        "  async for t in api.search(" + repr(q) + ", limit=5):\n"
+        "    c=getattr(t,'rawContent',None) or getattr(t,'content',None) or ''\n"
+        "    out.append(str(c)[:90])\n"
+        "  return out\n"
+        "r=asyncio.run(run())\n"
+        "print('\\n'.join('  - '+x for x in r[:5]) if r else '(X sin tweets)')\n"
+    )
     try:
-        g = subprocess.run([
-            "curl", "-s", "--max-time", "20",
-            "-H", f"authorization: Bearer {bearer}",
-            "-H", "User-Agent: Mozilla/5.0",
-            "https://api.twitter.com/1.1/guest/activate.json"],
-            capture_output=True, text=True, timeout=25)
-        import json as J
-        gt = J.loads(g.stdout).get("guest_token", "")
-    except Exception:
-        gt = ""
-    cookie = f"auth_token={at}; ct0={ct}"
-    if twid:
-        cookie += f"; twid={twid}"
-    if gt:
-        cookie += f"; gt={gt}"
-    try:
-        out = subprocess.run([
-            "curl", "-s", "--max-time", "25",
-            "-H", f"authorization: Bearer {bearer}",
-            "-H", f"x-csrf-token: {ct}",
-            "-H", f"x-guest-token: {gt}",
-            "-H", "x-twitter-auth-type: OAuth2Session",
-            "-H", "x-twitter-active-user: yes",
-            "-H", "User-Agent: Mozilla/5.0",
-            "--cookie", cookie,
-            f"https://twitter.com/i/api/2/search/adaptive.json?q={requests_quote(q)}&count=5&tweet_search_mode=live"],
-            capture_output=True, text=True, timeout=30)
-        d = J.loads(out.stdout)
-        tweets = d.get("globalObjects", {}).get("tweets", {})
-        if not tweets:
-            return f"(X sin tweets: {out.stdout[:150]})"
-        return "\n".join(f"  - {t['full_text'][:90]}" for t in list(tweets.values())[:5])
+        out = subprocess.run([PY, "-c", code], capture_output=True, text=True, timeout=60)
+        return out.stdout.strip() or f"(X err: {out.stderr[:120]})"
+    except subprocess.TimeoutExpired:
+        return "(X timeout)"
     except Exception as e:
         return f"(X err: {e})"
-
-def x_twid():
-    p = os.path.expanduser("~/.agent-reach/config.yaml")
-    try:
-        txt = open(p).read()
-        m = re.search(r"twitter_twid:\s*(\S+)", txt)
-        if m:
-            return m.group(1)
-        # intenta del json original
-        c = json.load(open("/tmp/x_cookies.json"))
-        d = {x["name"]: x["value"] for x in c}
-        return d.get("twid", "")
-    except Exception:
-        return ""
 
 def x_cookies():
     cfg = os.path.expanduser("~/.agent-reach/config.yaml")
@@ -142,7 +115,7 @@ def main():
             print(f"   {r}")
     print("\n>>> Web (Jina):")
     print(jina("https://github.com/Panniantong/agent-reach")[:250])
-    print("\n>>> X (Jina Reader x.com/search):")
+    print("\n>>> X (twscrape + cookies, ClientTransaction):")
     print(x_search("UEM MDM")[:400])
     print("\n>>> Reddit (curl autenticado):")
     print(reddit_search("UEM MDM")[:400])
