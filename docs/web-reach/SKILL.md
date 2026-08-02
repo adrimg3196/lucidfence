@@ -26,7 +26,11 @@ de Chrome fuera del navegador). Para usar: exportar TWITTER_AUTH_TOKEN y
 TWITTER_CT0 en el shell (twitter-cli no lee config.yaml solo).
 ESTADO: cookie valida (no 401) pero twitter-cli falla en handshake
 `ClientTransaction` (bug upstream con API actual de X). Canal listo; funcionara
-cuando twitter-cli lo arregle. Reddit: usar mismo flujo Cookie-Editor.
+cuando twitter-cli lo arregle. Reddit: cookies guardadas en
+~/.agent-reach/reddit_cookies.txt. opencli reddit requiere NAVEGADOR con sesion
+(Browser: yes), no acepta cookies por archivo; usa la sesion de Reddit ya activa
+en tu Chrome. Funciona cuando TU abres Chrome con tu sesion. Reddit bloquea sin
+login (403 via web/Jina).
 Safari NO soportado por agent-reach (extractor solo chrome/ff/edge/brave/opera).
 
 ## Scripts del repo que ya lo usan
