@@ -74,6 +74,7 @@ class LocationReport:
     battery_state: Optional[str] = None
     storage_total_gb: Optional[float] = None
     storage_free_gb: Optional[float] = None
+    encryption_enabled: Optional[bool] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -371,7 +372,7 @@ class SimulationLocationSource:
             wps = dev.get("waypoints", [])
             lat, lng = self._moving_point(wps, tick)
             plat = (dev.get("platform") or "android").lower()
-            # Inventory defaults so the MDM/UEM asset view is always populated,
+            # IT inventory defaults so the MDM/UEM asset view is always populated,
             # even when a (legacy) seed omits the new fields.
             os_default = {"android": "Android 13", "ios": "iOS 17.4",
                            "windows": "Windows 11 23H2", "macos": "macOS 14",
@@ -440,4 +441,3 @@ def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fle
     if mode == "live":
         return LiveLocationSource(org_id=org_id, api_key=api_key)
     return SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
-
