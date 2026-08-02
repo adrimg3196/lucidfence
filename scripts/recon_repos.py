@@ -2,7 +2,14 @@
 """Recon de repos GitHub: competidores UEM/MDM + tools de video.
 Devuelve minimo 3 repos diversos como inspiracion para el video de LucidFence.
 Usa GitHub API publica (sin auth, rate limit 60/h, suficiente para pocas queries)."""
-import json, urllib.request, urllib.parse, sys
+import json, urllib.request, urllib.parse, sys, os
+
+# reusa la busqueda social de agent-reach (X via twscrape, Reddit via auth)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from recon_web import social_pulse
+except Exception:
+    social_pulse = None
 
 QUERIES = [
     "UEM MDM mobile device management",
@@ -50,3 +57,7 @@ for i, (name, stars, desc, url, lang, angle) in enumerate(repos[:6], 1):
     print(f"   {desc}")
     print(f"   {url}\n")
 print(f"Total referencias traidas: {len(repos)} (minimo 3)")
+# pulso social via agent-reach (X/Reddit) con los mismos angulos
+if social_pulse:
+    print("\n=== PULSO SOCIAL (agent-reach: X + Reddit) ===")
+    print(social_pulse(QUERIES[:4]))

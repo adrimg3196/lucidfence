@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Recon de competidores USANDO agent-reach (fuente oficial de busqueda).
-Canales: YouTube (yt-dlp), web (Jina), X (Jina Reader de x.com/search, evita
-el bug de twitter-cli), Reddit (curl autenticado con cookies guardadas).
-Todos funcionan en headless/produccion sin navegador.
+Canales: YouTube (yt-dlp), web (Jina), X (twscrape + cookies, ClientTransaction),
+Reddit (curl autenticado con cookies). Todos funcionan en headless/produccion
+sin navegador.
 
 Usado por cron recon-web-agent-reach (9AM). Uso: python3 scripts/recon_web.py"""
 import subprocess, os, re, json
@@ -106,6 +106,19 @@ def reddit_cookie():
     except Exception:
         return None
     return None
+
+def social_pulse(queries):
+    """Busca cada query en X (twscrape) y Reddit (auth) y devuelve resumen.
+    Reutiliza x_search/reddit_search. Usado por recon-agent-repos y
+    recon-repos-competidores para inyectar la habilidad de busqueda social."""
+    out = []
+    for q in queries:
+        out.append(f">>> {q}")
+        x = x_search(q)
+        out.append("  X: " + (x[:200] if x else "(sin datos)"))
+        rd = reddit_search(q)
+        out.append("  Reddit: " + (rd[:200] if rd else "(sin datos)"))
+    return "\n".join(out)
 
 def main():
     print("=== RECON WEB (agent-reach) — competidores LucidFence ===\n")
