@@ -29,13 +29,13 @@ def jina(url, head=300):
         return f"(err: {e})"
 
 def x_search(q):
-    # curl directo a la API de X con cookies (auth_token+ct0+guest token)
+    # curl directo a la API de X con cookies (auth_token+ct0+twid+guest token)
     at, ct = x_cookies()
     if not at:
         return "(no cookies X)"
+    twid = x_twid()
     bearer = ("AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH2Kr1s8T2rK"
               "O8X2h7jU7MaxZUc0pGMKQ %3D%3D")
-    # obtener guest token
     try:
         g = subprocess.run([
             "curl", "-s", "--max-time", "20",
@@ -48,6 +48,8 @@ def x_search(q):
     except Exception:
         gt = ""
     cookie = f"auth_token={at}; ct0={ct}"
+    if twid:
+        cookie += f"; twid={twid}"
     if gt:
         cookie += f"; gt={gt}"
     try:
@@ -56,6 +58,7 @@ def x_search(q):
             "-H", f"authorization: Bearer {bearer}",
             "-H", f"x-csrf-token: {ct}",
             "-H", f"x-guest-token: {gt}",
+            "-H", "x-twitter-auth-type: OAuth2Session",
             "-H", "x-twitter-active-user: yes",
             "-H", "User-Agent: Mozilla/5.0",
             "--cookie", cookie,
@@ -64,10 +67,24 @@ def x_search(q):
         d = J.loads(out.stdout)
         tweets = d.get("globalObjects", {}).get("tweets", {})
         if not tweets:
-            return f"(X sin tweets: {out.stdout[:120]})"
+            return f"(X sin tweets: {out.stdout[:150]})"
         return "\n".join(f"  - {t['full_text'][:90]}" for t in list(tweets.values())[:5])
     except Exception as e:
         return f"(X err: {e})"
+
+def x_twid():
+    p = os.path.expanduser("~/.agent-reach/config.yaml")
+    try:
+        txt = open(p).read()
+        m = re.search(r"twitter_twid:\s*(\S+)", txt)
+        if m:
+            return m.group(1)
+        # intenta del json original
+        c = json.load(open("/tmp/x_cookies.json"))
+        d = {x["name"]: x["value"] for x in c}
+        return d.get("twid", "")
+    except Exception:
+        return ""
 
 def x_cookies():
     cfg = os.path.expanduser("~/.agent-reach/config.yaml")
@@ -129,7 +146,7 @@ def main():
     print(x_search("UEM MDM")[:400])
     print("\n>>> Reddit (curl autenticado):")
     print(reddit_search("UEM MDM")[:400])
-    print("\nCanales en produccion: YouTube, web/Jina, X (Jina), Reddit (auth cookie).")
+    print("\nCanales en produccion: YouTube, web/Jina, X (API+twid), Reddit (auth cookie).")
 
 if __name__ == "__main__":
     main()
