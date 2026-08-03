@@ -37,6 +37,12 @@ class MDMAdapter(ABC):
     #: False por defecto — el camino imperativo actual sigue siendo el fallback.
     supports_ddm: bool = False
 
+    #: Capacidad aditiva: el MDM deja publicar un documento de política de
+    #: Android Management API (AMAPI). False por defecto: gestionar Android
+    #: Enterprise NO implica exponer el documento de política por API, y solo
+    #: marcamos la capacidad donde el proveedor la documenta.
+    supports_amapi_policy: bool = False
+
     @abstractmethod
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         """Ejecuta una acción UEM remota y devuelve un dict normalizado.

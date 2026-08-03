@@ -547,7 +547,7 @@ class Engine:
                 return False
         bucket.add(key)
         if self.adapter is not None:
-            res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
+            res = self._execute_adapter_action(ds, action, params or {}, dry_run=self.dry_run)
         else:
             # Modo simulation/dry-run sin adapter UEM real: la acción se registra
             # igual (es lo que promete el fallback de route_exit) sin ejecutar
@@ -599,7 +599,7 @@ class Engine:
                     "remaining_seconds": remaining,
                     "error": f"comando {action} en cooldown; reintenta en {remaining}s",
                 }
-        res = self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        res = self._execute_adapter_action(dev, action, params or {}, dry_run=self.dry_run)
         res["ts"] = now_iso()
         res["fence_id"] = dev.inside_fence
         res["trigger"] = "operator"
@@ -631,6 +631,120 @@ class Engine:
             self.store.record_action_at(dev.device_id, action, now)
         return res
 
+    def _execute_adapter_action(self, device: Any, action: str, params: dict, dry_run: bool,
+                                orig_action: Optional[str] = None, orig_params: Optional[dict] = None) -> dict:
+        DECLARATIVE_ACTIONS = {"apply_ddm", "apply_amapi_policy", "apply_dsc"}
+
+        # Check if the original action is imperative and can be upgraded
+        if action not in DECLARATIVE_ACTIONS:
+            # Upgrade check
+            platform = str(getattr(device, "platform", None) if not isinstance(device, dict) else device.get("platform", "") or "").lower()
+            upgrade_action = None
+
+            if "android" in platform and getattr(self.adapter, "supports_amapi_policy", False):
+                from lucidfence.core.amapi import supports_amapi
+                if supports_amapi(device):
+                    upgrade_action = "apply_amapi_policy"
+            elif ("ios" in platform or "macos" in platform) and getattr(self.adapter, "supports_ddm", False):
+                from lucidfence.core.ddm import supports_ddm
+                if supports_ddm(device):
+                    upgrade_action = "apply_ddm"
+            elif "windows" in platform and getattr(self.adapter, "supports_dsc", False):
+                upgrade_action = "apply_dsc"
+
+            if upgrade_action:
+                # We have a candidate upgraded declarative action!
+                # Identify if the declarative policy/document exists in the cycle
+                decl_entry = self._find_declarative_policy_and_entry(device, action, params)
+                if decl_entry is None:
+                    # Lack of policy/document is treated as a blocker ("bloqueo") to automatic upgrade.
+                    # Limit change to unsupported_action reject, do not perform upgrade.
+                    pass
+                else:
+                    # Perform upgrade! Keep track of original action and params
+                    orig_action = action
+                    orig_params = params
+                    action = upgrade_action
+                    params = decl_entry
+
+        # Now execute the chosen action (either original, explicit declarative, or upgraded)
+        if action in DECLARATIVE_ACTIONS:
+            # 3. Reject if the adapter does NOT declare the capability
+            has_capability = False
+            if action == "apply_ddm" and getattr(self.adapter, "supports_ddm", False):
+                has_capability = True
+            elif action == "apply_amapi_policy" and getattr(self.adapter, "supports_amapi_policy", False):
+                has_capability = True
+            elif action == "apply_dsc" and getattr(self.adapter, "supports_dsc", False):
+                has_capability = True
+
+            if not has_capability:
+                return {
+                    "adapter": getattr(self.adapter, "name", "base"),
+                    "ok": False,
+                    "device_id": getattr(device, "device_id", None) if not isinstance(device, dict) else device.get("device_id"),
+                    "action": action,
+                    "error": f"Accion {action} no soportada por el adapter",
+                    "error_type": "unsupported_action",
+                }
+
+            # 1. Gate check for device
+            passes_gate = True
+            if action == "apply_ddm":
+                from lucidfence.core.ddm import supports_ddm
+                passes_gate = supports_ddm(device)
+            elif action == "apply_amapi_policy":
+                from lucidfence.core.amapi import supports_amapi
+                passes_gate = supports_amapi(device)
+
+            if not passes_gate:
+                # If upgraded, fallback and execute EXACTLY original action and params
+                if orig_action:
+                    res = self.adapter.execute(device, orig_action, orig_params or {}, dry_run=dry_run)
+                    res["enforcement_path"] = "imperative"
+                    res["fallback_reason"] = "device_gate_failed"
+                    return res
+                # For explicit declarative actions without upgrade, return gate failure
+                return {
+                    "adapter": getattr(self.adapter, "name", "base"),
+                    "ok": False,
+                    "device_id": getattr(device, "device_id", None) if not isinstance(device, dict) else device.get("device_id"),
+                    "action": action,
+                    "error": f"Dispositivo no cumple los requisitos de {action}",
+                    "error_type": "device_gate_failed",
+                    "fallback": "imperative"
+                }
+
+            # Both capability and gate passed, emit the declarative action!
+            res = self.adapter.execute(device, action, params or {}, dry_run=dry_run)
+
+            # 2. Check if result brings fallback: "imperative"
+            if res.get("fallback") == "imperative":
+                if orig_action:
+                    # Execute EXACTLY the original action and its params
+                    res = self.adapter.execute(device, orig_action, orig_params or {}, dry_run=dry_run)
+                    res["enforcement_path"] = "imperative"
+                    res["fallback_reason"] = "adapter_requested_fallback"
+                    return res
+                res["enforcement_path"] = "imperative"
+                return res
+
+            res["enforcement_path"] = "declarative"
+            return res
+
+        else:
+            # Simple imperative action
+            res = self.adapter.execute(device, action, params or {}, dry_run=dry_run)
+            res["enforcement_path"] = "imperative"
+            return res
+
+    def _find_declarative_policy_and_entry(self, device: Any, action: str, params: dict) -> Optional[dict]:
+        """Tries to find the declarative policy or document entry.
+        Since these entries do not typically exist in the cycle (they require specific
+        profile URLs or policy documents), this will return None, representing a
+        blocker ('bloqueo') to automatic upgrade, thus preventing fake automation.
+        """
+        return None
 
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
