@@ -81,6 +81,8 @@ class LocationReport:
     enrolled_at: Optional[str] = None
     device_tag: Optional[str] = None
     geofence_compliance: Optional[dict] = None
+    management_mode: Optional[str] = None
+    ownership: Optional[str] = None
 
 
 class LiveLocationSource:
@@ -295,6 +297,9 @@ class LiveLocationSource:
             last_checkin=dev.get("sortDate") or last_seen,
             enrolled_at=summary.get("enrolledAt") or dev.get("enrolledAt"),
             device_tag=summary.get("tag") or dev.get("tag"),
+            # --- Android AMAPI fields ---
+            management_mode=summary.get("managementMode") or summary.get("management_mode") or dev.get("managementMode") or dev.get("management_mode"),
+            ownership=summary.get("ownership") or dev.get("ownership"),
         )
 
     # -------------------------------------------------------------- public API
@@ -412,6 +417,8 @@ class SimulationLocationSource:
                 enrolled_at=dev.get("enrolled_at") or "2026-01-01T00:00:00Z",
                 device_tag=dev.get("device_tag") or dev.get("id"),
                 geofence_compliance=dev.get("geofence_compliance") if plat in ("ios", "ipados") else None,
+                management_mode=dev.get("management_mode") or dev.get("managementMode"),
+                ownership=dev.get("ownership"),
             ))
         return out
 

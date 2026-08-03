@@ -371,6 +371,8 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    management_mode=getattr(rep, "management_mode", None),
+                    ownership=getattr(rep, "ownership", None),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):

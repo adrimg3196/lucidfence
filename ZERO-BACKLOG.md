@@ -7,6 +7,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
 
 | Fecha | Rol | Resumen |
 |-------|-----|---------|
+| 2026-08-02 | CONSTRUCTOR | Issue #42 (Android AMAPI) cerrado: cierra el frente declarativo prioritario. Se rescató la IDEA del PR #53 de Jules y se descartó su implementación — estaba construida sobre `cameraDisabled` y `wifiConfigsLockdownEnabled`, **ambos marcados deprecated** en la referencia REST actual (viola la directriz "sin dependencias obsoletas"), era passthrough de dict sin validar, y el PR además borraba `ddm.py`/`dsc.py` por estar rameado de un main viejo. `lucidfence/core/amapi.py` nuevo, con el esquema verificado contra la doc oficial (2026-08-02): emite `cameraAccess` y `deviceConnectivityManagement.configureWifi`, valida los enums en vez de hacer `str()`, y devuelve `update_mask` — la doc de `policies.patch` dice que **sin `updateMask` se modifican TODOS los campos**, así que un parche parcial sin máscara borraba el resto de la política del tenant. Invariantes de `policyEnforcementRules` que AMAPI exige y el prototipo incumplía: `blockAction`/`wipeAction` van en pareja obligatoria y `blockAfterDays < wipeAfterDays`. Matriz de modos real (fully managed / COPE / BYOD) con las restricciones no soportadas declaradas en `skipped`, no enviadas en silencio. `supports_amapi_policy` **solo** en `applivery` (verificado vía MCP de su doc: `PUT .../mdm/android/enterprise/policies/{emmPolicyId}` con `config` = "Google Android Enterprise policy configuration object"); Intune y WS1 quedan en False con el hueco declarado, mismo criterio que dejó `supports_ddm` solo en `jamf`. Suite 387 PASS / 0 FAIL (baseline 344). |
 | 2026-08-01 | MANTENEDOR | P0 #74 cerrado por la causa raíz: `sbom.cdx.json` (artefacto que hashea todos los `.py`) sale de git y muere el `assert committed == sbom`; también el paso 2 de `scripts/pre-commit.sh`, que sin el fichero habría abortado TODO commit con `.py` (hueco que el PR #75 no cubría). Verificado con `git merge-tree` que el SBOM no era el único generador: `data/cloud_state.json` — snapshot que engine-cron republica en main cada hora — conflicta en el 100% de los PRs abiertos, así que job de CI `runtime-artifacts` que lo rechaza en rama. Tercer foco: la suite dejaba sucios `roadmap.json` (restauración por bytes) y `data/actions_log.jsonl` (destrackeado). Suite 344 PASS / 0 FAIL y `git status` limpio después de correrla. |
 | 2026-07-30b | DEV NOCTURNO | Issue #70 cerrado: `Engine.run_command` persiste el `device_state` que devuelve el adapter (readback `ddm_status`) con merge-no-reemplazo — un report parcial no pisa campos ausentes, `ok=False` y `dry_run` no mutan, `ddm_errors` queda en el action log. Campos nuevos `passcode_compliant` y `filevault_enabled` en `DeviceState`. Hook en el punto compartido (sirve igual al readback DSC de Windows), sin tocar la ruta imperativa. Suite 289 PASS / 2 FAIL (los 2 TypeGuard py3.9, issue #51 con PRs #69/#66 en vuelo). |
 | 2026-07-30 | DEV NOCTURNO | DDM fase 2 (issue #52): canal de Jamf Pro con endpoints **verificados** contra el OpenAPI oficial v11.30 (`ddm_status` + `ddm_sync`); hueco declarado y documentado — Jamf no publica endpoint para subir declarations propias, así que `apply_ddm` sigue offline. Dos bugs de causa raíz de la fase 1: las acciones DDM no estaban en `VALID_ACTIONS` (engine y API las rechazaban: la capa declarativa era inalcanzable) y los booleanos stringificados de Jamf llegaban como `"true"` al modelo de estado. Suite 287 PASS / 2 FAIL (las 2 son el TypeGuard de Python 3.9, issue #51). |
@@ -128,18 +129,43 @@ imperativos del servidor.
       clásico. Idempotente (re-apply sin cambios = no-op), readback de
       compliance al pipeline de device state. Flag `supports_dsc` en
       `windows_conformidad`.
-- [ ] **Android AMAPI** (issue #42): `lucidfence/core/amapi.py` genera el patch
-      de policy AMAPI (restricciones por estado de geocerca) con
-      `policyEnforcementRules` para escalado gradual; flag
-      `supports_amapi_policy` en adapters con backend Android (applivery,
-      intune, workspace_one). Readback vía `policyCompliant` /
-      `nonComplianceDetails`. Matriz COBO vs work profile obligatoria — muchas
-      restricciones dependen del modo de gestión.
+- [x] **Android AMAPI** (issue #42) — HECHO 2026-08-02. `lucidfence/core/amapi.py`
+      + `docs/operations/android_amapi.md` + `tests/test_amapi.py` (43 golden,
+      sin red, sin proyecto enterprise de Google). Esquema verificado contra la
+      referencia REST oficial el 2026-08-02.
+      **Dos correcciones sobre el enunciado original**, ambas con fuente:
+      1. Los campos que el issue y el PR #53 daban por buenos, `cameraDisabled`
+         y `wifiConfigsLockdownEnabled`, están **deprecated** en la referencia
+         actual. Se emiten sus sustitutos: `cameraAccess` y
+         `deviceConnectivityManagement.configureWifi`.
+      2. `supports_amapi_policy` va **solo en `applivery`**, no en los tres
+         adapters Android. Gestionar Android Enterprise no implica exponer el
+         documento de política por API: Applivery documenta el passthrough
+         (`PUT /v1/organizations/{org}/mdm/android/enterprise/policies/{emmPolicyId}`,
+         campo `config` = "Google Android Enterprise policy configuration
+         object", verificado vía el MCP de su doc); Intune y WS1 no publican
+         equivalente, así que quedan en False con el hueco declarado. Mismo
+         criterio que dejó `supports_ddm` solo en `jamf`.
+      **Invariantes que AMAPI exige** y `build_enforcement_rules` valida:
+      `blockAction` y `wipeAction` van en pareja obligatoria, y
+      `blockAfterDays < wipeAfterDays`. `build_policy_patch` devuelve además
+      `update_mask` porque `policies.patch` sin `updateMask` modifica TODOS los
+      campos modificables — un parche parcial sin máscara borraría el resto de
+      la política del tenant.
+      Matriz de modos aplicada en código: lo que no aplica al modo se declara en
+      `skipped` con su motivo, no se envía en silencio (kiosco solo fully
+      managed; bloqueo de Wi-Fi excluye BYOD). `apply_amapi_policy` genera
+      offline, como `apply_ddm`: publicar exigiría el `emmPolicyId` del tenant y
+      mutaría la política de un cliente real.
 - [ ] Matriz de soporte documentada en `docs/` (versiones OS, DDM vs legacy,
       DSC v2 vs v3, AMAPI COBO/BYOD) y fixtures golden en tests (sin red, sin
       host Windows, sin proyecto enterprise de Google). Apple y Windows ya tienen
       su matriz en `docs/operations/apple_ddm.md` y `docs/operations/windows_dsc.md`;
-      queda unificarlas cuando el AMAPI (PR #53) entre.
+      Android ya la tiene en `docs/operations/android_amapi.md`. Las tres
+      existen: queda **unificarlas** en una sola tabla (issue #72).
+      Nota para quien la unifique: el PR #53 (Jules, AMAPI) queda **obsoleto**;
+      se rescató la idea y se descartó la implementación (campos deprecados,
+      sin validación, y borraba `ddm.py`/`dsc.py` por venir de un main viejo).
 
 Regla transversal: capacidad aditiva — la ruta imperativa actual no se rompe.
 
@@ -162,3 +188,90 @@ Keycloak); el modo 100% local sigue siendo el default intacto.
 
 Guardarraíl: sin OIDC configurado, cero llamadas de red — la promesa
 "nothing leaves the machine" no se toca.
+
+## Plan persistente nocturno — 2026-08-01
+
+**Objetivo:** endurecer el núcleo de geolocalización/geocercas y convertir
+calidad, seguridad y linting en gates reproducibles de coste cero. Este plan es
+el estado recuperable del cron: el siguiente worker debe leerlo antes de actuar,
+marcar una sola tarea `in_progress` y registrar el resultado verificable.
+
+**Modo:** solo tareas locales/offline; sin servicios de pago, sin credenciales
+reales y sin llamadas a UEMs en los tests. Una tarea no está hecha por tener
+código: requiere su comando de verificación verde y `git status` sin artefactos
+de runtime nuevos.
+
+### Fase 1 — preservar coordenadas cero en fuentes de ubicación
+
+**Estado:** pending
+
+- Corregir `AppliveryLocationSource._extract_last_location` para no usar `or`
+  al escoger latitud/longitud: `0.0` es válido en ecuador y Greenwich.
+- Añadir regresiones para shapes anidado y plano con `lat=0`, `lng=0`, además
+  de ausencia real (`None`). Extender el mismo contrato al mapper genérico.
+- **Hecho cuando:** los tests nuevos fallan antes del cambio, pasan después y
+  `python3 tests/run_tests.py` termina con 0 fallos bajo Python >=3.11.
+
+### Fase 2 — validar coordenadas y números no finitos en el borde de entrada
+
+**Estado:** pending
+
+- Rechazar `NaN`, `Infinity`, latitudes fuera de `[-90, 90]`, longitudes fuera
+  de `[-180, 180]` y radios no finitos/<=0 antes de crear `LocationReport` o
+  evaluar una `Fence`; no convertirlos silenciosamente en ubicación fiable.
+- Cubrir `Fence.from_raw`, `validate_fences`, fuente Applivery y
+  `GenericHTTPLocationSource._to_report` con tests parametrizados sin red.
+- **Hecho cuando:** cada entrada inválida produce un resultado explícito y
+  estable (problema de validación o reporte omitido), sin excepción que aborte
+  el ciclo, y pasan los tests focalizados más la suite completa.
+
+### Fase 3 — fijar la semántica geométrica de borde y antimeridiano
+
+**Estado:** pending
+
+- Especificar si un punto sobre el borde de un polígono cuenta como dentro y
+  aplicar esa regla de forma determinista en `point_in_polygon`.
+- Añadir casos golden: borde/vértice, polígono cóncavo, coordenadas negativas,
+  cercanía de polos y geocerca que cruza `+180/-180`. Si el algoritmo actual
+  no soporta antimeridiano, normalizar longitudes localmente con stdlib.
+- **Hecho cuando:** el contrato queda documentado junto al código, todos los
+  golden pasan y el benchmark existente de 10k geofences mantiene su umbral.
+
+### Fase 4 — gate gratuito de lint y tipos, sin reescritura masiva
+
+**Estado:** pending
+
+- Medir primero `ruff check` y un type-checker sobre `lucidfence/core/geo.py`,
+  `fences.py`, `location_source.py` y `generic_http_source.py`; registrar el
+  baseline, no ocultarlo con `continue-on-error`.
+- Fijar versiones/hashes en el lock de tooling y añadir un job CI focalizado.
+  Corregir solo los hallazgos de estos módulos; no formatear todo el repo.
+- **Hecho cuando:** el gate falla ante una fixture deliberadamente inválida,
+  luego pasa limpio en CI/local y no introduce SaaS ni dependencia de pago.
+
+### Fase 5 — seguridad del conector HTTP de ubicación
+
+**Estado:** pending
+
+- Añadir pruebas contra SSRF/configuración peligrosa: esquemas distintos de
+  HTTPS (permitir HTTP solo para loopback local explícito), redirects a destinos
+  no permitidos, timeout acotado y respuestas sobredimensionadas/no JSON.
+- Verificar que errores y logs no exponen cabeceras `Authorization` ni valores
+  sustituidos desde entorno. Todo test usará servidor local/mock, nunca red real.
+- **Hecho cuando:** los negativos quedan cubiertos, gitleaks y pip-audit siguen
+  verdes, y el conector conserva el modo local sin credenciales configuradas.
+
+### Gate de completitud del plan
+
+- [ ] Las cinco fases figuran `complete`, nunca solo descritas como "hechas".
+- [ ] Cada fase enlaza commit/PR o diff y salida literal de sus tests focalizados.
+- [ ] `python3 tests/run_tests.py`: 0 fallos con el Python soportado (>=3.11).
+- [ ] CI: tests, lint/tipos, pip-audit, SBOM y gitleaks verdes.
+- [ ] Ningún fichero bajo `graphify-out/` ni snapshot de runtime se commitea.
+
+### Errores/limitaciones observados al crear el plan
+
+| Hallazgo | Impacto | Siguiente acción |
+|---|---|---|
+| Graphify devolvió 58 nodos y truncó a 21 con budget 700 | La consulta amplia no mostró todo el subgrafo | Se usaron `explain` y `affected` sobre `_sync_geofences`; no se inventaron relaciones |
+| `planning-with-files` aparece `excluded` por la allowlist del agente | Sus hooks no se inyectan automáticamente en este worker | El plan se aplicó manualmente; no tocar `openclaw.json` sin autorización |
