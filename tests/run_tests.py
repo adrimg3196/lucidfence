@@ -20,6 +20,15 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)  # so `from helpers import ...` resolves inside tests/
 
 
+_MIN_PY = (3, 11)
+if sys.version_info < _MIN_PY:
+    sys.stderr.write(
+        f"ERROR: LucidFence tests need Python >={'%d.%d' % _MIN_PY}, "
+        f"got {sys.version.split()[0]}. Use a venv: python3.11 -m venv .venv && . .venv/bin/activate\n"
+    )
+    sys.exit(2)
+
+
 def _load_module(path):
     name = os.path.splitext(os.path.basename(path))[0]
     spec = importlib.util.spec_from_file_location(name, path)
