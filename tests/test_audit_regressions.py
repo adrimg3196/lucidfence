@@ -107,9 +107,14 @@ def test_zero_fleet_offline_map_accessibility_and_monitor_contracts():
 
 def test_doctor_validates_installation_even_when_runtime_is_stopped():
     import subprocess
-    result = subprocess.run([str(ROOT / "lucidfence" / "cli.py"), "doctor", "--port", "65534", "--json"],
+    import sys
+    result = subprocess.run([sys.executable, str(ROOT / "lucidfence" / "cli.py"), "doctor", "--port", "65534", "--json"],
                             cwd=ROOT, capture_output=True, text=True, timeout=30)
     report = json.loads(result.stdout)
-    assert result.returncode == 0 and report["ok"] is True
-    assert report["warnings"] == 1
-    assert any(item["name"] == "roadmap" and item["ok"] for item in report["checks"])
+    py_ok = sys.version_info >= (3, 11)
+    # #51: producto exige >=3.11. Doctor refleja eso; bajo 3.9 el check python falla.
+    assert any(item["name"] == "python" and item["ok"] is py_ok for item in report["checks"])
+    if py_ok:
+        assert result.returncode == 0 and report["ok"] is True
+        assert report["warnings"] == 1
+        assert any(item["name"] == "roadmap" and item["ok"] for item in report["checks"])

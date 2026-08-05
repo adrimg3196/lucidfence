@@ -16,7 +16,7 @@ def run_doctor(root: Path, data_root: Path, port: int = 8765) -> dict:
     def add(name: str, ok: bool, detail: str, severity: str = "error"):
         checks.append({"name": name, "ok": bool(ok), "severity": severity, "detail": detail})
 
-    add("python", sys.version_info >= (3, 9), sys.version.split()[0])
+    add("python", sys.version_info >= (3, 11), sys.version.split()[0])
     required = ["saas_server.py", "static/dashboard.html", "roadmap.json"]
     missing = [name for name in required if not (root / name).is_file()]
     add("installation", not missing, "complete" if not missing else "missing: " + ", ".join(missing))
