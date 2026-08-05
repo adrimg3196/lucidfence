@@ -8,6 +8,8 @@ All notable changes to LucidFence are documented here.
 
 - feat(ddm): enforcement declarativo Apple DDM para policies de geocerca (`lucidfence/core/ddm.py`, acción `apply_ddm` en el adapter Jamf) — issue #40
 - feat(ddm): canal DDM de Jamf Pro — `ddm_status` (readback de `GET /v1/ddm/{clientManagementId}/status-items`) y `ddm_sync` (`POST /v1/ddm/{clientManagementId}/sync`), endpoints verificados contra el OpenAPI oficial v11.30; subir declarations propias sigue siendo hueco declarado porque Jamf no publica endpoint — issue #52
+- feat(amapi): enforcement declarativo Android vía Android Management API (`lucidfence/core/amapi.py`, acción `apply_amapi_policy`): documento de política por estado de geocerca, `policyEnforcementRules` graduadas (warn → block → wipe) y readback de `policyCompliant`/`nonComplianceDetails`. Matriz de modos (fully managed / COPE / BYOD) en `docs/operations/android_amapi.md`; las restricciones que no aplican al modo se declaran en `skipped` en vez de enviarse en silencio — issue #42
+- feat(amapi): `supports_amapi_policy` solo en `applivery`, único proveedor que documenta el passthrough del documento de política (`PUT /v1/organizations/{org}/mdm/android/enterprise/policies/{emmPolicyId}`, campo `config`). Gestionar Android Enterprise no implica exponerlo por API
 
 ### Changed
 
@@ -18,6 +20,8 @@ All notable changes to LucidFence are documented here.
 
 - fix(ddm): las acciones DDM no estaban en `VALID_ACTIONS`, así que `Engine.run_command` y el endpoint de comandos las rechazaban con "accion no valida" — la capa declarativa era inalcanzable desde el producto
 - fix(ddm): los `StatusItem.value` de Jamf son string siempre; `passcode.is-compliant` llegaba como `"true"` a un campo que el modelo de estado espera `bool`
+- fix(amapi): el generador NO emite `cameraDisabled` ni `wifiConfigsLockdownEnabled` (ambos marcados *deprecated* en la referencia REST actual) sino sus sustitutos `cameraAccess` y `deviceConnectivityManagement.configureWifi`
+- fix(amapi): `build_policy_patch` devuelve `update_mask`. `enterprises.policies.patch` sin `updateMask` modifica **todos** los campos modificables, así que un parche parcial sin máscara borraría el resto de la política del tenant
 - fix(server): el sanitizador de `log_message` convertía args numéricos a str y rompía `send_error(404)` (formato `%d`) — cualquier POST/DELETE a ruta desconocida devolvía 500 en vez de 404
 - fix(build)!: `sbom.cdx.json` deja de estar versionado (lo genera CI como artifact) y desaparece el `assert committed == sbom` — un artefacto que hashea todos los `.py` fijado por igualdad exacta hacía que main y toda rama tocaran las mismas dos líneas, conflicto garantizado en el 100% de los PRs — issue #74
 - fix(tests): `test_roadmap_tooling` restaura los bytes exactos de `roadmap.json` (el round-trip por `update_feature()` re-estampaba `meta.updated`) y `data/actions_log.jsonl` se destrackea — correr la suite dejaba el árbol sucio en dos ficheros versionados

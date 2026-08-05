@@ -6,7 +6,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/applivery.py",
-      "sha256": "dc2891e01638aa217c65a0b138d12029b718fa412f71ec592c02ca7315572e2c",
+      "sha256": "bd4692493ec0cb4bac1693c6044f5b7990f48dc1729a8eaa2af160bfea6ffde0",
       "install": "bundled",
       "verified": true
     },
