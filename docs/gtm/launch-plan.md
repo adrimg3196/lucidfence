@@ -1,7 +1,7 @@
 # LucidFence — Plan de Lanzamiento (GTM open-source / multi-MDM)
 
 *Generado con skill `launch` (ORB + 5 fases) + dictamen Growth del tribunal.*
-*Modelo: Apache-2.0 core + Enterprise on-prem (SSO/SOAR/Risk Engine premium). Land via MSPs.*
+*Modelo: Apache-2.0 core sovereign/local-first, sostenido por donaciones (`docs/gtm/revenue-model.md`). Land via MSPs.*
 
 ---
 
@@ -80,4 +80,4 @@
 - Canal primario: GitHub-first → Show HN, r/selfhosted, Jamf Nation, foros Intune, LinkedIn MSP.
 
 ---
-*Monetización (skill `pricing`): Apache-2.0 core gratis; Enterprise on-prem (SSO/SAML, SOAR, Risk Engine premium) por licencia anual + retainer MSP. El OSS genera inbound; el servicio gestionado + inteligencia de amenazas recurrente es la captura.*
+*Modelo de adopción: el core Apache-2.0 es gratis y soberano; el crecimiento viene de MSPs que despliegan para sus clientes. El OSS genera inbound; el despliegue gestionado es la captura.*
