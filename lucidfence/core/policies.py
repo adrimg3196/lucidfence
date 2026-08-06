@@ -97,7 +97,8 @@ def sig_device_posture(device, ctx):
     total = device.get("storage_total_gb")
     battery = device.get("battery_level")
     os_ver = (device.get("os_version") or "").lower()
-    encryption = bool(device.get("encryption_enabled", True))
+    encryption_value = device.get("encryption_enabled")
+    encryption = True if encryption_value is None else bool(encryption_value)
 
     disk_low = False
     if free is not None and total:
@@ -114,6 +115,7 @@ def sig_device_posture(device, ctx):
         "battery_critical": battery_critical,
         "os_unpatched": os_unpatched,
         "encryption_off": not encryption,
+        "osquery_config_invalid": device.get("osquery_config_valid") is False,
     }
 
 
@@ -254,6 +256,8 @@ class RiskEngine:
             score += 12; reasons.append("SO sin parchear de seguridad")
         if posture.get("encryption_off"):
             score += 15; reasons.append("almacenamiento sin cifrar")
+        if posture.get("osquery_config_invalid"):
+            score += 8; reasons.append("configuración de osquery no válida")
 
         if signals.get("time_of_day", {}).get("off_hours"):
             score += 10; reasons.append("fuera de horario laboral")
