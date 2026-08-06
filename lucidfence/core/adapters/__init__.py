@@ -84,6 +84,39 @@ def build_adapter(mode: str, org_id: str, endpoint_template: str,
                webhook_url=webhook_url, api_key=api_key)
 
 
+def build_bindings(providers: list[dict]) -> list:
+    """Build MultiUEMOrchestrator bindings from a tenant's provider config.
+
+    Each entry: {"name": str, "org_id"?: str, "endpoint"?: str, "api_key"?: str}.
+    Unknown names are skipped. The community MDMAdapter contract is reused:
+    capabilities come from ``ProviderCapabilities`` defaults, inventory from
+    ``adapter.fetch_devices``, actions from ``adapter.execute``.
+    """
+    from lucidfence.core.multiuem import ProviderBinding, ProviderCapabilities
+
+    bindings = []
+    for p in providers or []:
+        name = p.get("name")
+        cls = ADAPTER_REGISTRY.get(name)
+        if cls is None:
+            continue
+        adapter = cls(
+            org_id=p.get("org_id", ""),
+            endpoint_template=p.get("endpoint", ""),
+            api_key=p.get("api_key", ""),
+        )
+        capabilities = getattr(adapter, "capabilities", None)
+        if not isinstance(capabilities, ProviderCapabilities):
+            capabilities = ProviderCapabilities(actions=frozenset(VALID_ACTIONS))
+        bindings.append(ProviderBinding(
+            name=name,
+            capabilities=capabilities,
+            fetch_devices=adapter.fetch_devices,
+            execute_action=adapter.execute,
+        ))
+    return bindings
+
+
 __all__ = [
     "MDMAdapter",
     "SimulationAdapter",
@@ -97,4 +130,5 @@ __all__ = [
     "VALID_ACTIONS",
     "ADAPTER_REGISTRY",
     "build_adapter",
+    "build_bindings",
 ]

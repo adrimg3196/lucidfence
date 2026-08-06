@@ -13,6 +13,11 @@ from lucidfence.core.adapters.base import MDMAdapter
 class SimulationAdapter(MDMAdapter):
     name = "simulation"
 
+    def __init__(self, *args, **kwargs):
+        # The simulator needs no org/endpoint/key; accept and ignore them so it
+        # slots into the build_bindings() contract used by real live adapters.
+        pass
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         cmd_id = f"sim-{uuid.uuid4().hex[:12]}"
         return {
@@ -26,6 +31,10 @@ class SimulationAdapter(MDMAdapter):
             "dry_run": dry_run,
             "note": "Simulated action (no real device contacted).",
         }
+
+    def fetch_devices(self) -> list:
+        """No real fleet: the simulator drives location, not inventory."""
+        return []
 
     def geofence_compliance_snapshot(
         self,

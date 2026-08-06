@@ -54,6 +54,16 @@ class MDMAdapter(ABC):
         """
         raise NotImplementedError
 
+    def fetch_devices(self) -> list:
+        """Optional inventory pull for multi-UEM providers.
+
+        Returns a list of ``NormalizedDevice``-like dicts (or the dataclass
+        itself) so the ``MultiUEMOrchestrator`` can list each provider's fleet.
+        Default ``[]`` keeps single-adapter subclasses compatible without
+        forcing them to implement inventory they don't expose.
+        """
+        return []
+
     # --- helpers compartidos (no parte del contrato estricto) ---
 
     @staticmethod

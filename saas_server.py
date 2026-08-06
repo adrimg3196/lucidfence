@@ -199,6 +199,20 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
     wl = runtime.get("whitelabel") or {}
     if isinstance(wl, dict) and wl.get("domain"):
         cfg["whitelabel"] = {k: v for k, v in wl.items() if v not in (None, "")}
+    # Multi-UEM: build the provider list from tenant-isolated integration.json.
+    # The secret stays on disk (0600) and is passed straight to the adapter; it
+    # is never echoed back by GET /api/providers (see _masked_provider).
+    providers = []
+    for p in runtime.get("providers", []) or []:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        providers.append({
+            "name": p["name"],
+            "org_id": p.get("org_id", ""),
+            "endpoint": p.get("endpoint", ""),
+            "api_key": p.get("secret", "") or p.get("api_key", ""),
+        })
+    cfg["providers"] = providers
     return cfg
 
 
@@ -249,6 +263,30 @@ def _tenant_runtime(tdir: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+# --- Multi-UEM provider registry (per tenant, isolated dir) ----------------
+# Logic lives in lucidfence.saas.providers so it's unit-testable without the
+# server process. The provider *list* (names + non-secret config + secret)
+# lives in integration.json (tenant-isolated, chmod 0600); masked on GET.
+from lucidfence.saas.providers import list_providers as _list_providers
+from lucidfence.saas.providers import save_providers as _save_providers
+from lucidfence.saas.providers import mask_provider as _masked_provider
+
+
+def _provider_health(eng: "Engine | None") -> dict:
+    if eng is None or getattr(eng, "orchestrator", None) is None:
+        return {}
+    try:
+        return {n: h.status for n, h in eng.orchestrator.health().items()}
+    except Exception:
+        return {}
+
+
+def _masked_provider(p: dict) -> dict:
+    out = {k: v for k, v in p.items() if k != "secret"}
+    out["configured"] = bool(p.get("secret") or p.get("endpoint"))
+    return out
 
 
 def _masked_secret(secret: str) -> str:
@@ -1593,6 +1631,51 @@ class Handler(BaseHTTPRequestHandler):
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
+        # ---- Multi-UEM provider registry (tenant-local, isolated) ----------
+        if route == "/api/providers" and method == "GET":
+            tdir = _tenants.data_dir(org)
+            return _send_json(self, {
+                "providers": [_masked_provider(p) for p in _list_providers(tdir)],
+                "health": _provider_health(eng),
+            })
+        if route == "/api/providers" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            name = (body.get("name") or "").strip().lower()
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
+            if name not in ADAPTER_REGISTRY:
+                return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            tdir = _tenants.data_dir(org)
+            providers = _list_providers(tdir)
+            providers = [p for p in providers
+                         if not (p.get("name") == name and p.get("org_id") == body.get("org_id", ""))]
+            # ponytail: secret stored in tenant-isolated integration.json (0600),
+            # same trust boundary as core_secrets' .env; masked on GET.
+            providers.append({
+                "name": name,
+                "org_id": body.get("org_id", ""),
+                "endpoint": (body.get("endpoint") or "").strip(),
+                "secret": (body.get("api_key") or "").strip(),
+            })
+            _save_providers(tdir, providers)
+            try:
+                reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "registered": name,
+                                        "warning": f"engine reload falló: {exc}"}, 200)
+            return _send_json(self, {"ok": True, "registered": name})
+        if route.startswith("/api/providers/") and method == "DELETE":
+            name = route[len("/api/providers/"):].split("/")[0]
+            tdir = _tenants.data_dir(org)
+            providers = [p for p in _list_providers(tdir)
+                         if not (p.get("name") == name)]
+            _save_providers(tdir, providers)
+            try:
+                reload_engine(org)
+            except Exception:
+                pass
+            return _send_json(self, {"ok": True, "removed": name})
         if route == "/api/settings" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
