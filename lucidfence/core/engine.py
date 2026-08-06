@@ -23,6 +23,7 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
+from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
@@ -99,6 +100,19 @@ class Engine:
             webhook_url=config.get("uem", {}).get("remediation_webhook_url", ""),
             api_key=config.get("_applivery_api_key", ""),
         )
+        # Multi-UEM: if the tenant registered more than one provider, route
+        # remediation actions to the right adapter by device provider_refs.
+        # The orchestrator reuses the community MDMAdapter contract; when there
+        # is only one (or zero) provider it stays inert and engine falls back
+        # to the single self.adapter below.
+        self.orchestrator = None
+        providers = config.get("providers") or []
+        if len(providers) > 1 or (len(providers) == 1 and providers[0].get("name") != "simulation"):
+            try:
+                from lucidfence.core.multiuem import MultiUEMOrchestrator
+                self.orchestrator = MultiUEMOrchestrator(build_bindings(providers))
+            except Exception:
+                self.orchestrator = None
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
@@ -371,6 +385,7 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    provider_refs=dict(rep.raw.get("provider_refs") or {}),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
@@ -520,6 +535,33 @@ class Engine:
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
 
+    def _execute_action(self, dev: Any, action: str, params: dict) -> dict:
+        """Route a remediation command to the right UEM provider.
+
+        Multi-UEM: when an orchestrator is wired and the device carries
+        provider_refs (set by MultiUEMOrchestrator.fetch), dispatch to the
+        provider that supports the action. Falls back to the single
+        self.adapter (legacy single-provider path) otherwise. Never raises.
+        """
+        refs = getattr(dev, "provider_refs", None)
+        if self.orchestrator is not None and isinstance(refs, dict) and refs:
+            # The orchestrator expects a NormalizedDevice-shaped input
+            # (provider + provider_device_id + provider_refs); DeviceState only
+            # keeps provider_refs, so bridge the first ref into those fields.
+            first_provider, first_id = next(iter(refs.items()))
+            bridge = {
+                "provider": first_provider,
+                "provider_device_id": first_id,
+                "provider_refs": refs,
+            }
+            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=self.dry_run)
+            if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
+                return res
+        if self.adapter is not None:
+            return self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        return {"ok": True, "dry_run": True, "simulated": True,
+                "action": action, "device_id": getattr(dev, "device_id", "")}
+
     def _dedupe_action(self, ds: DeviceState, action: str, fence_id, trigger: str,
                        policy_name: str, severity: str, params: dict = None) -> bool:
         """Fire an action once per (device, action) per cycle across all sources.
@@ -546,14 +588,7 @@ class Engine:
             if last and (now - last) < self.action_cooldown_seconds:
                 return False
         bucket.add(key)
-        if self.adapter is not None:
-            res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
-        else:
-            # Modo simulation/dry-run sin adapter UEM real: la acción se registra
-            # igual (es lo que promete el fallback de route_exit) sin ejecutar
-            # nada externo.
-            res = {"ok": True, "dry_run": True, "simulated": True,
-                   "action": action, "device_id": ds.device_id}
+        res = self._execute_action(ds, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = fence_id
         res["trigger"] = trigger
@@ -599,7 +634,7 @@ class Engine:
                     "remaining_seconds": remaining,
                     "error": f"comando {action} en cooldown; reintenta en {remaining}s",
                 }
-        res = self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        res = self._execute_action(dev, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = dev.inside_fence
         res["trigger"] = "operator"
