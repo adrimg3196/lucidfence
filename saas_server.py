@@ -1632,6 +1632,9 @@ class Handler(BaseHTTPRequestHandler):
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
         # ---- Multi-UEM provider registry (tenant-local, isolated) ----------
+        if route == "/api/providers/catalog" and method == "GET":
+            from lucidfence.saas.providers import catalog
+            return _send_json(self, {"catalog": catalog()})
         if route == "/api/providers" and method == "GET":
             tdir = _tenants.data_dir(org)
             return _send_json(self, {

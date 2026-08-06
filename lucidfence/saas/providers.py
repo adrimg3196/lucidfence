@@ -44,3 +44,25 @@ def _tenant_runtime(tdir: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+# Minimal catalog of supported UEM connectors. Kept here (not in the adapters)
+# because it is presentation metadata for the wizard, not engine contract.
+PROVIDER_CATALOG: dict[str, dict] = {
+    "applivery": {"label": "Applivery", "fields": ["api_key", "org_id"]},
+    "intune": {"label": "Microsoft Intune", "fields": ["api_key", "org_id"]},
+    "jamf": {"label": "Jamf", "fields": ["api_key", "org_id"]},
+    "fleet": {"label": "FleetDM", "fields": ["api_key", "endpoint"]},
+    "workspace_one": {"label": "Workspace ONE", "fields": ["api_key", "org_id"]},
+    "chromeos": {"label": "ChromeOS", "fields": ["api_key", "org_id"]},
+    "windows_conformidad": {"label": "Windows (conformidad)", "fields": ["api_key", "org_id"]},
+    "simulation": {"label": "Simulación (demo)", "fields": []},
+}
+
+
+def catalog() -> list[dict]:
+    """Return the list of UEM connectors an admin can connect."""
+    return [
+        {"name": name, "label": meta["label"], "fields": meta["fields"]}
+        for name, meta in PROVIDER_CATALOG.items()
+    ]

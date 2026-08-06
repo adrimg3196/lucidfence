@@ -57,6 +57,23 @@ def test_roundtrip_and_mask():
     check(any(p.get("secret") for p in raw.get("providers", [])), "secret present in raw file only")
 
 
+def test_catalog_matches_registry():
+    from lucidfence.saas.providers import catalog, PROVIDER_CATALOG
+    from lucidfence.core.adapters import ADAPTER_REGISTRY
+
+    cat = catalog()
+    check(isinstance(cat, list) and len(cat) > 0, "catalog returns a non-empty list")
+    names = {c["name"] for c in cat}
+    # Every catalog entry must be a real, registered adapter (no phantom UEMs).
+    check(names <= set(ADAPTER_REGISTRY), "all catalog names are registered adapters")
+    # 'simulation' is always offered as the zero-config demo connector.
+    check("simulation" in names, "simulation present as zero-config option")
+    # Each entry has the fields the wizard renders.
+    check(all("fields" in c and "label" in c for c in cat), "each catalog entry has label+fields")
+    # The catalog is a subset of the registry (we don't surface every internal adapter).
+    check(names <= set(PROVIDER_CATALOG), "catalog matches PROVIDER_CATALOG keys")
+
+
 def test_empty_default():
     tmp = Path(tempfile.mkdtemp())
     tdir = tmp / "tenants" / "org_empty"
@@ -67,5 +84,6 @@ def test_empty_default():
 if __name__ == "__main__":
     test_roundtrip_and_mask()
     test_empty_default()
+    test_catalog_matches_registry()
     print(f"\n=== provider-registry: {passed} passed, {len(fails)} failed ===")
     sys.exit(1 if fails else 0)
