@@ -16,6 +16,9 @@ sys.path.insert(0, ROOT)
 
 from lucidfence.core.adapters.base import MDMAdapter
 from lucidfence.core.adapters.simulation import SimulationAdapter
+from lucidfence.core.adapters.intune import IntuneAdapter, AuthError as IntuneAuth, TransportError as IntuneTransport
+from lucidfence.core.adapters.jamf import JamfAdapter, AuthError as JamfAuth, TransportError as JamfTransport
+from lucidfence.core.adapters.chromeos import ChromeOSAdapter
 
 passed = 0
 fails = []
@@ -86,8 +89,49 @@ def test_live_and_auth_and_unreachable():
             check(r["ok"] is False and r["error_type"] == "unreachable", "conn error -> unreachable")
 
 
+def test_oauth_adapters_use_grant():
+    # Intune: a successful token fetch IS a live check.
+    a = IntuneAdapter(tenant_id="t", client_id="c", client_secret="s")
+    with patch.object(a, "_fetch_token", return_value="tok"):
+        r = a.test_connection()
+    check(r["ok"] is True and r["verified"] == "live", "intune: token ok -> live")
+    a2 = IntuneAdapter(tenant_id="t", client_id="c", client_secret="s")
+    with patch.object(a2, "_fetch_token", side_effect=IntuneAuth("bad")):
+        r = a2.test_connection()
+    check(r["ok"] is False and r["error_type"] == "auth", "intune: AuthError -> auth")
+    a3 = IntuneAdapter(tenant_id="t", client_id="c", client_secret="s")
+    with patch.object(a3, "_fetch_token", side_effect=IntuneTransport("down")):
+        r = a3.test_connection()
+    check(r["ok"] is False and r["error_type"] == "unreachable", "intune: TransportError -> unreachable")
+
+    # Jamf: same shape, Basic -> bearer grant.
+    j = JamfAdapter(base_url="https://x.jamfcloud.com", client_id="c", client_secret="s")
+    with patch.object(j, "_fetch_token", return_value="tok"):
+        r = j.test_connection()
+    check(r["ok"] is True and r["verified"] == "live", "jamf: token ok -> live")
+    j2 = JamfAdapter(base_url="https://x.jamfcloud.com", client_id="c", client_secret="s")
+    with patch.object(j2, "_fetch_token", side_effect=JamfAuth("bad")):
+        r = j2.test_connection()
+    check(r["ok"] is False and r["error_type"] == "auth", "jamf: AuthError -> auth")
+
+    # ChromeOS: refresh_token grant -> RuntimeError mapping.
+    c = ChromeOSAdapter(client_id="c", client_secret="s", refresh_token="r")
+    with patch.object(c, "_fetch_access_token", return_value="tok"):
+        r = c.test_connection()
+    check(r["ok"] is True and r["verified"] == "live", "chromeos: token ok -> live")
+    c2 = ChromeOSAdapter(client_id="c", client_secret="s", refresh_token="r")
+    with patch.object(c2, "_fetch_access_token", side_effect=RuntimeError("Google OAuth refresh HTTP 401")):
+        r = c2.test_connection()
+    check(r["ok"] is False and r["error_type"] == "auth", "chromeos: 401 -> auth")
+    c3 = ChromeOSAdapter(client_id="c", client_secret="s", refresh_token="r")
+    with patch.object(c3, "_fetch_access_token", side_effect=RuntimeError("unreachable")):
+        r = c3.test_connection()
+    check(r["ok"] is False and r["error_type"] == "unreachable", "chromeos: unreachable -> unreachable")
+
+
 if __name__ == "__main__":
     test_format_only_when_no_endpoint()
     test_live_and_auth_and_unreachable()
+    test_oauth_adapters_use_grant()
     print(f"\n=== provider-test: {passed} passed, {len(fails)} failed ===")
     sys.exit(1 if fails else 0)

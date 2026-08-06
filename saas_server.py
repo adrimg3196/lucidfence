@@ -1644,18 +1644,26 @@ class Handler(BaseHTTPRequestHandler):
             if name not in ADAPTER_REGISTRY:
                 return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
             cls = ADAPTER_REGISTRY[name]
+            # Build the adapter with every credential field the wizard sent.
+            # Map "endpoint" -> endpoint_template; pass OAuth fields as-is.
+            creds = {k: v for k, v in body.items()
+                     if k not in ("name",) and isinstance(v, str)}
+            creds.pop("endpoint", None)
             try:
                 adapter = cls(
                     org_id=body.get("org_id", ""),
                     endpoint_template=body.get("endpoint", "") or "",
                     api_key=(body.get("api_key") or "").strip(),
+                    **{k: v for k, v in creds.items()
+                       if k in ("tenant_id", "client_id", "client_secret",
+                                "refresh_token", "base_url", "username", "password")},
                 )
             except Exception as exc:
                 return _send_json(self, {"ok": False, "error_type": "init",
                                          "error": f"no se pudo construir el conector: {exc}"}, 400)
             # SimulationAdapter (and others that ignore kwargs) still need the
             # key for test_connection's format check; set it explicitly.
-            if not getattr(adapter, "api_key", None):
+            if not getattr(adapter, "api_key", None) and body.get("api_key"):
                 try:
                     adapter.api_key = (body.get("api_key") or "").strip()
                 except Exception:
@@ -1683,12 +1691,19 @@ class Handler(BaseHTTPRequestHandler):
                          if not (p.get("name") == name and p.get("org_id") == body.get("org_id", ""))]
             # ponytail: secret stored in tenant-isolated integration.json (0600),
             # same trust boundary as core_secrets' .env; masked on GET.
-            providers.append({
+            provider = {
                 "name": name,
                 "org_id": body.get("org_id", ""),
                 "endpoint": (body.get("endpoint") or "").strip(),
                 "secret": (body.get("api_key") or "").strip(),
-            })
+            }
+            # Persist any extra OAuth/connection fields (tenant_id, client_id,
+            # client_secret, refresh_token) so the connector is functional.
+            for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
+                          "username", "password", "base_url"):
+                if body.get(extra):
+                    provider[extra] = body[extra].strip()
+            providers.append(provider)
             _save_providers(tdir, providers)
             try:
                 reload_engine(org)

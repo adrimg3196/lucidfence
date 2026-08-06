@@ -180,6 +180,18 @@ class IntuneAdapter(MDMAdapter):
 
     # --- public API per MDMAdapter ---
 
+    def test_connection(self) -> dict:
+        # The OAuth client_credentials grant against Azure AD validates the
+        # tenant_id / client_id / client_secret directly — a successful token
+        # fetch IS a live connection check.
+        try:
+            self._fetch_token()
+        except AuthError as exc:
+            return {"ok": False, "error_type": "auth", "error": f"credenciales rechazadas: {exc}"}
+        except TransportError as exc:
+            return {"ok": False, "error_type": "unreachable", "error": f"no se pudo conectar: {exc}"}
+        return {"ok": True, "verified": "live", "note": "token OAuth obtenido"}
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)

@@ -31,10 +31,15 @@ def save_providers(tdir: Path, providers: list[dict]) -> None:
     os.chmod(path, 0o600)
 
 
+_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token", "password", "token")
+
+
 def mask_provider(p: dict) -> dict:
     """Return a provider dict safe to send to the client (no secret)."""
-    out = {k: v for k, v in p.items() if k != "secret"}
-    out["configured"] = bool(p.get("secret") or p.get("endpoint") or p.get("api_key"))
+    out = {k: v for k, v in p.items() if k not in _SECRET_KEYS}
+    out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("client_secret") or p.get("refresh_token")
+                             or p.get("endpoint") or p.get("tenant_id"))
     return out
 
 
@@ -50,11 +55,11 @@ def _tenant_runtime(tdir: Path) -> dict:
 # because it is presentation metadata for the wizard, not engine contract.
 PROVIDER_CATALOG: dict[str, dict] = {
     "applivery": {"label": "Applivery", "fields": ["api_key", "org_id"]},
-    "intune": {"label": "Microsoft Intune", "fields": ["api_key", "org_id"]},
-    "jamf": {"label": "Jamf", "fields": ["api_key", "org_id"]},
+    "intune": {"label": "Microsoft Intune", "fields": ["tenant_id", "client_id", "client_secret"]},
+    "jamf": {"label": "Jamf", "fields": ["client_id", "client_secret"]},
     "fleet": {"label": "FleetDM", "fields": ["api_key", "endpoint"]},
     "workspace_one": {"label": "Workspace ONE", "fields": ["api_key", "org_id"]},
-    "chromeos": {"label": "ChromeOS", "fields": ["api_key", "org_id"]},
+    "chromeos": {"label": "ChromeOS", "fields": ["client_id", "client_secret", "refresh_token"]},
     "windows_conformidad": {"label": "Windows (conformidad)", "fields": ["api_key", "org_id"]},
     "simulation": {"label": "Simulación (demo)", "fields": []},
 }

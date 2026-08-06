@@ -2159,7 +2159,7 @@ async function openConnWizard(){
         save.disabled = true; save.textContent = "Guardando…";
         try{
           const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:state.name, org_id:state.fields.org_id||"", endpoint:state.fields.endpoint||"", api_key:state.fields.api_key||""})});
+            body:JSON.stringify({name:state.name, ...state.fields})});
           if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
           else toast("Error", (r.error||"no se pudo guardar"), "bad");
         }catch(e){ toast("Error", e.message, "bad"); }
@@ -2174,7 +2174,7 @@ async function openConnWizard(){
       b.disabled = true; b.textContent = "Probando…";
       try{
         const r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({name:state.name, org_id:state.fields.org_id||"", endpoint:state.fields.endpoint||"", api_key:state.fields.api_key||""})});
+          body:JSON.stringify({name:state.name, ...state.fields})});
         if(r.ok) toast("Conexión OK", (r.verified==="live"?"verificada en vivo":r.note||""), "ok");
         else toast("Fallo", (r.error||"no se pudo conectar"), "bad");
       }catch(e){ toast("Error al probar", e.message, "bad"); }
