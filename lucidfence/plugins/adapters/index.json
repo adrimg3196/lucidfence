@@ -6,7 +6,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/applivery.py",
-      "sha256": "dc2891e01638aa217c65a0b138d12029b718fa412f71ec592c02ca7315572e2c",
+      "sha256": "4c670b5b49d6a3a5ba5ca31f15b76dbfe3cdb4730059eb0cf3d6f7a7e6c374c7",
       "install": "bundled",
       "verified": true
     },
@@ -51,7 +51,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/workspace_one.py",
-      "sha256": "93b008dd75d23225a02261d027847c8ed64cf0a4b4534de30329caf87bd50b4d",
+      "sha256": "6e2fcd82072f06d1224c225fb20dc2914e871ad3564ad2632c9fc07faf1d5464",
       "install": "bundled",
       "verified": true
     }

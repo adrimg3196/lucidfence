@@ -1635,7 +1635,35 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/providers/catalog" and method == "GET":
             from lucidfence.saas.providers import catalog
             return _send_json(self, {"catalog": catalog()})
-        if route == "/api/providers" and method == "GET":
+        if route == "/api/providers/test" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            name = (body.get("name") or "").strip().lower()
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
+            if name not in ADAPTER_REGISTRY:
+                return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            cls = ADAPTER_REGISTRY[name]
+            try:
+                adapter = cls(
+                    org_id=body.get("org_id", ""),
+                    endpoint_template=body.get("endpoint", "") or "",
+                    api_key=(body.get("api_key") or "").strip(),
+                )
+            except Exception as exc:
+                return _send_json(self, {"ok": False, "error_type": "init",
+                                         "error": f"no se pudo construir el conector: {exc}"}, 400)
+            # SimulationAdapter (and others that ignore kwargs) still need the
+            # key for test_connection's format check; set it explicitly.
+            if not getattr(adapter, "api_key", None):
+                try:
+                    adapter.api_key = (body.get("api_key") or "").strip()
+                except Exception:
+                    pass
+            result = adapter.test_connection()
+            result["provider"] = name
+            return _send_json(self, result)
+        if route == "/api/providers" and method == "POST":
             tdir = _tenants.data_dir(org)
             return _send_json(self, {
                 "providers": [_masked_provider(p) for p in _list_providers(tdir)],

@@ -40,6 +40,9 @@ class WorkspaceONEAdapter(MDMAdapter):
         self.password = password or api_key or os.environ.get("WORKSPACE_ONE_PASSWORD", "")
         self.live = bool(live)
         self.timeout = timeout
+        # Test endpoint (wizard "Probar"): search devices with Basic auth.
+        self._api_base = self.base_url
+        self._test_path = "/API/mdm/devices/search?pageSize=1"
 
     def _headers(self) -> dict:
         basic = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()

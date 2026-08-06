@@ -2165,10 +2165,23 @@ async function openConnWizard(){
         }catch(e){ toast("Error", e.message, "bad"); }
         finally{ save.disabled=false; save.textContent="Guardar conector"; }
       };
-      foot.appendChild(back); foot.appendChild(save);
+      foot.appendChild(back); foot.appendChild(window.cwTest()); foot.appendChild(save);
     }
   }
-  window.cwPick = (name)=>{ const m = catalog.find(c=>c.name===name); state.name=name; state.meta=m; state.step=2; render(); };
+  window.cwTest = ()=>{
+    const b = el("button","btn outline"); b.textContent="Probar conexión";
+    b.onclick = async ()=>{
+      b.disabled = true; b.textContent = "Probando…";
+      try{
+        const r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({name:state.name, org_id:state.fields.org_id||"", endpoint:state.fields.endpoint||"", api_key:state.fields.api_key||""})});
+        if(r.ok) toast("Conexión OK", (r.verified==="live"?"verificada en vivo":r.note||""), "ok");
+        else toast("Fallo", (r.error||"no se pudo conectar"), "bad");
+      }catch(e){ toast("Error al probar", e.message, "bad"); }
+      finally{ b.disabled=false; b.textContent="Probar conexión"; }
+    };
+    return b;
+  };
   render();
   open();
 }

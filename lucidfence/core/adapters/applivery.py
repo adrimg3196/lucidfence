@@ -45,6 +45,9 @@ class AppliveryAdapter(MDMAdapter):
             "/organizations/{org_id}/mdm/devices/{device_id}/commands"
         self.timeout = timeout
         self.webhook_url = webhook_url or os.environ.get("REMEDIATION_WEBHOOK_URL", "")
+        # Test endpoint (wizard "Probar"): list devices with the live key.
+        self._api_base = "https://api.applivery.io/v1"
+        self._test_path = f"/organizations/{self.org_id}/mdm/devices?limit=1"
 
     def _headers(self) -> dict:
         key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or os.environ.get("applivery_api_key")
