@@ -86,10 +86,17 @@ class StateStore:
         if self.states_path.exists():
             try:
                 raw = json.loads(self.states_path.read_text(encoding="utf-8"))
-                for d in raw:
-                    self._states[d["device_id"]] = DeviceState(**d)
             except Exception:
-                self._states = {}
+                return
+            # Isolate per-record failures: a single corrupt or
+            # schema-drifted row must be skipped, never wipe the whole fleet's
+            # persisted state. (ponytail: no logging infra here; skip silently
+            # but keep every good record — add logging if forensics matter.)
+            for d in raw:
+                try:
+                    self._states[d["device_id"]] = DeviceState(**d)
+                except Exception:
+                    continue
 
     def snapshot(self) -> dict[str, DeviceState]:
         with self.lock:
