@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
           TIMEOUT=30
-          curl -fsS --max-time "$TIMEOUT" "$URL" | python3 -c "import json, sys; data=json.load(sys.stdin); required=['fleet','compliance','geofences']; missing=[k for k in required if k not in data]; assert not missing, f'Faltan: {missing}'"
+          curl -fsS --max-time "$TIMEOUT" "$URL" | python3 -c "import json, sys; data=json.load(sys.stdin); required=['devices','fences','tenants','service','generated_at']; missing=[k for k in required if k not in data]; assert not missing, f'Faltan: {missing}'"
           echo "OK: estructura validada"
 
       - name: Correr tests del repo (runner honesto)
