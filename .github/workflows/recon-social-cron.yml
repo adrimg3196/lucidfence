@@ -13,7 +13,7 @@ on:
   workflow_dispatch:                # permitido forzar manualmente
 
 permissions:
-  contents: write                  # necesario para commitear resultados de recon
+  contents: write
 
 jobs:
   scan:
@@ -22,16 +22,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # Retry wrapper: GitHub API puede rate-limit; 3 intentos con backoff
-      # lineal (10s, 20s). Si todos fallan, el paso sale limpio (|| true)
-      # para que el workflow no se rompa y el downstream tenga al menos un
-      # snapshot anterior.
       - name: Recon de repos de competidores
         run: |
           set -euo pipefail
@@ -51,8 +46,6 @@ jobs:
           echo "Recon repos completado (puede ser snapshot anterior si todos los intentos fallaron)"
 
       - name: Recon social (X/Reddit/YouTube)
-        # polling-based APIs (X/Reddit) pueden fallar por rate limits o auth;
-        # no es blocker para el workflow — el downstream consume lo que haya.
         run: |
           set -euo pipefail
           MAX=3
@@ -72,13 +65,11 @@ jobs:
 
       - name: Persistir resultados para el análisis diario
         run: |
-          set -euo pipefail
           mkdir -p data/recon
-          TODAY=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          echo "--- recon repos ${TODAY} ---" > data/recon/latest_recon.txt
+          echo "--- recon repos $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" > data/recon/latest_recon.txt
           python3 scripts/recon_repos.py >> data/recon/latest_recon.txt 2>&1 || true
           echo "" >> data/recon/latest_recon.txt
-          echo "--- recon social ${TODAY} ---" >> data/recon/latest_recon.txt
+          echo "--- recon social $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >> data/recon/latest_recon.txt
           python3 scripts/recon_social.py >> data/recon/latest_recon.txt 2>&1 || true
           echo "Recon guardado en data/recon/latest_recon.txt"
 
