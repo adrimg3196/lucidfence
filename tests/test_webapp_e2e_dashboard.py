@@ -18,7 +18,7 @@ def test_dashboard_browser_smoke() -> None:
     if sync_playwright is None:
         print("SKIP test_dashboard_browser_smoke: Playwright no instalado "
               f"(instala: pip install playwright && playwright install chromium): {_PLAYWRIGHT_ERROR}")
-        raise SystemExit(0)
+        return
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900})
