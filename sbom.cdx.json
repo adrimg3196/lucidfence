@@ -68,11 +68,11 @@
   "properties": [
     {
       "name": "lucidfence:source-file-count",
-      "value": "186"
+      "value": "192"
     },
     {
       "name": "lucidfence:source-manifest-sha256",
-      "value": "a97bdf50144ba399b1b5b01fcc318c1a11d62df9f4a646bda4e7a13f981e6591"
+      "value": "372aa79e59a13e2bc76985d42b1d80b75856b5e380a07f0c920954fca2ee82f7"
     }
   ]
 }
