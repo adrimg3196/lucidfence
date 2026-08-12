@@ -42,6 +42,14 @@ jobs:
           echo "=== PRs abiertos ==="
           gh pr list --repo adrimg3196/lucidfence --state open --json number,title --jq '.[] | "  - #\(.number) \(.title)"' 2>/dev/null || echo "  (no hay PRs)"
           echo ""
+          echo "=== Recon social (último snapshot) ==="
+          if [ -f data/recon/latest_recon.txt ]; then
+            echo "  (disponible, $(wc -l < data/recon/latest_recon.txt) líneas)"
+            head -30 data/recon/latest_recon.txt
+          else
+            echo "  (no disponible — el recon-social-cron aún no ha corrido)"
+          fi
+          echo ""
           echo "=== Deps outdated ==="
           pip list --outdated --format=columns 2>/dev/null | tail -n +3 | head -10 || echo "  (no disponible)"
 
@@ -55,8 +63,12 @@ jobs:
           TOTAL=$(gh issue list --repo adrimg3196/lucidfence --state open --json number --jq 'length' 2>/dev/null || echo "desconocido")
           PRS_LOG=$(gh pr list --repo adrimg3196/lucidfence --state open --json number,title --jq '.[] | "  - #\(.number) \(.title)"' 2>/dev/null || echo "(no hay PRs)")
           DEPS_LOG=$(pip list --outdated --format=columns 2>/dev/null | tail -n +3 | awk '{print "  - " $1 " -> " $3}' || echo "(no disponible)")
+          RECON_SNAPSHOT=""
+          if [ -f data/recon/latest_recon.txt ]; then
+            RECON_SNAPSHOT=$(head -40 data/recon/latest_recon.txt | sed 's/^/    /')
+          fi
           N_HOY=$(echo "$INCIDENTS_LOG" | grep -c '  - ' || echo "0")
-          BODY="## Informe diario ${TODAY}\n\nIncidentes hoy: ${N_HOY} detectados\n${INCIDENTS_LOG}\n\nIssues abiertos: ${TOTAL}\n\nPRs abiertos:\n${PRS_LOG}\n\nDependencias:\n${DEPS_LOG}\n\nPropuestas:\n- Revisar y cerrar incidentes resueltos\n- Evaluar PRs listos para merge\n- Planificar update de dependencias criticas\n"
+          BODY="## Informe diario ${TODAY}\n\nIncidentes hoy: ${N_HOY} detectados\n${INCIDENTS_LOG}\n\nIssues abiertos: ${TOTAL}\n\nPRs abiertos:\n${PRS_LOG}\n\nRecon social (último snapshot):\n${RECON_SNAPSHOT:-(no disponible)}\n\nDependencias:\n${DEPS_LOG}\n\nPropuestas:\n- Revisar y cerrar incidentes resueltos\n- Evaluar PRs listos para merge\n- Planificar update de dependencias criticas\n"
           EXISTING=$(gh issue list --repo adrimg3196/lucidfence --state open --label "daily-analysis" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
             echo "Actualizando issue #${EXISTING}"
