@@ -53,27 +53,33 @@ def age_days(iso: str) -> int:
     return (now() - stamp).days
 
 
-def ci_state(pr: dict) -> tuple[int, int]:
-    """(checks en verde, checks totales). Un PR sin checks no cuenta como verde."""
+GREEN_CONCLUSIONS = ("SUCCESS", "NEUTRAL", "SKIPPED")
+FAILED_CONCLUSIONS = ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED")
+
+
+def ci_state(pr: dict) -> tuple[int, int, int]:
+    """(verdes, fallados, totales). Un check pendiente (sin conclusión) no es
+    ni verde ni rojo: cuenta solo en el total, y el PR no está listo hasta
+    que concluya — contar pendientes como verdes rompería el FIFO del train."""
     checks = pr.get("statusCheckRollup") or []
-    failed = sum(
-        1 for c in checks
-        if c.get("conclusion") in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED")
-    )
-    return len(checks) - failed, len(checks)
+    green = sum(1 for c in checks if (c.get("conclusion") or "") in GREEN_CONCLUSIONS)
+    failed = sum(1 for c in checks if (c.get("conclusion") or "") in FAILED_CONCLUSIONS)
+    return green, failed, len(checks)
 
 
 def classify(pr: dict) -> str:
     """Estado del PR de cara a la cola. Un solo sitio decide, para que agentes
     distintos no discrepen sobre quién va primero."""
-    green, total = ci_state(pr)
+    green, failed, total = ci_state(pr)
     state = pr.get("mergeStateStatus") or "UNKNOWN"
     if state in BLOCKED_BY_CONFLICT:
         return "conflict"
     if total == 0:
         return "no-ci"
-    if green < total:
+    if failed:
         return "ci-red"
+    if green < total:
+        return "ci-pending"
     if state in BLOCKED_BY_BASE:
         return "needs-update"
     if state in READY:
@@ -91,7 +97,7 @@ def fetch_prs() -> list[dict]:
 def build_queue(prs: list[dict]) -> dict:
     rows = []
     for pr in prs:
-        green, total = ci_state(pr)
+        green, _failed, total = ci_state(pr)
         rows.append({
             "number": pr["number"],
             "title": pr["title"],
@@ -142,6 +148,7 @@ def render(queue: dict) -> str:
             "conflict": "CONFLICTO — lo rebasa su autor",
             "needs-update": "detrás de main",
             "ci-red": "CI en rojo",
+            "ci-pending": "CI en curso",
             "no-ci": "sin CI",
             "unknown": "?",
         }[r["status"]]
@@ -156,6 +163,22 @@ def render(queue: dict) -> str:
         "_Reglas: `docs/references/agent-team-charter.md`._"
     )
     return "\n".join(lines)
+
+
+def ensure_labels() -> None:
+    """Las labels deben existir antes de usarlas: `gh issue create --label` y
+    `gh pr edit --add-label` fallan con label inexistente (bloqueó el primer
+    run del workflow). Crear es idempotente: si ya existe, gh sale con error
+    y lo ignoramos a propósito."""
+    for name, color, desc in (
+        (QUEUE_LABEL, "1D76DB", "Issue fija de la cola del merge train"),
+        (STALE_LABEL, "D93F0B", "PR >3 días sin rebasar o en conflicto"),
+    ):
+        subprocess.run(
+            ["gh", "label", "create", name, "--repo", REPO,
+             "--color", color, "--description", desc],
+            capture_output=True, text=True,
+        )
 
 
 def find_queue_issue() -> int | None:
@@ -208,6 +231,8 @@ def main() -> int:
 
     body = render(queue)
     print(body)
+    if args.publish or args.enforce:
+        ensure_labels()
     if args.publish:
         publish(body)
     if args.enforce:
