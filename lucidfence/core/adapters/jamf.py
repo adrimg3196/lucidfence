@@ -195,6 +195,16 @@ class JamfAdapter(MDMAdapter):
 
     # --- public API per MDMAdapter ---
 
+    def test_connection(self) -> dict:
+        # Jamf's Basic auth -> bearer grant validates client_id/secret + base_url.
+        try:
+            self._fetch_token()
+        except AuthError as exc:
+            return {"ok": False, "error_type": "auth", "error": f"credenciales rechazadas: {exc}"}
+        except TransportError as exc:
+            return {"ok": False, "error_type": "unreachable", "error": f"no se pudo conectar: {exc}"}
+        return {"ok": True, "verified": "live", "note": "token Jamf obtenido"}
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if action == "apply_ddm":
             return self._apply_ddm(device, params)

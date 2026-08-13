@@ -11,7 +11,7 @@ LucidFence es multi-MDM porque la comunidad lo alimenta. Si manejas un MDM que a
 ## Reconocimiento
 
 - Cada adapter mergeado entra al README con crédito y acceso al canal de contributors.
-- Bounties para adapters de MDM de pago y para señales de riesgo verificadas por CISOs.
-- Los contributors activos reciben acceso anticipado a la capa Enterprise on-prem.
+- Bounties para adapters de MDM y para señales de riesgo verificadas por CISOs.
+- Los contributors activos reciben acceso anticipado a las capas on-prem (SSO/SOAR/Risk Engine).
 
 Empieza en `CONTRIBUTING.md`. La soberanía se construye en comunidad.

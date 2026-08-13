@@ -1,242 +1,100 @@
 # LucidFence
 
-> Geofencing y riesgo explicable para flotas UEM/MDM. Open source, gratuito y 100% web.
+**Multi-UEM local-first. BYOI (Bring Your Own Infrastructure).** Tu data en tu máquina, tú firmas los tokens UEM, tú controlas el despliegue. No hay backend propietario que guarde dispositivos ni credenciales.
 
-[![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![PWA](https://img.shields.io/badge/app-PWA-5e6ad5.svg)](static/web.html)
-[![Browser-first](https://img.shields.io/badge/data-IndexedDB-4cc38a.svg)](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md)
+## Qué es
 
-LucidFence convierte ubicaciones y postura de dispositivos en geovallas, rutas, riesgo explicable y acciones UEM. Su modo principal funciona directamente en el navegador: no exige instalación, cuenta de LucidFence, nube propia ni suscripción.
+Engine de geofencing + política de riesgo que habla con los adaptadores UEM que tú ya tienes (Applivery, Intune, Jamf, y más). Genera el estado de compliance, lo expone en un dashboard local, y opcionalmente publica un snapshot público para la vitrina.
 
-## Consumir LucidFence Web — infraestructura del usuario
+Local-first: el estado de los dispositivos vive en tu máquina. La nube es solo publicar un JSON demo si quieres la vitrina → raw.githubusercontent (CORS `*`, sin secretos por diseño).
 
-LucidFence no necesita ni presupone un hosting operado por el autor. Cada organización genera el bundle y lo publica en su propia cuenta, dominio, nube o intranet:
+## Rápido
 
 ```bash
-python3 scripts/build_web_bundle.py
-```
+# 1 — instalar
+./install.sh
+# o
+docker compose up -d
 
-Artefactos:
+# 2 — correr local
+python3 saas_server.py            # :8765
 
-```text
-dist/lucidfence-web/       # directorio estático
-dist/lucidfence-web.zip    # paquete redistribuible
-dist/lucidfence-web/SHA256SUMS
-```
-
-Consulta [`deploy/web/SELF_HOST.md`](deploy/web/SELF_HOST.md) para desplegarlo en GitHub Pages, Cloudflare Pages, Nginx, Caddy, S3 o un contenedor del cliente.
-
-- Sin signup, tarjeta, Python, Docker o Homebrew.
-- Objetivos, flota, geovallas y ciclos se ejecutan en JavaScript/Web Worker.
-- El workspace se guarda en IndexedDB y puede exportarse/importarse.
-- El Service Worker permite reutilizarla offline después de la primera carga.
-- Las simulaciones no tienen efectos externos y no usan APIs de pago.
-- Los secretos UEM se rechazan en las importaciones y nunca se guardan en GitHub Pages.
-
-La app de escritorio, Homebrew y el backend Python siguen disponibles como opciones avanzadas para conectores live y despliegues soberanos; ya no son obligatorios para probar ni operar el modo de simulación.
-
-## Descargar la app de escritorio — Preview comunitaria
-
-Para un Mac con Apple Silicon (M1 o posterior) y macOS 14 o posterior:
-
-1. Abre **[LucidFence Desktop Preview 1](https://github.com/adrimg3196/lucidfence/releases/tag/v1.2.0-desktop-preview.1)**.
-2. Descarga `LucidFence-1.2.0-arm64.dmg`.
-3. Abre el DMG y arrastra **LucidFence** a **Applications**.
-4. En el primer inicio, haz clic derecho sobre LucidFence → **Abrir**. Después se abre normalmente desde Launchpad o Finder.
-
-La app es autónoma: incluye su backend y abre LucidFence en una ventana nativa de macOS. No requiere Terminal, Homebrew, Python, cuenta cloud ni suscripción. Sus datos permanecen en `~/Library/Application Support/LucidFence`.
-
-> La build comunitaria actual usa firma ad-hoc. El clic derecho del primer inicio es necesario hasta que el proyecto disponga de certificado Apple Developer ID y notarización.
-
-El primer arranque carga una flota de demostración local. No necesitas credenciales para evaluar las funciones incluidas en Demo; UEM live, IA y email son conectores opcionales y requieren su propia configuración.
-
-## Homebrew y Linux (alternativa técnica)
-
-Para automatización, servidores o usuarios de CLI:
-
-```bash
-brew tap adrimg3196/lucidfence
-brew install lucidfence
-lucidfence
-```
-
-`lucidfence` inicia el servicio local en `http://127.0.0.1:8765` y abre el navegador.
-
-## CLI
-
-```bash
-lucidfence                 # iniciar y abrir la interfaz
-lucidfence start           # iniciar en segundo plano
-lucidfence open            # abrir; inicia si hace falta
-lucidfence status          # salud, PID, datos y log
-lucidfence restart         # reiniciar limpiamente
-lucidfence stop            # detener solo la instancia gestionada
-lucidfence serve           # primer plano; ideal para servidores/systemd
-lucidfence doctor          # diagnóstico de instalación
-lucidfence mcp             # MCP local read-only por stdio
-lucidfence --version
-```
-
-Puerto personalizado:
-
-```bash
-lucidfence start --port 9000
-```
-
-Servidor Linux accesible en la red — hazlo solo detrás de tu firewall/reverse proxy:
-
-```bash
-lucidfence serve --host 0.0.0.0 --port 8765
-```
-
-## Dónde están los datos
-
-LucidFence nunca escribe datos mutables dentro del repositorio ni del Cellar de Homebrew:
-
-- macOS: `~/Library/Application Support/LucidFence`
-- Linux: `${XDG_STATE_HOME:-~/.local/state}/lucidfence`
-- Override: `LUCIDFENCE_DATA_DIR=/ruta/propia`
-
-Ahí viven usuarios locales, sesiones, tenants, configuración, eventos, trails, logs y PID. Los permisos del directorio se restringen al usuario.
-
-## Qué incluye
-
-- Geovallas circulares y poligonales.
-- Rutas y detección de desvíos.
-- Inventario y postura de dispositivos.
-- Risk Engine 0–100 con `reasons`, `provenance` y evidence gate.
-- Incidentes, lifecycle y auditoría.
-- Workflows y acciones UEM con cooldown para acciones destructivas.
-- CVE + EPSS y playbooks SOAR declarativos.
-- Fleet Intelligence descriptiva: recencia, continuidad, interrupciones, cobertura GPS,
-  tendencia de conformidad y transiciones de geovalla con fórmula explicable.
-- Alertas, export CSV/HTML y digest.
-- RBAC local y aislamiento por organización.
-- Compañía autónoma de geofencing gobernada: objetivos medibles, squads
-  especializados, evidencia, simulación, policy gates y handoff humano sin
-  ejecución implícita de comandos UEM. Ver
-  [`docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md`](docs/architecture/AUTONOMOUS_GEOFENCING_COMPANY.md).
-- Dashboard local sin CDN, telemetría ni frontend cloud.
-- Adapters MDM (interfaz `MDMAdapter` congelada): `simulation` (demo local),
-  `applivery` (live), `intune` (live vía Microsoft Graph, Bounty #1) y
-  `jamf` (live vía Jamf Pro API, Bounty #2). Ver `lucidfence/core/adapters/ADAPTER.md`.
-- IA opcional BYO API/modelo (OpenAI, Ollama, LM Studio, Nous Portal o compatible).
-- Gateway local OpenAI-compatible y MCP read-only incluidos.
-
-## Arquitectura
-
-```text
-lucidfence/
-├── saas_server.py          # servidor HTTP local (entrypoint)
-├── server.py               # servidor mínimo del engine
-├── install.sh              # installer de un comando
-├── lucidfence/             # el paquete Python: SDK público + todo el motor
-│   ├── cli.py              #   CLI de ciclo de vida (console script)
-│   ├── shell.py            #   shell interactiva local
-│   ├── core/               #   geofencing, riesgo, CVE, SOAR, adapters, publisher cloud
-│   ├── saas/               #   auth local, RBAC y aislamiento
-│   ├── mcp/                #   servidores MCP locales read-only
-│   └── plugins/            #   índice de adapters + contrato de providers
-├── static/                 # interfaz local, assets vendorizados
-├── scripts/                # utilidades de build, arranque, despliegue y QA
-├── docs/                   # documentación (ver docs/README.md)
-├── data/                   # seeds públicos read-only + estado local
-├── deploy/                 # bundle web autoalojable
-├── apps/                   # app de escritorio macOS + gateway edge opcional
-├── Formula/lucidfence.rb   # Homebrew
-└── tests/                  # suite stdlib
-```
-
-La capa histórica se sigue llamando `saas/` internamente por compatibilidad, pero no implica un servicio cloud: es la capa local de usuarios, organizaciones y RBAC.
-
-La documentación vive en [`docs/`](docs/README.md): `architecture/`, `operations/`,
-`roadmap/`, `product/`, `references/` y material interno. `AGENTS.md` se queda en
-la raíz porque su ruta es la convención que leen los agentes.
-
-## Integrar un MDM
-
-Desde la interfaz, abre **Ajustes** y configura el adapter y sus credenciales. Los secretos se almacenan en el directorio local de la organización, nunca en el frontend ni en Git.
-
-Para contribuir un adapter, implementa `MDMAdapter` siguiendo [`lucidfence/core/adapters/ADAPTER.md`](lucidfence/core/adapters/ADAPTER.md) y añade pruebas offline.
-
-## AI opcional y MCP
-
-La aplicación funciona sin modelo. En **Ajustes → Proveedor AI opcional** puedes conectar cualquier endpoint OpenAI-compatible y probarlo antes de guardar. La clave queda en el directorio tenant-local con modo `0600`.
-
-- Gateway: `POST http://127.0.0.1:8765/v1/chat/completions`
-- MCP: `lucidfence mcp`
-- Guía completa: [`docs/architecture/AI_AND_MCP.md`](docs/architecture/AI_AND_MCP.md)
-
-## Desarrollo
-
-```bash
-git clone https://github.com/adrimg3196/lucidfence.git
-cd lucidfence
-python3 -m pip install -r requirements.txt
+# 3 — tests (honestos, 105 = verde)
 python3 tests/run_tests.py
-python3 -m lucidfence.cli start --no-open
 ```
 
-La suite debe terminar con un resumen explícito y cero fallos. El proyecto usa Python 3.9+ y evita frameworks web.
+Dashboard: `http://localhost:8765` → `static/dashboard.html` (SPA local que habla con `:8765`).
 
-## Operación y monitoreo always-on
+## Stack
 
-```bash
-# Arrancar servicio en segundo plano managed
-python3 scripts/health_monitor.py
+- Python 3.11, stdlib-first. HTTP propio en `saas_server.py` (no web frameworks).
+- Cada adaptador UEM es un plugin para `core/` — engine, policies, state_store, adapters, cve_feed_nvd, location_source (simulation).
+- Cloudflare Worker opcional para el gateway UEM (`apps/uem-gateway/`).
+- App macOS Swift opcional (`apps/macos/` + builder DMG).
 
-# Salida JSON con estado del check y, en caso de fallo, apertura/cierre
-# automática de issue de infraestructura en GitHub con severidad y alertas.
+## Archivos que importan
+
+```
+lucidfence/          # el único paquete Python (todo lo importable)
+core/                # engine, policies (risk), state_store, adapters, cve_feed_nvd, location_source
+saas/                # tenants, auth local, RBAC
+mcp/                 # servidores MCP stdio read-only
+plugins/             # índice de adapters verificado por hash + providers de terceros
+cli.py / shell.py    # CLI de ciclo de vida y shell interactiva
+
+apps/
+  macos/             # app Swift + builder DMG
+  uem-gateway/       # Cloudflare Worker opcional
+
+data/
+  cloud_state.json           # estado publicado para la vitrina (commiteado, lo sirve Pages)
+  cloud_tenants/<id>/data/  # tenants de la nube (multi-tenant real vía saas-api)
+
+static/
+  dashboard.html     # SPA local
+  cloud.html         # vitrina serverless (lee data/cloud_state.json vía raw.githubusercontent)
+  app.js
+
+docs/                # toda la documentación; índice en docs/README.md
+tests/               # runner honesto: tests/run_tests.py
 ```
 
-Documentación operativa:
+## No está terminado (el openly honest gaps)
 
-- [`docs/operations/health-monitor.md`](docs/operations/health-monitor.md)
-- `scripts/health_monitor.py`
+Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 
-## Diseño
+| Área | Estado | Qué falta |
+|------|--------|-----------|
+| **README público / onboarding de terceros** | Estado inicial — README externo + alineación de licencia | README de usuario externo (npm-style): qué necesita, cómo instala, como chequea que funciona, FAQ mínima, cómo reporta bugs. Este README es interno. |
+| **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza cambios a cloud_state.json en PR), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
+| **Publicación de release tags / versiones** | Tags existen, Releases en GitHub faltan | Existen tags git (`v1.0.0` → `v1.4.0`) pero no hay GitHub Releases con description y assets. Ver CHANGELOG.md y `git tag --list`. |
+| **Docker / compose para terceros documentado** | Completo — docker-compose.yml + Dockerfile existen | `docker compose up -d` corre LucidFence always-on en localhost:8765. Perfil `internet-facing` levanta Caddy para TLS. Ver `docker-compose.yml`. |
+| **Documentación de adapters UEM para contribuidores** | Parcial | Cada adapter (Applivery/Intune/Jamf) tiene código, pero no hay guide de "cómo agrego un adaptador UEM nuevo" público con el contrato de plugin. |
+| **Vitrina pública viva / demo** | Completo — vitrina + demo walkthrough | `cloud.html` lee raw.githubusercontent, funcional. Demo paso a paso sin código en `docs/demo-walkthrough.md`. |
+| **Pricing / modelo de negocio declarado** | No existe | Si esto es open-source product, debe declarar qué es OSS puro y qué sería enterprise (si acaso). |
+| **Canales de soporte / issues triage** | No existe | No hay CONTRIBUTING, no hay etiquetas de issues, no hay respondedor que triague. |
+| **Seguridad: disclosure policy** | No existe | No hay SECURITY.md, no hay disclosure path claro para alguien que encuentra bug de seguridad. |
 
-- Tema dark por defecto, light opcional.
-- Tokens CSS en variables `:root` para colores, radios, sombras y fonts.
-- Densidad compacta y jerarquía clara; los KPIs y chips priorizan legibilidad.
-- Contraste AA para texto normal; UI components usan bordes suaves y paneles diferenciados.
-- Navegación consistente: sidebar, topbar y vistas principales con mismo vocabulario.
-- Comportamiento responsivo en `1100px`, `700px` y `430px`.
+Si quieres que esto sea **producto open-source que alguien usa sin que tú estés en medio**, la lista es esa. Primero: README externo + tests como gate de calidad públicos + release tags.
 
-Referencia canónica: `static/dashboard.html` y `static/cloud.html`.
+## Lo que sí funciona hoy
 
-- Escucha en `127.0.0.1` por defecto.
-- Sin telemetría ni cuenta remota.
-- Secretos y sesiones locales con permisos restringidos.
-- RBAC capability-based y aislamiento de tenants.
-- Path traversal bloqueado en estáticos.
-- Acciones UEM validadas contra allowlist y cooldown persistente.
-- Un riesgo positivo sin evidencia se marca `verified: false`.
+- Engine de compliance + política de riesgo: corre local, reporta dispositivos dentro/no-compliant/violaciones.
+- Adapters UEM existentes: Applivery, Intune, Jamf (estado local después de ingest).
+- Dashboard local en `:8765`.
+- Cloud vitrina: `data/cloud_state.json` publicado, leído por `static/cloud.html`.
+- Test runner honesto (105 tests = verde): gates reales, no stubs.
+- Cron de estado local: `geofence_daily_report.sh` genera el resumen sin red.
+- License: MIT (LICENSE), configurable en pyproject.toml si el mantenedor decide cambiar.
 
-Consulta [`SECURITY.md`](SECURITY.md) si está disponible o abre un security advisory privado en GitHub para reportar una vulnerabilidad.
+## Credits
 
-## Licencia
+Ver `AGENTS.md` para quién trabaja esto (agentes + Adri). Esto es desarrollo multi-agente concurrente + humano propietario, commits en nombres distintos.
 
-Todo el producto distribuido en este repositorio se publica bajo **Apache License 2.0**. Uso personal, comercial, modificación y redistribución permitidos conforme a la licencia.
+## License
 
-## Adapter Hall of Fame
+Apache-2.0 — ver `LICENSE` para los términos completos. Sin restricciones de uso, modificación, distribución. Corporaciones pueden adoptar esto sin revisión legal de copysleft.
 
-Programa de adapters de la comunidad (issue #3). El producto es agnóstico al
-MDM vía la interfaz `MDMAdapter` (`lucidfence/core/adapters/base.py`). Quien entregue el
-primer PR **verificado** de un MDM entra al Hall of Fame y se vuelve
-*Adapter Maintainer*.
+---
 
-| Adapter | Estado | Contribuidor | Notas |
-|---------|--------|--------------|-------|
-| `intune` (Microsoft Graph live) | ✅ live (Bounty #1) | [@jdjioe5-cpu](https://github.com/jdjioe5-cpu) | PR #13 mergeado — respeta el contrato congelado, tests 7/7, sin secretos |
-| `jamf` (Jamf Pro API live) | ✅ live (Bounty #2) | mantenedor | reimplementado siguiendo el patrón #13 — tests 7/7 |
-| `applivery` | ✅ live | mantenedor | conector principal |
-| `simulation` | ✅ mock | mantenedor | demo 100% local |
-
-**Siguientes MDMs pedidos:** SOTI, Workspace ONE, Mosyle, Kandji, Fleet.
-
-**Política anti-spam:** los PRs/comments que incluyan direcciones de wallet
-(Solana, BTC, USDT, ETH, XMR…), promoción de repos externos o pago de bounty
-en cripto serán cerrados sin merge. El código debe respetar `base.py` (no
-cambiar la interfaz), usar solo placeholders en `.env.example` y pasar la suite
-sin credenciales reales. Ver `lucidfence/core/adapters/ADAPTER.md`.
+*Full-local. Sin credenciales. Sin backend propietario de datos.*

@@ -31,8 +31,8 @@
     {
       "type": "library",
       "name": "cryptography",
-      "version": "49.0.0",
-      "purl": "pkg:pypi/cryptography@49.0.0"
+      "version": "50.0.0",
+      "purl": "pkg:pypi/cryptography@50.0.0"
     },
     {
       "type": "library",
@@ -68,11 +68,11 @@
   "properties": [
     {
       "name": "lucidfence:source-file-count",
-      "value": "186"
+      "value": "192"
     },
     {
       "name": "lucidfence:source-manifest-sha256",
-      "value": "a97bdf50144ba399b1b5b01fcc318c1a11d62df9f4a646bda4e7a13f981e6591"
+      "value": "d43c306d91ddfc289f7a7cba311b936d32125b6256f0130fd25b89ae175533ce"
     }
   ]
 }
