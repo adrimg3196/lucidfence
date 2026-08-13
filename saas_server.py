@@ -1671,7 +1671,7 @@ class Handler(BaseHTTPRequestHandler):
             result = adapter.test_connection()
             result["provider"] = name
             return _send_json(self, result)
-        if route == "/api/providers" and method == "POST":
+        if route == "/api/providers" and method == "GET":
             tdir = _tenants.data_dir(org)
             return _send_json(self, {
                 "providers": [_masked_provider(p) for p in _list_providers(tdir)],
