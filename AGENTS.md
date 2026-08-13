@@ -24,6 +24,14 @@ assuming either way; don't dedupe against it as if it were a known agent.
   resolved). Task split with the other two still informal: Adri/Zero assign work via
   `hermes kanban` (board `lucidfence`), no shared queue with Jules.
 
+**The shared queue now exists — read it before claiming anything.** The open
+issue labelled `merge-train` holds the authoritative order of entry, regenerated
+by `scripts/merge_train.py` (workflow `merge-train.yml`, twice daily). Rules of
+engagement — WIP limits, claim protocol, rebase discipline, merge order, what
+escalates to Adri — live in `docs/references/agent-team-charter.md`. Read it
+before opening a PR: on 2026-08-13 this repo had 19 open PRs and **zero**
+mergeable, because everyone kept producing and nobody drained.
+
 Before starting work that could overlap, check `git log --all --format='%an %s' -20`
 for recent activity from the other identities — same dedup practice already used
 for the #46/#47 duplicate-PR precedent (see `memory/lucidfence-jules-log.md` in the
