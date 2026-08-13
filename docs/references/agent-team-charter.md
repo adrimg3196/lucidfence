@@ -95,3 +95,18 @@ interactivo va en un worktree propio:
 ```bash
 git worktree add ../geofence-uem-<nombre> -b <rama> origin/main
 ```
+
+**Identidad por worktree — usa `--worktree`, no `--local`.** `git config
+--local` en un worktree escribe en la config COMPARTIDA de todos los
+worktrees: el 2026-08-13 un agente configuró así su identidad y mal-atribuyó
+el commit de otro que estaba trabajando en paralelo (mismo mecanismo que el
+incidente Zero/Hermes del 2026-08-02). `extensions.worktreeConfig` ya está
+activado en el repo; la forma correcta:
+
+```bash
+git config --worktree user.name "<Agente>"
+git config --worktree user.email "<agente>@lucidfence.local"
+```
+
+Verifica con `git config user.email` ANTES de cada commit, no solo al crear
+el worktree.
