@@ -1342,6 +1342,32 @@ class Handler(BaseHTTPRequestHandler):
         # engine is per-org; build/lookup it once for the whole request
         eng = engine_for(org)
 
+        if route == "/api/evidence/export" and method == "GET":
+            # Informe de evidencia con cadena de hashes verificable offline
+            # (ver core/evidence_export.py). Mismo círculo de visibilidad que
+            # /api/audit: el rol auditor existe precisamente para esto.
+            if role not in ("owner", "admin", "viewer", "auditor"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            from lucidfence.core.evidence_export import build_evidence_report
+            devices = [s.to_dict() for s in eng.store.snapshot().values()]
+            apps_total = sum(len(d.get("apps") or []) for d in devices)
+            report = build_evidence_report(
+                org=org,
+                devices=devices,
+                events=eng.store.recent_events(limit=2000),
+                actions=eng.store.recent_actions(limit=2000),
+                cve_summary={"apps_total": apps_total},
+                audit_integrity=verify_audit(_tenants.data_dir(org)),
+                since=qs.get("from", [None])[0],
+                until=qs.get("to", [None])[0],
+            )
+            append_audit(_tenants.data_dir(org), {
+                "event": "evidence.exported", "actor": user.get("id"),
+                "period": report["period"], "records": len(report["records"]),
+                "chain_head": report["chain_head"],
+            })
+            return _send_json(self, report)
+
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is
         # handed back to the existing audited UEM action flow.
