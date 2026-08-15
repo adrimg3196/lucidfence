@@ -3,6 +3,53 @@
 This file is the living state of the improvement loop. It is updated by the
 maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots.
 
+## Loop admin-value (patrón: `loop-admin-value.md`) — updated 2026-08-15
+
+- **Level:** L2 (asistido; 1 PR/run con gate QA; gates humanos intactos)
+- **Last run:** 2026-08-15 (ciclo 0: triage sembrado en sesión interactiva)
+- **Base:** v1.5.0 publicada (release + brew tap alineados); enforcement
+  observe→enforce con doble llave (#135); onboarding 4 UEMs + matriz de
+  ubicación + día 2 (#136); batería runtime 28/28 en CI.
+
+### Backlog priorizado (evidencia: análisis de practicidad 2026-08-15)
+
+1. **Enforcement desde el dashboard** — hoy `enforcement.*` solo se toca por
+   YAML; el admin debería ver Y editar la fase (con permiso + audit log del
+   cambio). El chip ya muestra el estado (#135); falta el control.
+2. **Multi-UEM onboarding** — el orchestrator (`multiuem.py`, `providers`)
+   existe y funciona; no hay guía ni UX de registro de providers. Flotas
+   mixtas (Applivery móvil + Fleet portátiles) son el caso real más potente.
+3. **RBAC visible** — `device:action` existe y el operador queda en el action
+   log; faltan roles viewer/operator gestionables y su superficie en UI/docs.
+4. **Agente iOS empaquetado** — `ios_geofence` (geocercas on-device, lo más
+   privado) sin guía de despliegue vía el propio MDM (perfil/app).
+5. **Quickstart guiado** — `lucidfence quickstart`: del install a ver tu
+   flota en N pasos autoverificados (baja time-to-first-value, la métrica 1).
+6. **Windows geofencing lógico** — DSC ya existe; falta ubicación por red
+   (osquery/IP) documentada y correlacionada como en Fleet.
+
+### Watch list
+
+- Cadencia de release: que formulas (repo+tap) no vuelvan a quedarse atrás —
+  el workflow lo automatiza, pero el sha256 de las fórmulas sigue siendo paso
+  manual post-release.
+- Body de release v1.5.0 quedó con fallback ("Release v1.5.0") — cosmético,
+  fix del awk ya mergeado (#134) para futuras; el propietario puede editarlo.
+- `loop-audit` score (33/100 en julio) — rancio; recalcular en un run L1.
+
+### Ruido descartado
+
+- Reescribir el loop de mantenimiento existente: no — este loop es hermano,
+  no sustituto.
+
+### Overrides del propietario
+
+- 2026-08-15: "todo lo que se anuncie debe validarse en runtime" (regla
+  permanente; batería + gate CI).
+- 2026-08-15: "gratis y del lado del cliente, siempre".
+- 2026-08-15: "Fleet es importante" — paridad de primera clase con el resto
+  de UEMs en cualquier mejora.
+
 ## Loop status (updated 2026-07-20)
 
 - **Level:** L1 (report-only + human-gated merges)
