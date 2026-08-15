@@ -32,3 +32,11 @@ def test_cli_version_matches_pyproject() -> None:
 
 def test_version_is_semver() -> None:
     assert re.fullmatch(r"\d+\.\d+\.\d+", _pyproject_version())
+
+
+def test_release_version_file_matches_pyproject() -> None:
+    # .release-version es el botón de release (release.yml se dispara al
+    # tocarlo en main); si no coincide con pyproject, el guard del workflow
+    # abortaría la publicación — mejor pararlo aquí, antes del merge.
+    with open(os.path.join(ROOT, ".release-version"), encoding="utf-8") as fh:
+        assert fh.read().strip() == _pyproject_version()
