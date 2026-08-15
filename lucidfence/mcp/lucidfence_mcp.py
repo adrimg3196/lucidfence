@@ -66,7 +66,7 @@ CONTRACT = {
     "setup": {"command": "lucidfence mcp", "url_env": "LUCIDFENCE_URL (default http://127.0.0.1:8765)"},
     "security": ["read-only fleet tools", "no UEM/API secrets accepted", "AI uses provider configured in LucidFence"],
     "tools": ["lucidfence_status", "lucidfence_list_devices", "lucidfence_list_incidents",
-              "lucidfence_get_risk", "lucidfence_ask_ai", "lucidfence_learn"],
+              "lucidfence_list_pois", "lucidfence_get_risk", "lucidfence_ask_ai", "lucidfence_learn"],
 }
 
 
@@ -77,6 +77,7 @@ def tools_list() -> Dict[str, Any]:
         {"name": "lucidfence_status", "description": "Get local fleet, geofence and compliance status.", "inputSchema": empty},
         {"name": "lucidfence_list_devices", "description": "List devices visible to the local LucidFence tenant.", "inputSchema": empty},
         {"name": "lucidfence_list_incidents", "description": "List geofence/risk incidents.", "inputSchema": empty},
+        {"name": "lucidfence_list_pois", "description": "List POIs (points of interest) for contextual enrichment.", "inputSchema": empty},
         {"name": "lucidfence_get_risk", "description": "Get explainable risk scores and evidence.", "inputSchema": empty},
         {"name": "lucidfence_ask_ai", "description": "Ask the optional configured AI provider using a fleet question.",
          "inputSchema": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}},
@@ -94,6 +95,7 @@ def tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     routes = {
         "lucidfence_status": "/api/status", "lucidfence_list_devices": "/api/devices",
         "lucidfence_list_incidents": "/api/incidents", "lucidfence_get_risk": "/api/risk",
+        "lucidfence_list_pois": "/api/pois",
     }
     if name in routes:
         result = _api("GET", routes[name])
