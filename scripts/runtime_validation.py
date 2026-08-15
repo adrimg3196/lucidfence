@@ -117,6 +117,23 @@ def main() -> int:
         check("Engine cablea fan-out desde config", is_fanout and n_channels == 2,
               f"notifier={type(eng.incidents.notifier).__name__}, canales={n_channels}")
 
+        # Incidente REAL -> webhooks: merge() es el mismo camino que usa el
+        # ciclo del engine; deben llegar los dos canales del fan-out.
+        before = len(CAPTURED)
+        eng.incidents.merge([{"id": "inc-rt-e2e", "title": "Incidente e2e runtime",
+                              "severity": "critical", "device_id": "dev-rt",
+                              "device_name": "Runtime QA", "fence_id": "hq"}])
+        nuevos = CAPTURED[before:]
+        rutas = sorted(c["path"] for c in nuevos)
+        firma_e2e = any(
+            c["path"] == "/hook" and SignedWebhookNotifier.verify(
+                "s", c["body"], c["headers"].get("X-Lucidfence-Signature")
+                or c["headers"].get("X-LucidFence-Signature", ""))
+            for c in nuevos)
+        check("incidente real dispara los 2 canales del fan-out",
+              rutas == ["/hook", "/t"] and firma_e2e,
+              f"rutas={rutas}, firma_generic_valida={firma_e2e}")
+
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
         r1 = eng.run_once()
@@ -186,6 +203,15 @@ def main() -> int:
               s == 200 and replay.get("dry_run") is True and replay.get("points_evaluated", 0) > 0,
               f"http={s}, puntos={replay.get('points_evaluated')}, disparos={replay.get('fires_total')}, exacto={replay.get('approximation', {}).get('exact')}")
 
+        s, replay2, _ = http_req("POST", "/api/policies/replay", cookie=cookie, body={
+            "policy": {"id": "qa-outside2", "name": "QA recompute",
+                       "when": [{"field": "fence_state", "op": "eq", "value": "outside"}],
+                       "actions": [{"action": "notify", "params": {}}]},
+            "recompute_fences": True})
+        check("replay recalcula contra geocercas actuales",
+              s == 200 and replay2.get("fence_state_source") == "recomputed",
+              f"http={s}, source={replay2.get('fence_state_source')}")
+
         # ============ 5. Evidencia: export vía API + verificación offline ===
         print("\n== P1.7 Evidencia (GET /api/evidence/export) ==")
         s, report, _ = http_req("GET", "/api/evidence/export", cookie=cookie)
@@ -198,6 +224,13 @@ def main() -> int:
             tampered["records"][0]["compliant"] = "manipulado"
             check("manipulación detectada offline", verify_evidence_report(tampered)["ok"] is False,
                   verify_evidence_report(tampered).get("error", ""))
+
+        s, audit, _ = http_req("GET", "/api/audit", cookie=cookie)
+        events = audit.get("events") if isinstance(audit, dict) else []
+        exported = any(e.get("event") == "evidence.exported" for e in (events or []))
+        integrity_ok = isinstance(audit, dict) and (audit.get("integrity") or {}).get("ok") is True
+        check("el export queda en la auditoría hash-chained", s == 200 and exported and integrity_ok,
+              f"http={s}, evento_presente={exported}, cadena_ok={integrity_ok}")
 
         # ============ 6. POIs (feature de ayer, también anunciada) ==========
         s, pois, _ = http_req("GET", "/api/pois", cookie=cookie)
@@ -222,6 +255,20 @@ def main() -> int:
               "lucidfence_explain_risk" in tools and explain.get("device_id") == first_dev
               and "why" in explain and "score" in explain,
               f"device={explain.get('device_id')}, score={explain.get('score')}, why={(explain.get('why') or ['<sin why>'])[:2]}, error={explain.get('error')}")
+
+        smoke_in = "\n".join(json.dumps(m) for m in [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "lucidfence_status", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "lucidfence_list_devices", "arguments": {}}},
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "lucidfence_list_pois", "arguments": {}}},
+        ]) + "\n"
+        smoke = subprocess.run([sys.executable, "lucidfence/mcp/lucidfence_mcp.py"],
+                               input=smoke_in, text=True, capture_output=True, timeout=60,
+                               env=dict(os.environ, LUCIDFENCE_URL=f"http://127.0.0.1:{PORT}"))
+        smoke_rows = [json.loads(l) for l in smoke.stdout.splitlines() if l.strip()]
+        errores = [r["id"] for r in smoke_rows[1:] if r["result"].get("isError")]
+        check("MCP smoke: status/devices/pois responden sin error", not errores,
+              f"llamadas={len(smoke_rows) - 1}, con_error={errores}")
 
         # ============ 8. Páginas servidas + banda demo ======================
         print("\n== UI servida por el server real ==")
@@ -260,6 +307,34 @@ def main() -> int:
         check("CLI genera adapter y su contract test pasa",
               gen_ok and pytest_run.returncode == 0 and "4 passed" in pytest_run.stdout,
               f"cli_rc={cli.returncode}, pytest={pytest_run.stdout.strip().splitlines()[-1] if pytest_run.stdout else pytest_run.stderr[-120:]}")
+
+        # ============ 10. CLI lifecycle: start -> status -> stop =============
+        print("\n== CLI (claim de la landing: arranque local en un comando) ==")
+        cli_env = dict(os.environ, LUCIDFENCE_PORT="8792",
+                       LUCIDFENCE_DATA_DIR=str(tmp / "cli-data"))
+        start = subprocess.run([sys.executable, "lucidfence/cli.py", "start"],
+                               text=True, capture_output=True, timeout=120, env=cli_env)
+        s_cli, _b, _c = (0, None, None)
+        try:
+            s_cli, _b, _c = http_req("GET", "/api/health", port=8792)
+        except OSError:
+            pass
+        status = subprocess.run([sys.executable, "lucidfence/cli.py", "status"],
+                                text=True, capture_output=True, timeout=60, env=cli_env)
+        stop = subprocess.run([sys.executable, "lucidfence/cli.py", "stop"],
+                              text=True, capture_output=True, timeout=60, env=cli_env)
+        down = False
+        for _ in range(10):
+            try:
+                http_req("GET", "/api/health", port=8792)
+            except OSError:
+                down = True
+                break
+            time.sleep(0.5)
+        check("CLI start/status/stop contra servidor real",
+              start.returncode == 0 and s_cli == 200 and status.returncode == 0
+              and "activo" in status.stdout and stop.returncode == 0 and down,
+              f"start_rc={start.returncode}, health={s_cli}, status='{status.stdout.splitlines()[0] if status.stdout else ''}', stop_rc={stop.returncode}, apagado={down}")
 
     finally:
         receiver.shutdown()
