@@ -4,6 +4,11 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- feat(enforcement): rollout seguro para pilotos reales — `enforcement.mode: observe|enforce`, `live_actions` (gating por acción) y doble llave para `wipe` (`allow_wipe` + `wipe_allowlist`); estado visible en `/api/status` y en el chip de modo del dashboard
+- feat(compliance): acción `set_compliance` — Intune la ejecuta vía Graph (managedDevice → objeto Entra → `PATCH isCompliant`) para que Conditional Access corte el acceso; Jamf y Fleet degradan con el mecanismo equivalente de su plataforma en el mensaje
+
 ## [1.5.0] - 2026-08-15
 
 ### Added

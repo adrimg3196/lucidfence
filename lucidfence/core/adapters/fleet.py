@@ -75,6 +75,15 @@ class FleetAdapter(MDMAdapter):
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         device_id = self._dev_id_str(device)
+        # En Fleet la conformidad la calculan sus propias policies (osquery),
+        # no un tercero: no hay API para forzarla. El camino equivalente para
+        # Conditional Access es la integración nativa Fleet <-> Microsoft
+        # Entra; el mensaje se lo dice al admin en vez de un genérico.
+        if action == "set_compliance":
+            return self._err(action, "unsupported_action",
+                             "Fleet computes compliance from its own policies; "
+                             "use Fleet's Microsoft Entra conditional access "
+                             "integration instead of set_compliance")
         # Contract: unknown actions return unsupported_action (never raise).
         if action not in _ALL_VALID_ACTIONS:
             return self._err(action, "unsupported_action",

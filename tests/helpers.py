@@ -19,9 +19,13 @@ from lucidfence.saas.tenant import TenantStore  # noqa: E402
 from lucidfence.core.engine import Engine  # noqa: E402
 
 
-def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org") -> Engine:
+def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org",
+                     extra_config: dict | None = None) -> Engine:
     """Devuelve un Engine aislado en tempdir con fences/routes/policies vacíos
-    y un tenant de prueba. No toca el CWD ni data/ del repo."""
+    y un tenant de prueba. No toca el CWD ni data/ del repo.
+
+    `extra_config` se fusiona sobre la config base (p.ej. el bloque
+    `enforcement` para tests de rollout observe/enforce)."""
     tmp = Path(tempfile.mkdtemp(prefix="lucidfence-test-"))
     (tmp / "fences.json").write_text(json.dumps({"fences": []}), encoding="utf-8")
     (tmp / "routes.json").write_text("[]", encoding="utf-8")
@@ -42,4 +46,6 @@ def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org") -
         "action_cooldown_seconds": cooldown_seconds,
         "incident_webhook_url": "https://hooks.example.com/test",
     }
+    if extra_config:
+        cfg.update(extra_config)
     return Engine(cfg)

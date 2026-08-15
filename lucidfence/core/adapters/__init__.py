@@ -46,6 +46,12 @@ VALID_ACTIONS = {
     "apply_ddm",
     "ddm_status",
     "ddm_sync",
+    # Marca el dispositivo como (no) conforme en el directorio del UEM para
+    # que Conditional Access le corte el acceso. Es la remediación de menor
+    # riesgo y mayor uso real en flotas Microsoft: no toca el dispositivo,
+    # solo su acceso. Intune la implementa vía Graph; el resto degrada con
+    # unsupported_action explicando el mecanismo equivalente de su plataforma.
+    "set_compliance",
 }
 
 # Registro de adapters por nombre. La comunidad puede hacer:
