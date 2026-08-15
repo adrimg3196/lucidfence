@@ -81,8 +81,11 @@ jobs:
         id: changelog
         run: |
           tag="${{ steps.ver.outputs.version }}"
-          section=$(awk -v ver="[$tag]" '
-            $0 ~ ("^## " ver) { found=1; next }
+          # index() y no ~: "[1.5.0]" dentro de un regex es una clase de
+          # caracteres, no el literal — el body de v1.5.0 salió con el
+          # fallback por esto.
+          section=$(awk -v ver="## [$tag]" '
+            index($0, ver) == 1 { found=1; next }
             found && /^## \[/ { found=0 }
             found { print }
           ' CHANGELOG.md)
