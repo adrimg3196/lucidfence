@@ -107,3 +107,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+
+  # "Verificar en runtime, no solo compila": la batería arranca el server
+  # real, un receptor webhook real y el MCP por stdio, y ejercita cada claim
+  # anunciado por su interfaz pública (25 checks). Un claim que no funciona
+  # en vivo bloquea el merge aunque los unit tests estén verdes — este job
+  # existe porque dos features llegaron a main con tests verdes y rotas en
+  # uso real (reloj del anti-spoofing y parsing del MCP explain-risk).
+  runtime-validation:
+    name: Runtime validation (claims en vivo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --require-hashes -r requirements.lock
+      - name: Validar claims en runtime
+        run: python3 scripts/runtime_validation.py
