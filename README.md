@@ -80,7 +80,13 @@ Si quieres que esto sea **producto open-source que alguien usa sin que tú esté
 ## Lo que sí funciona hoy
 
 - Engine de compliance + política de riesgo: corre local, reporta dispositivos dentro/no-compliant/violaciones.
-- Adapters UEM existentes: Applivery, Intune, Jamf (estado local después de ingest).
+- Adapters UEM existentes: Applivery, Intune, Jamf, Fleet (estado local después de ingest).
+  Onboarding por UEM con mínimo privilegio en [`docs/integrations/`](docs/integrations/)
+  (Intune, Jamf, Applivery, Fleet) y la [matriz de ubicación](docs/integrations/LOCATION_MATRIX.md)
+  con lo que cada UEM da de verdad.
+- Rollout seguro para pilotos: `enforcement.mode: observe|enforce`, gating por
+  acción y doble llave para wipe. Runbook: [`docs/operations/ENFORCEMENT.md`](docs/operations/ENFORCEMENT.md);
+  día 2 (servicio, backup, upgrade): [`docs/operations/DAY2.md`](docs/operations/DAY2.md).
 - Dashboard local en `:8765`.
 - Postura opcional con osquery: SO, almacenamiento, cifrado y batería,
   correlacionados con el riesgo geoespacial. Ver
