@@ -66,7 +66,8 @@ CONTRACT = {
     "setup": {"command": "lucidfence mcp", "url_env": "LUCIDFENCE_URL (default http://127.0.0.1:8765)"},
     "security": ["read-only fleet tools", "no UEM/API secrets accepted", "AI uses provider configured in LucidFence"],
     "tools": ["lucidfence_status", "lucidfence_list_devices", "lucidfence_list_incidents",
-              "lucidfence_list_pois", "lucidfence_get_risk", "lucidfence_ask_ai", "lucidfence_learn"],
+              "lucidfence_list_pois", "lucidfence_get_risk", "lucidfence_explain_risk",
+              "lucidfence_ask_ai", "lucidfence_learn"],
 }
 
 
@@ -79,6 +80,9 @@ def tools_list() -> Dict[str, Any]:
         {"name": "lucidfence_list_incidents", "description": "List geofence/risk incidents.", "inputSchema": empty},
         {"name": "lucidfence_list_pois", "description": "List POIs (points of interest) for contextual enrichment.", "inputSchema": empty},
         {"name": "lucidfence_get_risk", "description": "Get explainable risk scores and evidence.", "inputSchema": empty},
+        {"name": "lucidfence_explain_risk",
+         "description": "Explain WHY one device is risky: score, reasons, signals and matched policies from the Risk Engine (read-only).",
+         "inputSchema": {"type": "object", "properties": {"device_id": {"type": "string"}}, "required": ["device_id"]}},
         {"name": "lucidfence_ask_ai", "description": "Ask the optional configured AI provider using a fleet question.",
          "inputSchema": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}},
     ]}
@@ -100,6 +104,32 @@ def tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if name in routes:
         result = _api("GET", routes[name])
         return _tool_result(result, result.get("ok") is False if isinstance(result, dict) else False)
+    if name == "lucidfence_explain_risk":
+        device_id = str(args.get("device_id") or "").strip()
+        if not device_id:
+            return _tool_result({"error": "device_id es obligatorio"}, True)
+        result = _api("GET", "/api/risk")
+        rows = result if isinstance(result, list) else (
+            result.get("devices") or result.get("rows") or [] if isinstance(result, dict) else [])
+        if isinstance(result, dict) and result.get("ok") is False:
+            return _tool_result(result, True)
+        for row in rows:
+            if str(row.get("device_id")) == device_id:
+                # Solo el porqué: score + razones + señales + políticas — la
+                # explicabilidad del Risk Engine, sin el resto de la flota.
+                return _tool_result({
+                    "device_id": device_id,
+                    "device_name": row.get("device_name"),
+                    "score": row.get("score"),
+                    "level": row.get("level"),
+                    "fence_state": row.get("fence_state"),
+                    "why": [f.get("label") for f in (row.get("factors") or [])],
+                    "signals": row.get("signals") or {},
+                    "matched_policies": row.get("matched_policies") or [],
+                })
+        known = sorted(str(r.get("device_id")) for r in rows)[:25]
+        return _tool_result({"error": f"device_id {device_id!r} no encontrado",
+                             "known_device_ids": known}, True)
     if name == "lucidfence_ask_ai":
         question = str(args.get("question") or "").strip()
         if not question:
