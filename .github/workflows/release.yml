@@ -14,9 +14,15 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
-  # Vía manual: publica la release creando el tag vía API (softprops lo crea
-  # sobre main si no existe). Necesaria porque el proxy de las sesiones de
-  # agente no permite pushear refs/tags directamente.
+    # Vía merge: tocar .release-version en un PR y mergearlo a main publica la
+    # release de esa versión (softprops crea el tag vía API si no existe, y el
+    # guard de abajo hace el trigger idempotente si el fichero se toca sin
+    # cambiar de versión). Es el canal principal: el proxy de las sesiones de
+    # agente no puede pushear refs/tags ni disparar workflow_dispatch por API,
+    # pero mergear un PR sí funciona.
+    branches: [main]
+    paths: [".release-version"]
+  # Vía manual (botón "Run workflow" en Actions): mismo efecto que el merge.
   workflow_dispatch:
     inputs:
       version:
@@ -39,13 +45,39 @@ jobs:
       - name: Resolver versión
         id: ver
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            v="${GITHUB_REF_NAME#v}"
           else
-            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            v="$(tr -d '[:space:]' < .release-version)"
+          fi
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || {
+            echo "error: versión inválida: '$v'"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Guard de idempotencia y coherencia
+        id: guard
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          # Coherencia: no se publica una versión distinta de la del código.
+          # (test_version_consistency.py ya garantiza cli.py == pyproject.toml)
+          py_ver=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$VERSION" != "$py_ver" ]; then
+            echo "error: se pide release v$VERSION pero pyproject.toml declara $py_ver"
+            exit 1
+          fi
+          # Idempotencia: si el tag ya existe en origin, la release ya salió;
+          # un retoque de .release-version sin subir versión no re-publica.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "El tag v$VERSION ya existe: no hay nada que publicar."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Leer changelog
+        if: steps.guard.outputs.skip == 'false'
         id: changelog
         run: |
           tag="${{ steps.ver.outputs.version }}"
@@ -63,6 +95,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Construir tarball versionado
+        if: steps.guard.outputs.skip == 'false'
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           LUCIDFENCE_BUILD_VERSION="$VERSION" bash scripts/build.sh
@@ -70,6 +103,7 @@ jobs:
           sha256sum "lucidfence-$VERSION.tar.gz" | tee SHA256SUMS
 
       - name: Smoke del artefacto (el tarball arranca de verdad)
+        if: steps.guard.outputs.skip == 'false'
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           mkdir -p /tmp/smoke && tar -xzf "dist/lucidfence-$VERSION.tar.gz" -C /tmp/smoke
@@ -86,6 +120,7 @@ jobs:
           kill $SRV
 
       - name: Crear GitHub Release con el asset
+        if: steps.guard.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.version }}
