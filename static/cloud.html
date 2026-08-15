@@ -15,13 +15,15 @@
       --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:var(--font);background:var(--bg);color:var(--fg);padding:24px;line-height:1.45}
-    h1{font-size:20px;margin:0 0 4px}
-    .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+    body{margin:0 auto;max-width:1280px;font-family:var(--font);background:var(--bg);color:var(--fg);padding:24px;line-height:1.45}
+    h1{font-size:20px;margin:0 0 4px;letter-spacing:-.02em;text-wrap:balance}
+    .sub{color:var(--muted);font-size:13px;margin-bottom:16px;text-wrap:pretty}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
     .bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
     select,input{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
-    .btn{background:var(--accent);color:#fff;border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none}
+    .btn{background:var(--accent);color:#fff;border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:filter .2s,transform .15s}
     .btn:hover{filter:brightness(1.08)}
+    .btn:active,.btn-download:active{transform:translateY(1px) scale(.98)}
     .btn:focus-visible,.btn-download:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
     /* CTA primario (issue #110): sin scroll horizontal a 320px; apila en columnas estrechas */
     .cta-primary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px}
@@ -31,7 +33,7 @@
     input::placeholder{color:var(--muted)}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
-    .kpi .v{font-size:28px;font-weight:700}
+    .kpi .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
     .kpi .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     @media(max-width:900px){.grid{grid-template-columns:1fr}}
@@ -41,6 +43,11 @@
     table{width:100%;border-collapse:collapse;font-size:13px}
     th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
     th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+    tbody tr{transition:background .15s}
+    tbody tr:hover{background:var(--panel-2)}
+    @media (prefers-reduced-motion: reduce){
+      *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+    }
     .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
     .plat{background:rgba(78,167,252,.12);color:var(--blue)}
     .plat.chromeos{background:rgba(76,195,138,.14);color:var(--green)}
@@ -100,13 +107,13 @@
   </div>
 
   <div class="grid" style="margin-top:16px">
-    <div class="panel"><h2>CVE en flota</h2><div id="cve" class="meta">—</div></div>
-    <div class="panel"><h2>SOAR (playbooks activos)</h2><div id="soar" class="meta">—</div></div>
+    <div class="panel"><h2>CVE en flota</h2><div id="cve" class="meta">-</div></div>
+    <div class="panel"><h2>SOAR (playbooks activos)</h2><div id="soar" class="meta">-</div></div>
   </div>
 
   <div class="panel" style="margin-top:16px">
     <h2>Densidad de dispositivos por departamento</h2>
-    <div id="deptDensity" class="density-list meta">—</div>
+    <div id="deptDensity" class="density-list meta">-</div>
   </div>
 
   <div class="panel" style="margin-top:16px">
@@ -122,7 +129,7 @@
   </div>
 
   <p class="meta" style="margin-top:20px">
-    ¿Quieres ver la demo multi-tenant en vivo? La vitrina de arriba se regenera en la nube cada 15 min con datos de ejemplo. Para tu flota real, <b>descarga e instala</b> — no necesitas registrarte con nosotros.
+    ¿Quieres ver la demo multi-tenant en vivo? La vitrina de arriba se regenera en la nube cada 15 min con datos de ejemplo. Para tu flota real, <b>descarga e instala</b>: no necesitas registrarte con nosotros.
   </p>
 
   <script>
@@ -271,7 +278,7 @@
         return;
       }
       sel.innerHTML = FILTERED_TENANTS.map(({t,i},pos)=>
-        `<option value="${pos}">${esc(tenantName(t,i))} — ${((t.totals&&t.totals.devices)||0)} dev</option>`).join("");
+        `<option value="${pos}">${esc(tenantName(t,i))} · ${((t.totals&&t.totals.devices)||0)} dev</option>`).join("");
       if(CURRENT) renderTenant(0);
     }
 
@@ -336,8 +343,8 @@
       if(!s){
         document.querySelector("#devices tbody").innerHTML = "";
         document.getElementById("deptDensity").innerHTML = "Sin tenants que coincidan con el filtro.";
-        document.getElementById("cve").innerHTML = "—";
-        document.getElementById("soar").innerHTML = "—";
+        document.getElementById("cve").innerHTML = "-";
+        document.getElementById("soar").innerHTML = "-";
         return;
       }
       const NS = "http://www.w3.org/2000/svg";
@@ -366,7 +373,7 @@
         c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6");
         c.setAttribute("fill",color); c.setAttribute("stroke","#08090a"); c.setAttribute("stroke-width","1.5");
         const t2 = document.createElementNS(NS,"title");
-        t2.textContent = `${d.name} — ${d.department||"Sin departamento"} — ${d.fence_state} — riesgo ${d.risk_score||0}`;
+        t2.textContent = `${d.name} · ${d.department||"Sin departamento"} · ${d.fence_state} · riesgo ${d.risk_score||0}`;
         c.appendChild(t2);
         svg.appendChild(c);
       });
@@ -379,7 +386,7 @@
         const ctxt = d.compliant===false?"no":"sí";
         const geoApplicable = d.geofence_compliance_applicable===true;
         const geoClass = !geoApplicable || d.geofence_compliant==null ? "unk" : (d.geofence_compliant ? "comp-yes" : "comp-no");
-        const geoText = !geoApplicable ? "—" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
+        const geoText = !geoApplicable ? "-" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
         tb.insertAdjacentHTML("beforeend",
           `<tr><td class="tag">${esc(d.device_id)}</td><td>${esc(d.name||"")}</td>`+
           `<td><span class="pill ${esc(platformClass(d.platform))}">${esc(platformLabel(d.platform))}</span></td>`+
