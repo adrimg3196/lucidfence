@@ -1,5 +1,9 @@
 # Fleet MDM adapter
 
+> Guía de onboarding para administradores (token API-only, ubicación con
+> osquery, rollout): [docs/integrations/FLEET.md](../integrations/FLEET.md).
+> Este documento es la referencia técnica del adapter.
+
 LucidFence soporta **Fleet** (`fleetdm.com`) como fuente de acciones UEM
 remotas. Un admin de Fleet puede mandar lock/wipe/reboot/message a su flota
 directamente desde el dashboard de LucidFence.

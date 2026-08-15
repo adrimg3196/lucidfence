@@ -34,11 +34,20 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/FREEDOMAIN_WHITELABEL.md`](operations/FREEDOMAIN_WHITELABEL.md) | Dominio propio y whitelabel |
 | [`operations/health-monitor.md`](operations/health-monitor.md) | Monitor de salud |
 | [`operations/self-service-sla-2026-07-14.md`](operations/self-service-sla-2026-07-14.md) | SLA de self-service |
+| [`operations/ENFORCEMENT.md`](operations/ENFORCEMENT.md) | Runbook observe → enforce → wipe con doble llave |
+| [`operations/DAY2.md`](operations/DAY2.md) | Día 2: servicio, backup, upgrade, cadencia, monitorización |
+| [`operations/ALERT_RECIPES.md`](operations/ALERT_RECIPES.md) | Recetas de alertas: Slack, Teams, webhook firmado, ntfy |
+| [`operations/TEAM_ACCESS.md`](operations/TEAM_ACCESS.md) | Acceso en equipo: reverse proxy + SSO OIDC |
 
 ## Integraciones
 
 | Documento | Contenido |
 | --- | --- |
+| [`integrations/INTUNE.md`](integrations/INTUNE.md) | Onboarding Microsoft Intune con mínimo privilegio |
+| [`integrations/JAMF.md`](integrations/JAMF.md) | Onboarding Jamf Pro (API roles, DDM, compliance partner) |
+| [`integrations/APPLIVERY.md`](integrations/APPLIVERY.md) | Onboarding Applivery (fuente live de ubicación) |
+| [`integrations/FLEET.md`](integrations/FLEET.md) | Onboarding Fleet (osquery, MDM open-source) |
+| [`integrations/LOCATION_MATRIX.md`](integrations/LOCATION_MATRIX.md) | Matriz honesta: qué ubicación da cada UEM de verdad |
 | [`integrations/OSQUERY.md`](integrations/OSQUERY.md) | Postura local y multiplataforma con osquery |
 
 ## Roadmap
