@@ -410,6 +410,10 @@ function updateSync(st, before){
   const mode = st&&st.mode? st.mode : (App.org && App.org.org ? "live":"simulation");
   $("#modeText").textContent = (st&&st.mode==="simulation")?"demo":(mode||"live");
   $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":"var(--green)";
+  // Banda de datos demo (issue #110): visible solo mientras el backend declara
+  // modo simulación; con una organización real desaparecen banda y hueco.
+  const demoBanner = document.getElementById("demoBanner");
+  if(demoBanner) demoBanner.hidden = !(st && st.mode === "simulation");
 }
 
 /* ============================================================

@@ -22,6 +22,12 @@
     select,input{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
     .btn{background:var(--accent);color:#fff;border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none}
     .btn:hover{filter:brightness(1.08)}
+    .btn:focus-visible,.btn-download:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+    /* CTA primario (issue #110): sin scroll horizontal a 320px; apila en columnas estrechas */
+    .cta-primary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px}
+    .btn-download{display:inline-block;background:var(--accent);color:#fff;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:700;text-decoration:none}
+    .btn-download:hover{filter:brightness(1.08)}
+    .cta-note{color:var(--muted);font-size:13px}
     input::placeholder{color:var(--muted)}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
@@ -57,8 +63,16 @@
 </head>
 <body>
   <h1>LucidFence · Geofencing UEM/MDM en vivo</h1>
-  <div class="sub">Vitrina cloud-serverless multi-tenant ($0 · GitHub Actions + Pages). Estado generado por el engine en la nube cada 15 min.
+  <div class="sub">Vitrina cloud-serverless multi-tenant ($0 · GitHub Actions + Pages). Estado generado por el engine en la nube cada 15 min con <b>datos de ejemplo</b>.
     <span id="ts" class="meta"></span></div>
+
+  <!-- CTA primario (issue #110): visible sin scroll a 1440×900 y 320×568,
+       antes del selector de tenant y del PDF. Mismo destino de descarga que
+       la sección inferior. -->
+  <div class="cta-primary">
+    <a class="btn btn-download" href="https://github.com/adrimg3196/lucidfence/releases/download/v1.0.1/lucidfence-1.0.1.tar.gz">Descargar LucidFence</a>
+    <span class="cta-note">Gratis y on-premise.</span>
+  </div>
 
   <div class="bar">
     <label class="meta" for="tenantSel">Tenant:</label>
