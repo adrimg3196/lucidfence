@@ -21,6 +21,10 @@ RISK_ROWS = [
 ]
 
 
+def _real_shape(rows):
+    return {"risk": rows, "summary": {"total": len(rows)}}
+
+
 def _with_fake_api(response):
     original = mcp._api
     mcp._api = lambda method, path, payload=None: response
@@ -32,7 +36,7 @@ def _payload(result) -> dict:
 
 
 def test_explain_risk_returns_focused_explanation() -> None:
-    original = _with_fake_api(RISK_ROWS)
+    original = _with_fake_api(_real_shape(RISK_ROWS))
     try:
         result = mcp.tool_call("lucidfence_explain_risk", {"device_id": "dev-1"})
         assert result["isError"] is False
@@ -46,7 +50,7 @@ def test_explain_risk_returns_focused_explanation() -> None:
 
 
 def test_explain_risk_unknown_device_lists_known_ids() -> None:
-    original = _with_fake_api(RISK_ROWS)
+    original = _with_fake_api(_real_shape(RISK_ROWS))
     try:
         result = mcp.tool_call("lucidfence_explain_risk", {"device_id": "dev-999"})
         assert result["isError"] is True

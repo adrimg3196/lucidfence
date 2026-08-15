@@ -109,8 +109,11 @@ def tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         if not device_id:
             return _tool_result({"error": "device_id es obligatorio"}, True)
         result = _api("GET", "/api/risk")
+        # Forma real del endpoint: {"risk": [...], "summary": {...}} (ver
+        # saas_server._product). Validado en runtime contra el server vivo.
         rows = result if isinstance(result, list) else (
-            result.get("devices") or result.get("rows") or [] if isinstance(result, dict) else [])
+            result.get("risk") or result.get("devices") or result.get("rows") or []
+            if isinstance(result, dict) else [])
         if isinstance(result, dict) and result.get("ok") is False:
             return _tool_result(result, True)
         for row in rows:
