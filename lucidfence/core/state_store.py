@@ -56,13 +56,23 @@ class DeviceState:
     enrolled_at: Optional[str] = None         # enrollment date (ISO)
     device_tag: Optional[str] = None          # free-text asset tag / label
     geofence_compliance: Optional[dict] = None  # simulated/live iOS geofence posture
+<<<<<<< HEAD
+    # --- multi-UEM: which UEM provider(s) own this device, for action routing ---
+    provider_refs: dict = field(default_factory=dict)  # {"applivery": "dev123", ...}
+=======
     posture_source: Optional[str] = None       # e.g. osquery
     posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
     osquery_version: Optional[str] = None
     osquery_config_valid: Optional[bool] = None
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
+    # --- endpoint posture evidence (osquery) ---
+    posture_source: Optional[str] = None       # e.g. osquery
+    posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
+    osquery_version: Optional[str] = None
+    osquery_config_valid: Optional[bool] = None
 
     def to_dict(self) -> dict:
         return asdict(self)

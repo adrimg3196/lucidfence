@@ -1,10 +1,13 @@
 """Contract tests for the optional osquery posture integration."""
 from __future__ import annotations
 
+<<<<<<< HEAD
+=======
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)
 import json
 import tempfile
 from pathlib import Path
@@ -179,9 +182,14 @@ def test_provider_maps_host_identity_and_rejects_stale_events():
         assert provider.posture_for("uem-device-42")["os_version"] == "macOS 15.5"
         assert provider.status()["fresh"] == 1
 
+<<<<<<< HEAD
+        provider.refresh(now=1_700_002_000)
+        assert provider.posture_for("uem-device-42") == {}
+=======
         # Staleness threshold must reject aged events.
         provider.refresh(now=1_700_002_000)
         assert provider.posture_for("uem-device-42")["encryption_enabled"] is False  # fails closed!
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)
         assert provider.status()["fresh"] == 0
 
         # A forged far-future timestamp must not remain permanently fresh.
@@ -192,7 +200,11 @@ def test_provider_maps_host_identity_and_rejects_stale_events():
             "snapshot": [{"name": "macOS", "version": "99"}],
         }) + "\n", encoding="utf-8")
         provider.refresh(now=1_700_000_100)
+<<<<<<< HEAD
+        assert provider.posture_for("uem-device-42") == {}
+=======
         assert provider.posture_for("uem-device-42")["encryption_enabled"] is False  # fails closed!
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)
         assert provider.status()["fresh"] == 0
 
 
@@ -351,6 +363,8 @@ def test_engine_merges_osquery_posture_before_risk_evaluation():
         assert state.encryption_enabled is False
         assert state.risk_score >= 23
         assert stats["osquery_posture"]["fresh"] == 1
+<<<<<<< HEAD
+=======
 
 
 def test_engine_integration_with_actual_jsonl_results_including_corruption():
@@ -493,3 +507,4 @@ def test_engine_integration_fail_closed_on_corrupt_log():
         assert state.encryption_enabled is False
         assert state.osquery_config_valid is False
         assert "ValueError" in engine.osquery.status()["error"]
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)

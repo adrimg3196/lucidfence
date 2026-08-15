@@ -1,0 +1,63 @@
+name: Release (tag → GitHub Release)
+
+# Crea un GitHub Release cada vez que se push de un tag semver.
+# El tag debe ser v<MAJOR>.<MINOR>.<PATCH> (ej: v1.4.0).
+# Este workflow lee CHANGELOG.md y extrae la sección para la versión,
+# la publica como body del release, y adjunta el tarball de origen.
+#
+# Regla de operación: los tags se crean desde main, no desde ramas de feature.
+# El release se publica automáticamente — no requiere aprobación manual.
+#
+# Policy: ningún release contiene secrets, credenciales, o data de tenants reales.
+# El tarball es solo el código fuente + LICENSE + README.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Leer changelog
+        id: changelog
+        run: |
+          # Extrae la sección del CHANGELOG para esta versión.
+          # El formato es: ## [tag] - date ... hasta la próxima ##.
+          tag=${GITHUB_REF_NAME#v}
+          section=$(awk -v ver="[$tag]" '
+            $0 ~ ("^## " ver) { found=1; next }
+            found && /^## \[/ { found=0 }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$section" ]; then
+            echo "warning: no se encontró sección en CHANGELOG.md para $GITHUB_REF_NAME"
+            section="Release $GITHUB_REF_NAME"
+          fi
+          # Limpia markdown de encabezados de nivel 3+ para que el release body
+          # se lea bien. Mantén los niveles 2 (##) como separadores de sección.
+          section=$(echo "$section" | sed 's/^### /## /g' | sed 's/^- /  - /g')
+          echo "section<<EOF" >> $GITHUB_OUTPUT
+          echo "$section" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Crear Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.section }}
+          generate_release_notes: false
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

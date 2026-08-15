@@ -49,6 +49,11 @@ jobs:
         run: |
           node --check static/app.js
           node --check static/i18n.js
+          node --check static/web-app.js
+          node --check apps/uem-gateway/worker.mjs
+
+      - name: uem-gateway worker tests
+        run: node --test apps/uem-gateway/worker.test.mjs
 
   dependency-audit:
     name: Dependency audit
@@ -66,6 +71,29 @@ jobs:
         with:
           name: lucidfence-sbom
           path: sbom.cdx.json
+
+  runtime-artifacts:
+    name: No runtime artifacts in PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # data/cloud_state.json lo republica engine-cron en main cada hora (lo
+      # sirve GitHub Pages). Si una rama tambien lo toca, el conflicto de
+      # contenido con main es seguro y bloquea el merge — el mismo deadlock
+      # del issue #74 por otra via.
+      - name: Reject changes to files published by main
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- data/cloud_state.json)
+          if [ -n "$changed" ]; then
+            echo "::error::data/cloud_state.json es un snapshot que publica engine-cron en main." >&2
+            echo "Restauralo en la rama: git checkout origin/$BASE_REF -- data/cloud_state.json" >&2
+            exit 1
+          fi
 
   secret-scan:
     name: Secret scan (gitleaks)

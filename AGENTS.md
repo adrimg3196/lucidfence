@@ -3,10 +3,54 @@
 Apply these rules on every task in this repo. They describe the REAL conventions,
 not the wiki.
 
+## Multi-agent collaboration
+At least three AI agents work this repo concurrently, different LLMs, same human
+owner (Adri). There may be a 4th: commits as `Adrian Martinez <adri@lucidfence.local>`
+doing brand/video/skill-tooling work (OpenMontage, FLUX, "agent-upgrade", daily brief
+generation) at high frequency (multiple commits/hour) — not yet confirmed whether
+that's Adri himself or another automation using his identity. Verify with Adri before
+assuming either way; don't dedupe against it as if it were a known agent.
+- **Zero** (Claude/Anthropic, via OpenClaw) — coordinator role: dedupes competing PRs,
+  runs an independent review gate before merge, drives the nightly/scheduled crons
+  (`jules-scheduler`, `jules-lucidfence-loop`, `lucidfence-nightly-dev*`). Commits as
+  `zero@lucidfence.local` — **verify `git config --local user.email` at the start of
+  every session in this repo**: on 2026-08-02 Zero's local checkout was misconfigured
+  to Hermes' identity (`geofence-uem@local`) and every Zero commit that session was
+  mis-attributed as Hermes, silently breaking the dedup check below.
+- **Jules** (Google) — autonomous sessions per GitHub issue, opens PRs for review.
+  Commits as `google-labs-jules[bot]`.
+- **Hermes** (Nous Research, per Adri 2026-08-01) — commits seen under both `Geofence
+  UEM <geofence-uem@local>` and `Hermes Agent <hermes@local>` (inconsistent, not yet
+  resolved). Task split with the other two still informal: Adri/Zero assign work via
+  `hermes kanban` (board `lucidfence`), no shared queue with Jules.
+
+Before starting work that could overlap, check `git log --all --format='%an %s' -20`
+for recent activity from the other identities — same dedup practice already used
+for the #46/#47 duplicate-PR precedent (see `memory/lucidfence-jules-log.md` in the
+OpenClaw workspace for the full history Zero keeps on this).
+
+**Shared local checkout (`/Users/adri/geofence-uem`) gets hard-reset without
+warning, aggressively enough to discard uncommitted edits AND switch away from a
+branch you just created.** Confirmed 2026-08-02: Zero lost the same uncommitted edit
+twice in a row, the second time already on a dedicated branch. Not a `main`-push
+conflict — `engine-cron` (the 15-min cloud-state publisher) runs entirely on GitHub's
+own runners and never touches this machine, so GitHub branch protection would not
+have prevented this and would break `engine-cron`'s direct push unless explicitly
+exempted (not done, needs Adri's input if pursued). Most likely cause: a local agent
+task-runner (Hermes' kanban dispatcher is the leading suspect, given the timing)
+resets this checkout to a clean `origin/main` before claiming/running a task, with no
+awareness another agent is editing it interactively. **Rule: use `git worktree add
+../geofence-uem-<name> -b <branch>` for any interactive/manual work in this repo —
+don't edit the shared checkout directly, even briefly.** Commit fast is not enough;
+the reset can land mid-edit.
+
 ## Stack & commands
 - Python 3.11, stdlib-first. No web frameworks (HTTP propio en `saas_server.py`).
 - Test: `python3 tests/run_tests.py` (honest runner; 105 pass = green).
 - Cloud vitrina: `python3 -m lucidfence.core.cloud_publisher --cycles 2` → `data/cloud_state.json`.
+  **No commitees ese fichero desde una rama**: lo republica `engine-cron` en main cada hora, así
+  que tu PR conflictaría siempre (el job `runtime-artifacts` de CI lo rechaza). Si lo has tocado:
+  `git checkout origin/main -- data/cloud_state.json`.
 - Local SaaS: `python3 saas_server.py` (`:8765`).
 - Client install: `./install.sh` or `docker compose up -d`.
 

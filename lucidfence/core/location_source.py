@@ -208,14 +208,19 @@ class LiveLocationSource:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _coalesce(a, b):
+        # ponytail: `or` treats 0.0 as falsy; equator/Greenwich coords must survive
+        return a if a is not None else b
+
     # --------------------------------------------------------------- parsing
     @staticmethod
     def _extract_last_location(dev: dict):
         ll = dev.get("lastLocation") or dev.get("last_location") or {}
         # Real shape: lastLocation.agent.{latitude,longitude,date,address}
         agent = ll.get("agent") or ll.get("location") or {}
-        lat = agent.get("latitude") or ll.get("latitude")
-        lng = agent.get("longitude") or ll.get("longitude")
+        lat = LiveLocationSource._coalesce(agent.get("latitude"), ll.get("latitude"))
+        lng = LiveLocationSource._coalesce(agent.get("longitude"), ll.get("longitude"))
         ts = agent.get("date") or ll.get("date") or agent.get("lastReportDate")
         addr = agent.get("address") or ll.get("address")
         if addr and isinstance(addr, dict):
@@ -227,9 +232,9 @@ class LiveLocationSource:
         # still yields a usable position instead of a None (and an "unknown"
         # device that never enters any geofence).
         if lat is None:
-            lat = ll.get("latitude") or ll.get("lat")
+            lat = LiveLocationSource._coalesce(ll.get("latitude"), ll.get("lat"))
         if lng is None:
-            lng = ll.get("longitude") or ll.get("lng")
+            lng = LiveLocationSource._coalesce(ll.get("longitude"), ll.get("lng"))
         if lat is None or lng is None:
             return None
         return {

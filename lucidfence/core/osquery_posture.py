@@ -409,6 +409,15 @@ class OsqueryPostureProvider:
         self._status.update({"hosts": 0, "fresh": 0, "error": None})
         if not self.enabled:
             return
+<<<<<<< HEAD
+        try:
+            current = time.time() if now is None else float(now)
+            if self.mode == "results_log":
+                events = read_result_log(self.results_path)
+                hosts = _latest_tables(
+                    events, now=current, max_age_seconds=self.max_age_seconds
+                )
+=======
 
         # Pre-populate known devices with fail-closed / non-compliant state.
         # This ensures that if the osquery source is corrupt, absent, or stale,
@@ -444,6 +453,7 @@ class OsqueryPostureProvider:
                 )
                 if not hosts:
                     raise ValueError(f"No se encontraron eventos frescos de osquery (todos superan max_age de {self.max_age_seconds}s o están corruptos)")
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)
                 self._index_hosts(hosts)
                 self._status["hosts"] = len(hosts)
                 self._status["fresh"] = len(hosts)

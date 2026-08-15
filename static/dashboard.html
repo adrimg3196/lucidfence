@@ -473,12 +473,25 @@
       <div class="view hidden" id="view-company"></div>
       <div class="view hidden" id="view-roi"></div>
       <div class="view hidden" id="view-settings"></div>
+      <div class="view hidden" id="view-connectors"></div>
       <div class="view hidden" id="view-roadmap"></div>
     </main>
   </div>
 
   <!-- OVERLAY / MODAL / COMMAND PALETTE -->
   <div class="ovl" id="ovl"></div>
+  <div class="modal" id="connWizard" role="dialog" aria-modal="true" aria-labelledby="cwTitle" aria-hidden="true">
+    <div class="mhd">
+      <div class="mav" id="cwAv">+</div>
+      <div style="flex:1;min-width:0">
+        <h2 id="cwTitle">Conectar UEM</h2><div class="msub" id="cwSub">Paso 1 de 3 · elige tu plataforma</div>
+      </div>
+      <button class="xbtn" id="cwClose" aria-label="Cerrar asistente"><span data-reicon="x-square" data-size="16"></span></button>
+    </div>
+    <div class="mbody" id="cwBody"></div>
+    <div class="mft" id="cwFoot"></div>
+  </div>
+
   <div class="modal" id="devModal" role="dialog" aria-modal="true" aria-labelledby="mName" aria-hidden="true">
     <div class="mhd">
       <div class="mav" id="mAv">?</div>

@@ -80,10 +80,12 @@ def sig_shift_match(device, ctx):
 
 @register_signal("device_health")
 def sig_device_health(device, ctx):
+    encryption = device.get("encryption_enabled")
     return {
         "compliant": bool(device.get("compliant")),
         "rooted": bool(device.get("rooted", False)),
-        "encryption": bool(device.get("encryption_enabled", True)),
+        # Unknown posture is not evidence of disabled encryption.
+        "encryption": True if encryption is None else bool(encryption),
         "os_outdated": bool(device.get("os_outdated", False)),
     }
 

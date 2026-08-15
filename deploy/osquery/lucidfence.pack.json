@@ -64,4 +64,8 @@
       "platform": "windows"
     }
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 990d889 (feat(osquery): osquery phase 2 batch ingestion and risk correlation)

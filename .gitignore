@@ -74,3 +74,6 @@ moa/
 # graphify knowledge graph (local tooling, not product)
 graphify-out/
 .graphify_chunk_*.json
+
+# SBOM: artefacto de build, lo genera CI (issue #74)
+sbom.cdx.json

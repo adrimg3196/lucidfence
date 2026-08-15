@@ -1,0 +1,15 @@
+{
+  "titleFontSize": 84,
+  "titleWidth": 1280,
+  "signalLineCount": 14,
+  "scenes": [
+    { "id": "d1", "kind": "video", "startSeconds": 0, "durationSeconds": 6, "src": "dash1_resumen.mp4", "fadeInFrames": 6, "fadeOutFrames": 6 },
+    { "id": "t1", "kind": "title", "startSeconds": 6, "durationSeconds": 3, "text": "Tu flota se mueve.\n¿Tu seguridad también?", "accent": "#7C82FF", "variant": "plate" },
+    { "id": "d2", "kind": "video", "startSeconds": 9, "durationSeconds": 6, "src": "dash2_dispositivos.mp4", "fadeInFrames": 6, "fadeOutFrames": 6 },
+    { "id": "t2", "kind": "title", "startSeconds": 15, "durationSeconds": 3, "text": "Lo que sale de tu zona\nqueda aislado.", "accent": "#49D59C", "variant": "plate" },
+    { "id": "d3", "kind": "video", "startSeconds": 18, "durationSeconds": 6, "src": "dash3_soar.mp4", "fadeInFrames": 6, "fadeOutFrames": 6 },
+    { "id": "t3", "kind": "title", "startSeconds": 24, "durationSeconds": 3, "text": "CVEs en vivo + SOAR\nrespuesta automática.", "accent": "#F0BC5E", "variant": "plate" },
+    { "id": "d4", "kind": "video", "startSeconds": 27, "durationSeconds": 6, "src": "dash4_geovallas.mp4", "fadeInFrames": 6, "fadeOutFrames": 6 },
+    { "id": "end", "kind": "title", "startSeconds": 33, "durationSeconds": 5, "text": "LucidFence", "accent": "#7C82FF", "variant": "plate" }
+  ]
+}
