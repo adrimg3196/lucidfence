@@ -1449,6 +1449,33 @@ class Handler(BaseHTTPRequestHandler):
                 "actions": WF.action_options(),
                 "active": eng.active_workflows(),
             })
+        if route == "/api/policies/replay" and method == "POST":
+            # Simulador what-if: evalúa una policy CANDIDATA contra el trail
+            # histórico del tenant. Solo lectura — jamás ejecuta acciones —
+            # así que basta la capability de lectura de workflows.
+            if not AuthStore.can(user["org_roles"].get(org), "workflow:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            candidate = body.get("policy") if isinstance(body, dict) else None
+            if not isinstance(candidate, dict) or not candidate.get("when"):
+                return _send_json(self, {"error": "policy con 'when' es obligatoria"}, 400)
+            from lucidfence.core.policy_replay import load_trail_points, replay_policy
+            try:
+                limit = min(int(body.get("limit", 5000)), 20000)
+            except (TypeError, ValueError):
+                limit = 5000
+            points = load_trail_points(eng.store.trails_path, limit=limit)
+            states = {d_id: s.to_dict() for d_id, s in eng.store.snapshot().items()}
+            result = replay_policy(
+                candidate, points,
+                fences=eng.fences if body.get("recompute_fences") else None,
+                device_states=states,
+                risk_engine=eng.risk,
+                risk_ctx={"shift_zones": eng._ctx_shift_zones(),
+                          "zone_risk": eng._ctx_zone_risk()},
+            )
+            return _send_json(self, result)
+
         if route == "/api/workflows/apply" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "workflow:write"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
