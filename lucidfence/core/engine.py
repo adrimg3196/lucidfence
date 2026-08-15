@@ -65,12 +65,16 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
-        # Wire the incident lifecycle notifiers (Slack/Teams and/or Atomic Mail)
-        # if configured. Both are tenant-local and never raise.
-        webhook_url = config.get("incident_webhook_url", "") or ""
-        if webhook_url:
-            from lucidfence.core.notifier import IncidentNotifier
-            self.incidents.notifier = IncidentNotifier(webhook_url=webhook_url)
+        # Wire the incident lifecycle notifiers if configured: Slack/Teams
+        # (incident_webhook_url, legacy) plus the multi-channel list
+        # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
+        # tenant-local and never raise; Atomic Mail joins the fan-out below.
+        from lucidfence.core.notifier import IncidentFanoutNotifier, build_incident_notifiers
+        _channels = build_incident_notifiers(config)
+        if len(_channels) == 1:
+            self.incidents.notifier = _channels[0]
+        elif _channels:
+            self.incidents.notifier = IncidentFanoutNotifier(_channels)
         # Atomic Mail Agentic: real email for the SaaS (alerts + incidents +
         # digest). Opt-in per tenant: requires atomicmail config in integration.
         self.mailbox = None
