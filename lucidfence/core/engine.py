@@ -23,6 +23,7 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
+from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
@@ -33,6 +34,7 @@ from lucidfence.core.incidents import IncidentStore
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
+from lucidfence.core.osquery_posture import OsqueryPostureProvider
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -99,8 +101,24 @@ class Engine:
             webhook_url=config.get("uem", {}).get("remediation_webhook_url", ""),
             api_key=config.get("_applivery_api_key", ""),
         )
+        # Multi-UEM: if the tenant registered more than one provider, route
+        # remediation actions to the right adapter by device provider_refs.
+        # The orchestrator reuses the community MDMAdapter contract; when there
+        # is only one (or zero) provider it stays inert and engine falls back
+        # to the single self.adapter below.
+        self.orchestrator = None
+        providers = config.get("providers") or []
+        if len(providers) > 1 or (len(providers) == 1 and providers[0].get("name") != "simulation"):
+            try:
+                from lucidfence.core.multiuem import MultiUEMOrchestrator
+                self.orchestrator = MultiUEMOrchestrator(build_bindings(providers))
+            except Exception:
+                self.orchestrator = None
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
+        # Optional endpoint posture evidence. osquery observes; LucidFence
+        # correlates the evidence with geofences and UEM policy.
+        self.osquery = OsqueryPostureProvider(config.get("osquery"))
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
         # arranque si la red/cache falla. Por defecto solo carga el cache local;
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
@@ -292,6 +310,9 @@ class Engine:
             }
             return self.last_stats
         states_prev = self.store.snapshot()
+        # Refresh once per cycle. A missing/stale log or binary never blocks
+        # geofencing; provider health is exposed in cycle stats.
+        self.osquery.refresh()
         states_cur: dict[str, DeviceState] = {}
         events: list[dict] = []
         # Per-cycle action dedupe + accumulator: reset every cycle so a single
@@ -327,6 +348,13 @@ class Engine:
                     route_state = "off_route" if dev > assigned_route.corridor_m else "on_route"
 
                 prev = states_prev.get(rep.device_id)
+                posture = self.osquery.posture_for(
+                    rep.device_id,
+                    aliases=(
+                        rep.serial_number or "",
+                        str((rep.raw or {}).get("hostname") or ""),
+                    ),
+                )
                 prev_key = (
                     f"{prev.inside_fence}:{prev.fence_state}" if prev else "none:unknown"
                 )
@@ -355,15 +383,16 @@ class Engine:
                     route_deviation_m=route_dev_m,
                     apps=enrich_apps(rep.apps or []),
                     # --- IT inventory fields propagated from the location source ---
-                    os_version=rep.os_version,
-                    model=rep.model,
-                    manufacturer=rep.manufacturer,
-                    serial_number=rep.serial_number,
+                    os_version=posture.get("os_version") or rep.os_version,
+                    model=posture.get("model") or rep.model,
+                    manufacturer=posture.get("manufacturer") or rep.manufacturer,
+                    serial_number=posture.get("serial_number") or rep.serial_number,
                     imei=rep.imei,
-                    battery_level=rep.battery_level,
-                    battery_state=rep.battery_state,
-                    storage_total_gb=rep.storage_total_gb,
-                    storage_free_gb=rep.storage_free_gb,
+                    battery_level=posture.get("battery_level", rep.battery_level),
+                    battery_state=posture.get("battery_state") or rep.battery_state,
+                    storage_total_gb=posture.get("storage_total_gb", rep.storage_total_gb),
+                    storage_free_gb=posture.get("storage_free_gb", rep.storage_free_gb),
+                    encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,
@@ -371,6 +400,11 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    provider_refs=dict(rep.raw.get("provider_refs") or {}),
+                    posture_source=posture.get("posture_source"),
+                    posture_collected_at=posture.get("posture_collected_at"),
+                    osquery_version=posture.get("osquery_version"),
+                    osquery_config_valid=posture.get("osquery_config_valid"),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
@@ -392,6 +426,7 @@ class Engine:
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
                 })
+                risk_device.update(posture)
                 risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 ds.risk_score = risk["risk_score"]
                 ds.risk_severity = risk["severity"]
@@ -520,6 +555,33 @@ class Engine:
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
 
+    def _execute_action(self, dev: Any, action: str, params: dict) -> dict:
+        """Route a remediation command to the right UEM provider.
+
+        Multi-UEM: when an orchestrator is wired and the device carries
+        provider_refs (set by MultiUEMOrchestrator.fetch), dispatch to the
+        provider that supports the action. Falls back to the single
+        self.adapter (legacy single-provider path) otherwise. Never raises.
+        """
+        refs = getattr(dev, "provider_refs", None)
+        if self.orchestrator is not None and isinstance(refs, dict) and refs:
+            # The orchestrator expects a NormalizedDevice-shaped input
+            # (provider + provider_device_id + provider_refs); DeviceState only
+            # keeps provider_refs, so bridge the first ref into those fields.
+            first_provider, first_id = next(iter(refs.items()))
+            bridge = {
+                "provider": first_provider,
+                "provider_device_id": first_id,
+                "provider_refs": refs,
+            }
+            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=self.dry_run)
+            if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
+                return res
+        if self.adapter is not None:
+            return self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        return {"ok": True, "dry_run": True, "simulated": True,
+                "action": action, "device_id": getattr(dev, "device_id", "")}
+
     def _dedupe_action(self, ds: DeviceState, action: str, fence_id, trigger: str,
                        policy_name: str, severity: str, params: dict = None) -> bool:
         """Fire an action once per (device, action) per cycle across all sources.
@@ -546,14 +608,7 @@ class Engine:
             if last and (now - last) < self.action_cooldown_seconds:
                 return False
         bucket.add(key)
-        if self.adapter is not None:
-            res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
-        else:
-            # Modo simulation/dry-run sin adapter UEM real: la acción se registra
-            # igual (es lo que promete el fallback de route_exit) sin ejecutar
-            # nada externo.
-            res = {"ok": True, "dry_run": True, "simulated": True,
-                   "action": action, "device_id": ds.device_id}
+        res = self._execute_action(ds, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = fence_id
         res["trigger"] = trigger
@@ -599,7 +654,7 @@ class Engine:
                     "remaining_seconds": remaining,
                     "error": f"comando {action} en cooldown; reintenta en {remaining}s",
                 }
-        res = self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        res = self._execute_action(dev, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = dev.inside_fence
         res["trigger"] = "operator"
@@ -842,6 +897,7 @@ class Engine:
             "ios_geofence_total": ios_geo_total,
             "ios_geofence_compliant": ios_geo_ok,
             "ios_geofence_noncompliant": max(ios_geo_total - ios_geo_ok, 0),
+            "osquery_posture": self.osquery.status(),
         }
 
     # ---- loop ------------------------------------------------------------

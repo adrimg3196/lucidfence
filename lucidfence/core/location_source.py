@@ -74,6 +74,7 @@ class LocationReport:
     battery_state: Optional[str] = None
     storage_total_gb: Optional[float] = None
     storage_free_gb: Optional[float] = None
+    encryption_enabled: Optional[bool] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -445,4 +446,3 @@ def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fle
     if mode == "live":
         return LiveLocationSource(org_id=org_id, api_key=api_key)
     return SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
-

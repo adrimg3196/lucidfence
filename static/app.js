@@ -221,6 +221,7 @@ const NAV = [
   {id:"map",        label:"Mapa",        icon:"map"},
   {id:"devices",    label:"Dispositivos",icon:"devices"},
   {id:"inventory",  label:"Inventario",  icon:"box"},
+  {id:"connectors", label:"Conectores UEM", icon:"link"},
   {id:"riesgo",     label:"Riesgo",       icon:"shield-alert"},
   {id:"ai",         label:"AI opcional",  icon:"cpu"},
   {id:"events",     label:"Eventos",     icon:"calendar"},
@@ -267,6 +268,7 @@ function goView(id){
   if(id==="map") renderMapView();
   if(id==="devices") renderDevices();
   if(id==="inventory") renderInventory();
+  if(id==="connectors") renderConnectors();
   if(id==="riesgo") renderRisk();
   if(id==="ai") renderAI();
   if(id==="events") renderEvents();
@@ -314,6 +316,7 @@ async function refresh(initial){
     else if(App.view==="map") renderMapView();
     else if(App.view==="devices") renderDevices();
     else if(App.view==="inventory") renderInventory();
+    else if(App.view==="connectors") renderConnectors();
     else if(App.view==="riesgo") renderRisk();
     else if(App.view==="events") renderEvents();
     else if(App.view==="incidents") renderIncidents();
@@ -2070,4 +2073,124 @@ async function renderROI(){
   }catch(e){
     node.innerHTML = `<div class="empty"><div class="t">Error cargando ROI</div><div class="s">${esc(e.message)}</div></div>`;
   }
+}
+
+/* ===================== VISTA: CONECTORES UEM (wizard) ===================== */
+async function renderConnectors(){
+  const node = $("#view-connectors"); if(!node) return;
+  node.innerHTML = `
+    <div class="view-head">
+      <div><h2>Conectores UEM</h2>
+      <div class="sub">Conecta tus plataformas de gestión (MDM/UEM) para unificar inventario, ubicación y acciones de remediación.</div></div>
+      <div class="grow"></div>
+      <button class="btn primary" onclick="openConnWizard()">+ Conectar UEM</button>
+    </div>
+    <div class="card"><div class="bd" id="connList"><div class="empty"><div class="t">Cargando conectores…</div></div></div></div>`;
+  await loadConnectors();
+}
+
+async function loadConnectors(){
+  const list = $("#connList"); if(!list) return;
+  try{
+    const r = await api("/api/providers");
+    const ps = (r && r.providers) || [];
+    if(!ps.length){
+      list.innerHTML = `<div class="empty"><div class="t">Sin conectores</div><div class="s">Usa "Conectar UEM" para añadir Applivery, Intune, Jamf, FleetDM…</div></div>`;
+      return;
+    }
+    list.innerHTML = `<ul class="alist">` + ps.map(p=>`
+      <li>
+        <span>${esc(p.label||p.name)} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
+        <span class="row gap">
+          <button class="btn sm ghost" onclick="removeConn('${esc(p.name)}')">Quitar</button>
+        </span>
+      </li>`).join("") + `</ul>`;
+  }catch(e){
+    list.innerHTML = `<div class="empty"><div class="t">Error</div><div class="s">${esc(e.message)}</div></div>`;
+  }
+}
+
+async function openConnWizard(){
+  let catalog = [];
+  try{ const c = await api("/api/providers/catalog"); catalog = (c&&c.catalog)||[]; }catch(e){}
+  const state = {step:1, name:null, meta:null, fields:{}};
+  const modal = $("#connWizard");
+  const open = ()=>{ modal.classList.add("show"); modal.setAttribute("aria-hidden","false"); };
+  const close = ()=>{ modal.classList.remove("show"); modal.setAttribute("aria-hidden","true"); };
+  $("#cwClose").onclick = close;
+
+  function fieldLabel(f){
+    return {api_key:"API key / token", org_id:"ID de organización", endpoint:"Endpoint (URL base)"}[f] || f;
+  }
+  function render(){
+    const body = $("#cwBody"), foot = $("#cwFoot"), sub = $("#cwSub"), av = $("#cwAv"), title = $("#cwTitle");
+    body.innerHTML = ""; foot.innerHTML = "";
+    if(state.step===1){
+      title.textContent = "Conectar UEM"; sub.textContent = "Paso 1 de 3 · elige tu plataforma";
+      av.textContent = "+";
+      body.innerHTML = `<div class="grid cols-2" style="gap:10px">` + catalog.map(c=>`
+        <button class="btn outline" style="text-align:left;justify-content:flex-start" onclick="cwPick('${esc(c.name)}')">
+          <b>${esc(c.label)}</b></button>`).join("") + `</div>`;
+      const b = el("button","btn primary"); b.textContent="Siguiente"; b.onclick=()=>{
+        if(!state.name){ toast("Elige una plataforma","","bad"); return; }
+        state.step=2; render();
+      };
+      foot.appendChild(b);
+    } else if(state.step===2){
+      sub.textContent = "Paso 2 de 3 · credenciales"; av.textContent = state.meta?state.meta.label[0]:"·";
+      const fields = state.meta?state.meta.fields:[];
+      body.innerHTML = fields.length ? fields.map(f=>`
+        <label class="fld"><span>${fieldLabel(f)}</span>
+          <input id="cw_${f}" type="${f==='api_key'?'password':'text'}" autocomplete="off" placeholder="${fieldLabel(f)}"></label>`).join("")
+        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`;
+      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=1;render();};
+      const next = el("button","btn primary"); next.textContent="Siguiente"; next.onclick=()=>{
+        state.fields = {}; fields.forEach(f=>{ state.fields[f] = $(("#cw_"+f)).value.trim(); });
+        state.step=3; render();
+      };
+      foot.appendChild(back); foot.appendChild(next);
+    } else {
+      sub.textContent = "Paso 3 de 3 · guardar"; av.textContent = "✓";
+      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}</div>
+        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales cifradas en tu tenant)":""}.</div></div>`;
+      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=2;render();};
+      const save = el("button","btn primary"); save.textContent="Guardar conector";
+      save.onclick = async ()=>{
+        save.disabled = true; save.textContent = "Guardando…";
+        try{
+          const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({name:state.name, ...state.fields})});
+          if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
+          else toast("Error", (r.error||"no se pudo guardar"), "bad");
+        }catch(e){ toast("Error", e.message, "bad"); }
+        finally{ save.disabled=false; save.textContent="Guardar conector"; }
+      };
+      foot.appendChild(back); foot.appendChild(window.cwTest()); foot.appendChild(save);
+    }
+  }
+  window.cwTest = ()=>{
+    const b = el("button","btn outline"); b.textContent="Probar conexión";
+    b.onclick = async ()=>{
+      b.disabled = true; b.textContent = "Probando…";
+      try{
+        const r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({name:state.name, ...state.fields})});
+        if(r.ok) toast("Conexión OK", (r.verified==="live"?"verificada en vivo":r.note||""), "ok");
+        else toast("Fallo", (r.error||"no se pudo conectar"), "bad");
+      }catch(e){ toast("Error al probar", e.message, "bad"); }
+      finally{ b.disabled=false; b.textContent="Probar conexión"; }
+    };
+    return b;
+  };
+  render();
+  open();
+}
+
+async function removeConn(name){
+  if(!confirm("¿Quitar el conector "+name+"?")) return;
+  try{
+    const r = await api("/api/providers/"+encodeURIComponent(name),{method:"DELETE"});
+    if(r.ok){ toast("Conector quitado", name, "ok"); await loadConnectors(); }
+    else toast("Error", r.error||"", "bad");
+  }catch(e){ toast("Error", e.message, "bad"); }
 }

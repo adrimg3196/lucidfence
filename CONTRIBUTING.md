@@ -1,15 +1,44 @@
-# Contributing — review process
+# CONTRIBUTING
 
-Quesitos minimos antes de abrir PR o pedir merge:
+Gracias por querer contribuir a LucidFence. Estas notas te ahorran tiempo y evitan trabajo duplicado.
 
-- `python3 tests/run_tests.py` verde.
-- `git diff --stat` acotado al scope del issue/feature.
-- No hay secretos, tokens, cookies ni credenciales; `.env.example` con placeholders.
-- Si toca frontend: probar `http://127.0.0.1:8765/static/dashboard.html` y `cloud.html` en headless o browser real.
-- Si toca seguridad: incluir test o verificación curl de headers/auth.
-- Si toca Docker: `docker compose config` y comentar resultado; si docker no aplica, documentar blocker exacto.
-- PR description debe indicar: issue resuelto, QA ejecutada, screenshots/smoke test si aplica.
+## Cómo contribuir
 
-Para reviews:
-- Revisor debe confirmar checklist y pedir cambios concretos, no genericos.
-- En caso de conflicto: `git checkout --ours` + ajuste manual en el archivo roto, nunca merge ciego.
+1. **Busca primero.** Revisa issues existentes y el README antes de abrir algo nuevo.
+2. **Habla antes de escribir mucho.** Si quieres cambiar algo grande, abre un issue describiendo qué, por qué, y cómo lo piensas hacer. Si no hay issue y es pequeño, directo a PR.
+3. **PRs pequeños, PRs frecuentes.** Un PR que hace una cosa bien es más fácil de revisar que uno que hace cinco.
+4. **Mantén el commit histórico limpio.** Commits atómicos, mensaje que explica el *por qué* en el primer párrafo, el *qué* es el diff.
+5. **Sigue el stack del proyecto.** Python 3.11, stdlib-first. Nothing web frameworks in the engine. El HTTP propio está en `saas_server.py`.
+6. **No hackee el runner de tests.** `tests/run_tests.py` es honesto; un `test_*.py` que hace `raise SystemExit` en el import mata la discovery de todos los siguientes archivos.
+
+## Desarrollo local
+
+```bash
+# 1 — clonar
+git clone https://github.com/<owner>/lucidfence.git
+cd lucidfence
+
+# 2 — correr tests (honestos, 105 = verde)
+python3 tests/run_tests.py
+
+# 3 — servidor local
+python3 saas_server.py          # :8765
+```
+
+Dashboard: `http://localhost:8765` → `static/dashboard.html`.
+
+## Adapter UEM nuevo
+
+TODO: completar la guía de plugin con el contrato de adapter (qué methodos/estructuras espera el engine, cómo se registra, qué data retorna, cómo se verifica). Mientras tanto, mira `lucidfence/core/adapters/` existentes como referencia.
+
+## Releases
+
+Los tags y releases se hacen desde el mantenedor. El README externo declara la versión actual.
+
+## Código de conducta
+
+TODO: agregar el código de conducta del proyecto (Contributor Covenant o equivalente) cuando el proyecto esté listo para recibir contribuciones externas.
+
+## Contacto
+
+TODO: agregar canal de contacto del mantenedor cuando esté listo.

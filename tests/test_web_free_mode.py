@@ -6,7 +6,11 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except Exception as exc:  # playwright ausente en local/CI: los tests E2E hacen skip
+    sync_playwright = None
+    _PLAYWRIGHT_ERROR = exc
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,6 +52,9 @@ console.log(JSON.stringify({health:health.status,healthBody:await health.json(),
 
 
 def test_free_web_app_goal_cycle_and_indexeddb_persistence():
+    if sync_playwright is None:
+        print(f"SKIP test_free_web_app_goal_cycle_and_indexeddb_persistence: Playwright no instalado (pip install playwright && playwright install chromium): {_PLAYWRIGHT_ERROR}")
+        return
     base = os.environ.get("LUCIDFENCE_WEB_URL", "http://127.0.0.1:8765/static/web.html")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -114,6 +121,9 @@ def test_free_web_app_goal_cycle_and_indexeddb_persistence():
 
 
 def test_uem_wizard_credentials_never_reach_indexeddb():
+    if sync_playwright is None:
+        print(f"SKIP test_uem_wizard_credentials_never_reach_indexeddb: Playwright no instalado (pip install playwright && playwright install chromium): {_PLAYWRIGHT_ERROR}")
+        return
     # regresion: uemCredsB64/secCredsB64 son solo base64 (no cifrado) y el propio
     # wizard promete "en memoria, no persistidos" -- si persist() los guarda,
     # cualquiera con acceso al perfil del navegador lee el token en claro.

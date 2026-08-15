@@ -119,3 +119,17 @@ def test_compliance_pdf_export_is_wired_in_dashboard_and_cloud():
     assert "function downloadTenantCompliancePdf" in cloud
     assert "application/pdf" in server
     assert "export_compliance_pdf" in export_mod
+
+
+def test_providers_registry_wires_get_list_and_post_register():
+    """Regression #105: the provider-list handler was declared as POST,
+    so GET /api/providers returned 404 (dashboard providers view broken,
+    e2e smoke red) and the duplicate POST shadowed the real registration
+    handler (POST returned the list instead of registering)."""
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
+    # The client reads the provider list (api() defaults to GET).
+    assert 'api("/api/providers")' in js
+    # The server wires the read route and exactly one registration route.
+    assert server.count('route == "/api/providers" and method == "GET"') == 1
+    assert server.count('route == "/api/providers" and method == "POST"') == 1

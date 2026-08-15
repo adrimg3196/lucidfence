@@ -11,6 +11,13 @@ try:
 except Exception:
     social_pulse = None
 
+# reusa la busqueda social de agent-reach (X via twscrape, Reddit via auth)
+sys.path.insert(0, "/Users/adri/geofence-uem/scripts")
+try:
+    from recon_web import social_pulse
+except Exception:
+    social_pulse = None
+
 QUERIES = [
     "UEM MDM mobile device management",
     "geofencing device compliance",
