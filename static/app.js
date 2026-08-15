@@ -408,8 +408,14 @@ function updateSync(st, before){
   }
   $("#ratePill").textContent = (st&&st.cycle_period_s? Math.round(st.cycle_period_s/60)+" min" : "15 min");
   const mode = st&&st.mode? st.mode : (App.org && App.org.org ? "live":"simulation");
-  $("#modeText").textContent = (st&&st.mode==="simulation")?"demo":(mode||"live");
-  $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":"var(--green)";
+  // El chip de modo dice también en qué fase del rollout está el tenant:
+  // "live · observación" = todo dry-run (nada sale al UEM), "live · enforce"
+  // = las acciones de enforcement.live_actions se ejecutan de verdad.
+  const enfMode = st && st.enforcement && st.enforcement.mode;
+  let modeLabel = (st&&st.mode==="simulation")?"demo":(mode||"live");
+  if(st && st.mode !== "simulation" && enfMode) modeLabel += enfMode==="observe" ? " · observación" : " · enforce";
+  $("#modeText").textContent = modeLabel;
+  $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":(enfMode==="observe"?"var(--amber)":"var(--green)");
   // Banda de datos demo (issue #110): visible solo mientras el backend declara
   // modo simulación; con una organización real desaparecen banda y hueco.
   const demoBanner = document.getElementById("demoBanner");

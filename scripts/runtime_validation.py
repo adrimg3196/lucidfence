@@ -193,6 +193,28 @@ def main() -> int:
         check("riesgo explicable vía /api/risk", s == 200 and rows and rows[0].get("factors") is not None,
               f"{len(rows)} filas, top={rows[0].get('device_id') if rows else None} score={rows[0].get('score') if rows else None}")
 
+        # ============ 3b. Enforcement: rollout seguro por defecto ===========
+        print("\n== Enforcement (observe por defecto, wipe con doble llave) ==")
+        s, st_full, _ = http_req("GET", "/api/status", cookie=cookie)
+        enf = (st_full or {}).get("enforcement") or {}
+        check("status expone enforcement y arranca en observe",
+              s == 200 and enf.get("mode") == "observe" and enf.get("allow_wipe") is False,
+              f"http={s}, enforcement={enf}")
+
+        s, wres, _ = http_req("POST", f"/api/devices/{first_dev}/command",
+                              cookie=cookie, body={"action": "wipe"})
+        check("wipe en observe queda en dry-run (jamás toca el dispositivo)",
+              s == 200 and wres.get("dry_run") is True and not wres.get("blocked"),
+              f"http={s}, dry_run={wres.get('dry_run')}, blocked={wres.get('blocked')}")
+
+        s, cres, _ = http_req("POST", f"/api/devices/{first_dev}/command",
+                              cookie=cookie,
+                              body={"action": "set_compliance",
+                                    "params": {"compliant": False}})
+        check("set_compliance aceptado por la API de comandos",
+              s == 200 and cres.get("ok") is True and cres.get("action") == "set_compliance",
+              f"http={s}, adapter={cres.get('adapter')}, ok={cres.get('ok')}")
+
         # ============ 4. What-if replay vía API =============================
         print("\n== P0.1 Simulador what-if (POST /api/policies/replay) ==")
         s, replay, _ = http_req("POST", "/api/policies/replay", cookie=cookie, body={

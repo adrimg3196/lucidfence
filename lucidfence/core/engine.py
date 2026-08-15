@@ -60,6 +60,24 @@ class Engine:
         self.mode = config.get("mode", "simulation")  # simulation | live
         self.interval = int(config.get("interval_seconds", 900))
         self.dry_run = bool(config.get("dry_run", True))
+        # --- Enforcement (piloto seguro) ---
+        # Rollout progresivo pensado para admins reales: observe (todo dry-run,
+        # solo incidentes) -> enforce con live_actions acotadas (p.ej. message
+        # y lock) -> wipe solo con opt-in doble. `mode` manda sobre el legacy
+        # `dry_run` si ambos están en config.
+        enf = config.get("enforcement") or {}
+        _mode = str(enf.get("mode") or "").strip().lower()
+        if _mode == "observe":
+            self.dry_run = True
+        elif _mode == "enforce":
+            self.dry_run = False
+        _la = enf.get("live_actions")
+        # None = sin lista: en enforce salen en vivo todas las acciones (legacy).
+        self.live_actions = {str(a) for a in _la} if isinstance(_la, (list, tuple, set)) else None
+        # wipe es la única acción irreversible: nunca sale en vivo sin
+        # allow_wipe explícito, y wipe_allowlist puede acotarla a device_ids.
+        self.allow_wipe = bool(enf.get("allow_wipe", False))
+        self.wipe_allowlist = {str(x) for x in (enf.get("wipe_allowlist") or [])}
         # Cooldown (s) for destructive actions (wipe/lock/clear_passcode/reboot)
         # so a standing violation can't re-issue them every cycle/restart.
         self.action_cooldown_seconds = int(config.get("action_cooldown_seconds", 3600))
@@ -580,6 +598,34 @@ class Engine:
         provider that supports the action. Falls back to the single
         self.adapter (legacy single-provider path) otherwise. Never raises.
         """
+        dev_id = getattr(dev, "device_id", "") or (
+            dev.get("device_id", "") if isinstance(dev, dict) else "")
+        # Guardarraíl de wipe: en vivo solo con allow_wipe, y si hay
+        # allowlist, solo para esos device_ids. El resultado bloqueado queda
+        # en el action log (auditable) y, al no ser ok/dry_run/delegated,
+        # no arma el cooldown: habilitar la llave permite reintentar ya.
+        if action == "wipe" and not self.dry_run:
+            if not self.allow_wipe:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev_id, "action": action,
+                    "error": "wipe bloqueado por guardarrail: requiere "
+                             "enforcement.allow_wipe: true en la config del tenant",
+                }
+            if self.wipe_allowlist and dev_id not in self.wipe_allowlist:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev_id, "action": action,
+                    "error": f"wipe bloqueado: {dev_id!r} no está en "
+                             "enforcement.wipe_allowlist",
+                }
+        # Gating por acción: en enforce con live_actions, lo no listado se
+        # ejecuta como dry-run (se registra qué HABRÍA pasado, no pasa).
+        effective_dry = self.dry_run
+        if not effective_dry and self.live_actions is not None and action not in self.live_actions:
+            effective_dry = True
         refs = getattr(dev, "provider_refs", None)
         if self.orchestrator is not None and isinstance(refs, dict) and refs:
             # The orchestrator expects a NormalizedDevice-shaped input
@@ -591,11 +637,11 @@ class Engine:
                 "provider_device_id": first_id,
                 "provider_refs": refs,
             }
-            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=self.dry_run)
+            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=effective_dry)
             if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
                 return res
         if self.adapter is not None:
-            return self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+            return self.adapter.execute(dev, action, params or {}, dry_run=effective_dry)
         return {"ok": True, "dry_run": True, "simulated": True,
                 "action": action, "device_id": getattr(dev, "device_id", "")}
 
@@ -915,6 +961,16 @@ class Engine:
             "ios_geofence_compliant": ios_geo_ok,
             "ios_geofence_noncompliant": max(ios_geo_total - ios_geo_ok, 0),
             "osquery_posture": self.osquery.status(),
+            "enforcement": self.enforcement_status(),
+        }
+
+    def enforcement_status(self) -> dict:
+        """Estado del rollout de enforcement, para status API y dashboard."""
+        return {
+            "mode": "observe" if self.dry_run else "enforce",
+            "live_actions": sorted(self.live_actions) if self.live_actions is not None else "all",
+            "allow_wipe": self.allow_wipe,
+            "wipe_allowlist_size": len(self.wipe_allowlist),
         }
 
     # ---- loop ------------------------------------------------------------
@@ -953,6 +1009,7 @@ class Engine:
             "mode": self.mode,
             "interval_seconds": self.interval,
             "dry_run": self.dry_run,
+            "enforcement": self.enforcement_status(),
             "stats": self.last_stats,
             "fences": [
                 {

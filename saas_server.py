@@ -1710,6 +1710,7 @@ class Handler(BaseHTTPRequestHandler):
             st = core_secrets.status(tdir)
             st["mode"] = eng.config.get("mode")
             st["dry_run"] = eng.config.get("dry_run")
+            st["enforcement"] = eng.enforcement_status()
             st["masked_key"] = core_secrets.mask_key(tdir)
             runtime = _tenant_runtime(tdir)
             st["soar_webhook_hmac_configured"] = bool(runtime.get("soar_webhook_secret")
