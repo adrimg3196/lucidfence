@@ -82,6 +82,9 @@ Si quieres que esto sea **producto open-source que alguien usa sin que tú esté
 - Engine de compliance + política de riesgo: corre local, reporta dispositivos dentro/no-compliant/violaciones.
 - Adapters UEM existentes: Applivery, Intune, Jamf (estado local después de ingest).
 - Dashboard local en `:8765`.
+- Postura opcional con osquery: SO, almacenamiento, cifrado y batería,
+  correlacionados con el riesgo geoespacial. Ver
+  [`docs/integrations/OSQUERY.md`](docs/integrations/OSQUERY.md).
 - Cloud vitrina: `data/cloud_state.json` publicado, leído por `static/cloud.html`.
 - Test runner honesto (105 tests = verde): gates reales, no stubs.
 - Cron de estado local: `geofence_daily_report.sh` genera el resumen sin red.

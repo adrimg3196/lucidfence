@@ -11,6 +11,10 @@ escanea CVE en apps de la flota y ejecuta playbooks SOAR de remediación — con
 local (MoA), email soberano (Atomic Mail) y dominio propio (FreeDomain). $0, sin
 telemetría, sin proveedor de pago.
 
+La postura avanzada es una capa de evidencia opcional: osquery observa el
+endpoint, el Risk Engine correlaciona la evidencia con el contexto geoespacial
+y los adapters UEM mantienen en exclusiva la ejecución de acciones.
+
 **Modelo de negocio (decisión del 2026-07-14):** el producto comercial es una
 *app local que se instalan los clientes* en su propia infra (soberano, $0 para
 el proveedor). La vitrina SaaS serverless en GitHub Pages es la captación
@@ -35,6 +39,7 @@ lucidfence/
 ├── lucidfence/core/                         # engine, policies, state_store, adapters, cve_feed, location_source
 │   ├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
 │   ├── config_loader.py          # carga de config y .env
+│   ├── osquery_posture.py        # evidencia endpoint, sin SQL arbitrario
 │   └── roadmap_tooling.py        # motor del roadmap (GET /api/roadmap)
 ├── static/                       # dashboard.html (SPA local), cloud.html (vitrina), app.js, vendor/
 ├── data/

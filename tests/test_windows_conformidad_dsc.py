@@ -85,6 +85,25 @@ class TestWindowsConformidadDSC(unittest.TestCase):
         self.assertIn("Enabled = true;", mof)
         self.assertIn('ModuleName = "LucidFenceDSC";', mof)
 
+    def test_classic_dsc_quoting_escapes(self):
+        """Verify that double quotes inside name or description are escaped in generated documents."""
+        policy_with_quotes = Policy(
+            id="pol-quotes",
+            name='My "Special" Geofence',
+            description='This geofence "enforces" lock-on-exit state.',
+            severity="medium",
+            enabled=True,
+            when=[],
+            actions=[]
+        )
+        ps1 = generate_classic_dsc_ps1(policy_with_quotes)
+        self.assertIn('Name = "My `\"Special`\" Geofence"', ps1)
+        self.assertIn('Description = "This geofence `\"enforces`\" lock-on-exit state."', ps1)
+
+        mof = generate_classic_dsc_mof(policy_with_quotes)
+        self.assertIn('Name = "My \\"Special\\" Geofence";', mof)
+        self.assertIn('Description = "This geofence \\"enforces\\" lock-on-exit state.";', mof)
+
     def test_idempotency_test_set_semantics(self):
         """Verify Test/Set semantics for checking unchanged policies."""
         # Current state perfectly matches desired state

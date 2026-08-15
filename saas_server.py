@@ -80,6 +80,7 @@ from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
 from lucidfence.core.compliance_controls import map_controls
 from lucidfence.core.cluster import ClusterLease
 from lucidfence.core.autonomous_company import CompanyControlPlane
+from lucidfence.core.poi import POIService
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
@@ -100,6 +101,16 @@ MAX_REQUEST_BODY = 1024 * 1024
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
 _tenants = TenantStore(DATA_ROOT)
 _auth = AuthStore(DATA_ROOT)
+
+# POIs: seed público read-only (data/pois.json), opcional. Fail-soft si falta
+# o está corrupto — el resto del servidor no depende de él.
+_poi_service = POIService()
+try:
+    _pois_seed = TEMPLATE_DATA / "pois.json"
+    if _pois_seed.exists():
+        _poi_service.load_from_json(_pois_seed)
+except Exception:
+    pass
 def _load_oidc_providers() -> dict[str, OIDCProvider]:
     """Load deployment-only OIDC configuration; never values from requests."""
     providers: dict[str, OIDCProvider] = {}
@@ -1475,6 +1486,27 @@ class Handler(BaseHTTPRequestHandler):
                 states = [s for s in states if s.fence_state == st]
             return _send_json(self, [s.to_dict() for s in states])
 
+        if route == "/api/pois" and method == "GET":
+            lat = qs.get("lat", [None])[0]
+            lng = qs.get("lng", [None])[0]
+            if lat is not None and lng is not None:
+                try:
+                    lat_f, lng_f = float(lat), float(lng)
+                    radius_m = float(qs.get("radius_m", ["1000"])[0])
+                    limit = min(int(qs.get("limit", ["5"])[0]), 100)
+                except (TypeError, ValueError):
+                    return _send_json(self, {"error": "lat/lng/radius_m/limit inválidos"}, 400)
+                nearby = _poi_service.search_nearby(lat_f, lng_f, radius_m, limit=limit)
+                return _send_json(self, [dict(p.to_dict(), distance_m=round(d, 1))
+                                         for p, d in nearby])
+            return _send_json(self, [p.to_dict() for p in _poi_service.all()])
+
+        if route.startswith("/api/pois/") and method == "GET":
+            poi = _poi_service.get_poi(route[len("/api/pois/"):])
+            if poi is None:
+                return _send_json(self, {"error": "POI no encontrado"}, 404)
+            return _send_json(self, poi.to_dict())
+
         if route == "/api/org" and method == "GET":
             o = _tenants.get(org)
             return _send_json(self, {"org": o.to_dict(), "plan": FREE_PLAN,
@@ -1671,7 +1703,7 @@ class Handler(BaseHTTPRequestHandler):
             result = adapter.test_connection()
             result["provider"] = name
             return _send_json(self, result)
-        if route == "/api/providers" and method == "POST":
+        if route == "/api/providers" and method == "GET":
             tdir = _tenants.data_dir(org)
             return _send_json(self, {
                 "providers": [_masked_provider(p) for p in _list_providers(tdir)],
