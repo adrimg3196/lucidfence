@@ -6,6 +6,19 @@ file documents the improvement loop used to maintain it, adapting the
 
 ## Active loops
 
+### Admin-value (L2 — asistido, cadencia semanal)
+- **Patrón completo:** `docs/internal/loop-admin-value.md`.
+- **Objetivo:** empujar el producto a "imprescindible para el admin IT"
+  (onboarding sin fricción, rollout seguro, claims siempre validados).
+- **Trigger:** Routine semanal (lunes 05:00 UTC) que lanza una sesión nueva;
+  también ejecutable a mano pidiendo "ejecuta un ciclo del loop admin-value".
+- **Gate:** hasta 1 PR por run, merge solo con el gate QA del repo (CI verde
+  + runtime battery + `VEREDICTO QA: APTO`); la lista de gates humanos de
+  `loop-constraints.md` sigue intacta. Esta excepción al "no auto-merge" de
+  abajo la mandató el propietario (sesiones 2026-08-15) y aplica SOLO a este
+  loop.
+- **Estado/memoria:** sección "Loop admin-value" de `STATE.md` + run-log.
+
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.
 - **Maker:** contributor (or maintainer) proposes the change.
