@@ -34,6 +34,7 @@ from lucidfence.core.incidents import IncidentStore
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
+from lucidfence.core.osquery_posture import OsqueryPostureProvider
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -115,6 +116,9 @@ class Engine:
                 self.orchestrator = None
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
+        # Optional endpoint posture evidence. osquery observes; LucidFence
+        # correlates the evidence with geofences and UEM policy.
+        self.osquery = OsqueryPostureProvider(config.get("osquery"))
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
         # arranque si la red/cache falla. Por defecto solo carga el cache local;
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
@@ -306,6 +310,9 @@ class Engine:
             }
             return self.last_stats
         states_prev = self.store.snapshot()
+        # Refresh once per cycle. A missing/stale log or binary never blocks
+        # geofencing; provider health is exposed in cycle stats.
+        self.osquery.refresh()
         states_cur: dict[str, DeviceState] = {}
         events: list[dict] = []
         # Per-cycle action dedupe + accumulator: reset every cycle so a single
@@ -341,6 +348,13 @@ class Engine:
                     route_state = "off_route" if dev > assigned_route.corridor_m else "on_route"
 
                 prev = states_prev.get(rep.device_id)
+                posture = self.osquery.posture_for(
+                    rep.device_id,
+                    aliases=(
+                        rep.serial_number or "",
+                        str((rep.raw or {}).get("hostname") or ""),
+                    ),
+                )
                 prev_key = (
                     f"{prev.inside_fence}:{prev.fence_state}" if prev else "none:unknown"
                 )
@@ -369,15 +383,16 @@ class Engine:
                     route_deviation_m=route_dev_m,
                     apps=enrich_apps(rep.apps or []),
                     # --- IT inventory fields propagated from the location source ---
-                    os_version=rep.os_version,
-                    model=rep.model,
-                    manufacturer=rep.manufacturer,
-                    serial_number=rep.serial_number,
+                    os_version=posture.get("os_version") or rep.os_version,
+                    model=posture.get("model") or rep.model,
+                    manufacturer=posture.get("manufacturer") or rep.manufacturer,
+                    serial_number=posture.get("serial_number") or rep.serial_number,
                     imei=rep.imei,
-                    battery_level=rep.battery_level,
-                    battery_state=rep.battery_state,
-                    storage_total_gb=rep.storage_total_gb,
-                    storage_free_gb=rep.storage_free_gb,
+                    battery_level=posture.get("battery_level", rep.battery_level),
+                    battery_state=posture.get("battery_state") or rep.battery_state,
+                    storage_total_gb=posture.get("storage_total_gb", rep.storage_total_gb),
+                    storage_free_gb=posture.get("storage_free_gb", rep.storage_free_gb),
+                    encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,
@@ -386,6 +401,10 @@ class Engine:
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
                     provider_refs=dict(rep.raw.get("provider_refs") or {}),
+                    posture_source=posture.get("posture_source"),
+                    posture_collected_at=posture.get("posture_collected_at"),
+                    osquery_version=posture.get("osquery_version"),
+                    osquery_config_valid=posture.get("osquery_config_valid"),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
@@ -407,6 +426,7 @@ class Engine:
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
                 })
+                risk_device.update(posture)
                 risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 ds.risk_score = risk["risk_score"]
                 ds.risk_severity = risk["severity"]
@@ -877,6 +897,7 @@ class Engine:
             "ios_geofence_total": ios_geo_total,
             "ios_geofence_compliant": ios_geo_ok,
             "ios_geofence_noncompliant": max(ios_geo_total - ios_geo_ok, 0),
+            "osquery_posture": self.osquery.status(),
         }
 
     # ---- loop ------------------------------------------------------------

@@ -35,6 +35,12 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/health-monitor.md`](operations/health-monitor.md) | Monitor de salud |
 | [`operations/self-service-sla-2026-07-14.md`](operations/self-service-sla-2026-07-14.md) | SLA de self-service |
 
+## Integraciones
+
+| Documento | Contenido |
+| --- | --- |
+| [`integrations/OSQUERY.md`](integrations/OSQUERY.md) | Postura local y multiplataforma con osquery |
+
 ## Roadmap
 
 `roadmap/` contiene el roadmap anual, el trimestral y el del tooling del loop.
