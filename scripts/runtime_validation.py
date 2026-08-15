@@ -301,12 +301,20 @@ def main() -> int:
         cli = subprocess.run([sys.executable, str(REPO / "lucidfence" / "cli.py"), "adapter", "new", "validaqa"],
                              cwd=fake, text=True, capture_output=True, timeout=60)
         gen_ok = cli.returncode == 0 and (fake / "lucidfence" / "core" / "adapters" / "validaqa.py").is_file()
-        pytest_run = subprocess.run([sys.executable, "-m", "pytest", "tests/test_adapter_validaqa.py", "-q"],
-                                    cwd=fake, text=True, capture_output=True, timeout=120,
-                                    env=dict(os.environ, PYTHONPATH=str(fake)))
+        # Mini-runner stdlib (el repo es stdlib-first: sin depender de pytest).
+        runner = (
+            f"import sys; sys.path.insert(0, {str(fake)!r}); "
+            f"import importlib.util as u; "
+            f"spec = u.spec_from_file_location('t', {str(fake / 'tests' / 'test_adapter_validaqa.py')!r}); "
+            "m = u.module_from_spec(spec); spec.loader.exec_module(m); "
+            "fns = [getattr(m, n) for n in dir(m) if n.startswith('test_')]; "
+            "[f() for f in fns]; print(f'{len(fns)} checks OK')"
+        )
+        test_run = subprocess.run([sys.executable, "-c", runner], cwd=fake,
+                                  text=True, capture_output=True, timeout=120)
         check("CLI genera adapter y su contract test pasa",
-              gen_ok and pytest_run.returncode == 0 and "4 passed" in pytest_run.stdout,
-              f"cli_rc={cli.returncode}, pytest={pytest_run.stdout.strip().splitlines()[-1] if pytest_run.stdout else pytest_run.stderr[-120:]}")
+              gen_ok and test_run.returncode == 0 and "4 checks OK" in test_run.stdout,
+              f"cli_rc={cli.returncode}, tests={test_run.stdout.strip() or test_run.stderr[-120:]}")
 
         # ============ 10. CLI lifecycle: start -> status -> stop =============
         print("\n== CLI (claim de la landing: arranque local en un comando) ==")
