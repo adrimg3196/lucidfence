@@ -268,6 +268,25 @@ def cmd_validate_config(args) -> int:
     return validate_main(["--config", args.config] + (["--json"] if args.json else []))
 
 
+def cmd_adapter_new(args) -> int:
+    from lucidfence.core.adapter_scaffold import scaffold_adapter
+    # El scaffolding es un flujo de contribuidor: opera sobre el checkout
+    # actual si lo hay; si no, sobre el árbol del paquete instalado.
+    cwd = Path.cwd()
+    root = cwd if (cwd / "lucidfence" / "core" / "adapters").is_dir() else ROOT
+    result = scaffold_adapter(args.name, root)
+    if not result.get("ok"):
+        print(f"ERROR: {result.get('error')}", file=sys.stderr)
+        return 2
+    print(f"Adapter '{args.name}' generado ({result['class_name']}):")
+    print(f"  {result['adapter_path']}")
+    print(f"  {result['test_path']}")
+    print("\nSiguientes pasos:")
+    for step in result["next_steps"]:
+        print(f"  {step}")
+    return 0
+
+
 def cmd_mcp(_args) -> int:
     server = Path(__file__).resolve().parent / "mcp" / "lucidfence_mcp.py"
     if not server.is_file():
@@ -346,6 +365,13 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--config", default="config.json", help="ruta a config.json")
     validate.add_argument("--json", action="store_true", help="salida estructurada")
     validate.set_defaults(func=cmd_validate_config)
+
+    adapter = sub.add_parser("adapter", help="herramientas del SDK de adapters MDM")
+    adapter_sub = adapter.add_subparsers(dest="adapter_command", required=True)
+    adapter_new = adapter_sub.add_parser(
+        "new", help="genera el esqueleto de un adapter MDM nuevo + su contract test")
+    adapter_new.add_argument("name", help="identificador del MDM (minúsculas, p.ej. mosyle)")
+    adapter_new.set_defaults(func=cmd_adapter_new)
 
     mcp = sub.add_parser("mcp", help="ejecuta el MCP local read-only por stdio")
     mcp.set_defaults(func=cmd_mcp)
