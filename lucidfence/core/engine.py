@@ -35,6 +35,7 @@ from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 from lucidfence.core.osquery_posture import OsqueryPostureProvider
+from lucidfence.core.location_integrity import assess as assess_location_integrity
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -352,6 +353,16 @@ class Engine:
                     route_state = "off_route" if dev > assigned_route.corridor_m else "on_route"
 
                 prev = states_prev.get(rep.device_id)
+                # Anti-spoofing: verosimilitud del report contra el último
+                # estado persistido (velocidad imposible, flip de país sin
+                # movimiento, accuracy anómala). No descarta el report: deja
+                # evidencia explicable y alimenta el Risk Engine.
+                integrity = assess_location_integrity(
+                    {"lat": rep.lat, "lng": rep.lng, "accuracy_m": rep.accuracy_m,
+                     "country": rep.country, "location_source": rep.location_source,
+                     "last_seen": rep.last_seen},
+                    prev.to_dict() if prev else None,
+                )
                 posture = self.osquery.posture_for(
                     rep.device_id,
                     aliases=(
@@ -404,6 +415,7 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    location_integrity=integrity,
                     provider_refs=dict(rep.raw.get("provider_refs") or {}),
                     posture_source=posture.get("posture_source"),
                     posture_collected_at=posture.get("posture_collected_at"),
@@ -431,6 +443,7 @@ class Engine:
                     "route_deviation_m": route_dev_m,
                 })
                 risk_device.update(posture)
+                risk_device["location_integrity"] = integrity
                 risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 ds.risk_score = risk["risk_score"]
                 ds.risk_severity = risk["severity"]

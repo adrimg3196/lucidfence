@@ -121,6 +121,20 @@ def sig_device_posture(device, ctx):
     }
 
 
+@register_signal("location_integrity")
+def sig_location_integrity(device, ctx):
+    """Anti-spoofing: verosimilitud del report de ubicación (ver
+    location_integrity.py). El engine calcula los checks contra el último
+    estado persistido y los adjunta al device; aquí solo se exponen como
+    señal explicable para el score."""
+    li = device.get("location_integrity") or {}
+    return {
+        "suspicious": bool(li.get("suspicious")),
+        "checks": list(li.get("checks") or []),
+        "speed_kmh": li.get("speed_kmh"),
+    }
+
+
 @register_signal("zone_risk")
 def sig_zone_risk(device, ctx):
     """Riesgo de la zona desde ctx['zone_risk'] (dataset externo opcional)."""
@@ -260,6 +274,23 @@ class RiskEngine:
             score += 15; reasons.append("almacenamiento sin cifrar")
         if posture.get("osquery_config_invalid"):
             score += 8; reasons.append("configuración de osquery no válida")
+
+        # Anti-spoofing: un report inverosímil convierte el "dónde" en no
+        # confiable — y todo lo demás (geocerca, ruta, turno) cuelga del dónde.
+        li_checks = signals.get("location_integrity", {}).get("checks") or []
+        if "impossible_speed" in li_checks:
+            kmh = signals.get("location_integrity", {}).get("speed_kmh") or 0
+            score += 30
+            reasons.append(f"velocidad imposible entre reportes ({int(kmh)} km/h): posible spoofing de ubicación")
+        if "country_flip_without_movement" in li_checks:
+            score += 15
+            reasons.append("país declarado cambió sin movimiento acorde: metadatos de ubicación incoherentes")
+        if "accuracy_invalid" in li_checks:
+            score += 8
+            reasons.append("precisión GPS inválida (accuracy ≤ 0): report no fiable")
+        if "accuracy_too_perfect" in li_checks:
+            score += 8
+            reasons.append("precisión imposible para geolocalización por IP: campo falseado")
 
         if signals.get("time_of_day", {}).get("off_hours"):
             score += 10; reasons.append("fuera de horario laboral")

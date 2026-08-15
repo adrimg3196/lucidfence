@@ -61,6 +61,8 @@ class DeviceState:
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
+    # --- integridad de ubicación (anti-spoofing, ver location_integrity.py) ---
+    location_integrity: Optional[dict] = None  # {"suspicious", "checks", "speed_kmh", ...}
     # --- endpoint posture evidence (osquery) ---
     posture_source: Optional[str] = None       # e.g. osquery
     posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
