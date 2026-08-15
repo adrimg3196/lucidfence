@@ -4,7 +4,29 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-15
+
 ### Added
+
+- feat(alertas): webhooks multi-canal de incidentes — genérico con firma HMAC-SHA256 verificable en el receptor y canal ntfy, con fan-out (#120)
+- feat(risk): detección de spoofing de ubicación con señales explicables — velocidad imposible, flip de país sin movimiento, accuracy anómala (#121, endurecido en #127)
+- feat(policies): simulador what-if — `POST /api/policies/replay` evalúa una policy candidata contra el histórico de trails sin ejecutar acciones (#122)
+- feat(sdk): `lucidfence adapter new <nombre>` genera un adapter MDM + contract test listos para contribuir (#123)
+- feat(compliance): `GET /api/evidence/export` — informe por periodo con cadena de hashes verificable offline y registro en la auditoría del tenant (#124)
+- feat(mcp): tool `lucidfence_explain_risk` — score, razones, señales y políticas de un dispositivo (#125, fix de parsing en #127)
+- feat(posture): integración osquery en el ciclo del engine + señales al Risk Engine (#116)
+- feat(poi): servicio de Points of Interest con API y tool MCP (#55)
+- feat(ci): gate `runtime-validation` — 25 claims ejecutados en vivo en cada PR (#129) y workflow `release.yml` para publicar releases con asset y smoke del artefacto
+- feat(pages): publicación continua de la superficie estática en GitHub Pages con guardarraíl de integridad (#128)
+
+### Changed
+
+- feat(ui): rediseño de landing/vitrina con pase de diseño anti-slop; accesibilidad (focus-visible, reduced-motion) y CTA de descarga en primer viewport (#126, #119)
+- fix(security): pin de `cryptography` alineado con la lock + guardarraíl anti-divergencia (#117); testimonios y métricas sin fuente retirados de la vitrina (#119)
+- fix(windows-dsc): escapado de comillas en documentos DSC (#114); state store robusto ante registros corruptos (#103); coordenadas 0.0 sobreviven (#100)
+- chore(sbom): `sbom.cdx.json` deja de versionarse; lo genera CI (#115)
+
+### Added (previo, sin release)
 
 - feat(ddm): enforcement declarativo Apple DDM para policies de geocerca (`lucidfence/core/ddm.py`, acción `apply_ddm` en el adapter Jamf) — issue #40
 - feat(ddm): canal DDM de Jamf Pro — `ddm_status` (readback de `GET /v1/ddm/{clientManagementId}/status-items`) y `ddm_sync` (`POST /v1/ddm/{clientManagementId}/sync`), endpoints verificados contra el OpenAPI oficial v11.30; subir declarations propias sigue siendo hueco declarado porque Jamf no publica endpoint — issue #52
