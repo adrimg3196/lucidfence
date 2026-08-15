@@ -84,7 +84,12 @@ def assess(current: dict, previous: Optional[dict], now: Optional[datetime] = No
             distance_km = haversine_m(prev, cur) / 1000.0
             prev_ts = _parse_ts((previous or {}).get("last_report_ts")
                                 or (previous or {}).get("last_seen"))
-            now_ts = now or _parse_ts(current.get("last_seen")) or datetime.now(timezone.utc)
+            # El reloj de observación es SIEMPRE el nuestro, nunca el
+            # last_seen del report: (1) prev.last_report_ts se grabó con
+            # nuestro reloj, y mezclar relojes daba dt <= 0 y silenciaba el
+            # check en producción; (2) last_seen lo controla el dispositivo,
+            # y un spoofer podría inflarlo para diluir la velocidad.
+            now_ts = now or datetime.now(timezone.utc)
             if prev_ts is not None and distance_km >= MIN_DISTANCE_KM:
                 dt_h = (now_ts - prev_ts).total_seconds() / 3600.0
                 if dt_h > 0:

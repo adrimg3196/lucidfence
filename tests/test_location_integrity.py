@@ -79,6 +79,23 @@ def test_accuracy_anomalies() -> None:
     assert assess({"lat": 1, "lng": 1, "accuracy_m": 10, "location_source": "gps"}, None)["checks"] == []
 
 
+def test_engine_like_call_without_now_uses_observation_clock() -> None:
+    # Regresión del hallazgo de validación runtime: el engine no pasa `now`,
+    # y el last_seen del report (reloj del dispositivo, redondeado o
+    # manipulable) podía quedar ANTES del last_report_ts previo → dt <= 0 y
+    # el teletransporte pasaba en silencio. El reloj de observación debe ser
+    # el nuestro: sin `now`, assess usa datetime.now(utc), no last_seen.
+    prev_ts = datetime.now(timezone.utc).timestamp() - 15 * 60
+    prev = {"lat": MADRID["lat"], "lng": MADRID["lng"], "country": "es",
+            "last_report_ts": datetime.fromtimestamp(prev_ts, tz=timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%SZ")}
+    stale_seen = datetime.fromtimestamp(prev_ts - 3600, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    result = assess(dict(BUENOS_AIRES, country="ar", location_source="gps",
+                         last_seen=stale_seen), prev)
+    assert "impossible_speed" in result["checks"]
+    assert result["speed_kmh"] > 1000
+
+
 def test_first_cycle_and_missing_data_are_clean() -> None:
     assert assess(dict(MADRID), None)["suspicious"] is False
     assert assess({}, _prev(**MADRID))["suspicious"] is False
