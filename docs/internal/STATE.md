@@ -28,6 +28,23 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 6. **Windows geofencing lógico** — DSC ya existe; falta ubicación por red
    (osquery/IP) documentada y correlacionada como en Fleet.
 
+### Derivado del loop Roadmap (2026-08-16, pasada ciclo 1)
+
+Empujado desde `docs/roadmap/PRODUCT_ROADMAP.md` §Próximo (el loop Roadmap
+prioriza; Admin-value ejecuta):
+
+7. **Corregir la tabla "No está terminado" del README** — desinforma en
+   superficie pública: marca como *No existe/Parcial/faltan* 4 cosas ya
+   entregadas (Release v1.5.0, `docs/contributing/new-adapter-guide.md`,
+   `CONTRIBUTING.md`, `SECURITY.md`). p1 · esfuerzo small.
+8. **Declarar pricing / modelo de negocio** — qué es OSS puro, qué sería
+   enterprise (si acaso). Único gap de producto genuinamente abierto del
+   README. p1 · esfuerzo small.
+
+> Nota: el #1 del roadmap (verificar los 8 hallazgos Strix `open` de
+> `security/findings.md`) es **p0 pero dueño del Centinela**, no de Admin-value;
+> queda en su cola (jueves 22:07 UTC), no aquí.
+
 ### Watch list
 
 - Cadencia de release: que formulas (repo+tap) no vuelvan a quedarse atrás —
