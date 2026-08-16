@@ -125,6 +125,10 @@ contrato escrito. Léelo antes de tocar nada estructural:
   (incl. auto-merge total en verde y el estilo de reporting).
 - **`docs/internal/loop-constraints.md`** — la denylist absoluta y el único
   gate humano que queda (outreach a terceros).
+- **`docs/internal/agency/ORG.md`** — el organigrama: cada loop es un
+  departamento que delega decisiones de dominio en el bench de especialistas de
+  `.claude/agents/` (subagentes nativos, taxonomía de agency-agents adaptada al
+  repo). Los agentes deciden; el humano solo aprueba outreach.
 - Cada cambio a `main` auto-mergea si `verify.py` + CI están verdes; nadie es
   el merger por defecto. El propietario solo recibe el digest semanal del
   loop Dirección y aprueba outreach.
