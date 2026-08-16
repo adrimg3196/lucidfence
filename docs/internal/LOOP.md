@@ -10,14 +10,61 @@ file documents the improvement loop used to maintain it, adapting the
 - **Patrón completo:** `docs/internal/loop-admin-value.md`.
 - **Objetivo:** empujar el producto a "imprescindible para el admin IT"
   (onboarding sin fricción, rollout seguro, claims siempre validados).
-- **Trigger:** Routine semanal (lunes 05:00 UTC) que lanza una sesión nueva;
-  también ejecutable a mano pidiendo "ejecuta un ciclo del loop admin-value".
+- **Trigger:** Routine semanal (sábados 00:07 UTC ≈ 02:07 Madrid) que lanza
+  una sesión nueva; también ejecutable a mano pidiendo "ejecuta un ciclo del
+  loop admin-value".
+- **Rama:** `claude/admin-value-loop` (propiedad exclusiva; ver Coordinación).
 - **Gate:** hasta 1 PR por run, merge solo con el gate QA del repo (CI verde
   + runtime battery + `VEREDICTO QA: APTO`); la lista de gates humanos de
   `loop-constraints.md` sigue intacta. Esta excepción al "no auto-merge" de
   abajo la mandató el propietario (sesiones 2026-08-15) y aplica SOLO a este
   loop.
 - **Estado/memoria:** sección "Loop admin-value" de `STATE.md` + run-log.
+
+### Housekeeper (L2 — limpieza diaria, PRs human-merged)
+- **Especificación completa:** `docs/internal/housekeeper/README.md`.
+- **Objetivo:** un cleanup de housekeeping probado por día (código muerto,
+  ficheros/comentarios rancios, duplicación…), con lo incierto diferido y
+  listado, nunca borrado.
+- **Trigger:** Routine diaria (23:13 UTC ≈ 01:13 Madrid; NO corre la noche
+  del viernes — ver Coordinación); también ejecutable a mano.
+- **Rama:** `claude/housekeeper` (propiedad exclusiva).
+- **Gate:** máx. 1 PR nueva/día, con la evidencia de bajo riesgo en el
+  cuerpo; las PRs del Housekeeper las mergea SIEMPRE el propietario
+  (WIP=1: con una abierta, el run del día es solo-refresco).
+- **Estado/memoria:** `docs/internal/housekeeper/` (cards, deferred,
+  metrics) + dashboard + línea en el run-log común.
+
+## Coordinación entre loops (contrato de la casa)
+
+Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
+autónomos no se pisen como no se pisarían dos ingenieros seniors.
+
+1. **Propiedad de ramas.** Cada loop trabaja SOLO en su rama dedicada
+   (`claude/admin-value-loop`, `claude/housekeeper`). Prohibido recrear o
+   force-pushear la rama de otro loop o la de una sesión interactiva: un
+   force-push ajeno muta la PR abierta de su dueño.
+2. **Calendario sin solape.** Housekeeper: diario 23:13 UTC excepto la noche
+   del viernes (su slot precede en <1 h al run semanal del Admin-value,
+   sábado 00:07 UTC; esa noche el repo queda para el loop de producto).
+   Cambiar una cadencia obliga a revisar esta regla.
+3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
+   es mejora de producto (no limpieza), lo anota como candidato en la
+   sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
+   Admin-value encuentra deuda de limpieza pura, la añade a
+   `docs/internal/housekeeper/deferred-candidates.md` con su evidencia y NO
+   la limpia en su PR. Cada hallazgo viaja a la cola del loop dueño.
+4. **Prioridad en conflicto.** Si ambos loops quieren tocar el mismo fichero
+   la misma semana, el Admin-value (producto) tiene prioridad; el
+   Housekeeper difiere su candidato con una nota. Un rebase trivial no es
+   conflicto.
+5. **Registro común.** Ambos loops añaden una línea por run a
+   `docs/internal/loop-run-log.md` (formato existente), además de su memoria
+   propia. El run-log es la cronología única de lo que las máquinas hicieron
+   al repo.
+6. **Merges.** Admin-value mergea con el gate QA completo (su excepción
+   documentada arriba); Housekeeper nunca mergea. Los gates humanos de
+   `loop-constraints.md` aplican a los dos sin excepción.
 
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.
