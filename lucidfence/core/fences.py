@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from lucidfence.core.geo import Point, haversine_m, point_in_polygon
+from lucidfence.core.geo import (
+    Point, haversine_m, point_in_polygon, valid_coord, point_from,
+)
 
 
 @dataclass
@@ -32,10 +34,7 @@ class Fence:
     @staticmethod
     def from_raw(raw: dict) -> "Fence":
         c = raw.get("center")
-        coords = [
-            Point(lat=float(p["lat"]), lng=float(p["lng"]))
-            for p in raw.get("coordinates", [])
-        ]
+        coords = [point_from(p) for p in raw.get("coordinates", [])]
         actions = [
             ActionSpec(
                 action=a.get("action", "message"),
@@ -49,8 +48,8 @@ class Fence:
             id=raw["id"],
             name=raw["name"],
             type=raw.get("type", "circle"),
-            center=Point(lat=float(c["lat"]), lng=float(c["lng"])) if c else None,
-            radius_m=float(raw.get("radius_m", 0)),
+            center=point_from(c) if c else None,
+            radius_m=valid_coord(raw.get("radius_m", 0), 0.0, float("inf"), "radius_m"),
             coordinates=coords,
             rules=raw.get("rules", {}) or {},
             actions=actions,

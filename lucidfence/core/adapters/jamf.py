@@ -24,6 +24,7 @@ import logging
 import os
 import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -369,7 +370,7 @@ class JamfAdapter(MDMAdapter):
                 f"action {action!r} not in {list(JAMF_VERB)}",
             )
         verb = JAMF_VERB[action]
-        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=device_id)}"
+        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=quote(str(device_id), safe=''))}"
         body: dict = {"commandData": {"commandType": verb}}
         if action == "message":
             body["clientData"] = []
