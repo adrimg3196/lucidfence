@@ -67,15 +67,15 @@ Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 |------|--------|-----------|
 | **README público / onboarding de terceros** | Estado inicial — README externo + alineación de licencia | README de usuario externo (npm-style): qué necesita, cómo instala, como chequea que funciona, FAQ mínima, cómo reporta bugs. Este README es interno. |
 | **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza cambios a cloud_state.json en PR), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
-| **Publicación de release tags / versiones** | Tags existen, Releases en GitHub faltan | Existen tags git (`v1.0.0` → `v1.4.0`) pero no hay GitHub Releases con description y assets. Ver CHANGELOG.md y `git tag --list`. |
+| **Publicación de release tags / versiones** | Completo — GitHub Releases publicadas | v1.5.0 publicada como GitHub Release con description y asset; `release.yml` construye, instala y arranca el artefacto antes de publicar. Ver CHANGELOG.md y la pestaña Releases. |
 | **Docker / compose para terceros documentado** | Completo — docker-compose.yml + Dockerfile existen | `docker compose up -d` corre LucidFence always-on en localhost:8765. Perfil `internet-facing` levanta Caddy para TLS. Ver `docker-compose.yml`. |
-| **Documentación de adapters UEM para contribuidores** | Parcial | Cada adapter (Applivery/Intune/Jamf) tiene código, pero no hay guide de "cómo agrego un adaptador UEM nuevo" público con el contrato de plugin. |
+| **Documentación de adapters UEM para contribuidores** | Completo — guía pública | `docs/contributing/new-adapter-guide.md`: cómo agregar un adaptador UEM nuevo con el contrato `MDMAdapter` y el camino mock offline. Scaffolding con `lucidfence adapter new`. |
 | **Vitrina pública viva / demo** | Completo — vitrina + demo walkthrough | `cloud.html` lee raw.githubusercontent, funcional. Demo paso a paso sin código en `docs/demo-walkthrough.md`. |
-| **Pricing / modelo de negocio declarado** | No existe | Si esto es open-source product, debe declarar qué es OSS puro y qué sería enterprise (si acaso). |
-| **Canales de soporte / issues triage** | No existe | No hay CONTRIBUTING, no hay etiquetas de issues, no hay respondedor que triague. |
-| **Seguridad: disclosure policy** | No existe | No hay SECURITY.md, no hay disclosure path claro para alguien que encuentra bug de seguridad. |
+| **Pricing / modelo de negocio declarado** | Declarado — 100% free OSS | **No hay pricing.** LucidFence es software libre y open-source bajo Apache-2.0: sin tier de pago, sin edición enterprise, sin funciones de pago, sin telemetría. Todo el producto es gratis para usar, modificar y distribuir. Ver §Modelo abajo. |
+| **Canales de soporte / issues triage** | Funcional | `CONTRIBUTING.md` con el flujo; issues de terceros triados por la flota (etiquetado + respuesta), autores externos nunca auto-mergeados. |
+| **Seguridad: disclosure policy** | Completo | `SECURITY.md` con el disclosure path; el loop Centinela ataca el propio LucidFence en localhost (método Strix) y registra hallazgos con PoC. |
 
-Si quieres que esto sea **producto open-source que alguien usa sin que tú estés en medio**, la lista es esa. Primero: README externo + tests como gate de calidad públicos + release tags.
+Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista.
 
 ## Lo que sí funciona hoy
 
@@ -95,6 +95,26 @@ Si quieres que esto sea **producto open-source que alguien usa sin que tú esté
 - Test runner honesto (`python3 tests/run_tests.py`): gates reales, no stubs; el tally vive en CI, no aquí (los números en prosa caducan).
 - Cron de estado local: `geofence_daily_report.sh` genera el resumen sin red.
 - License: Apache-2.0 (`LICENSE`), alineada con `pyproject.toml` y la fórmula Homebrew.
+
+## Modelo (free & open-source)
+
+LucidFence es **software libre y open-source, 100% gratis**. No hay modelo de
+negocio de pago:
+
+- **Sin pricing, sin tiers.** No existe una edición "pro", "enterprise" ni
+  "cloud de pago". Todo el producto —engine, adaptadores UEM, dashboard, SaaS
+  local multi-tenant, MCP— está en este repo bajo Apache-2.0.
+- **Sin funciones de pago ni upsell.** Nada queda detrás de un muro. Nada exige
+  una licencia comercial.
+- **Sin telemetría, sin exfiltración.** Los datos del tenant viven en su
+  máquina; no hay backend propietario que los recoja.
+- **BYOI (Bring Your Own Infrastructure).** Tú corres el despliegue con tus
+  propias credenciales UEM y tus tiers gratuitos; el proyecto no cobra ni
+  intermedia.
+
+Apache-2.0 permite a cualquiera —persona o empresa— usarlo, modificarlo y
+distribuirlo sin coste ni restricción. Si alguien construye un servicio de pago
+encima, es cosa suya; el proyecto en sí es y seguirá siendo gratis.
 
 ## Credits
 

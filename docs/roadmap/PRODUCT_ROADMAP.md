@@ -28,9 +28,8 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Esfuerzo | Loop dueño | Origen (señal real) |
 |---|------|---------|----------|-----------|---------------------|
 | 1 | **Verificar y cerrar los 8 hallazgos Strix abiertos** (4 altos: `POST /api/settings/*` sin auth; `settings/test` reenvía `api_key` a Applivery sin auth; SSRF por header `Link` del MDM con robo de token Bearer; SSRF a `webhook_url` interno. + 4 medios/bajos: TLS ctx, `device_id` sin validar, lat/lng sin acotar) | **p0** | Centinela | `docs/internal/security/findings.md` — sembrados de PR #45, estado `open (verificar)`, ningún ciclo los ha cerrado aún |
-| 2 | **Corregir la tabla "No está terminado" del README** — desinforma en superficie pública: marca como *No existe/Parcial/faltan* 4 cosas ya entregadas (Release v1.5.0 publicada, `docs/contributing/new-adapter-guide.md`, `CONTRIBUTING.md`, `SECURITY.md`) | p1 | Admin-value | Esta pasada del loop Roadmap (reconciliación 2026-08-16) |
-| 3 | **Declarar pricing / modelo de negocio** (qué es OSS puro, qué sería enterprise si acaso) | p1 | small | Admin-value | README §"No está terminado": *"Pricing / modelo de negocio — No existe"* (único gap de producto genuinamente abierto) |
-| 4 | **Refrescar `docs/internal/STATE.md`** (sección "Stabilization QA 2026-07-20" declara base v1.2.0 / próximo v1.3.0; hoy v1.5.0) | p2 | small | Admin-value | Housekeeper `deferred-candidates.md` (diferido al loop de producto) |
+| 2 | **Onboarding externo** (README npm-style para terceros: qué necesita, cómo instala, cómo comprueba que funciona, FAQ mínima) | p1 | small | Admin-value | README §"No está terminado" (único gap de producto que queda tras cerrar pricing/release/adapters/soporte/seguridad) |
+| 3 | **Refrescar `docs/internal/STATE.md`** (sección "Stabilization QA 2026-07-20" declara base v1.2.0 / próximo v1.3.0; hoy v1.5.0) | p2 | small | Admin-value | Housekeeper `deferred-candidates.md` (diferido al loop de producto) |
 
 ## Después (horizonte, sin fecha)
 
@@ -46,6 +45,14 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 
 ## Bitácora de reconciliación
 
+- **2026-08-16 (ciclo 2, decisión del propietario).** El propietario declaró el
+  modelo: **LucidFence es 100% free open-source (Apache-2.0), sin pricing, sin
+  enterprise, sin funciones de pago.** Cierra el gap "Pricing / modelo de
+  negocio" (era el #3): declarado en `README.md` §Modelo. En la misma PR se
+  corrigió la tabla "No está terminado" del README (el antiguo #2): las 4
+  entregas ya hechas (release v1.5.0, guía de adaptadores, CONTRIBUTING,
+  SECURITY.md) marcadas como completas. Queda como único gap de producto el
+  onboarding externo (ahora #2).
 - **2026-08-16 (ciclo 1, pasada manual).** Reconciliado contra la realidad de
   `main`:
   - **Bajan (entregado):** README externo/onboarding parcial, guía de

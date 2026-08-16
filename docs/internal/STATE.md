@@ -33,13 +33,15 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 Empujado desde `docs/roadmap/PRODUCT_ROADMAP.md` §Próximo (el loop Roadmap
 prioriza; Admin-value ejecuta):
 
-7. **Corregir la tabla "No está terminado" del README** — desinforma en
-   superficie pública: marca como *No existe/Parcial/faltan* 4 cosas ya
-   entregadas (Release v1.5.0, `docs/contributing/new-adapter-guide.md`,
-   `CONTRIBUTING.md`, `SECURITY.md`). p1 · esfuerzo small.
-8. **Declarar pricing / modelo de negocio** — qué es OSS puro, qué sería
-   enterprise (si acaso). Único gap de producto genuinamente abierto del
-   README. p1 · esfuerzo small.
+7. ~~**Corregir la tabla "No está terminado" del README**~~ — **HECHO
+   2026-08-16**: 4 entregas marcadas como completas (release v1.5.0, guía de
+   adaptadores, CONTRIBUTING, SECURITY.md).
+8. ~~**Declarar pricing / modelo de negocio**~~ — **HECHO 2026-08-16** por
+   decisión del propietario: 100% free OSS, sin pricing ni enterprise (ver
+   §Overrides). Declarado en `README.md` §Modelo.
+
+Queda abierto de producto: **onboarding externo** (README npm-style + FAQ para
+terceros) — ver `PRODUCT_ROADMAP.md` §Próximo #2.
 
 > Nota: el #1 del roadmap (verificar los 8 hallazgos Strix `open` de
 > `security/findings.md`) es **p0 pero dueño del Centinela**, no de Admin-value;
@@ -66,6 +68,10 @@ prioriza; Admin-value ejecuta):
 - 2026-08-15: "gratis y del lado del cliente, siempre".
 - 2026-08-15: "Fleet es importante" — paridad de primera clase con el resto
   de UEMs en cualquier mejora.
+- 2026-08-16: **"La idea es que sea free open source."** El modelo es 100% free
+  y open-source (Apache-2.0): sin pricing, sin edición enterprise, sin funciones
+  de pago, sin telemetría. Cierra el gap de "modelo de negocio" (no hay uno de
+  pago por diseño). Regla permanente para toda superficie pública y roadmap.
 
 ## Loop status (updated 2026-07-20)
 
