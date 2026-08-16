@@ -1,5 +1,7 @@
 # docs/roadmap/ROADMAP_TOOLING.md — Estructura de mejora a nivel de herramienta (LucidFence)
 
+> **ARCHIVADO — snapshot histórico.** El roadmap de producto vivo y canónico es [`docs/roadmap/PRODUCT_ROADMAP.md`](PRODUCT_ROADMAP.md), mantenido por el loop Roadmap. Este fichero se conserva como contexto, no como plan.
+
 Este documento define **la estructura de mejora a nivel de herramienta** de
 LucidFence (la herramienta de geofencing UEM) y su plan de 12 meses. No es un
 PDF olvidado: es la fuente de verdad de `roadmap.json`, se auto-reporta con

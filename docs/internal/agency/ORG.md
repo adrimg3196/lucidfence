@@ -38,6 +38,7 @@ PR `outreach:`.
 | **Growth** (adopción) | `marketing-seo-specialist`, `marketing-community-builder`, `support-issue-triage` | Qué experimento SEO corre; redacta el outreach (**merge = aprobación del propietario**) |
 | **Centinela** (seguridad ofensiva) | `security-penetration-tester`, `security-architect` | Qué se ataca en localhost, qué fix+regresión entra, qué es crítico-notificable |
 | **Lanzamiento** (releases) | `engineering-devops-automator`, `testing-reality-checker` | Si toca lanzar, el bump coherente, disparar `release.yml`, Homebrew |
+| **Roadmap** (rumbo de producto) | `product-roadmap-strategist` | Qué entra en el horizonte y con qué prioridad; qué roadmap histórico es canónico; qué sube a la cola de Admin-value |
 | **Transversal (todos los loops)** | `project-shepherd` (coordinación), `finance-fpa-analyst` (presupuesto/kill switch), `specialized-fleet-architect` (diseño de la flota), `testing-reality-checker` (DoD), `engineering-privacy-engineer` (local-first) | Contrato de coordinación, techo de tokens, evolución de la flota, veredicto `verify.py`, invariante de privacidad |
 
 ## Derechos de decisión (quién decide qué, sin humano)

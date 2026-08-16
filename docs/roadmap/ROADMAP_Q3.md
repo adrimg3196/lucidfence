@@ -1,5 +1,7 @@
 # Roadmap Q3 2026 — LucidFence
 
+> **ARCHIVADO — snapshot histórico.** El roadmap de producto vivo y canónico es [`docs/roadmap/PRODUCT_ROADMAP.md`](PRODUCT_ROADMAP.md), mantenido por el loop Roadmap. Este fichero se conserva como contexto, no como plan.
+
 > Priorizado por PM (task `t_e98013c5`). Backlog fuente: board `uem-ops`.
 > Estado producto: vitrina demo viva (GitHub Pages + `saas_server.py` local :8765),
 > self-service multi-tenant ya funciona vía GitHub Issues (sin token del usuario),

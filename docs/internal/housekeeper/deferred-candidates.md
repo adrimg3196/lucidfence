@@ -7,12 +7,6 @@ la entrada: se anota la resolución.
 
 ## Abiertos
 
-- **2026-08-16 · Unificar `docs/roadmap/ROADMAP_Q3.md` y `ROADMAP_Q3_2026.md`** —
-  dos roadmaps de Q3 con solapamiento aparente pero contenido distinto
-  (boards `uem-ops` vs `lucidfence`, principios distintos; 63 vs 112 líneas;
-  ambos tocados en agosto). `ROADMAP_Q3.md` está referenciado por
-  `docs/internal/CEO_PRODUCT_REVIEW_2026-07-27.md`. Decidir cuál es canónico
-  es decisión de producto, no de limpieza → diferido al propietario.
 - **2026-08-16 · `loop_improve.py` (raíz)** — parece legacy (excluido del
   tarball en `build.sh`) pero está referenciado por `saas_server.py`,
   `lucidfence/core/roadmap_tooling.py`, `tests/test_audit_regressions.py`,
@@ -29,4 +23,8 @@ la entrada: se anota la resolución.
 
 ## Resueltos
 
-(ninguno aún)
+- **2026-08-16 · Unificar `docs/roadmap/ROADMAP_Q3.md` y `ROADMAP_Q3_2026.md`** —
+  era decisión de producto, no de limpieza. **Resuelto por el loop Roadmap**
+  (ciclo 0): `docs/roadmap/PRODUCT_ROADMAP.md` es el canónico vivo; ambos Q3
+  quedan archivados como snapshots históricos con banner y puntero. No se
+  borran (los referencia el CEO review de julio).

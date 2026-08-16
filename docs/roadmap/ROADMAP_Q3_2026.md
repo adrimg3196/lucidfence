@@ -1,5 +1,7 @@
 # Roadmap Q3 2026 — LucidFence
 
+> **ARCHIVADO — snapshot histórico.** El roadmap de producto vivo y canónico es [`docs/roadmap/PRODUCT_ROADMAP.md`](PRODUCT_ROADMAP.md), mantenido por el loop Roadmap. Este fichero se conserva como contexto, no como plan.
+
 > PM: priorización del backlog del board `lucidfence`.
 > Principios que rigen el orden (de `docs/architecture/SPEC.md`): **local-first & soberano**, **$0**
 > (solo free tiers), **datos del tenant en máquina del cliente**, y **verificar en
