@@ -24,7 +24,7 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
   loop.
 - **Estado/memoria:** sección "Loop admin-value" de `STATE.md` + run-log.
 
-### Housekeeper (L2 — limpieza diaria, PRs human-merged)
+### Housekeeper (L2 — limpieza diaria, auto-merge de bajo riesgo)
 - **Especificación completa:** `docs/internal/housekeeper/README.md`.
 - **Objetivo:** un cleanup de housekeeping probado por día (código muerto,
   ficheros/comentarios rancios, duplicación…), con lo incierto diferido y
@@ -33,21 +33,38 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
   del viernes — ver Coordinación); también ejecutable a mano.
 - **Rama:** `claude/housekeeper` (propiedad exclusiva).
 - **Gate:** máx. 1 PR nueva/día, con la evidencia de bajo riesgo en el
-  cuerpo; las PRs del Housekeeper las mergea SIEMPRE el propietario
-  (WIP=1: con una abierta, el run del día es solo-refresco).
+  cuerpo. **Auto-merge con el gate QA** (Tier A de la §Autonomía): la
+  limpieza probada y CI-verde no espera a un humano — el propietario
+  cambió el objetivo a "autónomo sin intervención humana" (2026-08-16),
+  lo que sustituye el "merge del propietario" anterior. WIP=1 por título
+  `housekeeping:`: con una abierta, el run del día es solo-refresco.
 - **Estado/memoria:** `docs/internal/housekeeper/` (cards, deferred,
   metrics) + dashboard + línea en el run-log común.
 
-### Guardián (L2 — salud de main, PRs de terceros y ramas; diario)
-- **Objetivo:** que `main` nunca amanezca rojo y ninguna PR externa quede
-  sin respuesta. Patrones ci-sweeper + pr-babysitter + post-merge-cleanup.
+### Guardián (L2 — salud de main, backlog, watchdog de la flota; diario)
+- **Objetivo:** que `main` nunca amanezca rojo, que el backlog de PRs no se
+  pudra, y que ningún loop se quede muerto sin que nadie lo note. Patrones
+  ci-sweeper + pr-babysitter + post-merge-cleanup + backlog-drain + watchdog.
 - **Trigger:** Routine diaria (04:23 UTC ≈ 06:23 Madrid).
 - **Rama:** `claude/ci-sweeper` (propiedad exclusiva).
-- **Gate:** un fix de CI verificado puede mergearse con el gate QA completo
-  (mantener main verde es mantenimiento, no feature); todo lo que toque
-  gates humanos queda en PR abierta. El triage de PRs de terceros es L1:
-  comenta y etiqueta según las reglas de "Contributor PR triage", JAMÁS
-  mergea. Borrado de ramas: solo ramas `claude/*` cuya PR está MERGED.
+- **Responsabilidades:**
+  1. *Salud de main*: si CI está rojo, diagnostica y arregla (Tier A) o
+     escala; nunca deja main roto de un día para otro sin acción.
+  2. *Drenaje de backlog*: es el DUEÑO de las PRs sin loop asignado (las 14
+     heredadas de Jules/sesiones viejas incluidas). Cada PR abierta con >7
+     días sin avanzar: rebasea y mergea las verdes de Tier A, cierra con
+     evidencia las superadas/muertas/duplicadas, y deja en "Te espera" las
+     de Tier B. Objetivo permanente: 0 PRs zombis.
+  3. *Triage de terceros* (L1): comenta y etiqueta según "Contributor PR
+     triage"; a autores externos JAMÁS les mergea.
+  4. *Watchdog de la flota*: lee la última línea de cada loop en el run-log;
+     si un loop lleva >1 ciclo sin correr cuando debía (comparado con el
+     Calendario), lo anota como INCIDENTE en el run-log para que Dirección
+     lo suba al digest. (No puede re-disparar Routines desde su sesión: su
+     arma es hacerlo visible, no silenciarlo.)
+  5. *Limpieza post-merge*: borra ramas `claude/*` cuya PR está MERGED.
+- **Gate:** fixes de CI y merges de backlog Tier A con el gate QA completo;
+  Tier B siempre PR abierta.
 - **Estado/memoria:** línea por run en el run-log común.
 
 ### Deps-sweeper (L1.5 — dependencias al día; semanal)
@@ -147,12 +164,25 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    `docs/internal/loop-run-log.md` (formato existente), además de su memoria
    propia. El run-log es la cronología única de lo que las máquinas hicieron
    al repo.
-6. **Merges.** Admin-value, Guardián (solo fixes de CI verificados),
-   Dirección (solo `docs/internal/exec/`), Growth (solo superficie
-   pública y `docs/internal/growth/`) y Centinela (solo fixes de seguridad
-   de bajo riesgo con test de regresión) mergean con el gate QA completo;
-   Housekeeper y Deps-sweeper nunca mergean. Los gates humanos de
-   `loop-constraints.md` aplican a todos sin excepción.
+6. **Merges por riesgo (§Autonomía).** El objetivo es "autónomo sin
+   intervención humana" (propietario, 2026-08-16): el humano deja de ser el
+   merger por defecto y pasa a ser el gate SOLO de lo irreversible.
+   - **Tier A — auto-merge con el gate QA** (CI verde + batería runtime +
+     `VEREDICTO QA: APTO`, sin humano): mejora de producto del Admin-value,
+     cleanup del Housekeeper, superficie pública + `docs/internal/growth/`
+     de Growth, informes del Dirección, fixes de CI y merges de backlog del
+     Guardián, y fixes de seguridad de bajo riesgo CON test de regresión del
+     Centinela. Todo docs interno es Tier A.
+   - **Tier B — gate humano, PR abierta NO bloqueante**: releases (tocar
+     `.release-version`), contrato de adapters (`base.py`), auth de
+     `saas_server.py`, `notifier.py`, modelo de sesión, empaquetado Desktop,
+     bumps MAJOR de dependencias y cualquier cambio de postura de seguridad.
+     El loop deja la PR lista con evidencia y SIGUE con otro trabajo — un
+     Tier B pendiente nunca bloquea el ciclo. Dirección lo lista en "Te
+     espera". Deps-sweeper y el outreach de Growth son Tier B por diseño.
+   - Los gates humanos de `loop-constraints.md` = la lista Tier B; son la
+     frontera entre autonomía y temeridad para un producto con autoridad de
+     wipe. Reducir esa lista lo decide el propietario, por escrito, aquí.
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
    el resumen ejecutivo semanal del loop Dirección (lo nuevo, lo corregido,
    tracción, decisiones pendientes, salud de la flota). Los demás loops
