@@ -35,19 +35,63 @@ file documents the improvement loop used to maintain it, adapting the
 - **Estado/memoria:** `docs/internal/housekeeper/` (cards, deferred,
   metrics) + dashboard + línea en el run-log común.
 
+### Guardián (L2 — salud de main, PRs de terceros y ramas; diario)
+- **Objetivo:** que `main` nunca amanezca rojo y ninguna PR externa quede
+  sin respuesta. Patrones ci-sweeper + pr-babysitter + post-merge-cleanup.
+- **Trigger:** Routine diaria (04:23 UTC ≈ 06:23 Madrid).
+- **Rama:** `claude/ci-sweeper` (propiedad exclusiva).
+- **Gate:** un fix de CI verificado puede mergearse con el gate QA completo
+  (mantener main verde es mantenimiento, no feature); todo lo que toque
+  gates humanos queda en PR abierta. El triage de PRs de terceros es L1:
+  comenta y etiqueta según las reglas de "Contributor PR triage", JAMÁS
+  mergea. Borrado de ramas: solo ramas `claude/*` cuya PR está MERGED.
+- **Estado/memoria:** línea por run en el run-log común.
+
+### Deps-sweeper (L1.5 — dependencias al día; semanal)
+- **Objetivo:** que los pins de `requirements.lock` no se pudran (la
+  historia del pin de cryptography, issue #108, es el porqué).
+- **Trigger:** Routine semanal (miércoles 21:37 UTC ≈ 23:37 Madrid).
+- **Rama:** `claude/deps-sweeper` (propiedad exclusiva).
+- **Gate:** PR con suite + batería runtime verdes y el diff de versiones
+  razonado; **NUNCA auto-merge** — dependencias son postura de seguridad
+  (gate humano de `loop-constraints.md`). WIP=1 por título `deps:`.
+- **Estado/memoria:** línea por run en el run-log común.
+
+### Dirección (L2 — resumen ejecutivo semanal; el ÚNICO que notifica)
+- **Especificación completa:** `docs/internal/exec/README.md`.
+- **Objetivo:** un informe ejecutivo semanal al propietario: lo nuevo, lo
+  corregido, la tracción (con deltas), lo que espera su decisión y la salud
+  de la flota de loops. El propietario no lee logs: lee esto.
+- **Trigger:** Routine semanal (lunes 05:33 UTC ≈ 07:33 Madrid).
+- **Rama:** `claude/exec-digest` (propiedad exclusiva).
+- **Gate:** su PR es solo `docs/internal/exec/` (informe + serie de
+  tracción); mergeable con gate QA (docs internos).
+- **Estado/memoria:** `docs/internal/exec/` (informes + `traction.jsonl`).
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
 autónomos no se pisen como no se pisarían dos ingenieros seniors.
 
-1. **Propiedad de ramas.** Cada loop trabaja SOLO en su rama dedicada
-   (`claude/admin-value-loop`, `claude/housekeeper`). Prohibido recrear o
-   force-pushear la rama de otro loop o la de una sesión interactiva: un
-   force-push ajeno muta la PR abierta de su dueño.
-2. **Calendario sin solape.** Housekeeper: diario 23:13 UTC excepto la noche
-   del viernes (su slot precede en <1 h al run semanal del Admin-value,
-   sábado 00:07 UTC; esa noche el repo queda para el loop de producto).
-   Cambiar una cadencia obliga a revisar esta regla.
+1. **Propiedad de ramas.** Cada loop trabaja SOLO en su rama dedicada:
+   | Loop | Rama |
+   |---|---|
+   | Admin-value | `claude/admin-value-loop` |
+   | Housekeeper | `claude/housekeeper` |
+   | Guardián | `claude/ci-sweeper` |
+   | Deps-sweeper | `claude/deps-sweeper` |
+   | Dirección | `claude/exec-digest` |
+   Prohibido recrear o force-pushear la rama de otro loop o la de una
+   sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
+2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
+   revisar esta tabla):
+   | Loop | Cadencia |
+   |---|---|
+   | Housekeeper | diario 23:13, excepto noche del viernes |
+   | Admin-value | sábado 00:07 |
+   | Guardián | diario 04:23 |
+   | Dirección | lunes 05:33 |
+   | Deps-sweeper | miércoles 21:37 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
@@ -62,9 +106,17 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    `docs/internal/loop-run-log.md` (formato existente), además de su memoria
    propia. El run-log es la cronología única de lo que las máquinas hicieron
    al repo.
-6. **Merges.** Admin-value mergea con el gate QA completo (su excepción
-   documentada arriba); Housekeeper nunca mergea. Los gates humanos de
-   `loop-constraints.md` aplican a los dos sin excepción.
+6. **Merges.** Admin-value, Guardián (solo fixes de CI verificados) y
+   Dirección (solo `docs/internal/exec/`) mergean con el gate QA completo;
+   Housekeeper y Deps-sweeper nunca mergean. Los gates humanos de
+   `loop-constraints.md` aplican a todos sin excepción.
+7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
+   el resumen ejecutivo semanal del loop Dirección (lo nuevo, lo corregido,
+   tracción, decisiones pendientes, salud de la flota). Los demás loops
+   corren en silencio; sus resultados llegan al propietario vía el digest y
+   quedan auditables en el run-log común y las PRs. Un loop solo rompe el
+   silencio si detecta algo que no puede esperar al lunes (main roto que no
+   sabe arreglar, secreto filtrado, PR maliciosa).
 
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.
