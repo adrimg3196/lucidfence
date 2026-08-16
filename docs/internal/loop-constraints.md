@@ -28,19 +28,13 @@ maintainer and the PR verifier (see `docs/internal/LOOP.md`).
 - Adapter contributions from the community MUST preserve the offline mock path
   and ship tests that run without real credentials.
 
-## El ÚNICO gate humano: publicar hacia fuera
+## El ÚNICO gate humano: outreach a terceros
 
-Lo que sale del repo hacia usuarios/terceros reales NO se automatiza; lo
-aprueba el propietario. Todo lo demás (merges a `main`) es auto-merge.
+Casi todo es autónomo. Los **releases se publican solos** desde el
+2026-08-16 (loop Lanzamiento + smoke de `release.yml`: construye, instala y
+arranca el artefacto antes de publicar). Lo único que sigue esperando al
+propietario:
 
-- **Releases a producción**: el commit que toca `.release-version` (dispara
-  `release.yml` → Homebrew/descargas). El loop lo deja listo; el propietario
-  lo mergea.
-- **Outreach a terceros**: las PR `outreach:` de Growth (publican con la
-  identidad del propietario). El merge del propietario sigue siendo el "sí".
-
-## Denylist absoluta (ni con gate verde)
-
-Estas nunca entran, las pase quien las pase: secretos en `config.json` /
-`data/` / `.env`; publicar `data/cloud_state.json` con datos reales de
-tenant; wallets/payout/spam ajeno al producto.
+- **Outreach a terceros**: las PR `outreach:` de Growth publican con la
+  identidad del propietario a plataformas externas → el merge del propietario
+  sigue siendo el "sí". PR abierta NO bloqueante.
