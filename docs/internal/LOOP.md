@@ -107,6 +107,23 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
 - **Estado/memoria:** `docs/internal/growth/` (experiments, mentions) +
   línea en el run-log común.
 
+### Lanzamiento (L2 — publica releases nuevas de forma autónoma; semanal)
+- **Especificación completa:** `docs/internal/release/README.md`.
+- **Objetivo:** que las versiones nuevas se publiquen solas (propietario,
+  2026-08-16). Dueño del runbook de release de punta a punta: decide si toca
+  lanzar, bumpea versión coherente (cli.py + pyproject + `.release-version` +
+  CHANGELOG), dispara `release.yml` y actualiza las fórmulas Homebrew con el
+  sha del asset publicado.
+- **Trigger:** Routine semanal (domingo 20:43 UTC ≈ 22:43 Madrid; tras el
+  ciclo de producto del sábado).
+- **Rama:** `claude/release-loop` (propiedad exclusiva).
+- **Gate:** solo lanza si hay cambios de usuario desde la última tag (nunca
+  releases vacías); **auto-publica** con el gate QA + el smoke de
+  `release.yml` (construye, instala y arranca el artefacto antes de publicar)
+  como red. Nunca bump MAJOR autónomo (contrato de adapters/API → propietario).
+- **Estado/memoria:** `docs/internal/release/` (history, pending-tap) +
+  run-log común.
+
 ### Centinela (L2 — seguridad ofensiva de aplicación; semanal)
 - **Especificación completa:** `docs/internal/security/README.md`.
 - **Objetivo:** atacar el propio LucidFence en localhost (metodología Strix:
@@ -137,6 +154,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Dirección | `claude/exec-digest` |
    | Growth | `claude/growth-loop` |
    | Centinela | `claude/security-loop` |
+   | Lanzamiento | `claude/release-loop` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -150,6 +168,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Deps-sweeper | miércoles 21:37 |
    | Growth | martes 06:17 |
    | Centinela | jueves 22:07 |
+   | Lanzamiento | domingo 20:43 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
@@ -175,12 +194,15 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    además su test de regresión (falla antes / pasa después). El gate QA es
    innegociable: "auto-merge" = "sin humano", jamás "sin comprobar". La
    denylist absoluta de `loop-constraints.md` no entra ni en verde.
-   - **Único gate humano restante: publicar hacia fuera.** (a) Releases —
-     el commit que toca `.release-version` (dispara `release.yml` →
-     Homebrew/descargas): el loop lo deja listo, lo mergea el propietario.
-     (b) Outreach — las PR `outreach:` de Growth (publican con su identidad).
-     Ambas son PR abiertas NO bloqueantes: el loop sigue con otro trabajo y
-     Dirección las lista en "Te espera". Nada más espera a un humano.
+   - **Releases: autónomas** (propietario, 2026-08-16: "publica releases
+     nuevas también"). Las publica el loop Lanzamiento: bumpea versión,
+     mergea `.release-version` → `release.yml` construye, instala y arranca
+     el artefacto ANTES de publicar (ese smoke es la red de máquina), y
+     actualiza las fórmulas Homebrew. Sin humano.
+   - **Único gate humano restante: outreach.** Las PR `outreach:` de Growth
+     publican con la identidad del propietario a terceros → su merge sigue
+     siendo el "sí". PR abierta NO bloqueante; Dirección la lista en "Te
+     espera". Nada más espera a un humano.
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
    el resumen ejecutivo semanal del loop Dirección (lo nuevo, lo corregido,
    tracción, decisiones pendientes, salud de la flota). Los demás loops
