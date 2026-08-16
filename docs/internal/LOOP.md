@@ -6,6 +6,10 @@ file documents the improvement loop used to maintain it, adapting the
 Reporting style follows [i-have-adhd](https://github.com/ayghri/i-have-adhd)
 (regla 8); Growth's SEO menu follows [open-seo](https://github.com/every-app/open-seo);
 Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
+Cada loop delega decisiones de dominio en un bench de especialistas
+([agency-agents](https://github.com/msitarzewski/agency-agents), adaptado en
+`.claude/agents/`); el organigrama loop→especialistas→derechos de decisión está
+en `docs/internal/agency/ORG.md`.
 
 ## Active loops
 
@@ -235,6 +239,23 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
      jamás "varios" o "algunos" si el dato existe.
    - **Cierre con UN siguiente paso concreto** (el del propietario si lo
      hay; el del loop si no).
+9. **Delegación al bench (agency-agents).** Cada loop es un departamento y
+   delega las decisiones de dominio en los especialistas de `.claude/agents/`
+   (invocables por su slug como `subagent_type`). El loop es el gerente; el
+   especialista decide y devuelve el entregable. El humano no está en esta
+   cadena. Mapa loop→especialistas→derechos de decisión:
+   | Loop | Especialistas |
+   |---|---|
+   | Admin-value | `product-manager`, `engineering-senior-developer`, `engineering-backend-architect`, `engineering-iot-fleet-engineer` |
+   | Housekeeper | `engineering-minimal-change-engineer` |
+   | Guardián | `engineering-code-reviewer`, `engineering-git-workflow-master`, `engineering-devops-automator` |
+   | Deps-sweeper | `engineering-devops-automator`, `testing-reality-checker` |
+   | Dirección | `specialized-chief-of-staff` |
+   | Growth | `marketing-seo-specialist`, `marketing-community-builder`, `support-issue-triage` |
+   | Centinela | `security-penetration-tester`, `security-architect` |
+   | Lanzamiento | `engineering-devops-automator`, `testing-reality-checker` |
+   | Transversal | `project-shepherd`, `finance-fpa-analyst`, `specialized-fleet-architect`, `testing-reality-checker`, `engineering-privacy-engineer` |
+   Detalle completo y derechos de decisión: `docs/internal/agency/ORG.md`.
 
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.
