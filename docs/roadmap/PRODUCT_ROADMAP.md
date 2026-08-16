@@ -4,7 +4,7 @@
 > dueño `product-roadmap-strategist`. Horizonte deslizante: **Ahora / Próximo /
 > Después**. Cada ítem cita su origen — sin señal real no entra.
 >
-> Estado: v1.5.0 en producción · main verde · actualizado 2026-08-16 (ciclo 0).
+> Estado: v1.5.0 en producción · main verde · última pasada 2026-08-16 (ciclo 1).
 > Los roadmaps `ROADMAP_Q3*.md`, `ROADMAP_2026-2027.md` y `roadmap.json` son
 > **históricos/archivados** (ver más abajo).
 
@@ -20,35 +20,46 @@ mejoras entran de una en una por el loop **Admin-value** (sábados), que toma su
 siguiente ítem del bloque "Próximo" de abajo. Salud operativa la cubren
 Guardián (main), Centinela (seguridad) y Deps-sweeper (dependencias).
 
+**Lo más caliente del horizonte es seguridad** (ítem 1 de "Próximo"): hay 8
+hallazgos de la auditoría Strix sin verificar desde julio.
+
 ## Próximo (candidatos priorizados — origen citado)
 
 | # | Ítem | Impacto | Esfuerzo | Loop dueño | Origen (señal real) |
 |---|------|---------|----------|-----------|---------------------|
-| 1 | **Declarar pricing / modelo de negocio** (qué es OSS puro, qué sería enterprise, si acaso) | p1 | small | Admin-value | README §"No está terminado": *"Pricing / modelo de negocio declarado — No existe"* |
-| 2 | **Pulir README externo / onboarding de terceros** (qué necesita, cómo instala, cómo comprueba que funciona, FAQ mínima, cómo reporta bugs) | p1 | small | Admin-value / Growth | README §"No está terminado": *"README público / onboarding — Estado inicial"* |
-| 3 | **Refrescar `docs/internal/STATE.md`** (sección "Stabilization QA 2026-07-20" declara base v1.2.0 / próximo v1.3.0; hoy v1.5.0 publicada) | p2 | small | Admin-value | Housekeeper `deferred-candidates.md` (diferido al loop de producto) |
+| 1 | **Verificar y cerrar los 8 hallazgos Strix abiertos** (4 altos: `POST /api/settings/*` sin auth; `settings/test` reenvía `api_key` a Applivery sin auth; SSRF por header `Link` del MDM con robo de token Bearer; SSRF a `webhook_url` interno. + 4 medios/bajos: TLS ctx, `device_id` sin validar, lat/lng sin acotar) | **p0** | Centinela | `docs/internal/security/findings.md` — sembrados de PR #45, estado `open (verificar)`, ningún ciclo los ha cerrado aún |
+| 2 | **Corregir la tabla "No está terminado" del README** — desinforma en superficie pública: marca como *No existe/Parcial/faltan* 4 cosas ya entregadas (Release v1.5.0 publicada, `docs/contributing/new-adapter-guide.md`, `CONTRIBUTING.md`, `SECURITY.md`) | p1 | Admin-value | Esta pasada del loop Roadmap (reconciliación 2026-08-16) |
+| 3 | **Declarar pricing / modelo de negocio** (qué es OSS puro, qué sería enterprise si acaso) | p1 | small | Admin-value | README §"No está terminado": *"Pricing / modelo de negocio — No existe"* (único gap de producto genuinamente abierto) |
+| 4 | **Refrescar `docs/internal/STATE.md`** (sección "Stabilization QA 2026-07-20" declara base v1.2.0 / próximo v1.3.0; hoy v1.5.0) | p2 | small | Admin-value | Housekeeper `deferred-candidates.md` (diferido al loop de producto) |
 
 ## Después (horizonte, sin fecha)
 
 | # | Ítem | Impacto | Origen |
 |---|------|---------|--------|
-| 4 | **Aclarar el estatus de `loop_improve.py` (raíz)**: legacy vs vivo (referenciado por `saas_server.py`, `roadmap_tooling.py`, tests y `roadmap.json`, pero excluido del tarball) — decidir consolidar o retirar con evidencia | p2 | Housekeeper `deferred-candidates.md` |
-| 5 | **Retirar `ZERO-BACKLOG.md` (raíz)** si el análisis confirma que es rancio (solo referenciado por el exclude de `build.sh`) | p2 | Housekeeper `deferred-candidates.md` |
-| 6 | **Ampliar cobertura de adaptadores UEM** más allá de Applivery/Intune/Jamf/Fleet según demanda inbound real | p2 | README §"Lo que sí funciona" + inbound de Growth |
+| 5 | **Aclarar el estatus de `loop_improve.py` (raíz)**: legacy vs vivo (referenciado por `saas_server.py`, `roadmap_tooling.py`, tests y `roadmap.json`, pero excluido del tarball) — consolidar o retirar con evidencia | p2 | Housekeeper `deferred-candidates.md` |
+| 6 | **Retirar `ZERO-BACKLOG.md` (raíz)** si el análisis confirma que es rancio (solo referenciado por el exclude de `build.sh`) | p2 | Housekeeper `deferred-candidates.md` |
+| 7 | **Ampliar cobertura de adaptadores UEM** más allá de Applivery/Intune/Jamf/Fleet según demanda inbound real | p2 | README §"Lo que sí funciona" + inbound de Growth |
 
 > Los ítems de "Después" suben a "Próximo" cuando un ciclo aporta señal fresca
 > (demanda inbound, finding de seguridad, decisión del propietario). Los findings
 > de Centinela con severidad entran directos en "Próximo" del ciclo siguiente.
 
-## Decisión de producto de este ciclo (ciclo 0)
+## Bitácora de reconciliación
 
-**Roadmap canónico resuelto.** Existían dos `ROADMAP_Q3` en conflicto que el
-Housekeeper difirió como *"decisión de producto, no de limpieza"*:
-- `ROADMAP_Q3_2026.md` (board `lucidfence`, con "Estado operativo revalidado
-  2026-08-14") y `ROADMAP_Q3.md` (board `uem-ops`, referenciado por el CEO
-  review de julio) → **ambos archivados como snapshots históricos**; este
-  `PRODUCT_ROADMAP.md` es el único canónico vivo. Q3-2026 termina; el horizonte
-  real es Q4-2026 en adelante, capturado arriba.
+- **2026-08-16 (ciclo 1, pasada manual).** Reconciliado contra la realidad de
+  `main`:
+  - **Bajan (entregado):** README externo/onboarding parcial, guía de
+    adaptadores, CONTRIBUTING, SECURITY.md y la publicación de releases ya
+    existen → dejan de ser gaps abiertos. El "Próximo" del ciclo 0 (pricing +
+    README + STATE) se conserva, pero **repriorizado por debajo de seguridad**.
+  - **Sube al #1:** los 8 hallazgos Strix sin verificar (leídos de
+    `security/findings.md`) — no estaban en el ciclo 0. Es ahora lo más
+    prioritario; su dueño es Centinela (jueves 22:07 UTC).
+  - **Nuevo ítem #2:** la tabla "No está terminado" del README desinforma
+    (4 entregas marcadas como pendientes) → derivado a Admin-value.
+- **2026-08-16 (ciclo 0).** Roadmap canónico resuelto: los dos `ROADMAP_Q3` en
+  conflicto (candidato diferido del Housekeeper) → este `PRODUCT_ROADMAP.md` es
+  el único vivo; ambos Q3 archivados con banner. `roadmap.json` archivado.
 
 ## Archivo histórico (no editar; contexto, no plan)
 
