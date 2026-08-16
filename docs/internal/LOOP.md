@@ -339,6 +339,10 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
   hereda los connectors de GitHub (crearla desde una sesión que los tenga, o
   desde la UI de Routines de claude.ai). Verificar en el primer run real de cada
   loop que pudo mergear; si no, el Guardián lo verá como PR colgada y lo anota.
+  **Fix reproducible (2026-08-16):** `.mcp.json` en la raíz declara el GitHub
+  MCP oficial para TODAS las sesiones (incl. cron); requiere
+  `GITHUB_PERSONAL_ACCESS_TOKEN` en el environment. Detalle:
+  `docs/internal/mcp-github.md`.
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the
