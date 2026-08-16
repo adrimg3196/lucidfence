@@ -201,6 +201,24 @@ def main() -> int:
               s == 200 and enf.get("mode") == "observe" and enf.get("allow_wipe") is False,
               f"http={s}, enforcement={enf}")
 
+        # Editar la fase desde el dashboard: POST /api/settings/enforcement con
+        # engine:config cambia el modo y /api/settings/status lo refleja tras el
+        # reload del engine. Se revierte a observe para no alterar los checks
+        # siguientes (que asumen el rollout seguro por defecto).
+        s, sw, _ = http_req("POST", "/api/settings/enforcement",
+                            cookie=cookie, body={"mode": "enforce"})
+        s2, st_after, _ = http_req("GET", "/api/settings/status", cookie=cookie)
+        enf_after = (st_after or {}).get("enforcement") or {}
+        check("POST /api/settings/enforcement cambia el modo y status lo refleja",
+              s == 200 and sw.get("enforcement", {}).get("mode") == "enforce"
+              and s2 == 200 and enf_after.get("mode") == "enforce",
+              f"post={s}/{sw.get('enforcement')}, status={s2}/{enf_after.get('mode')}")
+        s, sinv, _ = http_req("POST", "/api/settings/enforcement",
+                              cookie=cookie, body={"mode": "no-such-mode"})
+        check("modo de enforcement inválido rechazado con 400", s == 400,
+              f"http={s}, body={sinv}")
+        http_req("POST", "/api/settings/enforcement", cookie=cookie, body={"mode": "observe"})
+
         s, wres, _ = http_req("POST", f"/api/devices/{first_dev}/command",
                               cookie=cookie, body={"action": "wipe"})
         check("wipe en observe queda en dry-run (jamás toca el dispositivo)",

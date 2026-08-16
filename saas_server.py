@@ -198,6 +198,16 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
         mode = "simulation"
     cfg["mode"] = mode
     cfg["dry_run"] = bool(runtime.get("dry_run", cfg.get("dry_run", True)))
+    # Fase de enforcement (observe|enforce): editable por un admin desde el
+    # dashboard y persistida por tenant aquí. Sobreescribe `mode` dentro del
+    # bloque enforcement, que el Engine usa para fijar dry_run; live_actions,
+    # allow_wipe y wipe_allowlist siguen viniendo de config.json (la doble
+    # llave del wipe nunca se amplía desde la UI).
+    enf_mode = runtime.get("enforcement_mode")
+    if enf_mode in ("observe", "enforce"):
+        base_enf = dict(cfg.get("enforcement") or {})
+        base_enf["mode"] = enf_mode
+        cfg["enforcement"] = base_enf
     cfg["_applivery_api_key"] = key
     cfg.setdefault("applivery", {})["org_id"] = workspace_id
     cfg["incident_webhook_url"] = (runtime.get("incident_webhook_url") or "").strip()
@@ -1717,6 +1727,31 @@ class Handler(BaseHTTPRequestHandler):
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
+        if route == "/api/settings/enforcement" and method == "POST":
+            # Editar la fase de enforcement (observe|enforce) desde el dashboard.
+            # observe = todo dry-run; enforce = las live_actions salen en vivo.
+            # Cambiar el modo no ejecuta ninguna acción por sí mismo.
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            new_mode = (_read_body(self).get("mode") or "").strip().lower()
+            if new_mode not in ("observe", "enforce"):
+                return _send_json(self, {"error": "modo inválido (observe|enforce)"}, 400)
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            runtime["enforcement_mode"] = new_mode
+            tmp = tdir / "integration.json.tmp"
+            tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+            os.chmod(tmp, 0o600)
+            tmp.replace(tdir / "integration.json")
+            os.chmod(tdir / "integration.json", 0o600)
+            try:
+                eng = reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "mode": new_mode,
+                                         "warning": f"guardado pero el engine no se recargó: {exc}"})
+            append_audit(tdir, {"event": "enforcement.mode.changed",
+                                "actor": user.get("id"), "mode": new_mode})
+            return _send_json(self, {"ok": True, "enforcement": eng.enforcement_status()})
         # ---- Multi-UEM provider registry (tenant-local, isolated) ----------
         if route == "/api/providers/catalog" and method == "GET":
             from lucidfence.saas.providers import catalog

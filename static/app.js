@@ -416,6 +416,32 @@ function updateSync(st, before){
   if(st && st.mode !== "simulation" && enfMode) modeLabel += enfMode==="observe" ? " · observación" : " · enforce";
   $("#modeText").textContent = modeLabel;
   $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":(enfMode==="observe"?"var(--amber)":"var(--green)");
+  // Control de fase de enforcement: editable solo por roles con engine:config
+  // (owner/admin). Cambia el modo vía el endpoint y refresca el estado. Los
+  // demás roles nunca ven el control (solo el chip de lectura de arriba).
+  const enfRow = document.getElementById("enfRow");
+  const enfSel = document.getElementById("enfSelect");
+  if(enfRow && enfSel){
+    const role = App.org && App.org.role;
+    const canEdit = (role==="owner" || role==="admin") && !!enfMode;
+    enfRow.style.display = canEdit ? "flex" : "none";
+    if(canEdit){
+      if(!enfSel._wired){
+        enfSel.addEventListener("change", async ()=>{
+          const mode = enfSel.value; enfSel.disabled = true;
+          try{
+            const r = await api("/api/settings/enforcement", {method:"POST",
+              headers:{"Content-Type":"application/json"}, body:JSON.stringify({mode})});
+            if(r && r.ok){ toast("Enforcement actualizado", mode==="enforce"?"enforce":"observación", "ok"); refresh(false); }
+            else { toast("Error", (r&&r.error)||"No se pudo cambiar el modo", "bad"); enfSel.value = enfMode; }
+          }catch(e){ toast("Error", e.message||"fallo de red", "bad"); enfSel.value = enfMode; }
+          finally{ enfSel.disabled = false; }
+        });
+        enfSel._wired = true;
+      }
+      if(document.activeElement !== enfSel) enfSel.value = enfMode;
+    }
+  }
   // Banda de datos demo (issue #110): visible solo mientras el backend declara
   // modo simulación; con una organización real desaparecen banda y hueco.
   const demoBanner = document.getElementById("demoBanner");
