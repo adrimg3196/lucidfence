@@ -3,6 +3,9 @@
 LucidFence is a local-first, free, open-source geofencing / UEM product. This
 file documents the improvement loop used to maintain it, adapting the
 [loop-engineering](https://github.com/cobusgreyling/loop-engineering) patterns.
+Reporting style follows [i-have-adhd](https://github.com/ayghri/i-have-adhd)
+(regla 8); Growth's SEO menu follows [open-seo](https://github.com/every-app/open-seo);
+Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
 
 ## Active loops
 
@@ -88,6 +91,20 @@ file documents the improvement loop used to maintain it, adapting the
 - **Estado/memoria:** `docs/internal/growth/` (experiments, mentions) +
   línea en el run-log común.
 
+### Centinela (L2 — seguridad ofensiva de aplicación; semanal)
+- **Especificación completa:** `docs/internal/security/README.md`.
+- **Objetivo:** atacar el propio LucidFence en localhost (metodología Strix:
+  validar por PoC, no estáticamente) para cazar IDOR/aislamiento de tenant,
+  authz, fuga de secretos, SSRF y XSS antes de que lleguen a producción.
+  Complementa gitleaks + pip-audit del CI.
+- **Trigger:** Routine semanal (jueves 22:07 UTC ≈ 00:07 Madrid).
+- **Rama:** `claude/security-loop` (propiedad exclusiva).
+- **Alcance autorizado:** SOLO el localhost efímero del agente; jamás infra
+  de tenant ni terceros. Fixes de bajo riesgo con test de regresión
+  mergeables con gate QA; todo lo que toque auth/notifier/adapters/sesión es
+  gate humano (PR abierta con PoC). Crítico → notifica al momento.
+- **Estado/memoria:** `docs/internal/security/findings.md` + run-log común.
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
@@ -102,6 +119,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Deps-sweeper | `claude/deps-sweeper` |
    | Dirección | `claude/exec-digest` |
    | Growth | `claude/growth-loop` |
+   | Centinela | `claude/security-loop` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -114,6 +132,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Dirección | lunes 05:33 |
    | Deps-sweeper | miércoles 21:37 |
    | Growth | martes 06:17 |
+   | Centinela | jueves 22:07 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
@@ -129,8 +148,9 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    propia. El run-log es la cronología única de lo que las máquinas hicieron
    al repo.
 6. **Merges.** Admin-value, Guardián (solo fixes de CI verificados),
-   Dirección (solo `docs/internal/exec/`) y Growth (solo superficie
-   pública y `docs/internal/growth/`) mergean con el gate QA completo;
+   Dirección (solo `docs/internal/exec/`), Growth (solo superficie
+   pública y `docs/internal/growth/`) y Centinela (solo fixes de seguridad
+   de bajo riesgo con test de regresión) mergean con el gate QA completo;
    Housekeeper y Deps-sweeper nunca mergean. Los gates humanos de
    `loop-constraints.md` aplican a todos sin excepción.
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
@@ -139,8 +159,28 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    corren en silencio; sus resultados llegan al propietario vía el digest y
    quedan auditables en el run-log común y las PRs. Un loop solo rompe el
    silencio si detecta algo que no puede esperar al lunes (main roto que no
-   sabe arreglar, secreto filtrado, PR maliciosa) — y Growth, además, puede
-   notificar cuando deja una PR `outreach:` esperando aprobación.
+   sabe arreglar, secreto filtrado, vulnerabilidad crítica explotable, PR
+   maliciosa) — y Growth, además, puede notificar cuando deja una PR
+   `outreach:` esperando aprobación.
+8. **Estilo de reporting** (adaptado de la skill
+   [i-have-adhd](https://github.com/ayghri/i-have-adhd): la respuesta no
+   entierra la acción). Aplica a resúmenes finales, digest, cuerpos de PR
+   y run-log de TODOS los loops:
+   - **La acción primero.** Si el propietario tiene que hacer algo, es la
+     primera línea, imperativa y con enlace ("Mergea #138: …"). Nunca
+     enterrada tras contexto.
+   - **Decisiones numeradas.** Varias cosas que decidir = lista numerada,
+     máx. 5 items; el resto se agrega ("y 3 menores en el run-log").
+   - **Estado visible.** Cada informe reafirma el estado en una línea
+     (versión en producción, main verde/rojo, PRs abiertas N).
+   - **Victorias visibles, errores sin drama.** Lo aterrizado se dice
+     ("aterrizó X"); lo fallado se dice igual de plano, con el siguiente
+     paso, sin disculpas ni relleno.
+   - **Sin preámbulo, sin recapitulación, sin despedidas.** Nada de "esta
+     semana ha sido…"; el TL;DR ES la primera línea. Números concretos,
+     jamás "varios" o "algunos" si el dato existe.
+   - **Cierre con UN siguiente paso concreto** (el del propietario si lo
+     hay; el del loop si no).
 
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.
