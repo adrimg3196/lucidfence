@@ -17,11 +17,9 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
   una sesión nueva; también ejecutable a mano pidiendo "ejecuta un ciclo del
   loop admin-value".
 - **Rama:** `claude/admin-value-loop` (propiedad exclusiva; ver Coordinación).
-- **Gate:** hasta 1 PR por run, merge solo con el gate QA del repo (CI verde
-  + runtime battery + `VEREDICTO QA: APTO`); la lista de gates humanos de
-  `loop-constraints.md` sigue intacta. Esta excepción al "no auto-merge" de
-  abajo la mandató el propietario (sesiones 2026-08-15) y aplica SOLO a este
-  loop.
+- **Gate:** hasta 1 PR por run, auto-merge en verde con el gate QA (CI +
+  runtime battery + `VEREDICTO QA: APTO`); si la mejora publica una release
+  (`.release-version`), esa PR la mergea el propietario (§Autonomía).
 - **Estado/memoria:** sección "Loop admin-value" de `STATE.md` + run-log.
 
 ### Housekeeper (L2 — limpieza diaria, auto-merge de bajo riesgo)
@@ -52,9 +50,10 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
      escala; nunca deja main roto de un día para otro sin acción.
   2. *Drenaje de backlog*: es el DUEÑO de las PRs sin loop asignado (las 14
      heredadas de Jules/sesiones viejas incluidas). Cada PR abierta con >7
-     días sin avanzar: rebasea y mergea las verdes de Tier A, cierra con
-     evidencia las superadas/muertas/duplicadas, y deja en "Te espera" las
-     de Tier B. Objetivo permanente: 0 PRs zombis.
+     días sin avanzar: rebasea y mergea las verdes con el gate QA (auth,
+     seguridad y demás incluidos — auto-merge total), cierra con evidencia
+     las superadas/muertas/duplicadas, y deja en "Te espera" solo lo que
+     publica hacia fuera (release/outreach). Objetivo permanente: 0 zombis.
   3. *Triage de terceros* (L1): comenta y etiqueta según "Contributor PR
      triage"; a autores externos JAMÁS les mergea.
   4. *Watchdog de la flota*: lee la última línea de cada loop en el run-log;
@@ -63,8 +62,8 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
      lo suba al digest. (No puede re-disparar Routines desde su sesión: su
      arma es hacerlo visible, no silenciarlo.)
   5. *Limpieza post-merge*: borra ramas `claude/*` cuya PR está MERGED.
-- **Gate:** fixes de CI y merges de backlog Tier A con el gate QA completo;
-  Tier B siempre PR abierta.
+- **Gate:** todo con el gate QA completo; auto-merge (releases/outreach
+  ajenos, esos no son suyos).
 - **Estado/memoria:** línea por run en el run-log común.
 
 ### Deps-sweeper (L1.5 — dependencias al día; semanal)
@@ -73,8 +72,8 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
 - **Trigger:** Routine semanal (miércoles 21:37 UTC ≈ 23:37 Madrid).
 - **Rama:** `claude/deps-sweeper` (propiedad exclusiva).
 - **Gate:** PR con suite + batería runtime verdes y el diff de versiones
-  razonado; **NUNCA auto-merge** — dependencias son postura de seguridad
-  (gate humano de `loop-constraints.md`). WIP=1 por título `deps:`.
+  razonado; **auto-merge en verde** (incl. bumps MAJOR) — el gate QA es la
+  red: si un bump rompe algo, no pasa. WIP=1 por título `deps:`.
 - **Estado/memoria:** línea por run en el run-log común.
 
 ### Dirección (L2 — resumen ejecutivo semanal; el ÚNICO que notifica)
@@ -117,9 +116,10 @@ Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
 - **Trigger:** Routine semanal (jueves 22:07 UTC ≈ 00:07 Madrid).
 - **Rama:** `claude/security-loop` (propiedad exclusiva).
 - **Alcance autorizado:** SOLO el localhost efímero del agente; jamás infra
-  de tenant ni terceros. Fixes de bajo riesgo con test de regresión
-  mergeables con gate QA; todo lo que toque auth/notifier/adapters/sesión es
-  gate humano (PR abierta con PoC). Crítico → notifica al momento.
+  de tenant ni terceros. Los fixes (incl. auth/notifier/sesión) auto-mergean
+  en verde SIEMPRE con su test de regresión (falla antes / pasa después) —
+  un fix de seguridad sin regresión NO se mergea. Crítico → notifica al
+  momento igual, aunque el fix ya esté aplicado.
 - **Estado/memoria:** `docs/internal/security/findings.md` + run-log común.
 
 ## Coordinación entre loops (contrato de la casa)
@@ -164,25 +164,23 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    `docs/internal/loop-run-log.md` (formato existente), además de su memoria
    propia. El run-log es la cronología única de lo que las máquinas hicieron
    al repo.
-6. **Merges por riesgo (§Autonomía).** El objetivo es "autónomo sin
-   intervención humana" (propietario, 2026-08-16): el humano deja de ser el
-   merger por defecto y pasa a ser el gate SOLO de lo irreversible.
-   - **Tier A — auto-merge con el gate QA** (CI verde + batería runtime +
-     `VEREDICTO QA: APTO`, sin humano): mejora de producto del Admin-value,
-     cleanup del Housekeeper, superficie pública + `docs/internal/growth/`
-     de Growth, informes del Dirección, fixes de CI y merges de backlog del
-     Guardián, y fixes de seguridad de bajo riesgo CON test de regresión del
-     Centinela. Todo docs interno es Tier A.
-   - **Tier B — gate humano, PR abierta NO bloqueante**: releases (tocar
-     `.release-version`), contrato de adapters (`base.py`), auth de
-     `saas_server.py`, `notifier.py`, modelo de sesión, empaquetado Desktop,
-     bumps MAJOR de dependencias y cualquier cambio de postura de seguridad.
-     El loop deja la PR lista con evidencia y SIGUE con otro trabajo — un
-     Tier B pendiente nunca bloquea el ciclo. Dirección lo lista en "Te
-     espera". Deps-sweeper y el outreach de Growth son Tier B por diseño.
-   - Los gates humanos de `loop-constraints.md` = la lista Tier B; son la
-     frontera entre autonomía y temeridad para un producto con autoridad de
-     wipe. Reducir esa lista lo decide el propietario, por escrito, aquí.
+6. **Auto-merge total en verde (propietario, 2026-08-16: "ponlo todo en
+   automerge, todo salvo publicar release").** El humano deja de ser el
+   merger. CUALQUIER cambio a `main` — código de producto incluido: auth de
+   `saas_server.py`, `notifier.py`, contrato de adapters (`base.py` con bump
+   mayor + mock offline), modelo de sesión, empaquetado Desktop, bumps MAJOR
+   de deps, postura de seguridad — lo auto-mergea su loop dueño EN CUANTO
+   pasa el **gate QA de máquina**: CI verde + batería runtime N/N + tests de
+   regresión relevantes + `VEREDICTO QA: APTO`. Un fix de seguridad exige
+   además su test de regresión (falla antes / pasa después). El gate QA es
+   innegociable: "auto-merge" = "sin humano", jamás "sin comprobar". La
+   denylist absoluta de `loop-constraints.md` no entra ni en verde.
+   - **Único gate humano restante: publicar hacia fuera.** (a) Releases —
+     el commit que toca `.release-version` (dispara `release.yml` →
+     Homebrew/descargas): el loop lo deja listo, lo mergea el propietario.
+     (b) Outreach — las PR `outreach:` de Growth (publican con su identidad).
+     Ambas son PR abiertas NO bloqueantes: el loop sigue con otro trabajo y
+     Dirección las lista en "Te espera". Nada más espera a un humano.
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
    el resumen ejecutivo semanal del loop Dirección (lo nuevo, lo corregido,
    tracción, decisiones pendientes, salud de la flota). Los demás loops
@@ -233,22 +231,26 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
 
 ## Safety & gates
 
-- **No auto-merge to `main`** except trivial doc/loop-scaffolding changes.
-- **Denylist:** secrets in `config.json`/`data/`; modifications to
-  `lucidfence/core/adapters/base.py` without a major version bump; publish of
-  `data/cloud_state.json` with real tenant data.
+- **Auto-merge total en verde** (propietario, 2026-08-16). El gate humano
+  previo desaparece; lo sustituye el **gate QA de máquina** (CI + batería
+  runtime + regresión + `VEREDICTO QA: APTO`), que es innegociable. Detalle
+  y el único gate humano restante (publicar release/outreach) en
+  `docs/internal/loop-constraints.md` y en la regla 6 de Coordinación.
+- **Denylist absoluta** (ni con gate verde): secretos en
+  `config.json`/`data/`/`.env`; `base.py` sin bump mayor + mock; publicar
+  `data/cloud_state.json` con datos reales de tenant; wallets/spam.
 - **Least privilege:** CI uses read-only `GITHUB_TOKEN`; no deploy secrets in
   loop workflows.
 - **MCP usage:** not required for this loop. If a connector is added later, it
   MUST be read-only (issue/PR discovery) and scoped in `docs/internal/LOOP.md` before use.
 - **Worktree isolation:** every unattended code-change experiment runs in an
-  isolated git worktree; one worktree per fix, discarded after a failed verifier
-  or human escalation.
+  isolated git worktree; one worktree per fix, discarded after a failed verifier.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the
-  same fix, stop and escalate to a human (see `docs/internal/loop-budget.md`). Never repeat the
-  same failing action — write a note to `docs/internal/loop-run-log.md` instead.
-- **Human escalation:** any PR touching the adapter contract, the Desktop build,
-  or security posture MUST be reviewed by the maintainer before merge.
+  same fix, stop; write a note to `docs/internal/loop-run-log.md` (lo recoge
+  el watchdog del Guardián). Never repeat the same failing action.
+- **Red de seguridad reactiva:** el Guardián revisa main a diario; un merge
+  que ponga main rojo se revierte/arregla en el siguiente ciclo (el gate QA
+  hace improbable que llegue roto, pero la red existe).
 
 ## Budget & observability
 
