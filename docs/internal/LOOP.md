@@ -143,6 +143,22 @@ en `docs/internal/agency/ORG.md`.
   momento igual, aunque el fix ya esté aplicado.
 - **Estado/memoria:** `docs/internal/security/findings.md` + run-log común.
 
+### Roadmap (L2 — el rumbo de producto vivo; semanal)
+- **Especificación completa:** `docs/internal/roadmap/README.md`.
+- **Objetivo:** mantener un roadmap de producto VIVO a varios ciclos vista
+  (`docs/roadmap/PRODUCT_ROADMAP.md`, horizonte deslizante Ahora/Próximo/
+  Después) para que la empresa no solo mejore ciclo a ciclo sino que sepa hacia
+  dónde va. Reconcilia lo entregado, repriorije con señal real y empuja el
+  "Próximo" a la cola de Admin-value. `roadmap.json` (tooling de auto-mejora)
+  queda archivado; no se reabre.
+- **Trigger:** Routine semanal (viernes 21:17 UTC ≈ 23:17 Madrid).
+- **Rama:** `claude/roadmap-loop` (propiedad exclusiva).
+- **Gate:** su PR es docs (roadmap + snapshots archivados); auto-merge en verde
+  con el gate QA. Solo señal real (cada ítem cita origen); no implementa —
+  prioriza y deriva. Resuelve las decisiones de producto que otros loops
+  difieren (p. ej. qué roadmap histórico es canónico).
+- **Estado/memoria:** `docs/roadmap/PRODUCT_ROADMAP.md` + línea en el run-log.
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
@@ -159,6 +175,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Growth | `claude/growth-loop` |
    | Centinela | `claude/security-loop` |
    | Lanzamiento | `claude/release-loop` |
+   | Roadmap | `claude/roadmap-loop` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -173,6 +190,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Growth | martes 06:17 |
    | Centinela | jueves 22:07 |
    | Lanzamiento | domingo 20:43 |
+   | Roadmap | viernes 21:17 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
@@ -254,6 +272,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Growth | `marketing-seo-specialist`, `marketing-community-builder`, `support-issue-triage` |
    | Centinela | `security-penetration-tester`, `security-architect` |
    | Lanzamiento | `engineering-devops-automator`, `testing-reality-checker` |
+   | Roadmap | `product-roadmap-strategist` |
    | Transversal | `project-shepherd`, `finance-fpa-analyst`, `specialized-fleet-architect`, `testing-reality-checker`, `engineering-privacy-engineer` |
    Detalle completo y derechos de decisión: `docs/internal/agency/ORG.md`.
 

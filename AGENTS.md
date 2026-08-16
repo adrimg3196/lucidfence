@@ -117,12 +117,15 @@ re-corre las mismas comprobaciones como autoridad final.
   login` headless (fails silently); leave zombie processes between sessions.
 
 ## Flota autónoma de loops (el modelo de operación hoy)
-Este repo lo mantiene una flota de 8 loops agénticos coordinados por un
+Este repo lo mantiene una flota de 9 loops agénticos coordinados por un
 contrato escrito. Léelo antes de tocar nada estructural:
-- **`docs/internal/LOOP.md`** — los 8 loops (Admin-value, Housekeeper,
-  Guardián, Deps-sweeper, Growth, Centinela, Lanzamiento, Dirección), sus
-  ramas dedicadas, el calendario sin solapes, y las 8 reglas de coordinación
+- **`docs/internal/LOOP.md`** — los 9 loops (Admin-value, Housekeeper,
+  Guardián, Deps-sweeper, Growth, Centinela, Lanzamiento, Dirección, Roadmap),
+  sus ramas dedicadas, el calendario sin solapes, y las 9 reglas de coordinación
   (incl. auto-merge total en verde y el estilo de reporting).
+- **`docs/roadmap/PRODUCT_ROADMAP.md`** — el roadmap de producto VIVO (dueño:
+  loop Roadmap). `roadmap.json` es histórico del tooling de auto-mejora,
+  archivado; no reabrir.
 - **`docs/internal/loop-constraints.md`** — la denylist absoluta y el único
   gate humano que queda (outreach a terceros).
 - **`docs/internal/agency/ORG.md`** — el organigrama: cada loop es un
