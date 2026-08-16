@@ -29,6 +29,24 @@ honesto: sin humo, sin spam, sin métricas inventadas.
   exfiltrar ubicación", por vertical) — siempre con claims validados.
 - Contenido técnico publicable EN el repo/Pages: comparativas honestas,
   guías que respondan a búsquedas reales de admins.
+- **Workflows SEO** (metodología de [open-seo](https://github.com/every-app/open-seo):
+  workflows enfocados, no suite inflada):
+  - *Auditoría on-page de Pages*: title/meta description únicos por página,
+    un solo H1, jerarquía de headings, Open Graph, `sitemap.xml` +
+    `robots.txt`, enlaces internos entre landing/casos de uso/docs. Se
+    audita con fetch real de las páginas publicadas, no de memoria.
+  - *Visibilidad ante IAs* (AI visibility): `llms.txt` en Pages con el
+    resumen canónico del producto, claims verificables enlazados y docs
+    estructuradas — los asistentes que recomiendan herramientas a admins
+    son un canal de descubrimiento real.
+  - *Contenido orientado a keyword*: cada página de caso de uso apunta a
+    UNA búsqueda concreta de admin (p.ej. "intune geofence compliance
+    open source") formulada como la haría el admin; la hipótesis del
+    experimento nombra la búsqueda objetivo.
+  - *Escalado opt-in*: si el propietario despliega OpenSEO o aporta
+    credenciales DataForSEO, el loop puede usar keyword research y rank
+    tracking reales; sin credenciales se usan solo señales gratuitas
+    (GitHub search, autocompletar público) y se dice así en la hipótesis.
 - **Borradores de outreach** en `docs/gtm/outbox/` (Show HN, r/selfhosted,
   r/sysadmin, LinkedIn, listas awesome-*): redactados, listos para que EL
   PROPIETARIO los publique con un copy/paste. El material previo de
