@@ -64,25 +64,26 @@
 - [ ] **Step 1: Write failing lock and discovery tests**
 
 ```python
-def test_catalog_discovers_every_frontmatter_agent(tmp_path):
-    source = tmp_path / "agency"
-    (source / "gis").mkdir(parents=True)
-    (source / "engineering").mkdir()
-    (source / "gis" / "gis-qa.md").write_text(
-        "---\nname: GIS QA Engineer\ndescription: Validates spatial evidence.\n---\n# Body\n",
-        encoding="utf-8",
-    )
-    (source / "engineering" / "backend.md").write_text(
-        "---\nname: Backend Architect\ndescription: Designs reliable services.\n---\n# Body\n",
-        encoding="utf-8",
-    )
-    profiles = discover_agents(source)
-    assert [(p.division, p.name) for p in profiles] == [
-        ("engineering", "Backend Architect"),
-        ("gis", "GIS QA Engineer"),
-    ]
+def test_catalog_discovers_every_frontmatter_agent():
+    with tempfile.TemporaryDirectory() as td:
+        source = Path(td) / "agency"
+        (source / "gis").mkdir(parents=True)
+        (source / "engineering").mkdir()
+        (source / "gis" / "gis-qa.md").write_text(
+            "---\nname: GIS QA Engineer\ndescription: Validates spatial evidence.\n---\n# Body\n",
+            encoding="utf-8",
+        )
+        (source / "engineering" / "backend.md").write_text(
+            "---\nname: Backend Architect\ndescription: Designs reliable services.\n---\n# Body\n",
+            encoding="utf-8",
+        )
+        profiles = discover_agents(source)
+        assert [(p.division, p.name) for p in profiles] == [
+            ("engineering", "Backend Architect"),
+            ("gis", "GIS QA Engineer"),
+        ]
 
-def test_catalog_rejects_count_or_division_drift(tmp_path):
+def test_catalog_rejects_count_or_division_drift():
     lock = AgencyLock(
         repository="msitarzewski/agency-agents",
         commit="ebe9c99acb5c96f9468de368d8bead775387d1a7",
@@ -99,7 +100,6 @@ def test_catalog_rejects_count_or_division_drift(tmp_path):
 
 - [ ] **Step 2: Run the targeted test and verify it fails**
 
-Run: `python3 -c "import tests.test_agency_catalog as t; t.test_catalog_discovers_every_frontmatter_agent(__import__('pathlib').Path('/tmp/not-used'))"` is not used because the repository runner owns temporary setup.  
 Run: `python3 tests/run_tests.py`  
 Expected: FAIL importing `lucidfence.core.agency_catalog`.
 
@@ -269,7 +269,7 @@ git commit -m "feat: select and record night shift squads"
 - [ ] **Step 1: Write failing baseline and delta tests**
 
 ```python
-def test_first_observation_is_baseline_not_trending(tmp_path):
+def test_first_observation_is_baseline_not_trending():
     observation = RepoObservation("tidwall/tile38", "2026-08-16T00:17:00Z", 9714, 621, 100, "2026-08-07T12:16:28Z", 1, 20)
     candidates = score_trends([observation], now=parse_time("2026-08-16T00:17:00Z"))
     assert candidates[0].status == "baseline"
