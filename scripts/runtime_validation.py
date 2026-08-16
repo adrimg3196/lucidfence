@@ -366,6 +366,24 @@ def main() -> int:
               and "activo" in status.stdout and stop.returncode == 0 and down,
               f"start_rc={start.returncode}, health={s_cli}, status='{status.stdout.splitlines()[0] if status.stdout else ''}', stop_rc={stop.returncode}, apagado={down}")
 
+        # ============ 11. CLI quickstart: del install a ver la flota ==========
+        print("\n== CLI quickstart (time-to-first-value del admin) ==")
+        qs_env = dict(os.environ, LUCIDFENCE_PORT="8793",
+                      LUCIDFENCE_DATA_DIR=str(tmp / "qs-data"))
+        qs = subprocess.run([sys.executable, "lucidfence/cli.py", "quickstart"],
+                            text=True, capture_output=True, timeout=120, env=qs_env)
+        s_qs = 0
+        try:
+            s_qs, _b, _c = http_req("GET", "/api/health", port=8793)
+        except OSError:
+            pass
+        subprocess.run([sys.executable, "lucidfence/cli.py", "stop"],
+                       text=True, capture_output=True, timeout=60, env=qs_env)
+        check("CLI quickstart arranca y guía hasta la flota viva",
+              qs.returncode == 0 and s_qs == 200
+              and "[1/4] OK" in qs.stdout and "Abre tu flota" in qs.stdout,
+              f"qs_rc={qs.returncode}, health={s_qs}")
+
     finally:
         receiver.shutdown()
         if server_proc:

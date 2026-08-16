@@ -11,6 +11,28 @@ Cada loop delega decisiones de dominio en un bench de especialistas
 `.claude/agents/`); el organigrama loop→especialistas→derechos de decisión está
 en `docs/internal/agency/ORG.md`.
 
+## Norte de la flota (goal, propietario 2026-08-16)
+
+**TODO loop y cron existe para mejorar el producto** — un LucidFence que un
+administrador IT real elige y usa. Ningún loop es un fin en sí mismo. Regla que
+prevalece sobre la función concreta de cada loop:
+
+1. **El producto es la vara de medir.** Antes de actuar, cada loop se pregunta:
+   *¿esto mejora el producto para el admin, o habilita/protege una mejora?* Si
+   la respuesta es no, no se hace.
+2. **Todo hallazgo de producto viaja a Admin-value.** Cualquier loop (Housekeeper,
+   Guardián, Deps, Dirección, Centinela, Growth, Lanzamiento, Roadmap) que al
+   hacer su trabajo vea una oportunidad de mejora de producto la anota en el
+   backlog de la sección "Loop admin-value" de `STATE.md` — no la implementa
+   fuera de su carril, pero **jamás la deja pasar sin registrarla**.
+3. **Admin-value es el loop de producto por excelencia** y tiene prioridad de
+   recursos; los loops de plataforma (Housekeeper/Guardián/Deps) existen para
+   que Admin-value pueda entregar rápido y seguro. Centinela protege el producto,
+   Roadmap le da rumbo, Lanzamiento lo entrega, Growth consigue que se use,
+   Dirección informa del avance del producto.
+4. **Reporting en clave de producto.** Cada resumen dice qué mejoró (o habilitó)
+   para el admin IT, no solo qué tarea corrió.
+
 ## Active loops
 
 ### Admin-value (L2 — asistido, cadencia semanal)
