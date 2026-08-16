@@ -1,4 +1,4 @@
---- recon repos 2026-08-16T01:26:17Z ---
+--- recon repos 2026-08-16T06:42:43Z ---
 === RECON REPOS (GitHub) — inspiracion video LucidFence ===
 
 1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
@@ -41,7 +41,7 @@ Total referencias traidas: 7 (minimo 3)
   X: (no cookies X)
   Reddit: (no cookie Reddit)
 
---- recon social 2026-08-16T01:26:18Z ---
+--- recon social 2026-08-16T06:42:44Z ---
 === RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
 
 >>> YouTube: Applivery UEM
