@@ -189,11 +189,15 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    `saas_server.py`, `notifier.py`, contrato de adapters (`base.py` con bump
    mayor + mock offline), modelo de sesión, empaquetado Desktop, bumps MAJOR
    de deps, postura de seguridad — lo auto-mergea su loop dueño EN CUANTO
-   pasa el **gate QA de máquina**: CI verde + batería runtime N/N + tests de
-   regresión relevantes + `VEREDICTO QA: APTO`. Un fix de seguridad exige
-   además su test de regresión (falla antes / pasa después). El gate QA es
-   innegociable: "auto-merge" = "sin humano", jamás "sin comprobar". La
-   denylist absoluta de `loop-constraints.md` no entra ni en verde.
+   pasa el **gate QA de máquina**. Ese gate es UN comando, la definición de
+   "hecho" del repo (estilo `pnpm verify` de agentic-ship): **`python3
+   scripts/verify.py`** — coherencia de versión + enlaces de docs + batería
+   runtime N/N + suite honesta (tolera solo la baseline OIDC del contenedor).
+   Verde local + CI verde + `VEREDICTO QA: APTO` = mergeable. Un fix de
+   seguridad exige además su test de regresión (falla antes / pasa después).
+   El gate es innegociable: "auto-merge" = "sin humano", jamás "sin
+   comprobar". La denylist absoluta de `loop-constraints.md` no entra ni en
+   verde.
    - **Releases: autónomas** (propietario, 2026-08-16: "publica releases
      nuevas también"). Las publica el loop Lanzamiento: bumpea versión,
      mergea `.release-version` → `release.yml` construye, instala y arranca

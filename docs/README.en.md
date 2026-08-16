@@ -2,9 +2,9 @@
 
 > **Geofencing that doesn't exfiltrate. Risk that explains itself.**
 
-[![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Multi-MDM](https://img.shields.io/badge/MDM-Applivery%20%7C%20Intune%20%7C%20Jamf-9cf)](lucidfence/core/adapters/ADAPTER.md)
-[![Local-first](https://img.shields.io/badge/architecture-100%25%20local-blue)](saas_server.py)
+[![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](../LICENSE)
+[![Multi-MDM](https://img.shields.io/badge/MDM-Applivery%20%7C%20Intune%20%7C%20Jamf-9cf)](../lucidfence/core/adapters/ADAPTER.md)
+[![Local-first](https://img.shields.io/badge/architecture-100%25%20local-blue)](../saas_server.py)
 
 Local-first **UEM Risk & Geofence Control Plane** that turns your mobile fleet's
 geolocation into **explainable risk** (0–100 score **with its reason**) and
