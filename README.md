@@ -92,9 +92,9 @@ Si quieres que esto sea **producto open-source que alguien usa sin que tú esté
   correlacionados con el riesgo geoespacial. Ver
   [`docs/integrations/OSQUERY.md`](docs/integrations/OSQUERY.md).
 - Cloud vitrina: `data/cloud_state.json` publicado, leído por `static/cloud.html`.
-- Test runner honesto (105 tests = verde): gates reales, no stubs.
+- Test runner honesto (`python3 tests/run_tests.py`): gates reales, no stubs; el tally vive en CI, no aquí (los números en prosa caducan).
 - Cron de estado local: `geofence_daily_report.sh` genera el resumen sin red.
-- License: MIT (LICENSE), configurable en pyproject.toml si el mantenedor decide cambiar.
+- License: Apache-2.0 (`LICENSE`), alineada con `pyproject.toml` y la fórmula Homebrew.
 
 ## Credits
 
