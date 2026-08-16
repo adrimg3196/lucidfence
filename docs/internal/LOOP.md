@@ -77,9 +77,14 @@ file documents the improvement loop used to maintain it, adapting the
 - **Trigger:** Routine semanal (martes 06:17 UTC ≈ 08:17 Madrid).
 - **Rama:** `claude/growth-loop` (propiedad exclusiva).
 - **Gate:** cambios de superficie pública (README/Pages/topics) mergeables
-  con el gate QA; **el outreach JAMÁS se publica** — queda en
-  `docs/gtm/outbox/` para que lo envíe el propietario. Sin spam, sin
-  social proof inventado, sin telemetría.
+  con el gate QA. **Outreach con aprobación previa del propietario**:
+  lo ejecutable con la cuenta de GitHub (PR a una lista awesome-*,
+  discussion, respuesta útil en un repo relacionado) se propone en una PR
+  `outreach:` con el contenido exacto y el destino — **el merge del
+  propietario ES la aprobación** y el siguiente run lo publica y registra
+  el enlace. Fuera de GitHub (HN/Reddit/LinkedIn: el agente no tiene esas
+  cuentas) queda en `docs/gtm/outbox/` para copy/paste del propietario.
+  Sin spam, sin social proof inventado, sin telemetría.
 - **Estado/memoria:** `docs/internal/growth/` (experiments, mentions) +
   línea en el run-log común.
 
@@ -134,7 +139,8 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    corren en silencio; sus resultados llegan al propietario vía el digest y
    quedan auditables en el run-log común y las PRs. Un loop solo rompe el
    silencio si detecta algo que no puede esperar al lunes (main roto que no
-   sabe arreglar, secreto filtrado, PR maliciosa).
+   sabe arreglar, secreto filtrado, PR maliciosa) — y Growth, además, puede
+   notificar cuando deja una PR `outreach:` esperando aprobación.
 
 ### Contributor PR triage (L1 — human-gated)
 - **Trigger:** new PR or issue on `adrimg3196/lucidfence`.

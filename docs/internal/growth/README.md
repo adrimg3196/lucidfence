@@ -45,11 +45,19 @@ tracción. Los experimentos sin resultado a 3 semanas se cierran como
 
 ## Límites duros (los que protegen al propietario)
 
-- **JAMÁS publicar en plataformas de terceros** (Reddit, HN, LinkedIn,
-  X…) ni enviar emails: los borradores van a `docs/gtm/outbox/` y los
-  envía el propietario. La identidad pública es suya.
-- Sin spam de issues/PRs a otros repos. Una submission a una lista
-  awesome-* se PREPARA (rama + diff listo) y se lista en "Te espera".
+- **Publicar requiere aprobación previa del propietario, siempre.** El
+  flujo: el loop propone la publicación en una PR `outreach:` con el
+  contenido EXACTO y el destino; el merge del propietario es el sí; el
+  siguiente run la ejecuta y registra el enlace en `mentions.md` y el
+  resultado en `experiments.md`. Sin merge no se publica nada, nunca.
+- Ámbito de lo ejecutable por el loop: solo la cuenta de GitHub
+  (submission a listas awesome-*, discussions, UNA respuesta útil y no
+  promocional en un repo relacionado). Plataformas donde el agente no
+  tiene cuenta (HN, Reddit, LinkedIn, X, email): borrador en
+  `docs/gtm/outbox/`, lo publica el propietario.
+- Sin spam: máximo UNA publicación externa por ciclo, siempre con valor
+  genuino para quien la recibe; a un mismo destino no se vuelve en <30
+  días.
 - Sin testimonios, métricas o social proof inventados (la vitrina ya se
   limpió de eso una vez, #119; el guard de Pages lo vigila).
 - Sin telemetría en el producto: la adopción se mide solo con señales
