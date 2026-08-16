@@ -43,8 +43,34 @@ import random
 import time
 import urllib.request
 import urllib.error
+from urllib.parse import quote, urlsplit
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def _same_origin(candidate: str, base: str) -> bool:
+    """True only if `candidate` has the same scheme/host/port as `base`.
+
+    Guards SSRF/token-theft: pagination must never send the Bearer token to a
+    host the remote MDM response chose via a Link header (finding: A10 SSRF).
+    """
+    try:
+        c = urlsplit(candidate)
+        b = urlsplit(base)
+    except ValueError:
+        return False
+
+    def _port(p):
+        if p.port:
+            return p.port
+        return {"https": 443, "http": 80}.get(p.scheme)
+
+    return (
+        bool(c.scheme)
+        and c.scheme == b.scheme
+        and (c.hostname or "").lower() == (b.hostname or "").lower()
+        and _port(c) == _port(b)
+    )
 
 
 @dataclass
@@ -178,19 +204,25 @@ class LiveLocationSource:
                 if seen > 100:
                     break
                 continue
-            url = self._next_from_link(link)
+            url = self._next_from_link(link, self._api_base)
             if not url:
                 break
         return results
 
     @staticmethod
-    def _next_from_link(link_header: Optional[str]) -> Optional[str]:
+    def _next_from_link(link_header: Optional[str], base: str) -> Optional[str]:
         if not link_header:
             return None
         for part in link_header.split(","):
             seg = part.split(";")
             if len(seg) >= 2 and 'rel="next"' in seg[1]:
-                return seg[0].strip().strip("<>")
+                candidate = seg[0].strip().strip("<>")
+                # SSRF guard: only follow pagination on the SAME origin as the
+                # API base. Never re-send the Bearer token to a host the MDM
+                # response picked via the Link header.
+                if _same_origin(candidate, base):
+                    return candidate
+                return None
         return None
 
     # --------------------------------------------------------------- helpers
@@ -311,7 +343,9 @@ class LiveLocationSource:
 
     def fetch_one(self, device_id: str) -> Optional[LocationReport]:
         self.last_error = None
-        path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
+        path = self.endpoint_template.format(
+            org_id=self.org_id, device_id=quote(str(device_id), safe="")
+        )
         url = f"{self._api_base}{path}"
         req = urllib.request.Request(url, headers=self._headers())
         try:

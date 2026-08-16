@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -120,7 +121,7 @@ class FleetAdapter(MDMAdapter):
 
     def _build_request(self, device_id: str, action: str, params: dict):
         fleet_verb = _FLEET_ACTION.get(action, action)
-        url = f"{self.endpoint_template}/api/v1/fleet/device/{device_id}/{fleet_verb}"
+        url = f"{self.endpoint_template}/api/v1/fleet/device/{quote(str(device_id), safe='')}/{fleet_verb}"
         body: dict = {}
         if action == "message":
             body = {"message": params.get("message", "")}

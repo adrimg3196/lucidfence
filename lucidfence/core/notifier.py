@@ -52,6 +52,12 @@ def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dic
     """
     import http.client
     parsed = urlparse(url)
+    # Only http/https with a real host. Reject exotic schemes (file://, gopher://,
+    # ftp://) and credential-smuggling (http://user:pass@host). The destination
+    # IP is intentionally NOT restricted: in a self-hosted deployment the admin
+    # may legitimately point the webhook at an internal SIEM (10.x, loopback).
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        return {"ok": False, "error": f"webhook_url no permitido (esquema/host): {url!r}"}
     host, port = parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
     if isinstance(payload, bytes):
         body = payload
