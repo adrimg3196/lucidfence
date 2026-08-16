@@ -17,7 +17,7 @@ en `docs/internal/agency/ORG.md`.
 - **Patrón completo:** `docs/internal/loop-admin-value.md`.
 - **Objetivo:** empujar el producto a "imprescindible para el admin IT"
   (onboarding sin fricción, rollout seguro, claims siempre validados).
-- **Trigger:** Routine semanal (sábados 00:07 UTC ≈ 02:07 Madrid) que lanza
+- **Trigger:** Routine semanal (sábados 00:00 UTC ≈ 02:00 Madrid) que lanza
   una sesión nueva; también ejecutable a mano pidiendo "ejecuta un ciclo del
   loop admin-value".
 - **Rama:** `claude/admin-value-loop` (propiedad exclusiva; ver Coordinación).
@@ -183,7 +183,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Loop | Cadencia |
    |---|---|
    | Housekeeper | diario 23:13, excepto noche del viernes |
-   | Admin-value | sábado 00:07 |
+   | Admin-value | sábado 00:00 |
    | Guardián | diario 04:23 |
    | Dirección | lunes 05:33 |
    | Deps-sweeper | miércoles 21:37 |
@@ -309,6 +309,14 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
   loop workflows.
 - **MCP usage:** not required for this loop. If a connector is added later, it
   MUST be read-only (issue/PR discovery) and scoped in `docs/internal/LOOP.md` before use.
+- **Requisito de las Routines (connectors GitHub):** cada loop auto-mergea vía
+  las tools `mcp__github__*` (abrir PR, `get_check_runs`, `merge_pull_request`).
+  Una Routine creada sin esos connectors dispara sesiones que solo pueden hacer
+  `git push` por Bash, pero NO abrir/mergear PRs → el loop dejaría PRs colgadas.
+  Al crear/editar una Routine de loop hay que garantizar que la sesión fresca
+  hereda los connectors de GitHub (crearla desde una sesión que los tenga, o
+  desde la UI de Routines de claude.ai). Verificar en el primer run real de cada
+  loop que pudo mergear; si no, el Guardián lo verá como PR colgada y lo anota.
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the
