@@ -68,6 +68,21 @@ file documents the improvement loop used to maintain it, adapting the
   tracción); mergeable con gate QA (docs internos).
 - **Estado/memoria:** `docs/internal/exec/` (informes + `traction.jsonl`).
 
+### Growth (L2 — vigilar la adopción y empujarla; semanal)
+- **Especificación completa:** `docs/internal/growth/README.md`.
+- **Objetivo:** que la gente encuentre y use el producto. Vigila inbound
+  (issues sin respuesta), menciones y superficie pública; ejecuta UN
+  experimento de crecimiento por ciclo (discoverability, casos de uso,
+  borradores de outreach) y lee su resultado en la serie de tracción.
+- **Trigger:** Routine semanal (martes 06:17 UTC ≈ 08:17 Madrid).
+- **Rama:** `claude/growth-loop` (propiedad exclusiva).
+- **Gate:** cambios de superficie pública (README/Pages/topics) mergeables
+  con el gate QA; **el outreach JAMÁS se publica** — queda en
+  `docs/gtm/outbox/` para que lo envíe el propietario. Sin spam, sin
+  social proof inventado, sin telemetría.
+- **Estado/memoria:** `docs/internal/growth/` (experiments, mentions) +
+  línea en el run-log común.
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
@@ -81,6 +96,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Guardián | `claude/ci-sweeper` |
    | Deps-sweeper | `claude/deps-sweeper` |
    | Dirección | `claude/exec-digest` |
+   | Growth | `claude/growth-loop` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -92,6 +108,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Guardián | diario 04:23 |
    | Dirección | lunes 05:33 |
    | Deps-sweeper | miércoles 21:37 |
+   | Growth | martes 06:17 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
@@ -106,8 +123,9 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    `docs/internal/loop-run-log.md` (formato existente), además de su memoria
    propia. El run-log es la cronología única de lo que las máquinas hicieron
    al repo.
-6. **Merges.** Admin-value, Guardián (solo fixes de CI verificados) y
-   Dirección (solo `docs/internal/exec/`) mergean con el gate QA completo;
+6. **Merges.** Admin-value, Guardián (solo fixes de CI verificados),
+   Dirección (solo `docs/internal/exec/`) y Growth (solo superficie
+   pública y `docs/internal/growth/`) mergean con el gate QA completo;
    Housekeeper y Deps-sweeper nunca mergean. Los gates humanos de
    `loop-constraints.md` aplican a todos sin excepción.
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:

@@ -1,0 +1,59 @@
+# Growth — vigilar la adopción y empujarla (un experimento por semana)
+
+Loop semanal de crecimiento. Dirección *mide* la tracción; este loop la
+*empuja*: cada ciclo formula UNA hipótesis, ejecuta UN experimento, y el
+resultado (con números) aparece en el digest del lunes. Growth engineering
+honesto: sin humo, sin spam, sin métricas inventadas.
+
+## Qué vigila (cada ciclo)
+
+1. **Inbound sin atender** — issues nuevas o preguntas sin respuesta.
+   Regla: ninguna issue de un usuario real pasa >1 ciclo sin una respuesta
+   útil (primera impresión = adopción). Spam/duplicados: política de
+   `LOOP.md`.
+2. **Menciones y llegada** — búsqueda de menciones de LucidFence
+   (GitHub code/repo search; web search si está disponible). Nuevas
+   menciones → se registran en `mentions.md` con enlace y contexto.
+3. **Superficie pública** — Pages vivo y sin strings prohibidos, README con
+   quickstart arriba, description y topics del repo alineados con lo que un
+   admin buscaría (los topics son el SEO de GitHub), release notes de la
+   última release legibles.
+4. **La serie de tracción** (`docs/internal/exec/traction.jsonl`, escrita
+   por Dirección) — para leer si el experimento anterior movió algo.
+
+## Qué ejecuta (UN experimento por ciclo, de este menú o similar)
+
+- Mejoras de discoverability del repo: topics, description, README
+  (quickstart primero, GIF/captura del dashboard, badges honestos).
+- Páginas de caso de uso en la vitrina ("geofencing para flotas Intune sin
+  exfiltrar ubicación", por vertical) — siempre con claims validados.
+- Contenido técnico publicable EN el repo/Pages: comparativas honestas,
+  guías que respondan a búsquedas reales de admins.
+- **Borradores de outreach** en `docs/gtm/outbox/` (Show HN, r/selfhosted,
+  r/sysadmin, LinkedIn, listas awesome-*): redactados, listos para que EL
+  PROPIETARIO los publique con un copy/paste. El material previo de
+  `docs/gtm/` (community-strategy, launch-copy) es la base — operarlo, no
+  reinventarlo.
+- Mejoras de first-run (si son de producto → derivación al Admin-value).
+
+## Registro de experimentos (`experiments.md`)
+
+Una entrada por experimento: fecha, hipótesis, acción, métrica esperada,
+y (rellenado en ciclos posteriores) resultado real leído de la serie de
+tracción. Los experimentos sin resultado a 3 semanas se cierran como
+"sin señal". Append-only.
+
+## Límites duros (los que protegen al propietario)
+
+- **JAMÁS publicar en plataformas de terceros** (Reddit, HN, LinkedIn,
+  X…) ni enviar emails: los borradores van a `docs/gtm/outbox/` y los
+  envía el propietario. La identidad pública es suya.
+- Sin spam de issues/PRs a otros repos. Una submission a una lista
+  awesome-* se PREPARA (rama + diff listo) y se lista en "Te espera".
+- Sin testimonios, métricas o social proof inventados (la vitrina ya se
+  limpió de eso una vez, #119; el guard de Pages lo vigila).
+- Sin telemetría en el producto: la adopción se mide solo con señales
+  públicas (stars, forks, descargas, issues, menciones).
+- Todo cambio va por PR con el gate QA; cambios de superficie pública
+  (Pages/README/topics) son mergeables por el loop; outreach es SIEMPRE
+  del propietario.
