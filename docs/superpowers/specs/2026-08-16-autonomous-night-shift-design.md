@@ -148,7 +148,7 @@ Trend-derived work must:
 - avoid paid SDKs, mandatory cloud services and invasive telemetry;
 - include tests and a rollback path.
 
-The first validated candidate is accuracy-aware geofencing with boundary hysteresis to reduce false enter/exit events. It remains queued behind the current blocked PR backlog and the verified coordinate-`0.0` defect.
+The first validated candidate is accuracy-aware geofencing with boundary hysteresis to reduce false enter/exit events. It remains queued behind the current blocked PR backlog. The coordinate-`0.0` defect is already fixed on `main`; the night shift must verify its regression coverage and close the stale issue rather than duplicate the implementation.
 
 ## 8. Automated Merge Gates
 
@@ -219,7 +219,7 @@ The design is complete when implementation demonstrates all of the following:
 - catalogue validation finds exactly the complete pinned upstream agent set and all divisions;
 - a test objective selects 3–7 appropriate roles and records the exact pinned sources;
 - no prompt or workflow can authorize forbidden fleet actions;
-- the coordinate-`0.0` regression is fixed with tests;
+- the existing coordinate-`0.0` fix is verified by regression tests and its stale issue is closed;
 - the current PR backlog is inventoried and overlapping AMAPI work is identified before new feature creation;
 - trend snapshots distinguish baseline from measured growth;
 - a dry run produces a business-language report without unsupported claims;
@@ -238,5 +238,5 @@ The design is complete when implementation demonstrates all of the following:
 4. Create and validate the personal skill.
 5. Install the four scheduled tasks.
 6. Run one on-demand dry pass.
-7. Run one bounded live pass that may fix the coordinate-`0.0` defect but may not execute fleet actions.
+7. Run one bounded live pass that verifies and closes the stale coordinate-`0.0` issue, or selects the next smallest verified defect, but may not execute fleet actions.
 8. Deliver the resulting executive report.
