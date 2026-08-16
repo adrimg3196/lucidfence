@@ -23,8 +23,9 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    log; faltan roles viewer/operator gestionables y su superficie en UI/docs.
 4. **Agente iOS empaquetado** — `ios_geofence` (geocercas on-device, lo más
    privado) sin guía de despliegue vía el propio MDM (perfil/app).
-5. **Quickstart guiado** — `lucidfence quickstart`: del install a ver tu
-   flota en N pasos autoverificados (baja time-to-first-value, la métrica 1).
+5. ~~**Quickstart guiado**~~ — **HECHO 2026-08-16**: `lucidfence quickstart`
+   (entorno → app → dashboard → fuente de datos, autoverificado; check runtime
+   en la batería + tests). Baja el time-to-first-value del admin nuevo.
 6. **Windows geofencing lógico** — DSC ya existe; falta ubicación por red
    (osquery/IP) documentada y correlacionada como en Fleet.
 

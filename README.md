@@ -16,12 +16,17 @@ Local-first: el estado de los dispositivos vive en tu máquina. La nube es solo 
 # o
 docker compose up -d
 
-# 2 — correr local
-python3 saas_server.py            # :8765
+# 2 — del install a ver tu flota, en pasos autoverificados
+lucidfence quickstart             # entorno → app → dashboard → fuente de datos
+# (equivale a: python3 saas_server.py en :8765 + comprobaciones)
 
-# 3 — tests (honestos, 105 = verde)
+# 3 — tests (honestos)
 python3 tests/run_tests.py
 ```
+
+`lucidfence quickstart` es el camino recomendado para un admin nuevo: comprueba
+el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
+tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
 
 Dashboard: `http://localhost:8765` → `static/dashboard.html` (SPA local que habla con `:8765`).
 
