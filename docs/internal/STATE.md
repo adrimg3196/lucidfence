@@ -39,6 +39,23 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    `location_source.py` (nunca sobreescribe GPS real); `docs/integrations/NETWORK_LOCATION.md`
    + matriz actualizada; 20 tests (CIDR/SSID/BSSID, precedencia, envenenado).
 
+### Pasada de la flota completa sobre el producto (2026-08-17)
+
+Con la entrega desbloqueada, los loops corrieron en paralelo sobre el producto;
+cada uno entregó una mejora real y verificada (`verify.py` APTO 4/4). Todas
+mergeadas en **#164**:
+
+- **Centinela (seguridad):** SSRF corregida en `/api/providers[/test]` —
+  `endpoint`/`base_url` ahora validados con `_safe_webhook_url` (solo https
+  externo). Antes: escaneo de infra interna + reflejo de respuesta. Test PoC.
+- **Revisión (correctness):** bug de paginación por cursor en
+  `location_source.py` (separador sobre `url` en vez de `path`) que perdía todo
+  dispositivo desde la página 3 y hacía descartar el ciclo. Fix de un token + test.
+- **Admin-value:** tarjeta "Registro de auditoría" en el dashboard (integridad de
+  la cadena + export CEF a SIEM); da pantalla al rol `auditor`. Cero backend nuevo.
+- **Realidad (honestidad):** corregido el claim falso "105 tests" (real 525) y un
+  enlace roto en `demo-walkthrough.md`.
+
 ### Derivado del loop Roadmap (2026-08-16, pasada ciclo 1)
 
 Empujado desde `docs/roadmap/PRODUCT_ROADMAP.md` §Próximo (el loop Roadmap
