@@ -1443,6 +1443,43 @@ async function renderSettings(){
   // Equipo / Roles: gestionar RBAC desde el dashboard. Solo lo ve el owner,
   // que es el único rol con la capability user:role en el backend.
   renderTeamCard();
+  // Registro de auditoría: hace visible el log encadenado (a prueba de
+  // manipulación) que ya se escribe en cada acción privilegiada. Da al rol
+  // auditor una pantalla y responde "quién cambió qué" sin abrir audit.jsonl.
+  renderAuditCard();
+}
+
+async function renderAuditCard(){
+  // Mismo círculo que autoriza el backend en GET /api/audit (403 en otro caso).
+  if(!(App.org && ["owner","admin","viewer","auditor"].includes(App.org.role))) return;
+  const card=document.createElement("div"); card.className="card"; card.style.marginTop="14px";
+  card.innerHTML='<div class="hd"><h3>Registro de auditoría</h3><div class="grow"></div>'+
+    '<span class="tag unk" id="auditIntegrity"><span class="d"></span>comprobando…</span></div>'+
+    '<div class="bd" id="auditBody"><div class="sk" style="height:200px"></div></div>';
+  $("#view-settings").appendChild(card);
+  let data;
+  try{ data = await api("/api/audit"); }
+  catch(e){ $("#auditBody").innerHTML=`<div class="help">No se pudo cargar la auditoría: ${esc(e.message||"")}</div>`; return; }
+  const integ = data.integrity||{};
+  const chip = $("#auditIntegrity");
+  if(integ.ok){ chip.className="tag in"; chip.innerHTML=`<span class="d"></span>cadena íntegra · ${integ.events||0} eventos`; }
+  else { chip.className="tag nocomp"; chip.innerHTML=`<span class="d"></span>cadena alterada${integ.error?": "+esc(integ.error):""}`; }
+  // Detalle compacto: solo campos relevantes de cada evento (whitelist).
+  const DETAIL_KEYS=["mode","role","key_id","goal_id","segment","provider","target"];
+  const detail=(e)=>DETAIL_KEYS.filter(k=>e[k]!=null&&e[k]!=="").map(k=>`${esc(k)}=${esc(e[k])}`).join(" · ");
+  const events=(data.events||[]).slice(-100).reverse();
+  const rows=events.map(e=>`<tr>
+      <td class="sub" style="white-space:nowrap">${esc(e.ts||"")}</td>
+      <td><b>${esc(e.event||"evento")}</b></td>
+      <td class="sub">${esc(e.actor||"—")}</td>
+      <td class="sub" style="font-family:monospace;font-size:11px">${detail(e)}</td>
+    </tr>`).join("");
+  $("#auditBody").innerHTML=
+    '<div class="help">Cada acción privilegiada (enforcement, roles, claves API, providers, exportaciones) queda registrada en un log <b>encadenado por hash</b>: si alguien altera una línea, la cadena se rompe y se marca arriba.</div>'+
+    (rows?`<table class="tbl" style="margin-top:10px;width:100%"><thead><tr><th>Cuándo</th><th>Evento</th><th>Actor</th><th>Detalle</th></tr></thead><tbody>${rows}</tbody></table>`
+        :'<div class="help" style="margin-top:10px">Aún no hay eventos de auditoría.</div>')+
+    `<details style="margin-top:12px"><summary>Exportar a SIEM (CEF)</summary>`+
+    `<textarea class="input" readonly rows="6" style="margin-top:6px;width:100%;font-family:monospace;font-size:11px" onclick="this.select()">${esc((data.cef||[]).join("\n"))}</textarea></details>`;
 }
 
 async function renderTeamCard(){

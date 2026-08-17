@@ -298,6 +298,18 @@ def main() -> int:
               s == 400 and s2 == 200 and audited,
               f"http={s}, guardrail_ok={s == 400}, member.role.changed_en_audit={audited}")
 
+        # ---- Auditoría visible en el dashboard (GET /api/audit) ----
+        # La tarjeta "Registro de auditoría" renderiza tal cual esta respuesta:
+        # eventos + verdicto de integridad + export CEF alineado 1:1.
+        print("\n== Auditoría visible (GET /api/audit: events + integrity + cef) ==")
+        s, adt, _ = http_req("GET", "/api/audit", cookie=cookie)
+        ev = (adt or {}).get("events", [])
+        integ = (adt or {}).get("integrity", {})
+        cef = (adt or {}).get("cef", [])
+        check("GET /api/audit devuelve cadena íntegra, eventos y CEF alineado",
+              s == 200 and integ.get("ok") is True and len(ev) > 0 and len(cef) == len(ev),
+              f"http={s}, integridad_ok={integ.get('ok')}, eventos={len(ev)}, cef={len(cef)}")
+
         # ============ 4. What-if replay vía API =============================
         print("\n== P0.1 Simulador what-if (POST /api/policies/replay) ==")
         s, replay, _ = http_req("POST", "/api/policies/replay", cookie=cookie, body={
