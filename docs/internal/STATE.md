@@ -13,9 +13,10 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 
 ### Backlog priorizado (evidencia: análisis de practicidad 2026-08-15)
 
-1. **Enforcement desde el dashboard** — hoy `enforcement.*` solo se toca por
-   YAML; el admin debería ver Y editar la fase (con permiso + audit log del
-   cambio). El chip ya muestra el estado (#135); falta el control.
+1. ~~**Enforcement desde el dashboard**~~ — **HECHO**: el control existe y está
+   cableado (`static/dashboard.html` `#enfSelect` → `POST /api/settings/enforcement`,
+   gated a owner/admin por `engine:config`, con audit y recarga del engine). El
+   chip muestra el estado (#135) y el select edita la fase (observe|enforce).
 2. ~~**Multi-UEM onboarding**~~ — **HECHO 2026-08-17 (#158)**: registro de
    providers con etiqueta de segmento de flota (móviles/portátiles) + guía
    `docs/integrations/MULTI_UEM.md`; de paso 2 fixes de seguridad (fuga de
@@ -30,8 +31,13 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 5. ~~**Quickstart guiado**~~ — **HECHO 2026-08-16**: `lucidfence quickstart`
    (entorno → app → dashboard → fuente de datos, autoverificado; check runtime
    en la batería + tests). Baja el time-to-first-value del admin nuevo.
-6. **Windows geofencing lógico** — DSC ya existe; falta ubicación por red
-   (osquery/IP) documentada y correlacionada como en Fleet.
+6. ~~**Windows geofencing lógico**~~ — **HECHO 2026-08-17**: ubicación gruesa por
+   señal de red para portátiles/Windows sin GPS. `lucidfence/core/network_location.py`
+   (stdlib `ipaddress`; mapeo declarado por el operador IP-CIDR/SSID/BSSID → sitio
+   con coords + radio; cero geoip de terceros, nunca inventa, `accuracy_m` = radio,
+   `location_source="network"`); enriquecimiento inerte-por-defecto en
+   `location_source.py` (nunca sobreescribe GPS real); `docs/integrations/NETWORK_LOCATION.md`
+   + matriz actualizada; 20 tests (CIDR/SSID/BSSID, precedencia, envenenado).
 
 ### Derivado del loop Roadmap (2026-08-16, pasada ciclo 1)
 

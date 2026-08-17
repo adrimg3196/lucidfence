@@ -462,9 +462,74 @@ class SimulationLocationSource:
         return None
 
 
+# ---------------------------------------------- network (geofencing lógico) enrich
+
+
+def _enrich_report_with_network(report: "LocationReport", resolver) -> "LocationReport":
+    """Fill a coordinate-less report from operator-declared network sites.
+
+    Windows/laptops sin GPS (Intune/Fleet/osquery) llegan sin lat/lng. Si el
+    report NO tiene un fix usable y las señales de red (IP de salida, SSID,
+    BSSID) casan con un sitio declarado, rellenamos una ubicación GRUESA y
+    honesta: `accuracy_m == radius del sitio` y `location_source="network"`.
+
+    Nunca sobreescribe un fix GPS real. Nunca inventa: si el resolver no casa,
+    el report se devuelve intacto (y el dispositivo se queda `unknown`).
+    """
+    if report is None or resolver is None:
+        return report
+    # ¿Ya tiene coordenadas usables? Entonces es un fix real: no se toca.
+    if report.lat is not None and report.lng is not None:
+        return report
+    raw = report.raw if isinstance(report.raw, dict) else {}
+    signals = {
+        "ip": report.ip,
+        "ssid": raw.get("ssid") or raw.get("wifi_ssid") or raw.get("SSID"),
+        "bssid": raw.get("bssid") or raw.get("wifi_bssid") or raw.get("BSSID"),
+    }
+    try:
+        match = resolver.resolve(signals)
+    except Exception:
+        match = None
+    if not match:
+        return report
+    report.lat = match["lat"]
+    report.lng = match["lng"]
+    report.accuracy_m = match["accuracy_m"]
+    report.location_source = "network"
+    return report
+
+
+class _NetworkEnrichedSource:
+    """Decorates a location source, enriching coordinate-less reports.
+
+    Delegación transparente: cualquier atributo/método que el engine espere del
+    source original (last_error, fetch_one, etc.) se reenvía. Solo `fetch` y
+    `fetch_one` interceptan la salida para pasar cada report por el resolver.
+
+    Se instancia SOLO cuando hay `network_sites` válidos configurados; en su
+    ausencia `build_location_source` devuelve la fuente sin envolver, de modo que
+    el comportamiento es byte-idéntico cuando la función no está en uso.
+    """
+
+    def __init__(self, inner, resolver):
+        self._inner = inner
+        self._resolver = resolver
+
+    def fetch(self) -> list:
+        return [_enrich_report_with_network(r, self._resolver) for r in self._inner.fetch()]
+
+    def fetch_one(self, device_id: str):
+        return _enrich_report_with_network(self._inner.fetch_one(device_id), self._resolver)
+
+    def __getattr__(self, name):
+        # last_error y cualquier otro atributo viven en la fuente envuelta.
+        return getattr(self._inner, name)
+
+
 # ----------------------------------------------------------------------- factory
 def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fleet_seed.json",
-                          api_key: str = "", location_cfg: dict = None):
+                          api_key: str = "", location_cfg: dict = None, network_cfg: dict = None):
     """Return a location source for the given mode.
 
     mode == "live"       -> LiveLocationSource(org_id)  (reads APPLIVERY_API_KEY)
@@ -473,10 +538,22 @@ def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fle
 
     If `location_cfg` carries a `url` and mode is not simulation, the generic
     source wins (bring-your-own UEM API), regardless of the mode label.
+
+    Si `network_cfg` trae `network_sites` válidos (geofencing lógico por red),
+    la fuente resultante se envuelve para enriquecer reports sin coordenadas.
+    Sin `network_sites`, la fuente se devuelve TAL CUAL (inerte por defecto).
     """
     if location_cfg and location_cfg.get("url") and mode != "simulation":
         from lucidfence.core.generic_http_source import GenericHTTPLocationSource
-        return GenericHTTPLocationSource(location_cfg)
-    if mode == "live":
-        return LiveLocationSource(org_id=org_id, api_key=api_key)
-    return SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
+        source = GenericHTTPLocationSource(location_cfg)
+    elif mode == "live":
+        source = LiveLocationSource(org_id=org_id, api_key=api_key)
+    else:
+        source = SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
+
+    if network_cfg:
+        from lucidfence.core.network_location import NetworkLocationResolver
+        resolver = NetworkLocationResolver(network_cfg)
+        if resolver.configured:
+            return _NetworkEnrichedSource(source, resolver)
+    return source
