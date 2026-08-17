@@ -233,6 +233,27 @@ def main() -> int:
               s == 200 and cres.get("ok") is True and cres.get("action") == "set_compliance",
               f"http={s}, adapter={cres.get('adapter')}, ok={cres.get('ok')}")
 
+        # ============ 3c. Multi-UEM: registrar un provider en vivo ===========
+        # El flujo Admin-value de flota mixta: registrar un UEM (con su etiqueta
+        # de segmento) con engine:config y verificar que el listado lo refleja.
+        # Se usa el provider 'simulation' (mock offline, sin credenciales) para
+        # no exigir tokens reales, y se limpia al final.
+        print("\n== Multi-UEM (POST /api/providers registra y GET lo lista) ==")
+        s, preg, _ = http_req("POST", "/api/providers", cookie=cookie,
+                              body={"name": "simulation", "segment": "portátiles"})
+        s2, plist, _ = http_req("GET", "/api/providers", cookie=cookie)
+        provs = (plist or {}).get("providers") or []
+        sim = next((p for p in provs if p.get("name") == "simulation"), None)
+        check("POST /api/providers registra y GET lo lista con su segmento",
+              s == 200 and preg.get("ok") is True and s2 == 200
+              and sim is not None and sim.get("segment") == "portátiles",
+              f"post={s}/{preg.get('ok')}, get={s2}, segment={(sim or {}).get('segment')}")
+        s, pinv, _ = http_req("POST", "/api/providers", cookie=cookie,
+                             body={"name": "no_tal_uem"})
+        check("provider no soportado rechazado con 400", s == 400,
+              f"http={s}, body={pinv}")
+        http_req("DELETE", "/api/providers/simulation", cookie=cookie)
+
         # ============ 4. What-if replay vía API =============================
         print("\n== P0.1 Simulador what-if (POST /api/policies/replay) ==")
         s, replay, _ = http_req("POST", "/api/policies/replay", cookie=cookie, body={
