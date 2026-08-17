@@ -51,8 +51,10 @@ prioriza; Admin-value ejecuta):
    decisión del propietario: 100% free OSS, sin pricing ni enterprise (ver
    §Overrides). Declarado en `README.md` §Modelo.
 
-Queda abierto de producto: **onboarding externo** (README npm-style + FAQ para
-terceros) — ver `PRODUCT_ROADMAP.md` §Próximo #2.
+~~Queda abierto de producto: **onboarding externo**~~ — **HECHO 2026-08-17**:
+`docs/GETTING_STARTED.md` (npm-style: qué necesitas, instalar, comprobar que
+funciona, primer paso real conectando UEM, FAQ, cómo reportar bugs/seguridad),
+enlazada desde el README y con la fila "No está terminado" #73 cerrada.
 
 > Nota: el #1 del roadmap (verificar los 8 hallazgos Strix `open` de
 > `security/findings.md`) es **p0 pero dueño del Centinela**, no de Admin-value;
