@@ -1439,6 +1439,49 @@ async function renderSettings(){
   const aiPayload=()=>({enabled:$("#aiEnabled").classList.contains("on"),provider:$("#aiPreset").value,base_url:$("#aiBase").value,model:$("#aiModel").value,api_key:$("#aiKey").value});
   $("#aiSave").onclick=async()=>{const r=await api("/api/ai/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});if(r.ok){toast("AI guardada",r.enabled?r.model:"Desactivada","ok");renderSettings();}else toast("Error",r.error||"","bad");};
   $("#aiTest").onclick=async()=>{const r=await api("/api/ai/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});const out=$("#aiResult");out.className="test-result "+(r.ok?"ok show":"bad show");out.textContent=r.ok?`Conexión correcta · ${(r.models||[]).slice(0,3).join(', ')||'endpoint activo'}`:(r.error||"Fallo de conexión");};
+
+  // Equipo / Roles: gestionar RBAC desde el dashboard. Solo lo ve el owner,
+  // que es el único rol con la capability user:role en el backend.
+  renderTeamCard();
+}
+
+async function renderTeamCard(){
+  if(!(App.org && App.org.role === "owner")) return;
+  const card=document.createElement("div"); card.className="card"; card.style.marginTop="14px";
+  card.innerHTML='<div class="hd"><h3>Equipo · Roles</h3><div class="grow"></div>'+
+    '<span class="tag in"><span class="d"></span>solo propietario</span></div>'+
+    '<div class="bd" id="teamBody"><div class="sk" style="height:200px"></div></div>';
+  $("#view-settings").appendChild(card);
+  let data;
+  try{ data = await api("/api/members"); }
+  catch(e){ $("#teamBody").innerHTML=`<div class="help">No se pudo cargar el equipo: ${esc(e.message||"")}</div>`; return; }
+  const roles = data.roles||[];
+  const options = (sel)=>roles.map(r=>`<option value="${esc(r.id)}" ${r.id===sel?"selected":""}>${esc(r.label)}</option>`).join("");
+  const rows = (data.members||[]).map(m=>{
+    const self = m.is_self ? ' <span class="sub">(tú)</span>' : "";
+    return `<tr>
+      <td><div>${esc(m.name||m.email)}${self}</div><div class="sub">${esc(m.email)}</div></td>
+      <td><select class="input" data-uid="${esc(m.id)}" data-current="${esc(m.role)}" style="min-width:150px">${options(m.role)}</select></td>
+    </tr>`;
+  }).join("");
+  const legend = roles.map(r=>`<details style="margin-top:6px"><summary><b>${esc(r.label)}</b> <span class="sub">· ${r.caps.length} permisos</span></summary>`+
+    `<div class="sub" style="margin:6px 0 0 12px;font-family:monospace;font-size:11px;line-height:1.5">${r.caps.map(esc).join(" · ")}</div></details>`).join("");
+  $("#teamBody").innerHTML=
+    '<div class="help">Asigna a cada miembro el <b>mínimo privilegio</b> que necesite. La organización conserva siempre al menos un propietario.</div>'+
+    `<table class="tbl" style="margin-top:10px;width:100%"><thead><tr><th>Miembro</th><th>Rol</th></tr></thead><tbody>${rows}</tbody></table>`+
+    `<div style="margin-top:14px"><div class="lab">Qué puede cada rol</div>${legend}</div>`;
+  $$("#teamBody select[data-uid]").forEach(sel=>{
+    sel.addEventListener("change", async ()=>{
+      const uid=sel.dataset.uid, role=sel.value, prev=sel.dataset.current;
+      sel.disabled=true;
+      try{
+        const r=await api("/api/members/role",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,role})});
+        if(r && r.ok){ toast("Rol actualizado", (r.member&&r.member.email)+" → "+(r.member&&r.member.role_label), "ok"); renderSettings(); }
+        else { toast("Error",(r&&r.error)||"No se pudo cambiar el rol","bad"); sel.value=prev; }
+      }catch(e){ toast("Error", e.message||"fallo de red","bad"); sel.value=prev; }
+      finally{ sel.disabled=false; }
+    });
+  });
 }
 function toggleShow(id, btn){ const i=$("#"+id); if(i.type==="password"){i.type="text";btn.textContent="Ocultar";} else {i.type="password";btn.textContent="Ver";} }
 

@@ -16,11 +16,13 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 1. **Enforcement desde el dashboard** — hoy `enforcement.*` solo se toca por
    YAML; el admin debería ver Y editar la fase (con permiso + audit log del
    cambio). El chip ya muestra el estado (#135); falta el control.
-2. **Multi-UEM onboarding** — el orchestrator (`multiuem.py`, `providers`)
-   existe y funciona; no hay guía ni UX de registro de providers. Flotas
-   mixtas (Applivery móvil + Fleet portátiles) son el caso real más potente.
-3. **RBAC visible** — `device:action` existe y el operador queda en el action
-   log; faltan roles viewer/operator gestionables y su superficie en UI/docs.
+2. ~~**Multi-UEM onboarding**~~ — **HECHO 2026-08-17 (#158)**: registro de
+   providers con etiqueta de segmento de flota (móviles/portátiles) + guía
+   `docs/integrations/MULTI_UEM.md`; de paso 2 fixes de seguridad (fuga de
+   secretos en GET, DELETE sin permiso).
+3. ~~**RBAC visible**~~ — **HECHO 2026-08-17 (#159)**: `GET /api/members` +
+   `POST /api/members/role` (owner-only, guardarraíl del último propietario,
+   audit), tarjeta "Equipo · Roles" en el dashboard, `docs/operations/RBAC.md`.
 4. **Agente iOS empaquetado** — `ios_geofence` (geocercas on-device, lo más
    privado) sin guía de despliegue vía el propio MDM (perfil/app).
 5. ~~**Quickstart guiado**~~ — **HECHO 2026-08-16**: `lucidfence quickstart`

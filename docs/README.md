@@ -38,6 +38,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/DAY2.md`](operations/DAY2.md) | Día 2: servicio, backup, upgrade, cadencia, monitorización |
 | [`operations/ALERT_RECIPES.md`](operations/ALERT_RECIPES.md) | Recetas de alertas: Slack, Teams, webhook firmado, ntfy |
 | [`operations/TEAM_ACCESS.md`](operations/TEAM_ACCESS.md) | Acceso en equipo: reverse proxy + SSO OIDC |
+| [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
 
 ## Integraciones
 
