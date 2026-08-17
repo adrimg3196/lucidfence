@@ -2136,7 +2136,7 @@ async function loadConnectors(){
     }
     list.innerHTML = `<ul class="alist">` + ps.map(p=>`
       <li>
-        <span>${esc(p.label||p.name)} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
+        <span>${esc(p.label||p.name)}${p.segment?' <span class="pill">'+esc(p.segment)+'</span>':''} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
         <span class="row gap">
           <button class="btn sm ghost" onclick="removeConn('${esc(p.name)}')">Quitar</button>
         </span>
@@ -2175,27 +2175,31 @@ async function openConnWizard(){
     } else if(state.step===2){
       sub.textContent = "Paso 2 de 3 · credenciales"; av.textContent = state.meta?state.meta.label[0]:"·";
       const fields = state.meta?state.meta.fields:[];
-      body.innerHTML = fields.length ? fields.map(f=>`
+      const segOpts = ["","móviles","portátiles","mixta","servidores","otros"];
+      const segSel = `<label class="fld"><span>Segmento de flota <small style="opacity:.6">(qué cubre este UEM)</small></span>
+          <select id="cw_segment">${segOpts.map(o=>`<option value="${o}"${o===(state.segment||"")?" selected":""}>${o||"— sin etiqueta —"}</option>`).join("")}</select></label>`;
+      body.innerHTML = (fields.length ? fields.map(f=>`
         <label class="fld"><span>${fieldLabel(f)}</span>
           <input id="cw_${f}" type="${f==='api_key'?'password':'text'}" autocomplete="off" placeholder="${fieldLabel(f)}"></label>`).join("")
-        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`;
+        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`) + segSel;
       const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=1;render();};
       const next = el("button","btn primary"); next.textContent="Siguiente"; next.onclick=()=>{
         state.fields = {}; fields.forEach(f=>{ state.fields[f] = $(("#cw_"+f)).value.trim(); });
+        const seg = $("#cw_segment"); state.segment = seg ? seg.value : "";
         state.step=3; render();
       };
       foot.appendChild(back); foot.appendChild(next);
     } else {
       sub.textContent = "Paso 3 de 3 · guardar"; av.textContent = "✓";
-      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}</div>
-        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales cifradas en tu tenant)":""}.</div></div>`;
+      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}${state.segment?' <span class="pill">'+esc(state.segment)+'</span>':''}</div>
+        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales aisladas en tu tenant, 0600)":""}.</div></div>`;
       const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=2;render();};
       const save = el("button","btn primary"); save.textContent="Guardar conector";
       save.onclick = async ()=>{
         save.disabled = true; save.textContent = "Guardando…";
         try{
           const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:state.name, ...state.fields})});
+            body:JSON.stringify({name:state.name, segment:state.segment||"", ...state.fields})});
           if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
           else toast("Error", (r.error||"no se pudo guardar"), "bad");
         }catch(e){ toast("Error", e.message, "bad"); }

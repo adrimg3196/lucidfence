@@ -292,7 +292,12 @@ def _tenant_runtime(tdir: Path) -> dict:
 # lives in integration.json (tenant-isolated, chmod 0600); masked on GET.
 from lucidfence.saas.providers import list_providers as _list_providers
 from lucidfence.saas.providers import save_providers as _save_providers
-from lucidfence.saas.providers import mask_provider as _masked_provider
+
+# Todas las claves que pueden portar un secreto de conexión. Ninguna sale nunca
+# en un GET (ni en el audit log): las credenciales viven en integration.json
+# (0600) y jamás se re-emiten al cliente.
+_PROVIDER_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token",
+                         "password", "token")
 
 
 def _provider_health(eng: "Engine | None") -> dict:
@@ -305,8 +310,13 @@ def _provider_health(eng: "Engine | None") -> dict:
 
 
 def _masked_provider(p: dict) -> dict:
-    out = {k: v for k, v in p.items() if k != "secret"}
-    out["configured"] = bool(p.get("secret") or p.get("endpoint"))
+    # Elimina TODA clave que porte un secreto (no solo "secret": Intune/Jamf/
+    # ChromeOS guardan client_secret/refresh_token). `segment` (la etiqueta de
+    # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
+    out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
+    out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("client_secret") or p.get("refresh_token")
+                             or p.get("endpoint") or p.get("tenant_id"))
     return out
 
 
@@ -1810,6 +1820,10 @@ class Handler(BaseHTTPRequestHandler):
             providers = _list_providers(tdir)
             providers = [p for p in providers
                          if not (p.get("name") == name and p.get("org_id") == body.get("org_id", ""))]
+            # segment: etiqueta de flota (móviles/portátiles/…). No es secreto
+            # y es lo que hace útil el multi-UEM: qué UEM cubre qué clase de
+            # dispositivo (p.ej. Applivery=móviles + Fleet=portátiles).
+            segment = (body.get("segment") or "").strip()[:40]
             # ponytail: secret stored in tenant-isolated integration.json (0600),
             # same trust boundary as core_secrets' .env; masked on GET.
             provider = {
@@ -1818,6 +1832,8 @@ class Handler(BaseHTTPRequestHandler):
                 "endpoint": (body.get("endpoint") or "").strip(),
                 "secret": (body.get("api_key") or "").strip(),
             }
+            if segment:
+                provider["segment"] = segment
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
@@ -1826,18 +1842,27 @@ class Handler(BaseHTTPRequestHandler):
                     provider[extra] = body[extra].strip()
             providers.append(provider)
             _save_providers(tdir, providers)
+            # Rastro auditable: quién conectó qué UEM y para qué segmento. Nunca
+            # el secreto (solo el nombre del proveedor y la etiqueta de flota).
+            append_audit(tdir, {"event": "provider.registered",
+                                "actor": user.get("id"), "provider": name,
+                                "segment": segment})
             try:
                 reload_engine(org)
             except Exception as exc:
                 return _send_json(self, {"ok": True, "registered": name,
                                         "warning": f"engine reload falló: {exc}"}, 200)
-            return _send_json(self, {"ok": True, "registered": name})
+            return _send_json(self, {"ok": True, "registered": name, "segment": segment})
         if route.startswith("/api/providers/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
             name = route[len("/api/providers/"):].split("/")[0]
             tdir = _tenants.data_dir(org)
             providers = [p for p in _list_providers(tdir)
                          if not (p.get("name") == name)]
             _save_providers(tdir, providers)
+            append_audit(tdir, {"event": "provider.removed",
+                                "actor": user.get("id"), "provider": name})
             try:
                 reload_engine(org)
             except Exception:
