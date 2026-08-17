@@ -254,6 +254,50 @@ def main() -> int:
               f"http={s}, body={pinv}")
         http_req("DELETE", "/api/providers/simulation", cookie=cookie)
 
+        # ============ 3d. RBAC gestionable: ver miembros y cambiar un rol =====
+        # El ciclo Admin-value nº3: el propietario da de alta un miembro, GET
+        # /api/members lo lista, POST /api/members/role le cambia el rol en vivo,
+        # y can() del backend cambia en consecuencia (operator sí puede
+        # engine:run, viewer no). El guardarraíl del último owner se ejercita.
+        print("\n== RBAC (GET /api/members + POST /api/members/role) ==")
+        from lucidfence.saas.auth import AuthStore
+        rbac_email = f"rbac-runtime-{int(time.time())}@demo.test"
+        http_req("POST", "/api/users", cookie=cookie,
+                 body={"email": rbac_email, "name": "RBAC RT", "role": "operator"})
+        s, listing, _ = http_req("GET", "/api/members", cookie=cookie)
+        member = next((m for m in (listing or {}).get("members", []) if m["email"] == rbac_email), None)
+        list_ok = s == 200 and member is not None and member.get("role") == "operator" \
+            and member.get("role_label") == "Operador" \
+            and all("pw_hash" not in m and "pw_salt" not in m for m in listing.get("members", []))
+        check("GET /api/members lista con rol+label y sin secretos", list_ok,
+              f"http={s}, miembro={rbac_email}, rol={(member or {}).get('role')}")
+
+        s, chg, _ = http_req("POST", "/api/members/role", cookie=cookie,
+                             body={"email": rbac_email, "role": "viewer"})
+        s2, listing2, _ = http_req("GET", "/api/members", cookie=cookie)
+        now_role = {m["email"]: m["role"] for m in (listing2 or {}).get("members", [])}.get(rbac_email)
+        # can() del backend refleja el cambio: operator tiene engine:run, viewer no.
+        can_flip = AuthStore.can("operator", "engine:run") and not AuthStore.can("viewer", "engine:run")
+        check("POST /api/members/role cambia el rol, GET lo refleja y can() cambia",
+              s == 200 and chg.get("ok") and chg.get("member", {}).get("role") == "viewer"
+              and s2 == 200 and now_role == "viewer" and can_flip,
+              f"post={s}/{chg.get('member', {}).get('role')}, get_role={now_role}, can_flip={can_flip}")
+
+        # rol inválido -> 400
+        s, rinv, _ = http_req("POST", "/api/members/role", cookie=cookie,
+                             body={"email": rbac_email, "role": "root"})
+        check("rol inválido rechazado con 400", s == 400, f"http={s}, body={rinv}")
+
+        # guardarraíl: degradar al único propietario (el demo owner) -> 400
+        owner_id = next((m["id"] for m in (listing or {}).get("members", []) if m["role"] == "owner"), "")
+        s, gres, _ = http_req("POST", "/api/members/role", cookie=cookie,
+                             body={"user_id": owner_id, "role": "operator"})
+        s2, laudit, _ = http_req("GET", "/api/audit", cookie=cookie)
+        audited = any(e.get("event") == "member.role.changed" for e in (laudit or {}).get("events", []))
+        check("guardarraíl del último owner (400) y cambio auditado",
+              s == 400 and s2 == 200 and audited,
+              f"http={s}, guardrail_ok={s == 400}, member.role.changed_en_audit={audited}")
+
         # ============ 4. What-if replay vía API =============================
         print("\n== P0.1 Simulador what-if (POST /api/policies/replay) ==")
         s, replay, _ = http_req("POST", "/api/policies/replay", cookie=cookie, body={

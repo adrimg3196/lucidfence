@@ -1723,6 +1723,55 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, KeyError) as e:
                 return _send_json(self, {"error": str(e)}, 400)
 
+        # members / RBAC surface (strictly tenant-local: only THIS org)
+        if route == "/api/members" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "user:invite"):
+                return _send_json(self, {"error": "sin permiso", "capability": "user:invite"}, 403)
+            members = []
+            for u in _auth.org_members(org):
+                r = u.org_roles.get(org)
+                members.append({
+                    "id": u.id, "email": u.email, "name": u.name,
+                    "role": r, "role_label": ROLE_LABELS.get(r, r),
+                    "active": u.active, "created_at": u.created_at,
+                    "is_self": u.id == user.get("id"),
+                })
+            members.sort(key=lambda m: (m["role"] != "owner", m["email"]))
+            roles = [{"id": rid, "label": ROLE_LABELS.get(rid, rid),
+                      "caps": sorted(ROLE_CAPS[rid])} for rid in ROLE_CAPS]
+            return _send_json(self, {"members": members, "roles": roles,
+                                     "self_id": user.get("id"),
+                                     "owners": _auth.count_org_owners(org)})
+        if route == "/api/members/role" and method == "POST":
+            # Cambiar el rol de un miembro es sensible: exige la capability de
+            # gestión de roles (user:role, solo owner). Un admin con user:invite
+            # puede crear usuarios pero no reasignar roles existentes.
+            if not AuthStore.can(user["org_roles"].get(org), "user:role") \
+                    or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo un propietario con sesión puede gestionar roles",
+                                         "capability": "user:role"}, 403)
+            body = _read_body(self)
+            new_role = (body.get("role") or "").strip()
+            if new_role not in ROLE_CAPS:
+                return _send_json(self, {"error": "rol inválido"}, 400)
+            target_id = (body.get("user_id") or "").strip()
+            target = _auth.get(target_id) if target_id else None
+            if target is None:
+                email = (body.get("email") or "").strip()
+                target = _auth.get_by_email(email) if email else None
+            if target is None or org not in target.org_roles:
+                return _send_json(self, {"error": "el usuario no pertenece a la organización"}, 404)
+            try:
+                updated = _auth.set_org_role(target.id, org, new_role)
+            except ValueError as e:
+                return _send_json(self, {"error": str(e)}, 400)
+            append_audit(_tenants.data_dir(org), {
+                "event": "member.role.changed", "actor": user.get("id"),
+                "target": updated.id, "target_email": updated.email, "role": new_role})
+            return _send_json(self, {"ok": True, "member": {
+                "id": updated.id, "email": updated.email, "name": updated.name,
+                "role": new_role, "role_label": ROLE_LABELS.get(new_role, new_role)}})
+
 
         # settings / credentials (strictly tenant-local)
         if route == "/api/settings/status" and method == "GET":
