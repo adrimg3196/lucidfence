@@ -198,7 +198,13 @@ class LiveLocationSource:
             # Pagination: data.nextCursor first, then Link header.
             nxt = payload.get("nextCursor")
             if nxt:
-                sep = "&" if "?" in url else "?"
+                # El separador se decide sobre `path` (lo que se reconstruye),
+                # no sobre `url`: tras el primer cursor `url` ya lleva
+                # `?cursor=...`, así que mirar `url` daba `&` y producía una URL
+                # malformada `.../devices&cursor=...` desde la página 3 —
+                # perdiendo silenciosamente todo dispositivo de esa página en
+                # adelante. `path` nunca lleva `?`, así que siempre es `?`.
+                sep = "&" if "?" in path else "?"
                 url = f"{self._api_base}{path}{sep}cursor={nxt}"
                 seen += 1
                 if seen > 100:

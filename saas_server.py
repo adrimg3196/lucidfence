@@ -1823,6 +1823,15 @@ class Handler(BaseHTTPRequestHandler):
             from lucidfence.core.adapters import ADAPTER_REGISTRY
             if name not in ADAPTER_REGISTRY:
                 return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF: un endpoint/base_url de proveedor debe ser un host
+            # externo https, jamás loopback/privado/link-local (misma política
+            # que el webhook de incidentes). Vacío = el adapter usa su default
+            # empaquetado. Sin esto, el asistente de conector permitía escanear
+            # infra interna y reflejar la respuesta del host interno al llamante.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
             cls = ADAPTER_REGISTRY[name]
             # Build the adapter with every credential field the wizard sent.
             # Map "endpoint" -> endpoint_template; pass OAuth fields as-is.
@@ -1865,6 +1874,12 @@ class Handler(BaseHTTPRequestHandler):
             from lucidfence.core.adapters import ADAPTER_REGISTRY
             if name not in ADAPTER_REGISTRY:
                 return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF (igual que /api/providers/test): un endpoint/base_url
+            # persistido se usa en cada ciclo del engine; debe ser https externo.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
             tdir = _tenants.data_dir(org)
             providers = _list_providers(tdir)
             providers = [p for p in providers
