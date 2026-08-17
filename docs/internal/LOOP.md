@@ -343,6 +343,12 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
   MCP oficial para TODAS las sesiones (incl. cron); requiere
   `GITHUB_PERSONAL_ACCESS_TOKEN` en el environment. Detalle:
   `docs/internal/mcp-github.md`.
+  **Raíl de entrega por Actions (2026-08-17, plan B activo):** aunque una
+  sesión cron no tenga API, con `git push` a su rama `claude/**` basta —
+  `agent-pr.yml` abre la PR y `agent-automerge.yml` la squash-mergea en verde
+  aplicando este contrato (jamás `outreach:`/forks/drafts; ignora solo el
+  helper `train`). Requiere el Actions Secret `AGENTS_GITHUB_PAT`
+  (instrucciones móviles en `docs/internal/mcp-github.md`).
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the

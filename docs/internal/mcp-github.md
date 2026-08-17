@@ -58,3 +58,31 @@ Guardián sigue anotando como INCIDENTE cualquier loop que corra sin entregar.
 - Alternativa local (sin depender del remoto): el mismo server por Docker
   (`ghcr.io/github/github-mcp-server`, `GITHUB_PERSONAL_ACCESS_TOKEN` en `-e`),
   si el environment tuviera Docker disponible.
+
+## Plan B activo: el raíl de entrega por Actions (no necesita el environment)
+
+El proxy de las sesiones bloquea llamadas API con tokens propios ("GitHub
+access is not enabled for this session"), así que el `.mcp.json` solo funciona
+si el environment provee el token. Mientras tanto hay un **raíl de entrega que
+vive en el propio GitHub** y no depende del environment:
+
+- **`.github/workflows/agent-pr.yml`** — en cada `git push` a una rama
+  `claude/**` (lo único que las sesiones cron SÍ pueden hacer), abre la PR
+  contra `main` si no existe.
+- **`.github/workflows/agent-automerge.yml`** — cuando la CI de esa PR
+  termina en verde, la squash-mergea aplicando el contrato (ramas `claude/**`
+  del propio repo; jamás `outreach:`, drafts ni forks; todos los checks del
+  gate en verde — solo se ignora el helper `train`).
+
+Ambos usan el **Actions Secret `AGENTS_GITHUB_PAT`** (cifrado; jamás en el
+repo). Sin el secret, no-op con aviso en el log.
+
+### Añadir el secret — funciona DESDE EL MÓVIL
+
+1. En el navegador del móvil: `github.com/adrimg3196/lucidfence/settings/secrets/actions`
+2. **New repository secret** → Name: `AGENTS_GITHUB_PAT` → Secret: (el PAT
+   fine-grained con Contents RW + Pull requests RW) → **Add secret**.
+3. Listo: el siguiente push de cualquier loop abre y mergea su PR solo.
+
+Rota el PAT si viajó por un canal inseguro (p. ej. pegado en un chat) y
+actualiza el secret con el nuevo valor.
