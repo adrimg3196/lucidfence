@@ -126,6 +126,39 @@ def test_register_mixed_fleet_permission_isolation_and_audit():
     print(f"  multi-UEM register OK · {len(regs)} altas auditadas")
 
 
+def test_provider_endpoint_ssrf_guard_rejects_internal_targets():
+    """Un endpoint/base_url de proveedor no puede apuntar a infra interna.
+
+    Regresión de la SSRF del asistente de conector: antes, /api/providers[/test]
+    aceptaba cualquier URL y el server la pedía (escaneo interno + reflejo de la
+    respuesta). Ahora se valida como el webhook de incidentes: solo https
+    externo; loopback/privado/link-local se rechaza con 400 y sin salir a la red.
+    """
+    ck = _owner_cookie("ssrf")
+    blocked = [
+        {"name": "workspace_one", "endpoint": "http://127.0.0.1:9", "api_key": "x0123456789"},
+        {"name": "workspace_one", "endpoint": "https://169.254.169.254/latest/meta-data", "api_key": "x0123456789"},
+        {"name": "workspace_one", "base_url": "https://10.0.0.5/API/mdm", "api_key": "x0123456789"},
+        {"name": "workspace_one", "endpoint": "https://mdm.internal/x", "api_key": "x0123456789"},
+    ]
+    for payload in blocked:
+        st, res, _ = req("POST", "/api/providers/test", payload, cookie=ck)
+        assert st == 400 and "no permitida" in (res.get("error") or ""), \
+            f"SSRF no bloqueada para {payload!r}: http={st} res={res}"
+        # y persistir tampoco: mismo guard en el POST de alta
+        st2, res2, _ = req("POST", "/api/providers", payload, cookie=ck)
+        assert st2 == 400 and "no permitida" in (res2.get("error") or ""), \
+            f"SSRF persistible para {payload!r}: http={st2} res={res2}"
+
+    # El guard está acotado: un provider con default empaquetado (sin endpoint)
+    # NO se rechaza por el guard (llega a test_connection con su https default).
+    st, res, _ = req("POST", "/api/providers/test", {"name": "applivery", "api_key": "x0123456789"}, cookie=ck)
+    assert "no permitida" not in (res.get("error") or ""), \
+        f"el guard rompió el default empaquetado de applivery: {res}"
+    print("  SSRF guard OK · 4 destinos internos bloqueados, default intacto")
+
+
 if __name__ == "__main__":
     test_register_mixed_fleet_permission_isolation_and_audit()
+    test_provider_endpoint_ssrf_guard_rejects_internal_targets()
     print("\nmulti-UEM register test passed")
