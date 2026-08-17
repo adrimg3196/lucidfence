@@ -28,6 +28,10 @@ python3 tests/run_tests.py
 el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
 tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
 
+> ¿Primera vez? Empieza por **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**:
+> qué necesitas, cómo instalar, cómo comprobar que funciona, FAQ y cómo reportar
+> un bug. (Este README es la vista técnica del proyecto.)
+
 Dashboard: `http://localhost:8765` → `static/dashboard.html` (SPA local que habla con `:8765`).
 
 ## Stack
@@ -70,7 +74,7 @@ Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 
 | Área | Estado | Qué falta |
 |------|--------|-----------|
-| **README público / onboarding de terceros** | Estado inicial — README externo + alineación de licencia | README de usuario externo (npm-style): qué necesita, cómo instala, como chequea que funciona, FAQ mínima, cómo reporta bugs. Este README es interno. |
+| **README público / onboarding de terceros** | Completo — guía de arranque externa | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md): qué necesitas, cómo instalas, cómo compruebas que funciona, primer paso real (conectar UEM), FAQ y cómo reportar bugs/seguridad. Enlazada desde arriba. |
 | **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza cambios a cloud_state.json en PR), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
 | **Publicación de release tags / versiones** | Completo — GitHub Releases publicadas | v1.5.0 publicada como GitHub Release con description y asset; `release.yml` construye, instala y arranca el artefacto antes de publicar. Ver CHANGELOG.md y la pestaña Releases. |
 | **Docker / compose para terceros documentado** | Completo — docker-compose.yml + Dockerfile existen | `docker compose up -d` corre LucidFence always-on en localhost:8765. Perfil `internet-facing` levanta Caddy para TLS. Ver `docker-compose.yml`. |
