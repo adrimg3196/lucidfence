@@ -40,7 +40,7 @@ Abre `http://localhost:8765` — dashboard local con la misma información de la
 python3 tests/run_tests.py
 ```
 
-El runner honesto corre los tests contra mock. 105 tests = verde = engine, auth, adapters, policies funcionando según lo declarado.
+El runner honesto corre los tests contra mock. Suite en verde = engine, auth, adapters, policies funcionando según lo declarado. (El tally exacto vive en CI; los números en prosa caducan.)
 
 **No necesitas:** UEM real, credenciales, datos de producción.
 
@@ -95,7 +95,7 @@ cat docker-compose.yml
 cat Dockerfile
 ```
 
-O lee la guía completa en `docs/installation.md`.
+O lee la guía de arranque completa en [docs/GETTING_STARTED.md](GETTING_STARTED.md).
 
 ## Qué NO hace esta demo
 
