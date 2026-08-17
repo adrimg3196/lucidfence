@@ -114,6 +114,9 @@ class Engine:
             self.mode, self.org_id, config.get("sim_seed_path", "data/fleet_seed.json"),
             api_key=config.get("_applivery_api_key", ""),
             location_cfg=config.get("location_source"),
+            # Geofencing lógico por red (portátiles sin GPS): inerte salvo que el
+            # tenant declare `network_sites`. El resolver solo lee esa clave.
+            network_cfg=config,
         )
         self.adapter = build_adapter(
             self.mode if not self.dry_run else "simulation",  # never call live in dry_run
