@@ -10,7 +10,7 @@ piloto con expectativas reales, no las de una demo.
 | **Intune** | Muy limitada: `locateDevice` es puntual, pensado para dispositivos perdidos (supervisados/corporativos) | Bajo demanda, no continua | iOS supervisado, Windows | Graph **no** expone un stream de ubicación de flota. No planifiques geofencing continuo solo con Intune |
 | **Jamf** | Sin ubicación continua por API | — | macOS/iOS | Jamf da inventario y postura excelentes, ubicación no. Combínalo con el adapter iOS o geofencing lógico |
 | **Fleet (osquery)** | Aproximada por señal de red (IP pública, SSID/BSSID) — "geofencing lógico" | La del intervalo osquery (configurable, minutos) | macOS/Windows/Linux | Sin GPS. Ideal para "¿está en la red de la oficina / en qué país sale a internet?", no para radios de 200 m |
-| **Adapter iOS geofence** (`ios_geofence`) | Geocercas evaluadas **en el dispositivo** (CoreLocation), el server solo recibe cumplimiento | Eventos de entrada/salida | iOS | La opción más privada: la ubicación cruda no sale del dispositivo. Requiere desplegar el perfil/app vía tu MDM |
+| **Adapter iOS geofence** (`ios_geofence`) | Geocercas evaluadas **en el dispositivo** (CoreLocation), el server solo recibe cumplimiento | Eventos de entrada/salida | iOS | La opción más privada: la ubicación cruda no sale del dispositivo. Despliegue por MDM en [IOS_ONDEVICE.md](IOS_ONDEVICE.md) |
 | **Webhook genérico** (`generic_http_source`) | La que tenga tu sistema (CAD, telemática vehicular, EDR…) | La de tu sistema | Cualquiera | Si ya tienes una fuente de ubicación mejor, inyéctala y usa el UEM solo para actuar |
 
 ## Cómo decidir
