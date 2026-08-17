@@ -14,7 +14,13 @@ from lucidfence.core.adapters.simulation import SimulationAdapter
 from lucidfence.core.adapters.applivery import AppliveryAdapter
 from lucidfence.core.adapters.intune import IntuneAdapter
 from lucidfence.core.adapters.jamf import JamfAdapter
-from lucidfence.core.adapters.ios_geofence import is_ios_device, ios_geofence_compliance
+from lucidfence.core.adapters.ios_geofence import (
+    is_ios_device,
+    ios_geofence_compliance,
+    build_geofence_appconfig,
+    to_appconfig_plist,
+    build_geofence_mobileconfig,
+)
 from lucidfence.core.adapters.windows_conformidad import (
     WindowsConformidadAdapter,
     build_windows_conformidad_adapter_from_config,
@@ -133,6 +139,9 @@ __all__ = [
     "build_workspace_one_adapter_from_config",
     "is_ios_device",
     "ios_geofence_compliance",
+    "build_geofence_appconfig",
+    "to_appconfig_plist",
+    "build_geofence_mobileconfig",
     "VALID_ACTIONS",
     "ADAPTER_REGISTRY",
     "build_adapter",

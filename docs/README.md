@@ -49,6 +49,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`integrations/APPLIVERY.md`](integrations/APPLIVERY.md) | Onboarding Applivery (fuente live de ubicación) |
 | [`integrations/FLEET.md`](integrations/FLEET.md) | Onboarding Fleet (osquery, MDM open-source) |
 | [`integrations/MULTI_UEM.md`](integrations/MULTI_UEM.md) | Registrar una flota mixta (Applivery móviles + Fleet portátiles) desde el dashboard |
+| [`integrations/IOS_ONDEVICE.md`](integrations/IOS_ONDEVICE.md) | Desplegar el agente iOS de geocercas on-device por MDM (config de despliegue, sin exfiltrar ubicación) |
 | [`integrations/LOCATION_MATRIX.md`](integrations/LOCATION_MATRIX.md) | Matriz honesta: qué ubicación da cada UEM de verdad |
 | [`integrations/OSQUERY.md`](integrations/OSQUERY.md) | Postura local y multiplataforma con osquery |
 

@@ -23,8 +23,10 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 3. ~~**RBAC visible**~~ — **HECHO 2026-08-17 (#159)**: `GET /api/members` +
    `POST /api/members/role` (owner-only, guardarraíl del último propietario,
    audit), tarjeta "Equipo · Roles" en el dashboard, `docs/operations/RBAC.md`.
-4. **Agente iOS empaquetado** — `ios_geofence` (geocercas on-device, lo más
-   privado) sin guía de despliegue vía el propio MDM (perfil/app).
+4. ~~**Agente iOS empaquetado**~~ — **HECHO 2026-08-17 (#160)**: exportador de
+   config de despliegue (managed app config + `.mobileconfig`, stdlib) +
+   `docs/integrations/IOS_ONDEVICE.md`; cero exfiltración (solo geocercas de
+   política, nunca coords/device_id — test con datos envenenados).
 5. ~~**Quickstart guiado**~~ — **HECHO 2026-08-16**: `lucidfence quickstart`
    (entorno → app → dashboard → fuente de datos, autoverificado; check runtime
    en la batería + tests). Baja el time-to-first-value del admin nuevo.
