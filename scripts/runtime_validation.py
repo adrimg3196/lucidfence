@@ -158,6 +158,30 @@ def main() -> int:
         check("risk engine puntúa el spoofing con razón textual", spoof_reason,
               f"reasons={[r for r in risk_row.get('reasons', []) if 'spoof' in r or 'imposible' in r]}")
 
+        # ============ 2b. Lockdown Mode como postura (Apple DDM OS 27) ======
+        # Prueba el camino en vivo: lockdown_mode=False produce la señal
+        # lockdown_mode_off y sube el riesgo con razón textual; lockdown_mode
+        # desconocido (None) NO penaliza (desconocido nunca inventa riesgo).
+        print("\n== Lockdown Mode posture (readback DDM OS 27) ==")
+        from lucidfence.core.policies import RiskEngine, sig_device_posture
+        rk = RiskEngine()
+        dev_off = {"device_id": "ld-off", "lockdown_mode": False, "fence_state": "outside"}
+        dev_unk = {"device_id": "ld-unk", "lockdown_mode": None, "fence_state": "outside"}
+        post_off = sig_device_posture(dev_off, {})
+        post_unk = sig_device_posture(dev_unk, {})
+        risk_off = rk.evaluate(dev_off, "outside", {})
+        risk_unk = rk.evaluate(dev_unk, "outside", {})
+        off_reason = "Lockdown Mode desactivado" in risk_off.get("reasons", [])
+        unk_reason = "Lockdown Mode desactivado" in risk_unk.get("reasons", [])
+        check("lockdown_mode=False -> señal + riesgo con razón; None no penaliza",
+              post_off.get("lockdown_mode_off") is True
+              and post_unk.get("lockdown_mode_off") is False
+              and off_reason and not unk_reason
+              and risk_off["risk_score"] > risk_unk["risk_score"],
+              f"off_signal={post_off.get('lockdown_mode_off')}, unk_signal={post_unk.get('lockdown_mode_off')}, "
+              f"off_reason={off_reason}, unk_reason={unk_reason}, "
+              f"score_off={risk_off['risk_score']}, score_unk={risk_unk['risk_score']}")
+
         # ============ 3. Server real: arranque + sesión demo ================
         print("\n== Servidor real (saas_server.py) ==")
         env = dict(os.environ, LUCIDFENCE_DATA_DIR=str(tmp / "server-data"),

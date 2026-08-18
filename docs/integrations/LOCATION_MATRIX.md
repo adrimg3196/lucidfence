@@ -36,3 +36,7 @@ piloto con expectativas reales, no las de una demo.
   pueden exigir una precisión mínima antes de disparar acciones.
 - Todo lo anterior corre local: la ubicación de tu flota no sale de tu
   máquina (garantía de diseño del producto, no una promesa de marketing).
+- La ubicación se **correlaciona** con postura de readback (cifrado, y ahora
+  el status **Lockdown Mode** de Apple DDM OS 27) **solo cuando la UEM la
+  reporta**: un dato ausente es `None` y nunca suma riesgo — ver
+  [apple_ddm.md](../operations/apple_ddm.md).
