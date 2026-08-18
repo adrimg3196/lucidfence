@@ -530,7 +530,7 @@
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:8px">Comandos remotos (MDM/UEM)</div>
         <div class="row gap wrap" id="mCmd">
           <button class="btn sm" data-cmd="lock"><span data-reicon="lock" data-size="14"></span>Bloquear</button>
-          <button class="btn sm" data-cmd="wipe"><span data-reicon="trash-2" data-size="14"></span>Borrar</button>
+          <button class="btn sm" id="cmdWipe" data-cmd="wipe"><span data-reicon="trash-2" data-size="14"></span>Borrar<span id="wipeKey" class="tag" style="margin-left:6px;font-size:9px"></span></button>
           <button class="btn sm" data-cmd="locate"><span data-reicon="map-pin" data-size="14"></span>Localizar</button>
           <button class="btn sm" data-cmd="reboot"><span data-reicon="rotate-cw" data-size="14"></span>Reiniciar</button>
           <button class="btn sm" data-cmd="clear_passcode"><span data-reicon="key-round" data-size="14"></span>Reset PIN</button>

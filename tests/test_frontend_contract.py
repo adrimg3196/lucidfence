@@ -133,3 +133,13 @@ def test_providers_registry_wires_get_list_and_post_register():
     # The server wires the read route and exactly one registration route.
     assert server.count('route == "/api/providers" and method == "GET"') == 1
     assert server.count('route == "/api/providers" and method == "POST"') == 1
+
+
+def test_wipe_two_key_state_is_surfaced_in_ui():
+    # El botón de wipe debe mostrar ANTES de pulsar el estado de la doble llave
+    # (simulado / bloqueado por doble llave / LIVE), leyendo st.enforcement.
+    html = (ROOT / "static" / "dashboard.html").read_text(encoding="utf-8")
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    assert 'id="wipeKey"' in html
+    assert "allow_wipe" in js and "wipe_allowlist_size" in js
+    assert "IRREVERSIBLE" in js  # el confirm distingue vivo vs simulado

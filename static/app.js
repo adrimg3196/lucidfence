@@ -969,11 +969,37 @@ async function openDeviceModal(id){
     const evs = (det.events||[]).slice(-8).reverse();
     $("#mEvents").innerHTML = "";
     renderEventList($("#mEvents"), evs.map(e=>({...e, kind:e.kind||"info", text:e.text||e.msg})));
+    // Doble llave del wipe: el operador ve ANTES de pulsar si el borrado es
+    // irreversible (LIVE), está bloqueado por la doble llave, o se simula.
+    // Datos ya serializados en st.enforcement (allow_wipe/wipe_allowlist_size);
+    // la fuente de verdad sigue siendo el servidor (engine bloquea igual).
+    const enf = (App.status && App.status.enforcement) || {};
+    const sim = App.status && App.status.mode === "simulation";
+    const wipeLive = !sim && enf.mode === "enforce" && enf.allow_wipe === true;
+    const wb = document.getElementById("cmdWipe"), wk = document.getElementById("wipeKey");
+    if(wb && wk){
+      wb.classList.toggle("danger", !!wipeLive);
+      if(wipeLive){
+        wk.textContent="LIVE"; wk.style.color="var(--red)";
+        wb.title="Wipe EN VIVO e irreversible · alcance: "+(enf.wipe_allowlist_size?("allowlist ("+enf.wipe_allowlist_size+")"):"toda la flota");
+      } else if(enf.mode==="enforce" && !enf.allow_wipe){
+        wk.textContent="doble llave"; wk.style.color="var(--amber)";
+        wb.title="Wipe con doble llave: enforcement.allow_wipe está desactivada (valor seguro por defecto). El servidor bloqueará el borrado hasta armarla en la config del tenant.";
+      } else {
+        wk.textContent="simulado"; wk.style.color="var(--muted)";
+        wb.title="Wipe se simula (dry-run) en fase observación: no toca el dispositivo.";
+      }
+    }
     // remote commands wiring
     $$("#mCmd [data-cmd]").forEach(btn=>{
       btn.onclick = async ()=>{
         const cmd = btn.dataset.cmd;
-        if(cmd==="wipe" && !confirm("¿Seguro que quieres BORRAR (wipe) este dispositivo?")) return;
+        if(cmd==="wipe"){
+          const msg = wipeLive
+            ? "BORRADO IRREVERSIBLE de "+id+". Sale EN VIVO al UEM y no se puede deshacer. ¿Continuar?"
+            : "Simular borrado (wipe) de "+id+"? En esta fase no toca el dispositivo real.";
+          if(!confirm(msg)) return;
+        }
         if(cmd==="message"){
           const txt = prompt("Mensaje para el dispositivo:");
           if(!txt) return;
