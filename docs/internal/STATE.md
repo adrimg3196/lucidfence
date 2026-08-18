@@ -38,6 +38,18 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    `location_source="network"`); enriquecimiento inerte-por-defecto en
    `location_source.py` (nunca sobreescribe GPS real); `docs/integrations/NETWORK_LOCATION.md`
    + matriz actualizada; 20 tests (CIDR/SSID/BSSID, precedencia, envenenado).
+7. **Postura Apple DDM (OS 27) como señal del motor de riesgo** — *derivado del
+   loop Tendencias 2026-08-18, ver `docs/internal/trends/signals.md`.* En WWDC 2026
+   Apple hizo DDM **obligatorio** en la generación OS 27 y añadió nuevos *status
+   items*: **Lockdown Mode**, **salud de hardware** (baseband, cámara, Face/Touch
+   ID, NFC, UWB), tipo de enrolamiento y Shared iPad. LucidFence ya soporta DDM
+   (`supports_ddm` en jamf, `apply_ddm`, `docs/operations/apple_ddm.md`); el
+   siguiente paso de producto es **ingerir esos status por el canal `device_state`
+   que ya existe** (merge, no reemplazo) y dejar que las políticas correlacionen,
+   p. ej., "fuera de geocerca **y** Lockdown Mode desactivado" o salud de hardware
+   degradada. Fuente: [Jamf WWDC26](https://www.jamf.com/blog/wwdc26-key-takeaways-for-apple-admins/),
+   [42Gears](https://www.42gears.com/blog/wwdc-2026-whats-new-apple-device-management/).
+   Esfuerzo medio; empezar por el status de Lockdown Mode (booleano, alto valor).
 
 ### Pasada de la flota completa sobre el producto (2026-08-17)
 
