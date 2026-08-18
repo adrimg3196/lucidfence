@@ -182,6 +182,33 @@ def main() -> int:
               f"off_reason={off_reason}, unk_reason={unk_reason}, "
               f"score_off={risk_off['risk_score']}, score_unk={risk_unk['risk_score']}")
 
+        # ============ 2c. Enrolment supervision como postura (DDM OS 27) ====
+        # Camino en vivo: supervised=False -> señal unsupervised + riesgo con
+        # razón textual; supervised desconocido (None) NO penaliza; True tampoco.
+        print("\n== Enrolment supervision posture (readback DDM OS 27) ==")
+        dev_uns = {"device_id": "sup-off", "supervised": False, "fence_state": "outside"}
+        dev_sup = {"device_id": "sup-on", "supervised": True, "fence_state": "outside"}
+        dev_sunk = {"device_id": "sup-unk", "supervised": None, "fence_state": "outside"}
+        post_uns = sig_device_posture(dev_uns, {})
+        post_sup = sig_device_posture(dev_sup, {})
+        post_sunk = sig_device_posture(dev_sunk, {})
+        risk_uns = rk.evaluate(dev_uns, "outside", {})
+        risk_sup = rk.evaluate(dev_sup, "outside", {})
+        risk_sunk = rk.evaluate(dev_sunk, "outside", {})
+        _sup_reason = "dispositivo sin supervisión (enrolamiento personal)"
+        check("supervised=False -> señal + riesgo con razón; None/True no penalizan",
+              post_uns.get("unsupervised") is True
+              and post_sunk.get("unsupervised") is False
+              and post_sup.get("unsupervised") is False
+              and _sup_reason in risk_uns.get("reasons", [])
+              and _sup_reason not in risk_sunk.get("reasons", [])
+              and _sup_reason not in risk_sup.get("reasons", [])
+              and risk_uns["risk_score"] > risk_sunk["risk_score"]
+              and risk_sunk["risk_score"] == risk_sup["risk_score"],
+              f"uns={post_uns.get('unsupervised')}, unk={post_sunk.get('unsupervised')}, "
+              f"on={post_sup.get('unsupervised')}, score_uns={risk_uns['risk_score']}, "
+              f"score_unk={risk_sunk['risk_score']}, score_on={risk_sup['risk_score']}")
+
         # ============ 3. Server real: arranque + sesión demo ================
         print("\n== Servidor real (saas_server.py) ==")
         env = dict(os.environ, LUCIDFENCE_DATA_DIR=str(tmp / "server-data"),

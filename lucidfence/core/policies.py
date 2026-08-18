@@ -117,6 +117,10 @@ def sig_device_posture(device, ctx):
     # (el caso común: la UEM aún no lo expone) NO penaliza — nunca se inventa
     # riesgo a partir de un dato desconocido.
     lockdown_mode_off = device.get("lockdown_mode") is False
+    # Enrolamiento sin supervisión (Apple OS 27 enrollment-type status item):
+    # SOLO es "unsupervised" cuando la UEM reporta supervised explícitamente
+    # False. None/ausente NO penaliza — desconocido nunca inventa riesgo.
+    unsupervised = device.get("supervised") is False
 
     return {
         "disk_low": disk_low,
@@ -124,6 +128,7 @@ def sig_device_posture(device, ctx):
         "os_unpatched": os_unpatched,
         "encryption_off": not encryption,
         "lockdown_mode_off": lockdown_mode_off,
+        "unsupervised": unsupervised,
         "osquery_config_invalid": device.get("osquery_config_valid") is False,
     }
 
@@ -281,6 +286,8 @@ class RiskEngine:
             score += 15; reasons.append("almacenamiento sin cifrar")
         if posture.get("lockdown_mode_off"):
             score += 10; reasons.append("Lockdown Mode desactivado")
+        if posture.get("unsupervised"):
+            score += 10; reasons.append("dispositivo sin supervisión (enrolamiento personal)")
         if posture.get("osquery_config_invalid"):
             score += 8; reasons.append("configuración de osquery no válida")
 

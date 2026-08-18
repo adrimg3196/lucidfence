@@ -431,6 +431,7 @@ class Engine:
                     encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
                     # DDM/UEM readback: carry None as None (unknown never fabricated).
                     lockdown_mode=rep.lockdown_mode,
+                    supervised=rep.supervised,
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,

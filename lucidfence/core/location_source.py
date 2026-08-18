@@ -105,6 +105,10 @@ class LocationReport:
     # set where a UEM actually reports it. None = unknown (the common case),
     # never inferred. See docs/operations/apple_ddm.md.
     lockdown_mode: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 enrollment-type status item, WWDC 2026):
+    # True/False = UEM reported supervision explicitly; None = unknown (the
+    # common case), never inferred. See docs/operations/apple_ddm.md.
+    supervised: Optional[bool] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -342,6 +346,10 @@ class LiveLocationSource:
             # the DDM status channel (device_state readback) when the UEM reports
             # it — Apple OS 27, WWDC 2026 — not from this list endpoint.
             lockdown_mode=None,
+            # Same verified schema exposes NO enrollment-supervision field:
+            # leave it unknown. It arrives via the DDM status channel
+            # (device_state readback), not from this list endpoint.
+            supervised=None,
             carrier=summary.get("carrier") or summary.get("networkOperator"),
             assigned_user=summary.get("userName") or summary.get("assignedUser"),
             department=summary.get("department"),
@@ -464,6 +472,10 @@ class SimulationLocationSource:
                 # (unknown), never defaulted — the risk engine must not penalize
                 # a device just because a legacy seed omits Lockdown Mode.
                 lockdown_mode=dev.get("lockdown_mode"),
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits enrollment supervision.
+                supervised=dev.get("supervised"),
                 carrier=dev.get("carrier") or "Movistar",
                 assigned_user=dev.get("assigned_user") or dev.get("name"),
                 department=dev.get("department") or "Operaciones",
