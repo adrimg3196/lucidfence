@@ -181,6 +181,20 @@ prevalece sobre la función concreta de cada loop:
   difieren (p. ej. qué roadmap histórico es canónico).
 - **Estado/memoria:** `docs/roadmap/PRODUCT_ROADMAP.md` + línea en el run-log.
 
+### Tendencias → Producto (L2 — I+D aplicada; semanal)
+- **Especificación completa:** `docs/internal/trends/README.md`.
+- **Objetivo:** vigilar el ecosistema (Apple DDM, Android AMAPI, Windows CSP/DSC,
+  osquery/Fleet, CVEs de la stack, regulación NIS2/GDPR/CRA, gaps de competencia)
+  como un ingeniero senior y **convertir la señal real en producto**: implementa
+  la mejora si cabe en un diff pequeño, o la deriva al backlog de Admin-value con
+  la fuente citada. No es el Radar de preventa (ese informa a una persona fuera
+  del repo); este entrega producto.
+- **Trigger:** Routine semanal (miércoles 12:00 UTC ≈ 14:00 Madrid), sesión fresca.
+- **Rama:** `claude/trends-loop` (propiedad exclusiva).
+- **Gate:** auto-merge en verde con el gate QA vía el raíl. Solo señal citada;
+  nada inventado; invariantes intactos. Sin autorización humana.
+- **Estado/memoria:** `docs/internal/trends/signals.md` (append-only) + run-log.
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
@@ -198,6 +212,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Centinela | `claude/security-loop` |
    | Lanzamiento | `claude/release-loop` |
    | Roadmap | `claude/roadmap-loop` |
+   | Tendencias | `claude/trends-loop` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -213,6 +228,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Centinela | jueves 22:07 |
    | Lanzamiento | domingo 20:43 |
    | Roadmap | viernes 21:17 |
+   | Tendencias | miércoles 12:00 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
