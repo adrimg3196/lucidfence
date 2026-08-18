@@ -790,9 +790,25 @@ def _safe_webhook_url(url: str):
     if not host:
         return ""
     import ipaddress
+    import socket
+    # Canonicaliza encodings numéricos de IP (decimal/hex/octal/dotless, p.ej.
+    # 2130706433 / 0x7f000001 / 017700000001 / 127.1 == 127.0.0.1; 2852039166 ==
+    # 169.254.169.254) que glibc getaddrinfo acepta pero ipaddress rechaza. Sin
+    # esto, un destino interno escrito en forma no canónica se colaba por la rama
+    # `except ValueError` como "hostname externo". AI_NUMERICHOST NO hace lookup
+    # DNS: un hostname real lanza gaierror y se deja intacto (fleet.acme.test no
+    # se rompe). Hallazgo del Centinela 2026-08-18 (SSRF bypass).
+    try:
+        host = socket.getaddrinfo(host, None, flags=socket.AI_NUMERICHOST)[0][4][0].lower()
+    except socket.gaierror:
+        pass
     try:
         ip = ipaddress.ip_address(host)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return ""
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped and (mapped.is_private or mapped.is_loopback
+                       or mapped.is_link_local or mapped.is_reserved):
             return ""
     except ValueError:
         # hostname (not IP): block obvious internal suffixes
