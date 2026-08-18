@@ -6,7 +6,8 @@
 #
 # Guardarraíles (innegociables):
 #   - solo ramas claude/** del PROPIO repo (jamás forks/terceros);
-#   - jamás PRs `outreach:` (único gate humano restante) ni drafts;
+#   - ni drafts (autonomía total 2026-08-18: outreach y release también
+#     auto-mergean en verde; no queda gate humano);
 #   - todos los checks del head completados y en verde; se ignora únicamente
 #     el helper `train` (merge-train informativo, ajeno al gate QA, con
 #     fallos transitorios conocidos por 503 de la API).
@@ -47,9 +48,11 @@ jobs:
             if (!prs.length) { core.info('sin PR abierta para la rama'); return; }
             const pr = prs[0];
             if (pr.draft) { core.info(`#${pr.number} es draft`); return; }
-            if (/^outreach:/i.test(pr.title)) {
-              core.notice(`#${pr.number} es outreach: gate humano, no se auto-mergea`); return;
-            }
+            // Autonomía total (propietario 2026-08-18: "todo lo decide la IA,
+            // nada los humanos"): sin gate humano. Se auto-mergea todo lo verde,
+            // incluido outreach: y release. Guardarraíles que quedan (NO son
+            // aprobación humana, son anti-daño): solo ramas claude/** del propio
+            // repo, jamás forks/terceros ni drafts.
             const IGNORED = new Set(['train']);
             const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: pr.head.sha, per_page: 100});
             const relevant = checks.check_runs.filter(c => !IGNORED.has(c.name));
