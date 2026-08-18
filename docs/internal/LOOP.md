@@ -197,6 +197,19 @@ prevalece sobre la función concreta de cada loop:
   nada inventado; invariantes intactos. Sin autorización humana.
 - **Estado/memoria:** `docs/internal/trends/signals.md` (append-only) + run-log.
 
+### Product Manager → Nuevas funciones (L2 — features autónomas; semanal)
+- **Especificación completa:** `docs/internal/product/README.md`.
+- **Objetivo:** un product manager autónomo que **suma capacidades nuevas** al
+  producto cada ciclo (mientras Admin-value hace *imprescindible* lo que ya
+  existe, este **añade lo que aún no existe**). Ideas de fuentes reales: roadmap
+  vivo, señales de Tendencias, gaps declarados y dogfooding del dashboard. Una
+  función usable por ciclo (o su primer incremento funcional), nunca humo.
+- **Trigger:** Routine semanal (lunes 12:00 UTC ≈ 14:00 Madrid), sesión fresca.
+- **Rama:** `claude/pm-features` (propiedad exclusiva).
+- **Gate:** auto-merge en verde con el gate QA vía el raíl; sin autorización
+  humana. Todo claim nuevo se prueba en la batería runtime.
+- **Estado/memoria:** `STATE.md` (función registrada) + run-log.
+
 ## Coordinación entre loops (contrato de la casa)
 
 Reglas que TODO loop lee antes de actuar. Existen para que dos agentes
@@ -215,6 +228,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Lanzamiento | `claude/release-loop` |
    | Roadmap | `claude/roadmap-loop` |
    | Tendencias | `claude/trends-loop` |
+   | Product Manager | `claude/pm-features` |
    Prohibido recrear o force-pushear la rama de otro loop o la de una
    sesión interactiva: un force-push ajeno muta la PR abierta de su dueño.
 2. **Calendario sin solape** (todo en UTC; cambiar una cadencia obliga a
@@ -231,6 +245,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    | Lanzamiento | domingo 20:43 |
    | Roadmap | viernes 21:17 |
    | Tendencias | miércoles 12:00 |
+   | Product Manager | lunes 12:00 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
