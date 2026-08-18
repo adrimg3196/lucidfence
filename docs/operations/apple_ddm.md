@@ -128,6 +128,44 @@ una clave inventada mientras OS 27 no esté publicado. Dependencia de readback
 honesta: sin UEM que lo reporte, el campo se queda en `None` y la plumbing
 engine/política sigue funcionando sin penalizar.
 
+### Tipo de enrolamiento (supervisión) como postura (OS 27)
+
+El mismo anuncio de WWDC 2026 añade el status item de **tipo de enrolamiento**.
+LucidFence ingiere su faceta booleana de mayor valor —**supervisión**— como
+postura correlacionable, con idéntica disciplina de readback honesto que
+Lockdown Mode:
+
+- El modelo lleva el campo booleano de readback `supervised`
+  (`LocationReport` → `DeviceState`), junto a `lockdown_mode`. **Solo se rellena
+  cuando la UEM lo reporta.**
+- `sig_device_posture` deriva `unsupervised`, que es `True` **únicamente** cuando
+  `supervised is False` (no supervisado de forma explícita). `None`/ausente —el
+  caso común hoy— **no penaliza**: nunca se inventa riesgo desde un desconocido.
+- Cuando contribuye, el motor suma riesgo con la razón textual
+  `"dispositivo sin supervisión (enrolamiento personal)"` (+10), junto al resto
+  de flags de postura.
+
+Un dispositivo **fuera de geocerca y no supervisado** (enrolamiento personal/BYOD,
+donde la mayoría del enforcement declarativo no aplica) puntúa más alto que uno
+supervisado o desconocido. Política de ejemplo:
+
+```json
+{
+  "id": "unsupervised-outside",
+  "name": "Fuera de geocerca sin supervisión",
+  "when": [
+    {"field": "fence_state", "op": "eq", "value": "outside"},
+    {"field": "supervised", "op": "eq", "value": false}
+  ],
+  "actions": [{"action": "notify", "params": {}}]
+}
+```
+
+`supervised` desconocido (`None`) **no** dispara la regla (desconocido ≠ no
+supervisado). Cuando Apple publique la clave del status item de enrolamiento, el
+único cambio es mapearla a `supervised` en `_STATUS_FIELD_MAP` (`ddm.py`); no se
+hardcodea una clave inventada mientras OS 27 no esté publicado.
+
 ## Fase 2 — canal de Jamf Pro (endpoints verificados)
 
 Verificado contra el OpenAPI oficial de la Jamf Pro API **v11.30**

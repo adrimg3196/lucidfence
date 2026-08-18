@@ -62,6 +62,7 @@ class DeviceState:
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
     lockdown_mode: Optional[bool] = None       # security.lockdown-mode.enabled (Apple OS 27); None=unknown
+    supervised: Optional[bool] = None          # enrollment supervision (Apple OS 27); None=unknown
     # --- integridad de ubicación (anti-spoofing, ver location_integrity.py) ---
     location_integrity: Optional[dict] = None  # {"suspicious", "checks", "speed_kmh", ...}
     # --- endpoint posture evidence (osquery) ---
