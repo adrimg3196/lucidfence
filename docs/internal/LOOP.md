@@ -44,8 +44,9 @@ prevalece sobre la función concreta de cada loop:
   loop admin-value".
 - **Rama:** `claude/admin-value-loop` (propiedad exclusiva; ver Coordinación).
 - **Gate:** hasta 1 PR por run, auto-merge en verde con el gate QA (CI +
-  runtime battery + `VEREDICTO QA: APTO`); si la mejora publica una release
-  (`.release-version`), esa PR la mergea el propietario (§Autonomía).
+  runtime battery + `VEREDICTO QA: APTO`); incluidas las que publican release
+  (`.release-version`) — el smoke de `release.yml` es el gate automático, no un
+  humano (§Autonomía).
 - **Estado/memoria:** sección "Loop admin-value" de `STATE.md` + run-log.
 
 ### Housekeeper (L2 — limpieza diaria, auto-merge de bajo riesgo)
@@ -77,9 +78,9 @@ prevalece sobre la función concreta de cada loop:
   2. *Drenaje de backlog*: es el DUEÑO de las PRs sin loop asignado (las 14
      heredadas de Jules/sesiones viejas incluidas). Cada PR abierta con >7
      días sin avanzar: rebasea y mergea las verdes con el gate QA (auth,
-     seguridad y demás incluidos — auto-merge total), cierra con evidencia
-     las superadas/muertas/duplicadas, y deja en "Te espera" solo lo que
-     publica hacia fuera (release/outreach). Objetivo permanente: 0 zombis.
+     seguridad y demás incluidos — auto-merge total, release/outreach también),
+     y cierra con evidencia las superadas/muertas/duplicadas. Nada se deja para
+     un humano. Objetivo permanente: 0 zombis.
   3. *Triage de terceros* (L1): comenta y etiqueta según "Contributor PR
      triage"; a autores externos JAMÁS les mergea.
   4. *Watchdog de la flota*: lee la última línea de cada loop en el run-log;
@@ -88,8 +89,8 @@ prevalece sobre la función concreta de cada loop:
      lo suba al digest. (No puede re-disparar Routines desde su sesión: su
      arma es hacerlo visible, no silenciarlo.)
   5. *Limpieza post-merge*: borra ramas `claude/*` cuya PR está MERGED.
-- **Gate:** todo con el gate QA completo; auto-merge (releases/outreach
-  ajenos, esos no son suyos).
+- **Gate:** todo con el gate QA completo; auto-merge total (a autores externos
+  jamás; su código no es de confianza aunque pase CI).
 - **Estado/memoria:** línea por run en el run-log común.
 
 ### Deps-sweeper (L1.5 — dependencias al día; semanal)
@@ -121,15 +122,16 @@ prevalece sobre la función concreta de cada loop:
   borradores de outreach) y lee su resultado en la serie de tracción.
 - **Trigger:** Routine semanal (martes 06:17 UTC ≈ 08:17 Madrid).
 - **Rama:** `claude/growth-loop` (propiedad exclusiva).
-- **Gate:** cambios de superficie pública (README/Pages/topics) mergeables
-  con el gate QA. **Outreach con aprobación previa del propietario**:
-  lo ejecutable con la cuenta de GitHub (PR a una lista awesome-*,
-  discussion, respuesta útil en un repo relacionado) se propone en una PR
-  `outreach:` con el contenido exacto y el destino — **el merge del
-  propietario ES la aprobación** y el siguiente run lo publica y registra
-  el enlace. Fuera de GitHub (HN/Reddit/LinkedIn: el agente no tiene esas
-  cuentas) queda en `docs/gtm/outbox/` para copy/paste del propietario.
-  Sin spam, sin social proof inventado, sin telemetría.
+- **Gate:** todo con el gate QA (autonomía total 2026-08-18: sin aprobación
+  humana). Lo ejecutable con la cuenta de GitHub (PR a una lista awesome-*,
+  discussion, respuesta útil en un repo relacionado) va en una PR `outreach:`
+  con el contenido exacto y el destino; **el raíl la auto-mergea en verde** y
+  el siguiente run la publica y registra el enlace. Fuera de GitHub
+  (HN/Reddit/LinkedIn: el agente no tiene esas cuentas) queda en
+  `docs/gtm/outbox/`. Guardarraíles anti-daño que NO son aprobación humana y
+  siguen vigentes: **sin spam** (máx. 1 publicación externa por ciclo, valor
+  genuino, sin repetir destino en 30 días), **sin social proof inventado**,
+  sin suplantar identidad, sin telemetría.
 - **Estado/memoria:** `docs/internal/growth/` (experiments, mentions) +
   línea en el run-log común.
 
@@ -263,10 +265,12 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
      mergea `.release-version` → `release.yml` construye, instala y arranca
      el artefacto ANTES de publicar (ese smoke es la red de máquina), y
      actualiza las fórmulas Homebrew. Sin humano.
-   - **Único gate humano restante: outreach.** Las PR `outreach:` de Growth
-     publican con la identidad del propietario a terceros → su merge sigue
-     siendo el "sí". PR abierta NO bloqueante; Dirección la lista en "Te
-     espera". Nada más espera a un humano.
+   - **Outreach: también autónomo** (propietario, 2026-08-18: "todo lo decide
+     la IA, nada los humanos"). Las PR `outreach:` de Growth las auto-mergea el
+     raíl en verde como cualquier otra; el siguiente run de Growth ejecuta la
+     publicación. **Ya no queda ningún gate humano.** Los guardarraíles
+     anti-daño siguen (sin spam, sin social proof inventado, sin suplantación,
+     jamás auto-merge de forks/terceros).
 7. **Reporting: un solo canal.** El propietario recibe UNA notificación:
    el resumen ejecutivo semanal del loop Dirección (lo nuevo, lo corregido,
    tracción, decisiones pendientes, salud de la flota). Los demás loops
@@ -274,8 +278,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    quedan auditables en el run-log común y las PRs. Un loop solo rompe el
    silencio si detecta algo que no puede esperar al lunes (main roto que no
    sabe arreglar, secreto filtrado, vulnerabilidad crítica explotable, PR
-   maliciosa) — y Growth, además, puede notificar cuando deja una PR
-   `outreach:` esperando aprobación.
+   maliciosa).
 8. **Estilo de reporting** (adaptado de la skill
    [i-have-adhd](https://github.com/ayghri/i-have-adhd): la respuesta no
    entierra la acción). Aplica a resúmenes finales, digest, cuerpos de PR
@@ -335,10 +338,10 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
 
 ## Safety & gates
 
-- **Auto-merge total en verde** (propietario, 2026-08-16). El gate humano
-  previo desaparece; lo sustituye el **gate QA de máquina** (CI + batería
-  runtime + regresión + `VEREDICTO QA: APTO`), que es innegociable. Detalle
-  y el único gate humano restante (publicar release/outreach) en
+- **Autonomía total: todo lo decide la IA, nada los humanos** (propietario,
+  2026-08-18). NO queda ningún gate humano — ni release ni outreach. El único
+  juez es el **gate QA de máquina** (CI + batería runtime + regresión +
+  `VEREDICTO QA: APTO`), innegociable. Detalle en
   `docs/internal/loop-constraints.md` y en la regla 6 de Coordinación.
 - **Denylist absoluta** (ni con gate verde): secretos en
   `config.json`/`data/`/`.env`; `base.py` sin bump mayor + mock; publicar
@@ -364,15 +367,15 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
   **`git push` a su rama `claude/<loop>`**. A partir de ahí el raíl actúa solo:
   `agent-pr.yml` abre la PR contra `main` y `agent-automerge.yml` la squash-mergea
   en cuanto la CI (el gate QA) está verde, aplicando este contrato (jamás
-  `outreach:`/forks/drafts; ignora solo el helper `train`). Probado extremo a
-  extremo (PR #166: abierta y mergeada por el raíl, sin intervención humana).
+  forks/drafts; auto-mergea TODO lo demás en verde, outreach y release incluidos;
+  ignora solo el helper `train`). Probado extremo a extremo (PR #166: abierta y
+  mergeada por el raíl, sin intervención humana).
 
   Regla operativa para las sesiones cron: **haz push y para.** NO necesitas las
   tools `mcp__github__*` (abrir PR, `get_check_runs`, `merge_pull_request`); si tu
   prompt de loop aún menciona esos pasos, quedan **superados por el raíl** —
-  ignóralos, el push es la entrega. Una PR por ciclo (WIP=1 por título). El único
-  gate humano que se conserva es `outreach:` (Growth), que el raíl excluye a
-  propósito. Requiere el Actions Secret `AGENTS_GITHUB_PAT` con permisos
+  ignóralos, el push es la entrega. Una PR por ciclo (WIP=1 por título). No queda
+  ningún gate humano. Requiere el Actions Secret `AGENTS_GITHUB_PAT` con permisos
   Pull requests + Contents (RW), ya configurado. Detalle: `docs/internal/mcp-github.md`.
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier.
