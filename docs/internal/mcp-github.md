@@ -59,6 +59,15 @@ Guardián sigue anotando como INCIDENTE cualquier loop que corra sin entregar.
   (`ghcr.io/github/github-mcp-server`, `GITHUB_PERSONAL_ACCESS_TOKEN` en `-e`),
   si el environment tuviera Docker disponible.
 
+## Estado: raíl de entrega por Actions ACTIVO y verificado (2026-08-18)
+
+El raíl está operativo de extremo a extremo: el Actions Secret `AGENTS_GITHUB_PAT`
+está puesto en **Settings → Secrets and variables → Actions** y el PAT tiene los
+permisos **Pull requests: RW** y **Contents: RW** sobre `adrimg3196/lucidfence`.
+Con eso, un `git push` a una rama `claude/**` abre la PR (`agent-pr.yml`) y, en
+verde, la squash-mergea (`agent-automerge.yml`) sin intervención humana. El único
+gate humano que se conserva es `outreach:` (excluido por contrato).
+
 ## Plan B activo: el raíl de entrega por Actions (no necesita el environment)
 
 El proxy de las sesiones bloquea llamadas API con tokens propios ("GitHub
