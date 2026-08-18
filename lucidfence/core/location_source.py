@@ -101,6 +101,10 @@ class LocationReport:
     storage_total_gb: Optional[float] = None
     storage_free_gb: Optional[float] = None
     encryption_enabled: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 Lockdown Mode status item, WWDC 2026): only
+    # set where a UEM actually reports it. None = unknown (the common case),
+    # never inferred. See docs/operations/apple_ddm.md.
+    lockdown_mode: Optional[bool] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -333,6 +337,11 @@ class LiveLocationSource:
             battery_state=summary.get("batteryState") or summary.get("battery_state"),
             storage_total_gb=self._to_float(summary.get("storageTotalGb") or summary.get("storage_total_gb")),
             storage_free_gb=self._to_float(summary.get("storageFreeGb") or summary.get("storage_free_gb")),
+            # Applivery's verified device schema (2026-07-09) exposes NO Lockdown
+            # Mode field: leave it unknown rather than invent one. It arrives via
+            # the DDM status channel (device_state readback) when the UEM reports
+            # it — Apple OS 27, WWDC 2026 — not from this list endpoint.
+            lockdown_mode=None,
             carrier=summary.get("carrier") or summary.get("networkOperator"),
             assigned_user=summary.get("userName") or summary.get("assignedUser"),
             department=summary.get("department"),
@@ -451,6 +460,10 @@ class SimulationLocationSource:
                 battery_state=dev.get("battery_state") or "full",
                 storage_total_gb=dev.get("storage_total_gb") or 128.0,
                 storage_free_gb=dev.get("storage_free_gb") if dev.get("storage_free_gb") is not None else 64.0,
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits Lockdown Mode.
+                lockdown_mode=dev.get("lockdown_mode"),
                 carrier=dev.get("carrier") or "Movistar",
                 assigned_user=dev.get("assigned_user") or dev.get("name"),
                 department=dev.get("department") or "Operaciones",

@@ -112,11 +112,18 @@ def sig_device_posture(device, ctx):
     # Heurística de SO sin parchear: versiones "antiguas" conocidas por plataforma.
     os_unpatched = any(tok in os_ver for tok in ("android 12", "android 11", "ios 15", "windows 10", "windows 10 pro", "win10"))
 
+    # Lockdown Mode (Apple OS 27 DDM status item, WWDC 2026): readback de la UEM.
+    # SOLO es "off" cuando la UEM lo reporta explícitamente False. None/ausente
+    # (el caso común: la UEM aún no lo expone) NO penaliza — nunca se inventa
+    # riesgo a partir de un dato desconocido.
+    lockdown_mode_off = device.get("lockdown_mode") is False
+
     return {
         "disk_low": disk_low,
         "battery_critical": battery_critical,
         "os_unpatched": os_unpatched,
         "encryption_off": not encryption,
+        "lockdown_mode_off": lockdown_mode_off,
         "osquery_config_invalid": device.get("osquery_config_valid") is False,
     }
 
@@ -272,6 +279,8 @@ class RiskEngine:
             score += 12; reasons.append("SO sin parchear de seguridad")
         if posture.get("encryption_off"):
             score += 15; reasons.append("almacenamiento sin cifrar")
+        if posture.get("lockdown_mode_off"):
+            score += 10; reasons.append("Lockdown Mode desactivado")
         if posture.get("osquery_config_invalid"):
             score += 8; reasons.append("configuración de osquery no válida")
 
