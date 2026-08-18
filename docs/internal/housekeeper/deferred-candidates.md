@@ -28,3 +28,9 @@ la entrada: se anota la resolución.
   (ciclo 0): `docs/roadmap/PRODUCT_ROADMAP.md` es el canónico vivo; ambos Q3
   quedan archivados como snapshots históricos con banner y puntero. No se
   borran (los referencia el CEO review de julio).
+
+- **2026-08-18 · `engine.py` F811/F841 (shadowing `save_routes`/`save_policies`
+  y `stats` sin usar)** — diferido por el loop Housekeeper: el redefinido de
+  métodos frente a los imports de línea 31-32 es shadowing REAL, no un import
+  muerto trivial; y `stats` (engine.py:255) podría tener efecto colateral
+  deliberado. Incierto → se lista, no se toca a ciegas.
