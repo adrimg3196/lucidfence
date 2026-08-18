@@ -15,8 +15,10 @@ decisiones de dominio. Cada `*.md` es un especialista (frontmatter
   `docs/internal/LOOP.md`.
 - **Regla común:** todos llevan las "Reglas de la casa" (gate QA `verify.py`
   innegociable, auto-merge total en verde, denylist absoluta, runtime-first, un
-  solo canal de reporting, estilo i-have-adhd). Los agentes deciden; el humano
-  solo aprueba outreach.
+  solo canal de reporting, estilo i-have-adhd). Los agentes deciden; no queda
+  gate humano en el desarrollo (release y outreach incluidos, propietario
+  2026-08-18). El RUNTIME del producto lo controla siempre el admin, y
+  LucidFence es complemento del UEM, nunca UEM.
 
 ## Bench actual (por división)
 
@@ -25,7 +27,7 @@ decisiones de dominio. Cada `*.md` es un especialista (frontmatter
 | engineering | backend-architect, senior-developer, code-reviewer, minimal-change-engineer, devops-automator, git-workflow-master, iot-fleet-engineer, privacy-engineer |
 | security | penetration-tester, architect |
 | testing | reality-checker |
-| product | manager |
+| product | manager, roadmap-strategist |
 | marketing | seo-specialist, community-builder |
 | project-management | project-shepherd |
 | finance | fpa-analyst |
