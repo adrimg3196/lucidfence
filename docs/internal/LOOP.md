@@ -343,12 +343,21 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
   MCP oficial para TODAS las sesiones (incl. cron); requiere
   `GITHUB_PERSONAL_ACCESS_TOKEN` en el environment. Detalle:
   `docs/internal/mcp-github.md`.
-  **Raíl de entrega por Actions (2026-08-17, plan B activo):** aunque una
-  sesión cron no tenga API, con `git push` a su rama `claude/**` basta —
-  `agent-pr.yml` abre la PR y `agent-automerge.yml` la squash-mergea en verde
-  aplicando este contrato (jamás `outreach:`/forks/drafts; ignora solo el
-  helper `train`). Requiere el Actions Secret `AGENTS_GITHUB_PAT`
-  (instrucciones móviles en `docs/internal/mcp-github.md`).
+  **Raíl de entrega por Actions (VERIFICADO EN VIVO 2026-08-18) — la forma
+  canónica de entregar.** Toda sesión cron entrega su trabajo con un solo gesto:
+  **`git push` a su rama `claude/<loop>`**. A partir de ahí el raíl actúa solo:
+  `agent-pr.yml` abre la PR contra `main` y `agent-automerge.yml` la squash-mergea
+  en cuanto la CI (el gate QA) está verde, aplicando este contrato (jamás
+  `outreach:`/forks/drafts; ignora solo el helper `train`). Probado extremo a
+  extremo (PR #166: abierta y mergeada por el raíl, sin intervención humana).
+
+  Regla operativa para las sesiones cron: **haz push y para.** NO necesitas las
+  tools `mcp__github__*` (abrir PR, `get_check_runs`, `merge_pull_request`); si tu
+  prompt de loop aún menciona esos pasos, quedan **superados por el raíl** —
+  ignóralos, el push es la entrega. Una PR por ciclo (WIP=1 por título). El único
+  gate humano que se conserva es `outreach:` (Growth), que el raíl excluye a
+  propósito. Requiere el Actions Secret `AGENTS_GITHUB_PAT` con permisos
+  Pull requests + Contents (RW), ya configurado. Detalle: `docs/internal/mcp-github.md`.
 - **Worktree isolation:** every unattended code-change experiment runs in an
   isolated git worktree; one worktree per fix, discarded after a failed verifier.
 - **No-progress / circuit breaker:** after 3 failed verifier attempts on the
