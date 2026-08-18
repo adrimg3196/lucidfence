@@ -11,7 +11,10 @@
 ## Principios de priorización (no negociables)
 
 Local-first & soberano · $0 por defecto (solo free tiers) · datos del tenant en
-su máquina · verificar en runtime, no solo "compila" · sin telemetría.
+su máquina · verificar en runtime, no solo "compila" · sin telemetría ·
+**complemento, no UEM** (decisión del propietario 2026-08-18: LucidFence nunca
+enrola, empuja perfiles ni gestiona apps/parches — lee del UEM existente,
+correlaciona, explica, y actúa solo a través del UEM cuando el admin decide).
 
 ## Ahora (en vuelo)
 
@@ -45,6 +48,13 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 
 ## Bitácora de reconciliación
 
+- **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca
+  seremos un UEM, somos el complemento"** — sube a principio no negociable.
+  El loop PM lo aterrizó en `docs/internal/product/BACKLOG.md` (§Posicionamiento
+  + 6 ítems nuevos de capa-complemento, #12–#17: panel multi-UEM, segunda
+  opinión UEM vs observado, políticas portables, puntos ciegos, auditor de
+  mínimo privilegio, eventos OCSF). Pendiente de reconciliar por el loop
+  Roadmap en su próximo ciclo.
 - **2026-08-16 (ciclo 2, decisión del propietario).** El propietario declaró el
   modelo: **LucidFence es 100% free open-source (Apache-2.0), sin pricing, sin
   enterprise, sin funciones de pago.** Cierra el gap "Pricing / modelo de
