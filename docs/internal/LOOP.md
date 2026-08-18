@@ -235,17 +235,19 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    revisar esta tabla):
    | Loop | Cadencia |
    |---|---|
+   Todos corren de **noche** (propietario 2026-08-18: ventana 22:00–05:00 UTC =
+   00:00–07:00 Madrid) para no interrumpir el día del propietario.
    | Housekeeper | diario 23:13, excepto noche del viernes |
    | Admin-value | sábado 00:00 |
-   | Guardián | diario 04:23 |
-   | Dirección | lunes 05:33 |
-   | Deps-sweeper | miércoles 21:37 |
-   | Growth | martes 06:17 |
+   | Guardián | diario 03:00 |
+   | Dirección | lunes 04:30 |
+   | Deps-sweeper | miércoles 22:40 |
+   | Growth | martes 23:15 |
    | Centinela | jueves 22:07 |
-   | Lanzamiento | domingo 20:43 |
-   | Roadmap | viernes 21:17 |
-   | Tendencias | miércoles 12:00 |
-   | Product Manager | lunes 12:00 |
+   | Lanzamiento | domingo 23:20 |
+   | Roadmap | viernes 23:40 |
+   | Tendencias | miércoles 23:30 |
+   | Product Manager | lunes 23:00 |
 3. **Derivación cruzada, no invasión.** Si el Housekeeper encuentra algo que
    es mejora de producto (no limpieza), lo anota como candidato en la
    sección "Loop admin-value" de `STATE.md` y NO lo implementa. Si el
