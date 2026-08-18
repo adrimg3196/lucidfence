@@ -13,6 +13,32 @@ en `docs/internal/agency/ORG.md`.
 
 ## Norte de la flota (goal, propietario 2026-08-16)
 
+### Qué es autónomo y qué NO (frontera inviolable, propietario 2026-08-18)
+
+Lo **autónomo es el DESARROLLO del producto**: la flota de loops es la *empresa*
+que idea, implementa, prueba, versiona y publica LucidFence sin intervención
+humana. Eso es lo que no tiene gate humano.
+
+Lo que **NUNCA es autónomo es el PRODUCTO en runtime**: el geofencing y el
+enforcement sobre **dispositivos reales** los decide **siempre el administrador**.
+El producto mantiene al admin en control por diseño y ningún loop puede debilitarlo:
+- `dry_run` por defecto `True`; fase `observe` = todo dry-run (nada sale al UEM).
+- `enforce` (acciones en vivo) **solo** si el admin lo activa explícitamente por
+  tenant; `live_actions` es una allow-list por acción.
+- `wipe` exige **doble llave** (`allow_wipe: true` **y** `wipe_allowlist`); jamás
+  se amplía desde la UI ni desde un loop.
+- LucidFence nunca actúa sobre un dispositivo real por su cuenta: ejecuta la
+  política que el admin escribió, con esos frenos.
+
+**Invariante para todo loop:** está prohibido entregar un cambio que quite al
+admin del control de acciones sobre dispositivos reales o que haga que el producto
+actúe solo (cambiar el default a `enforce`, autoejecutar `wipe`, saltarse la doble
+llave, o disparar acciones en vivo sin config explícita del tenant). El gate QA y
+la revisión del Centinela tratan cualquier regresión de esto como bloqueante,
+aunque el resto esté verde. La autonomía es de la *empresa*, no del *geofencing*.
+
+### Todo loop existe para mejorar el producto
+
 **TODO loop y cron existe para mejorar el producto** — un LucidFence que un
 administrador IT real elige y usa. Ningún loop es un fin en sí mismo. Regla que
 prevalece sobre la función concreta de cada loop:
