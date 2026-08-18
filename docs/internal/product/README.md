@@ -16,6 +16,9 @@ Nada de features de humo: si no se puede validar en runtime, no se anuncia.
 
 ## De dónde salen las ideas (señal real, no invención)
 
+0. **Backlog evaluado** (`BACKLOG.md`, este directorio): ítems inspirados en el
+   sector con veredicto explícito de si merecen desarrollo; los SÍ son la cola
+   por defecto de este loop.
 1. **Roadmap vivo** (`docs/roadmap/PRODUCT_ROADMAP.md` §Próximo/Después): el
    horizonte que el loop Roadmap ya priorizó.
 2. **Tendencias** (`docs/internal/trends/signals.md`): capacidades que el
