@@ -28,6 +28,7 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/devices/<id>
   GET  /api/fences           -> fence IDs only (geometry comes from /api/status.st.fences)
   GET  /api/risk
+  GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -1403,6 +1404,16 @@ class Handler(BaseHTTPRequestHandler):
                 "chain_head": report["chain_head"],
             })
             return _send_json(self, report)
+
+        # Informe de puntos ciegos (coverage gap): el negativo de la cobertura
+        # del tenant — solo lectura sobre estado ya existente, estrictamente
+        # local (ver core/coverage.py). Mismo gating que /api/cve.
+        if route == "/api/coverage" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "device:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            from lucidfence.core.coverage import coverage_report
+            devices = [s.to_dict() for s in eng.store.snapshot().values()]
+            return _send_json(self, coverage_report(devices, eng.fences))
 
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is

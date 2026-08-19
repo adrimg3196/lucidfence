@@ -39,6 +39,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/ALERT_RECIPES.md`](operations/ALERT_RECIPES.md) | Recetas de alertas: Slack, Teams, webhook firmado, ntfy |
 | [`operations/TEAM_ACCESS.md`](operations/TEAM_ACCESS.md) | Acceso en equipo: reverse proxy + SSO OIDC |
 | [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
+| [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
 
 ## Integraciones
 

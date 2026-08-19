@@ -50,6 +50,18 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    degradada. Fuente: [Jamf WWDC26](https://www.jamf.com/blog/wwdc26-key-takeaways-for-apple-admins/),
    [42Gears](https://www.42gears.com/blog/wwdc-2026-whats-new-apple-device-management/).
    Esfuerzo medio; empezar por el status de Lockdown Mode (booleano, alto valor).
+   **Primer incremento HECHO 2026-08-18** (mergeado vía `claude/pm-features` /
+   `claude/trends-loop`): `lockdown_mode` y `supervised` como señales
+   readback-honestas del motor de riesgo (None nunca penaliza), con tests y
+   docs. **Queda (nuevo nº1 del backlog):** salud de hardware (baseband,
+   cámara, Face/Touch ID, NFC, UWB) por el mismo canal `device_state`.
+8. ~~**Informe de puntos ciegos (coverage gap)**~~ — **HECHO 2026-08-19**
+   (backlog evaluado #15, `docs/internal/product/BACKLOG.md`):
+   `lucidfence/core/coverage.py` (función pura stdlib, readback-honesta) +
+   `GET /api/coverage` (gating `device:read`, tenant-scoped) + 10 tests +
+   3 checks runtime (43/43) + `docs/operations/coverage.md`. El negativo que
+   ningún panel del sector enseña: dispositivos sin señal, "lost sheep" sin
+   reportar, cercas vacías — visible para el admin, jamás acción automática.
 
 ### Pasada de la flota completa sobre el producto (2026-08-17)
 
