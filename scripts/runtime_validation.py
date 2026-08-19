@@ -567,6 +567,43 @@ def main() -> int:
               and "[1/4] OK" in qs.stdout and "Abre tu flota" in qs.stdout,
               f"qs_rc={qs.returncode}, health={s_qs}")
 
+        # ============ 12. Backlog #1: config como código (lucidfence apply) ==
+        # Tenant simulado propio (copia de la config demo + trails reales del
+        # engine de la sección 2): dry-run enseña el diff '+' sin tocar el
+        # fichero vivo; --yes lo aplica atómico; se restaura al final.
+        print("\n== Backlog #1 Config como código (lucidfence apply) ==")
+        apply_dir = tmp / "apply-data"
+        apply_dir.mkdir()
+        shutil.copy(REPO / "data" / "fences.json", apply_dir / "fences.json")
+        shutil.copy(REPO / "data" / "policies.json", apply_dir / "policies.json")
+        for fname in ("trails.jsonl", "device_states.json"):
+            src = eng_dir / fname
+            if src.exists():
+                shutil.copy(src, apply_dir / fname)
+        vivo_antes = (apply_dir / "fences.json").read_bytes()
+        cand_path = tmp / "cand_fences.json"
+        cand_path.write_text(json.dumps({"fences": json.loads(vivo_antes)["fences"] + [{
+            "id": "qa-cfg-nueva", "name": "QA config as code", "type": "circle",
+            "center": {"lat": 41.39, "lng": 2.17}, "radius_m": 400}]},
+            ensure_ascii=False, indent=2), encoding="utf-8")
+        dry = subprocess.run([sys.executable, "lucidfence/cli.py", "apply",
+                              "--fences", str(cand_path), "--data-dir", str(apply_dir)],
+                             text=True, capture_output=True, timeout=60)
+        intacto = (apply_dir / "fences.json").read_bytes() == vivo_antes
+        check("apply dry-run enseña '+' en el diff y NO toca el fichero vivo",
+              dry.returncode == 0 and "+ qa-cfg-nueva" in dry.stdout and intacto,
+              f"rc={dry.returncode}, diff_plus={'+ qa-cfg-nueva' in dry.stdout}, "
+              f"vivo_intacto={intacto}, whatif={'WHAT-IF' in dry.stdout}")
+        yes = subprocess.run([sys.executable, "lucidfence/cli.py", "apply",
+                              "--fences", str(cand_path), "--data-dir", str(apply_dir), "--yes"],
+                             text=True, capture_output=True, timeout=60)
+        vivo_final = (apply_dir / "fences.json").read_text(encoding="utf-8")
+        igual = vivo_final == cand_path.read_text(encoding="utf-8")
+        check("apply --yes escribe atómico y el fichero vivo pasa a ser el candidato",
+              yes.returncode == 0 and igual and "escrito" in yes.stdout,
+              f"rc={yes.returncode}, contenido_igual_al_candidato={igual}")
+        (apply_dir / "fences.json").write_bytes(vivo_antes)  # restaurar
+
     finally:
         receiver.shutdown()
         if server_proc:

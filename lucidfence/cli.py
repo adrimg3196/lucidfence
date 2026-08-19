@@ -370,6 +370,94 @@ def cmd_quickstart(args) -> int:
     return 0
 
 
+def cmd_apply(args) -> int:
+    """Políticas y geocercas como código: valida -> diff -> what-if -> aplica.
+
+    GitOps sin servidor: la config candidata vive en git y `lucidfence apply`
+    la valida con los mismos validadores del engine, enseña el plan y solo
+    escribe con --yes (dry-run por defecto, igual que el enforcement arranca
+    en observe). Jamás toca dispositivos: solo ficheros locales del data dir.
+    """
+    from lucidfence.core import config_apply as ca
+    if not args.fences and not args.policies:
+        print("ERROR: indica al menos --fences o --policies", file=sys.stderr)
+        return 2
+    data_dir = Path(args.data_dir).expanduser() if args.data_dir else _runtime_dir()
+    mode = "apply" if args.yes else "dry-run (usa --yes para aplicar)"
+    print(f"LucidFence · apply · {mode}")
+    print(f"Data dir: {data_dir}\n")
+
+    # (etiqueta, fichero vivo destino, resultado del candidato, filas vivas)
+    plans: list[tuple[str, Path, dict, dict]] = []
+    cand_fences = None
+    cand_policies_raw = None
+    if args.fences:
+        res = ca.load_fences_candidate(args.fences)
+        cand_fences = res["fences"]
+        target = data_dir / "fences.json"
+        plans.append(("fences.json", target, res, ca.load_live_fence_rows(target)))
+    if args.policies:
+        res = ca.load_policies_candidate(args.policies)
+        cand_policies_raw = res["raw"]
+        target = data_dir / "policies.json"
+        plans.append(("policies.json", target, res, ca.load_live_policy_rows(target)))
+
+    print("[1/4] VALIDAR")
+    errors = [e for _l, _t, res, _v in plans for e in res["errors"]]
+    if errors:
+        for e in errors:
+            print(f"  ERROR {e}")
+        print(f"\n{len(errors)} error(es) de validación: no se aplica nada.")
+        return 1
+    for label, _t, res, _v in plans:
+        kind = "geocercas" if label == "fences.json" else "políticas"
+        print(f"  OK  {res['path']}: {res['count']} {kind} válidas")
+
+    print("\n[2/4] DIFF contra la config viva del data dir")
+    for label, _t, res, live in plans:
+        d = ca.diff_rows(live, res["by_id"])
+        print(f"  {label}:")
+        if not (d["added"] or d["changed"] or d["removed"]):
+            print("    sin cambios")
+        for fid in d["added"]:
+            print(f"    + {fid}")
+        for fid in d["changed"]:
+            print(f"    ~ {fid}")
+        for fid in d["removed"]:
+            print(f"    - {fid}")
+
+    print("\n[3/4] WHAT-IF (replay del cambio sobre el histórico local)")
+    # Se simulan las políticas que quedarían activas tras el apply: las
+    # candidatas si vienen, y si no las vivas (útil al cambiar solo geocercas).
+    pol_replay = (cand_policies_raw if cand_policies_raw is not None
+                  else ca.load_raw_policies(data_dir / "policies.json"))
+    wi = ca.what_if(data_dir, pol_replay, cand_fences)
+    if wi["points"] == 0:
+        print("  sin histórico para simular (trails.jsonl vacío o ausente)")
+    elif not wi["replays"]:
+        print("  sin políticas activas que simular")
+    else:
+        for r in wi["replays"]:
+            total = sum(r["actions_that_would_run"].values())
+            acc = ", ".join(f"{k}×{v}" for k, v in sorted(r["actions_that_would_run"].items()))
+            approx = "exacto" if r["approximation"]["exact"] else "aproximado"
+            print(f"  {r['policy_id']}: con esta config habrían disparado {total} acciones"
+                  f" ({acc or 'ninguna'}) en {r['devices_affected']} dispositivo(s)"
+                  f" sobre {r['points_evaluated']} puntos [{approx}]")
+            if r["destructive_actions"]:
+                print(f"    ATENCIÓN: incluye acciones destructivas: {', '.join(r['destructive_actions'])}")
+
+    print("\n[4/4] APLICAR")
+    if not args.yes:
+        print("  dry-run: no se ha escrito nada. Repite con --yes para aplicar.")
+        return 0
+    for _label, target, res, _live in plans:
+        ca.apply_atomic(target, res["text"])
+        print(f"  escrito {target}")
+    print("  Reinicia o recarga la app (`lucidfence restart`) para que el engine cargue la config nueva.")
+    return 0
+
+
 def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--host", default=None, help=f"interfaz de escucha (por defecto {DEFAULT_HOST})")
     parser.add_argument("--port", type=int, default=None, help=f"puerto (por defecto {DEFAULT_PORT})")
@@ -420,6 +508,16 @@ def build_parser() -> argparse.ArgumentParser:
     quickstart.add_argument("--open", dest="open_browser", action="store_true",
                             help="abre el dashboard en el navegador al terminar")
     quickstart.set_defaults(func=cmd_quickstart, open_browser=False)
+
+    apply_p = sub.add_parser(
+        "apply", help="políticas y geocercas como código: valida, diff, what-if y aplica")
+    apply_p.add_argument("--fences", default=None, help="fichero candidato de geocercas (formato fences.json)")
+    apply_p.add_argument("--policies", default=None, help="fichero candidato de políticas (formato policies.json)")
+    apply_p.add_argument("--data-dir", dest="data_dir", default=None,
+                         help="data dir del tenant (por defecto el de la app local)")
+    apply_p.add_argument("--yes", action="store_true",
+                         help="aplica de verdad (por defecto dry-run: solo imprime el plan)")
+    apply_p.set_defaults(func=cmd_apply)
 
     validate = sub.add_parser("validate-config",
                               help="valida el mapeo location_source contra la API real (cualquier UEM)")

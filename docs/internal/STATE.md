@@ -55,6 +55,13 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    readback-honestas del motor de riesgo (None nunca penaliza), con tests y
    docs. **Queda (nuevo nº1 del backlog):** salud de hardware (baseband,
    cámara, Face/Touch ID, NFC, UWB) por el mismo canal `device_state`.
+8b. ~~**Políticas y geocercas como código (`lucidfence apply`)**~~ — **HECHO
+   2026-08-19** (backlog evaluado #1; tendencia GitHub validada: Fleet 4.90
+   redobla en GitOps): validar → diff `+/~/-` → **what-if con replay del
+   histórico local** (nadie del sector lo tiene) → apply atómico solo con
+   `--yes`. Nuevo `validate_policies` espejo de `validate_fences`,
+   `core/config_apply.py`, 8 tests, 2 checks runtime (45/45),
+   `docs/operations/config_as_code.md`.
 8. ~~**Informe de puntos ciegos (coverage gap)**~~ — **HECHO 2026-08-19**
    (backlog evaluado #15, `docs/internal/product/BACKLOG.md`):
    `lucidfence/core/coverage.py` (función pura stdlib, readback-honesta) +

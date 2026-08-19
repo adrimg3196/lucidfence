@@ -224,6 +224,72 @@ def load_policies(path: Path) -> list[Policy]:
     return out
 
 
+# Vocabulario que el motor entiende de verdad: ops de _cmp() y acciones que
+# los adapters saben ejecutar (APPLIVERY_ACTIONS + retire de policy_replay).
+VALID_OPS = {"gte", "gt", "lte", "lt", "eq", "ne", "in", "contains"}
+VALID_POLICY_ACTIONS = {
+    "lock", "wipe", "message", "locate", "reboot", "clear_passcode", "notify", "custom", "retire"
+}
+VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+
+
+def validate_policies(raw: Any) -> list[str]:
+    """Espejo de fences.validate_fences para policies.json (lista vacía == OK).
+
+    Opera sobre el JSON parseado, no sobre Policy: load_policies() rellena
+    defaults y ocultaría los campos rotos. Cada problema lleva el id del
+    objeto para que el error sea accionable:
+      - fichero que no es lista / objeto que no es dict / id ausente o duplicado
+      - `when` vacío o con condiciones sin field/op válido/value
+      - acciones fuera del catálogo que los adapters ejecutan
+      - severidad fuera de low|medium|high|critical
+    """
+    if not isinstance(raw, list):
+        return ["el fichero debe ser una LISTA de políticas"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for i, p in enumerate(raw):
+        if not isinstance(p, dict):
+            problems.append(f"objeto #{i}: debe ser un objeto, no {type(p).__name__}")
+            continue
+        pid = str(p.get("id") or f"objeto #{i}")
+        if not p.get("id"):
+            problems.append(f"{pid}: falta 'id'")
+        elif p["id"] in seen:
+            problems.append(f"duplicate policy id: {pid}")
+        else:
+            seen.add(p["id"])
+        when = p.get("when")
+        if not isinstance(when, list) or not when:
+            problems.append(f"{pid}: 'when' debe ser una lista no vacía de condiciones")
+        else:
+            for j, c in enumerate(when):
+                if not isinstance(c, dict) or not c.get("field"):
+                    problems.append(f"{pid}: condición #{j} sin 'field'")
+                    continue
+                op = c.get("op", "gte")
+                if op not in VALID_OPS:
+                    problems.append(
+                        f"{pid}: condición '{c['field']}' con op desconocido {op!r}"
+                        f" (usa {'|'.join(sorted(VALID_OPS))})")
+                if "value" not in c:
+                    problems.append(f"{pid}: condición '{c['field']}' sin 'value'")
+        actions = p.get("actions", [])
+        if not isinstance(actions, list):
+            problems.append(f"{pid}: 'actions' debe ser una lista")
+        else:
+            for a in actions:
+                name = a.get("action") if isinstance(a, dict) else None
+                if name not in VALID_POLICY_ACTIONS:
+                    problems.append(
+                        f"{pid}: acción desconocida {name!r}"
+                        f" (usa {'|'.join(sorted(VALID_POLICY_ACTIONS))})")
+        sev = p.get("severity", "medium")
+        if sev not in VALID_SEVERITIES:
+            problems.append(f"{pid}: severidad {sev!r} inválida (low|medium|high|critical)")
+    return problems
+
+
 def save_policies(path: Path, policies: list[Policy]) -> None:
     """Persist the policy list (used by the Workflows module to add/remove)."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
