@@ -37,9 +37,7 @@ render a graceful integration_error instead of a 500.
 """
 
 import json
-import math
 import os
-import random
 import time
 import urllib.request
 import urllib.error

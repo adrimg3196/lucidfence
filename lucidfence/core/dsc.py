@@ -8,7 +8,7 @@ Allows idempotent re-application of geofence policies via Test/Set mapping.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Any, Dict
 
 
 def generate_dsc_v3_manifest(policy: Any) -> Dict[str, Any]:

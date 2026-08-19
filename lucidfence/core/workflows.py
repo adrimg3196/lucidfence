@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Optional
+from typing import Optional
 
 # ----------------------------------------------------------------------------
 # Catálogo de acciones Applivery (lo que el LiveAdapter sabe ejecutar).

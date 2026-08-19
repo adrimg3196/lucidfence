@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from lucidfence.core.compliance_controls import map_controls
 

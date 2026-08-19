@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
 
 from lucidfence.core.generic_http_source import GenericHTTPLocationSource, _dig
 from lucidfence.core.config_loader import load

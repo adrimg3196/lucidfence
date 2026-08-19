@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -44,13 +43,7 @@ _SHARED_DIR = str(_HERE / "atomicmail" / "vendor_shared")
 os.environ.setdefault("ATOMIC_MAIL_SHARED_DIR", _SHARED_DIR)
 
 from lucidfence.core.atomicmail.session import create_agent_session  # noqa: E402
-from lucidfence.core.atomicmail.credentials import (  # noqa: E402
-    Credentials,
-    write_credentials,
-    read_credentials,
-    try_read_credentials,
-    FilesystemCredentialStore,
-)
+from lucidfence.core.atomicmail.credentials import try_read_credentials  # noqa: E402
 
 DEFAULT_AUTH_URL = "https://auth.atomicmail.ai"
 DEFAULT_API_URL = "https://api.atomicmail.ai"
@@ -233,7 +226,6 @@ class TenantMailbox:
         """Resolve the inbox mailbox id via Mailbox/query (JMAP requires a real id)."""
         try:
             import urllib.request
-            from urllib.error import HTTPError
             envelope = {
                 "using": [JMAP_MAIL_URN],
                 "methodCalls": [

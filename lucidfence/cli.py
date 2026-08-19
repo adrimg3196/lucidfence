@@ -303,7 +303,6 @@ def cmd_shell(_args) -> int:
 
 
 def cmd_doctor(args) -> int:
-    from lucidfence.core.app_paths import ensure_data_dir
     from lucidfence.core.doctor import run_doctor
     report = run_doctor(ROOT, ensure_data_dir(), _port(args.port))
     if args.json:
@@ -325,10 +324,9 @@ def cmd_quickstart(args) -> int:
     """
     host, port = _host(args.host), _port(args.port)
     url = _url(host, port)
-    print(f"LucidFence · quickstart · gratis y 100% local\n")
+    print("LucidFence · quickstart · gratis y 100% local\n")
 
     # 1/4 — entorno (reutiliza el mismo diagnóstico que `lucidfence doctor`)
-    from lucidfence.core.app_paths import ensure_data_dir
     from lucidfence.core.doctor import run_doctor
     report = run_doctor(ROOT, ensure_data_dir(), port)
     if report["ok"]:
