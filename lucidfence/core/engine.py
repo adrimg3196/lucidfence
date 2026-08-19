@@ -432,6 +432,7 @@ class Engine:
                     # DDM/UEM readback: carry None as None (unknown never fabricated).
                     lockdown_mode=rep.lockdown_mode,
                     supervised=rep.supervised,
+                    hardware_health=rep.hardware_health,
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,

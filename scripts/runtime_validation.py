@@ -209,6 +209,41 @@ def main() -> int:
               f"on={post_sup.get('unsupervised')}, score_uns={risk_uns['risk_score']}, "
               f"score_unk={risk_sunk['risk_score']}, score_on={risk_sup['risk_score']}")
 
+        # ============ 2d. Salud de hardware como postura (DDM OS 27) ========
+        # Camino en vivo: un componente False -> señal hardware_degraded +
+        # riesgo con razón textual que nombra el componente; None/dict vacío/
+        # todo sano NO penalizan (desconocido nunca inventa riesgo).
+        print("\n== Hardware health posture (readback DDM OS 27) ==")
+        dev_hwd = {"device_id": "hw-deg", "fence_state": "outside",
+                   "hardware_health": {"baseband": False, "camera": True}}
+        dev_hwo = {"device_id": "hw-ok", "fence_state": "outside",
+                   "hardware_health": {"baseband": True, "camera": "ok"}}
+        dev_hwu = {"device_id": "hw-unk", "fence_state": "outside",
+                   "hardware_health": None}
+        post_hwd = sig_device_posture(dev_hwd, {})
+        post_hwo = sig_device_posture(dev_hwo, {})
+        post_hwu = sig_device_posture(dev_hwu, {})
+        risk_hwd = rk.evaluate(dev_hwd, "outside", {})
+        risk_hwo = rk.evaluate(dev_hwo, "outside", {})
+        risk_hwu = rk.evaluate(dev_hwu, "outside", {})
+        _hw_prefix = "salud de hardware degradada"
+        hwd_reason = any(r.startswith(_hw_prefix) and "baseband" in r
+                         for r in risk_hwd.get("reasons", []))
+        hwo_reason = any(r.startswith(_hw_prefix) for r in risk_hwo.get("reasons", []))
+        hwu_reason = any(r.startswith(_hw_prefix) for r in risk_hwu.get("reasons", []))
+        check("hardware degradado -> señal + riesgo con razón; sano/None no penalizan",
+              post_hwd.get("hardware_degraded") is True
+              and post_hwd.get("hardware_degraded_components") == ["baseband"]
+              and post_hwo.get("hardware_degraded") is False
+              and post_hwu.get("hardware_degraded") is False
+              and hwd_reason and not hwo_reason and not hwu_reason
+              and risk_hwd["risk_score"] > risk_hwu["risk_score"]
+              and risk_hwo["risk_score"] == risk_hwu["risk_score"],
+              f"deg={post_hwd.get('hardware_degraded_components')}, "
+              f"ok={post_hwo.get('hardware_degraded')}, unk={post_hwu.get('hardware_degraded')}, "
+              f"score_deg={risk_hwd['risk_score']}, score_ok={risk_hwo['risk_score']}, "
+              f"score_unk={risk_hwu['risk_score']}")
+
         # ============ 3. Server real: arranque + sesión demo ================
         print("\n== Servidor real (saas_server.py) ==")
         env = dict(os.environ, LUCIDFENCE_DATA_DIR=str(tmp / "server-data"),

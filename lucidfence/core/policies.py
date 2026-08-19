@@ -90,6 +90,34 @@ def sig_device_health(device, ctx):
     }
 
 
+# Normalización de estados de componente de hardware (DDM OS 27). Solo se
+# considera degradado lo reportado EXPLÍCITAMENTE como tal: False o un string
+# reconocido. Un string desconocido/valor raro es "desconocido" y NO penaliza.
+_HW_DEGRADED_WORDS = {"degraded", "failed", "error"}
+_HW_HEALTHY_WORDS = {"ok", "healthy", "normal"}
+
+
+def _hardware_degraded_components(hardware_health) -> list:
+    """Claves del dict hardware_health reportadas explícitamente degradadas.
+
+    Readback honesto: None/no-dict/dict vacío -> []. Valores no interpretables
+    (ints, listas, strings fuera del vocabulario) se ignoran en silencio —
+    desconocido nunca inventa riesgo.
+    """
+    if not isinstance(hardware_health, dict):
+        return []
+    degraded = []
+    for component, value in hardware_health.items():
+        if not isinstance(component, str):
+            continue
+        if value is False:
+            degraded.append(component)
+        elif isinstance(value, str) and value.strip().lower() in _HW_DEGRADED_WORDS:
+            degraded.append(component)
+        # True / "ok"/"healthy"/"normal" = sano; cualquier otra cosa = desconocido.
+    return degraded
+
+
 @register_signal("device_posture")
 def sig_device_posture(device, ctx):
     """Señales de posture del endpoint (inspirado en Fleet/osquery):
@@ -121,6 +149,11 @@ def sig_device_posture(device, ctx):
     # SOLO es "unsupervised" cuando la UEM reporta supervised explícitamente
     # False. None/ausente NO penaliza — desconocido nunca inventa riesgo.
     unsupervised = device.get("supervised") is False
+    # Salud de hardware (Apple OS 27 hardware-health status items, WWDC 2026):
+    # SOLO degradado cuando algún componente lo reporta explícitamente
+    # (False o "degraded"/"failed"/"error"). None/dict vacío/valores raros
+    # NO penalizan — desconocido nunca inventa riesgo.
+    hw_degraded = _hardware_degraded_components(device.get("hardware_health"))
 
     return {
         "disk_low": disk_low,
@@ -129,6 +162,8 @@ def sig_device_posture(device, ctx):
         "encryption_off": not encryption,
         "lockdown_mode_off": lockdown_mode_off,
         "unsupervised": unsupervised,
+        "hardware_degraded": bool(hw_degraded),
+        "hardware_degraded_components": hw_degraded,
         "osquery_config_invalid": device.get("osquery_config_valid") is False,
     }
 
@@ -354,6 +389,9 @@ class RiskEngine:
             score += 10; reasons.append("Lockdown Mode desactivado")
         if posture.get("unsupervised"):
             score += 10; reasons.append("dispositivo sin supervisión (enrolamiento personal)")
+        if posture.get("hardware_degraded"):
+            comps = ", ".join(posture.get("hardware_degraded_components") or [])
+            score += 10; reasons.append(f"salud de hardware degradada ({comps})")
         if posture.get("osquery_config_invalid"):
             score += 8; reasons.append("configuración de osquery no válida")
 
@@ -481,6 +519,15 @@ def _resolve_field(field_: str, risk: dict, device: dict, fence_state: str):
         return risk.get("severity")
     if field_ == "compliant":
         return device.get("compliant")
+    if field_ == "hardware_degraded":
+        # Señal derivada (no vive en el device dict, a diferencia de
+        # supervised/lockdown_mode): se resuelve desde la señal de postura ya
+        # calculada, con fallback a derivarla del propio device si el caller
+        # pasó un `risk` sin señales. Desconocido -> False (no casa eq true).
+        posture = (risk.get("signals") or {}).get("device_posture")
+        if isinstance(posture, dict) and "hardware_degraded" in posture:
+            return posture["hardware_degraded"]
+        return bool(_hardware_degraded_components(device.get("hardware_health")))
     if field_.startswith("signal:"):
         # signal:<provider>.<key>
         _, rest = field_.split(":", 1)
