@@ -37,3 +37,41 @@ descartada con motivo). Nunca se borra; el estado se actualiza en su sitio.
   (tablas Windows) no está en nuestra allow-list de queries. **Decisión:** anotado;
   sin acción de producto. Recomendar en docs que el operador corra osquery ≥5.23.1.
 
+
+## 2026-08-19 (pasada GitHub — repos como el nuestro)
+
+- **Señal:** Fleet (fleetdm/fleet, ~6.2k★, releases semanales) sigue invirtiendo
+  en **GitOps/config-as-code** como diferenciador central: 4.90.0 añade
+  detección de políticas duplicadas al aplicar YAML y errores más precisos y
+  accionables en el apply; además soporte DDM "day one" (subir cualquier config
+  DDM, canal device y user), *custom host vitals* (asset tag, caducidad de
+  garantía) y renovación automática SCEP/ACME. Fuentes:
+  [Fleet 4.90.0](https://fleetdm.com/releases/fleet-4-90-0) [Oficial],
+  [Fleet GitOps docs](https://fleetdm.com/docs/configuration/yaml-files) [Oficial],
+  [fleetdm/fleet](https://github.com/fleetdm/fleet) [Oficial].
+  **Impacto para LucidFence:** valida el backlog evaluado #1 (políticas como
+  código); nuestra mejora sobre el incumbente es apply sin servidor + replay
+  what-if pre-aplicación (nadie lo tiene).
+  **Decisión:** implementada este ciclo — `lucidfence apply` (validar → diff →
+  what-if → aplicar atómico), rama `claude/missing-production-prs-hqdtv6`.
+
+- **Señal:** consolidación minimalista en el MDM open-source Apple: MicroMDM
+  (~2.6k★) entra en fin de soporte (finales de 2025) a favor de **NanoMDM**
+  (~590★): servidor de protocolo mínimo, stateless, storage enchufable, que
+  delega SCEP/TLS/enrolamiento en piezas externas. Fleet mismo se construye
+  sobre nanoMDM+osquery. Fuentes:
+  [micromdm/micromdm](https://github.com/micromdm/micromdm) [Oficial],
+  [h-mdm review 2026](https://h-mdm.com/top-open-source-mdm-solutions-in-2026/) [Prensa].
+  **Impacto para LucidFence:** la tendencia del ecosistema es exactamente
+  nuestro posicionamiento — piezas pequeñas, componibles, sin lock-in
+  (complemento sobre el UEM, stdlib, local-first). Refuerza el NO a "ser el
+  UEM nº15" y el SÍ al panel multi-UEM neutral (backlog #12).
+  **Decisión:** anotada como validación de posicionamiento; sin acción extra.
+
+- **Señal:** Fleet persigue certificación **Common Criteria EAL4+ (BSI)** desde
+  feb-2026 — el compliance verificable se vuelve argumento de compra en
+  open-source. Fuente: [aimultiple](https://aimultiple.com/open-source-mdm-software) [Prensa].
+  **Impacto para LucidFence:** refuerza la línea evidencia-no-certificación ya
+  existente (`compliance_controls.py`, export con hash encadenado) y el ítem
+  #13 del backlog (segunda opinión UEM vs observado, oro para auditores).
+  **Decisión:** anotada; alimenta la priorización de #13.
