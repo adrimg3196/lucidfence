@@ -405,6 +405,43 @@ def main() -> int:
         check("POIs vía /api/pois", s == 200 and isinstance(pois, list) and len(pois) >= 1,
               f"http={s}, pois={len(pois) if isinstance(pois, list) else pois}")
 
+        # ============ 6b. Backlog #15: informe de puntos ciegos =============
+        # Claim: sobre el tenant simulado, un dispositivo sin cerca (sin señal
+        # utilizable) y una cerca sin dispositivos aparecen ambos en el informe.
+        print("\n== Backlog #15 Puntos ciegos (GET /api/coverage) ==")
+        s, cov0, _ = http_req("GET", "/api/coverage", cookie=cookie)
+        res0 = (cov0 or {}).get("resumen") or {}
+        shape_ok = s == 200 and all(
+            k in (cov0 or {}) for k in ("devices_sin_senal", "devices_sin_reportar",
+                                        "fences_vacias", "resumen"))
+        check("GET /api/coverage responde con las 3 listas + resumen",
+              shape_ok and res0.get("devices_total", 0) > 0,
+              f"http={s}, resumen={res0}")
+
+        # cerca vacía inyectada en vivo (mitad del Atlántico: nadie dentro)
+        http_req("POST", "/api/fences", cookie=cookie,
+                 body={"id": "qa-vacia", "name": "QA cerca vacia", "type": "circle",
+                       "center": {"lat": 0.0, "lng": -30.0}, "radius_m": 500})
+        s, cov1, _ = http_req("GET", "/api/coverage", cookie=cookie)
+        vacias = [f["fence_id"] for f in (cov1 or {}).get("fences_vacias", [])]
+        check("cerca sin dispositivos aparece en fences_vacias",
+              s == 200 and "qa-vacia" in vacias, f"http={s}, fences_vacias={vacias}")
+        http_req("DELETE", "/api/fences/qa-vacia", cookie=cookie)
+
+        # dispositivo ciego inyectado en el estado REAL del engine local: sin
+        # coordenadas -> sin_senal; sin last_seen -> sin_reportar con motivo.
+        from lucidfence.core.coverage import coverage_report
+        from lucidfence.core.state_store import DeviceState
+        eng.store.upsert(DeviceState(device_id="dev-ciego", name="Sin señal QA", platform="android"))
+        rep = coverage_report([d.to_dict() for d in eng.store.snapshot().values()], eng.fences)
+        ciegos = [d["device_id"] for d in rep["devices_sin_senal"]]
+        mudos = [d["device_id"] for d in rep["devices_sin_reportar"]]
+        check("dispositivo sin señal listado en sin_senal y sin_reportar (sin last_seen)",
+              "dev-ciego" in ciegos and "dev-ciego" in mudos
+              and rep["resumen"]["coverage_percent"] < 100.0,
+              f"sin_senal={ciegos}, sin_reportar={mudos}, "
+              f"coverage={rep['resumen']['coverage_percent']}%")
+
         # ============ 7. MCP real por stdio contra el server vivo ===========
         print("\n== P2.8 MCP explain-risk (stdio real contra el server) ==")
         rpc_in = "\n".join(json.dumps(m) for m in [
