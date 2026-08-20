@@ -1,5 +1,10 @@
 # LucidFence 1.1 — Spec: configuración local, AI opcional y MCP
 
+> **Histórico** (implementado y shipped en 1.1; la versión actual es
+> posterior). La fuente de verdad viva es [`SPEC.md`](SPEC.md) bajo la
+> [Constitución](CONSTITUTION.md). Se conserva como registro de la decisión
+> de diseño BYO-AI + MCP local.
+
 Fecha: 2026-07-15
 Estado: LOCKED para implementación TDD
 Referencia de proceso: grill → spec → tareas pequeñas → revisión independiente → QA → ship.
