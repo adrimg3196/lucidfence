@@ -1716,6 +1716,49 @@ class Handler(BaseHTTPRequestHandler):
                      "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
 
+        # --- Playbooks SOAR del tenant (REQ §5): editor desde UI, sin código) ---
+        if route in ("/api/soar/playbooks", "/api/soar/playbook") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            store = getattr(eng, "soar_store", None)
+            if store is None:
+                return _send_json(self, {"error": "engine sin playbook store"}, 500)
+            try:
+                pb = store.upsert(body)
+            except ValueError as exc:
+                return _send_json(self, {"ok": False, "error": f"validacion: {exc}"}, 400)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.created", "actor": user.get("id"), "playbook": pb.id})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook": {"id": pb.id, "name": pb.name, "enabled": pb.enabled, "severity_min": pb.severity_min, "condition": pb.condition, "actions": pb.actions}})
+        if route.startswith("/api/soar/playbook/") and route.endswith("/enable") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):-len("/enable")].strip("/")
+            body = _read_body(self)
+            enabled = bool((body or {}).get("enabled", True))
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.set_enabled(pid, enabled):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.enabled", "actor": user.get("id"), "playbook": pid, "enabled": enabled})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid, "enabled": enabled})
+        if route.startswith("/api/soar/playbook/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):].split("/")[0].strip("/")
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.delete(pid):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.deleted", "actor": user.get("id"), "playbook": pid})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid})
+
+        # users
+
         # users
         if route == "/api/users" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "user:invite"):
@@ -2545,12 +2588,16 @@ class Handler(BaseHTTPRequestHandler):
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             from lucidfence.core.soar import DEFAULT_PLAYBOOKS, evaluate_soar
+            from lucidfence.core.adapters.capabilities import capability_for
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
             devs = list(eng.store.snapshot().values())
+            # Evalúa builtin + tenant (REQ §5) para el "matched" en vivo.
+            playbooks = eng.soar_store.all_playbooks() if getattr(eng, "soar_store", None) else DEFAULT_PLAYBOOKS
             soar_ctx = {"cycle": getattr(eng, "cycle_count", 0), "on_error": None}
             recent = []
             for d in devs:
                 try:
-                    execs = evaluate_soar(d.to_dict(), DEFAULT_PLAYBOOKS, soar_ctx)
+                    execs = evaluate_soar(d.to_dict(), playbooks, soar_ctx)
                 except Exception:
                     execs = []
                 for ex in execs:
@@ -2562,12 +2609,38 @@ class Handler(BaseHTTPRequestHandler):
                         "severity": ex.get("severity"),
                         "actions": ex.get("actions"),
                     })
+            # Matriz de capacidades por UEM (diseño §3.1 / REQ §3): la UI ofrece
+            # solo lo que el UEM soporta y marca las acciones en dry-run pendientes
+            # de validar (decisión §10.2).
+            capability_matrix = {}
+            for name in ADAPTER_REGISTRY:
+                cap = capability_for(name)
+                if cap is not None:
+                    capability_matrix[name] = {
+                        "inventory": cap.inventory,
+                        "location": cap.location,
+                        "native_geofences": cap.native_geofences,
+                        "actions": sorted(cap.actions),
+                        "dry_run_actions": sorted(cap.dry_run_actions),
+                    }
+            tenant_pbs = []
+            errors = []
+            if getattr(eng, "soar_store", None) is not None:
+                tenant_pbs = [{
+                    "id": pb.id, "name": pb.name, "description": pb.description,
+                    "enabled": pb.enabled, "severity_min": pb.severity_min,
+                    "condition": pb.condition, "actions": pb.actions,
+                } for pb in eng.soar_store.load()]
+                errors = eng.soar_store.errors()
             return _send_json(self, {
                 "playbooks": [{
                     "id": pb.id, "name": pb.name, "description": pb.description,
                     "enabled": pb.enabled, "severity_min": pb.severity_min,
-                    "actions": pb.actions,
+                    "actions": pb.actions, "builtin": True,
                 } for pb in DEFAULT_PLAYBOOKS],
+                "tenant_playbooks": tenant_pbs,
+                "tenant_playbook_errors": errors,
+                "capability_matrix": capability_matrix,
                 "matched": recent,
                 "devices_scanned": len(devs),
             })

@@ -84,6 +84,11 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
+        # Playbooks SOAR del tenant (REQ §5): builtin del producto + los del
+        # tenant persistidos en <data_dir>/soar_playbooks.json. El engine los
+        # fusiona en cada ciclo; un playbook roto se salta (auditado).
+        from lucidfence.core.soar_playbook_store import TenantPlaybookStore
+        self.soar_store = TenantPlaybookStore(data_dir=self.data_dir, builtin=DEFAULT_PLAYBOOKS)
         # Wire the incident lifecycle notifiers if configured: Slack/Teams
         # (incident_webhook_url, legacy) plus the multi-channel list
         # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
@@ -534,14 +539,18 @@ class Engine:
                 continue
         self.last_run = now_iso()
 
-        # ---- SOAR: evaluate orchestration playbooks per device --------------
-        # Each matched playbook yields UEM actions executed via the same adapter
-        # (and cooldown/dry_run machinery) used for geofence actions.
+        # ---- SOAR: evaluate orchestration playbooks per device --------------\n        # Combina los playbooks builtin del producto con los del tenant (REQ §5).
+        # Cada playbook matcheado produce acciones UEM. Las acciones destructivas
+        # (lock/wipe/clear_passcode/reboot) son SIEMPRE human-gated: en lugar de
+        # ejecutarlas, se emiten como handoff (diseño §5) y quedan registradas
+        # para aprobación manual en la consola; nunca se ejecutan de forma
+        # autónoma (REQ §5, design §2.3 / §5).
         soar_ctx = {"cycle": self.cycle_count, "on_error": None}
+        playbooks = self.soar_store.all_playbooks()
         for ds in states_cur.values():
             dev_dict = ds.to_dict()
             try:
-                execs = evaluate_soar(dev_dict, DEFAULT_PLAYBOOKS, soar_ctx)
+                execs = evaluate_soar(dev_dict, playbooks, soar_ctx)
             except Exception:
                 execs = []
             for ex in execs:
@@ -557,6 +566,25 @@ class Engine:
                             "playbook_id": ex.get("playbook_id"),
                             "note": act.get("params", {}).get("reason", ""),
                         })
+                        continue
+                    if aname in self.DESTRUCTIVE_ACTIONS:
+                        # Human-gate: handoff, no ejecución autónoma.
+                        self.store.log_event({
+                            "ts": now_iso(), "kind": "soar_handoff",
+                            "device_id": ds.device_id,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "action": aname,
+                            "severity": ex.get("severity", "high"),
+                            "matched_fields": ex.get("matched_fields", []),
+                            "params": act.get("params", {}) or {},
+                            "human_gate": True,
+                            "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
+                        })
+                        if self._cycle_actions:
+                            self._cycle_actions[-1]["soar"] = True
+                            self._cycle_actions[-1]["soar_handoff"] = True
+                            self._cycle_actions[-1]["playbook_id"] = ex.get("playbook_id")
                         continue
                     if self._dedupe_action(
                         ds, aname, "soar", ex.get("playbook_id", "soar"),

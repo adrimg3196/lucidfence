@@ -57,6 +57,12 @@ class ProviderCapabilities:
     location: bool = False
     native_geofences: bool = False
     actions: frozenset[str] = frozenset()
+    # Acciones que el UEM solo acepta como handoff dry-run (endpoint no validado
+    # o pendiente de certificar). El orquestador las construye y registra, pero
+    # jamás muta el dispositivo hasta que su endpoint quede validado. Esto es el
+    # mecanismo que materializa la decisión de Product §10.2 (Applivery: acción
+    # nativa pendiente de validar -> dry-run, no ejecución ciega).
+    dry_run_actions: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -212,6 +218,7 @@ class MultiUEMOrchestrator:
                     location=capabilities.location,
                     native_geofences=capabilities.native_geofences,
                     actions=frozenset(actions),
+                    dry_run_actions=frozenset(capabilities.dry_run_actions),
                 ),
                 fetch_devices=binding.fetch_devices,
                 execute_action=binding.execute_action,
@@ -596,7 +603,19 @@ class MultiUEMOrchestrator:
         binding = self._bindings.get(provider)
         if binding is None:
             return {"ok": False, "error_type": "unknown_provider", "adapter": provider}
-        if action not in binding.capabilities.actions or binding.execute_action is None:
+        # dry_run_actions: el UEM expone la acción pero su endpoint no está
+        # certificado, así que el orquestador la construye y la registra como
+        # handoff (dry-run), sin mutar nunca el dispositivo. Cubre la decisión
+        # de Product §10.2 (Applivery acción nativa pendiente de validar).
+        if action in binding.capabilities.dry_run_actions:
+            forced_dry = True
+            dry_run_reason = "provider_endpoint_pending_validation"
+        else:
+            forced_dry = False
+            dry_run_reason = None
+        effective_dry = dry_run or forced_dry
+        unsupported = (action not in binding.capabilities.actions and not forced_dry) or binding.execute_action is None
+        if unsupported:
             return {
                 "ok": False,
                 "error_type": "unsupported_action",
@@ -613,10 +632,10 @@ class MultiUEMOrchestrator:
             "error_type": "invalid_response",
             "adapter": provider,
             "action": action,
-            "dry_run": dry_run,
+            "dry_run": effective_dry,
         }
         try:
-            response = binding.execute_action(remote_id, action, deepcopy(params), dry_run)
+            response = binding.execute_action(remote_id, action, deepcopy(params), effective_dry)
         except Exception:
             return {
                 "ok": False,
@@ -653,8 +672,11 @@ class MultiUEMOrchestrator:
                 "ok": response["ok"],
                 "adapter": provider,
                 "action": action,
-                "dry_run": dry_run,
+                "dry_run": effective_dry,
             }
+            if forced_dry:
+                sanitized["dry_run_reason"] = dry_run_reason
+                sanitized["handoff"] = True
             if mode is not None:
                 sanitized["mode"] = mode
             if delegated is not None:
