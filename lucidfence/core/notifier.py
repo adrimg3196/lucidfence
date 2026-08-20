@@ -49,6 +49,159 @@ _VERB = {
 }
 
 
+# Per-tenant outbound webhook egress policy (task t_f33e2f23).
+#
+# Product decision (t_316b8ec5, APROBADA): a tenant-scoped allow/deny-list for
+# OUTGOING webhooks, defaulting to `permissive` (current behaviour — never breaks
+# existing deployments) with an opt-in `strict` mode.
+#
+#   mode:        "permissive" (default) | "strict"
+#                permissive -> only the admission guard runs (legacy behaviour).
+#                strict     -> admission guard AND an explicit allow-list.
+#   allow:       list of entries; each is an exact hostname ("hooks.slack.com"),
+#                a domain suffix (".slack.com", matches subdomains), or a literal
+#                IP ("10.20.30.40"). A global wildcard "*" is REJECTED (it would
+#                be an allow-all that nullifies the policy).
+#   allow_private: in `strict`, whether RFC1918 / private destinations are
+#                permitted. Default False -> private egress denied even if the
+#                host appears in `allow` (closes the residual H-3 RFC1918 gap).
+#
+# Defense in depth: this is a LAYER ON TOP of the admission guard
+# (_webhook_resolve blocks loopback/link-local/cloud-metadata 169.254.0.0/16
+# always). In strict: admission guard AND allow-list must both pass.
+#
+# A delivery denied by this policy is NEVER silent: the post returns an explicit
+# {"ok": False, "result": "denied_by_egress_policy", ...} so the dashboard can
+# surface it (criterion #3 of the product decision).
+class EgressAllowListPolicy:
+    """Parse and evaluate a tenant's outgoing-webhook egress policy.
+
+    Robust by design: a malformed policy degrades to `permissive` so a bad
+    integration.json can never break webhook delivery for an existing tenant.
+    """
+
+    def __init__(self, raw: Any = None):
+        self.mode = "permissive"
+        self.allow: list[str] = []
+        self.allow_private = False
+        self.parse(raw)
+
+    @classmethod
+    def from_config(cls, config: Any) -> "EgressAllowListPolicy":
+        raw = (config or {}).get("egress_policy") or {}
+        return cls(raw)
+
+    def parse(self, raw: Any) -> None:
+        if not isinstance(raw, dict):
+            # Malformed -> permissive (do not break deployments).
+            self.mode = "permissive"
+            self.allow = []
+            self.allow_private = False
+            return
+        mode = str(raw.get("mode", "permissive")).strip().lower()
+        self.mode = "strict" if mode == "strict" else "permissive"
+        allow = raw.get("allow") or []
+        cleaned: list[str] = []
+        if isinstance(allow, list):
+            for entry in allow:
+                if not isinstance(entry, str):
+                    continue
+                e = entry.strip().lower()
+                if not e or e == "*":
+                    # Reject the global wildcard: it would be an allow-all that
+                    # defeats the entire point of an allow-list.
+                    continue
+                cleaned.append(e)
+        self.allow = cleaned
+        self.allow_private = bool(raw.get("allow_private", False))
+
+    def is_strict(self) -> bool:
+        return self.mode == "strict"
+
+    def allows_host(self, host: str) -> bool:
+        """Pre-DNS allow-list match on the configured host (no resolution).
+
+        Matches exact hostnames, domain suffixes (".slack.com"), and literal IPs.
+        In `permissive` mode everything is allowed.
+        """
+        if not self.is_strict():
+            return True
+        h = (host or "").strip().lower()
+        if not h:
+            return False
+        for entry in self.allow:
+            if entry.startswith("."):
+                suffix = entry[1:]
+                if h == suffix or h.endswith("." + suffix):
+                    return True
+            elif h == entry:
+                return True
+        return False
+
+    @staticmethod
+    def _is_private(ip: Any) -> bool:
+        try:
+            addr = ipaddress.ip_address(str(ip))
+        except ValueError:
+            return False
+        if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped:
+            addr = addr.ipv4_mapped
+        return bool(addr.is_private or addr.is_loopback or addr.is_link_local
+                    or addr.is_reserved or addr.is_multicast)
+
+    def allows(self, host: str, resolved_ips: Any = None) -> tuple[bool, Optional[str]]:
+        """Full egress verdict for a destination.
+
+        `resolved_ips` are addresses already vetted by the admission guard
+        (_webhook_resolve — loopback/link-local/metadata already removed). They
+        are only needed for the private-egress gate when `allow_private` is off.
+
+        Returns (allowed, reason). reason is None when allowed.
+        """
+        if not self.is_strict():
+            return True, None
+        h = (host or "").strip().lower()
+        # 1) Allow-list membership (hostname / suffix / literal IP).
+        if not self.allows_host(h):
+            return False, "host-not-in-allow-list"
+        # 2) Private-egress gate (honours allow_private).
+        if not self.allow_private:
+            candidates: list[Any] = []
+            try:
+                candidates.append(ipaddress.ip_address(h))
+            except ValueError:
+                pass
+            for rip in (resolved_ips or []):
+                candidates.append(rip)
+            for c in candidates:
+                if self._is_private(c):
+                    return False, "private-egress-denied"
+        return True, None
+
+
+def _egress_check(url: str, egress: Optional["EgressAllowListPolicy"]) -> Optional[dict]:
+    """Return a denied verdict if `url` is blocked by a strict egress policy.
+
+    Returns None when the delivery is permitted (or no strict policy applies),
+    and a non-silent ``denied_by_egress_policy`` verdict dict otherwise. The
+    check is pre-connect: it evaluates the configured host against the allow-
+    list (and the literal-IP private gate). The post-resolve private gate for
+    hostname->RFC1918 destinations runs inside ``_default_http_post``.
+    """
+    if egress is None or not egress.is_strict():
+        return None
+    from urllib.parse import urlparse as _urlparse
+    host = (_urlparse(url).hostname or "").lower()
+    allowed, reason = egress.allows(host)
+    if not allowed:
+        return {
+            "ok": False,
+            "result": "denied_by_egress_policy",
+            "error": f"egress policy ({reason}): {host}",
+        }
+    return None
+
+
 # Outbound webhook egress policy.
 #
 # SECURITY (H-3 follow-up, task t_cd79333c): the legacy `_safe_webhook_url` guard
@@ -172,7 +325,8 @@ class _PinnedHTTPConnection:
             self._conn.close()
 
 
-def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dict:
+def _default_http_post(url: str, payload, headers: Optional[dict] = None,
+                        egress: Optional[EgressAllowListPolicy] = None) -> dict:
     """Real HTTP POST via stdlib http.client. Never raises.
 
     `payload` dict/list → JSON body; str/bytes → raw body (ntfy usa texto plano).
@@ -182,6 +336,11 @@ def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dic
     hostname). This removes the DNS-rebinding TOCTOU: the address used at connect
     time is the same one that passed validation, so a name that flips to an
     internal/metadata IP between config-check and send cannot pivot.
+
+    Egress allow-list (t_f33e2f23): when `egress` is a `strict` policy and
+    `allow_private` is off, a destination whose resolved address is RFC1918 /
+    private is denied here (after the admission-resolve, before connect) with an
+    explicit `denied_by_egress_policy` verdict — never silent.
     """
     parsed = urlparse(url)
     # Only http/https with a real host. Reject exotic schemes (file://, gopher://,
@@ -204,7 +363,19 @@ def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dic
     send_headers.update(headers or {})
     try:
         # Resolve once; validate the whole snapshot; pick the first usable IP.
+        # The admission guard already drops loopback/link-local/metadata pivots.
         ips = _webhook_resolve(host, port)
+        # Egress allow-list: in strict + allow_private=off, deny any private
+        # (RFC1918 / reserved / etc.) destination — even one reached via a
+        # hostname that was on the allow-list. This is the post-resolve half of
+        # the private gate (the pre-resolve half runs in _egress_guarded_post).
+        if egress is not None and egress.is_strict() and not egress.allow_private:
+            if egress._is_private(host) or any(egress._is_private(ip) for ip in ips):
+                return {
+                    "ok": False,
+                    "result": "denied_by_egress_policy",
+                    "error": f"egress policy (private-egress-denied): {host}",
+                }
         if not ips:
             # Unresolvable LAN name: fall back to hostname-based connect (the
             # operator's resolver handles it). No TOCTOU risk because we never
@@ -225,9 +396,11 @@ def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dic
 
 
 class IncidentNotifier:
-    def __init__(self, webhook_url: str = "", http_post: Optional[Callable] = None):
+    def __init__(self, webhook_url: str = "", http_post: Optional[Callable] = None,
+                 egress: Optional[EgressAllowListPolicy] = None):
         self.webhook_url = (webhook_url or "").strip()
         self._post = http_post or _default_http_post
+        self.egress = egress
         self.last_result: Optional[dict] = None
         self.deliveries: list[dict] = []
 
@@ -239,9 +412,18 @@ class IncidentNotifier:
 
         `transition` is one of: open | acknowledged | resolved. Suppressed
         transitions (reopen etc.) are still delivered but labeled generically.
-        Never raises.
+        Never raises. A strict egress policy denies non-allow-listed hosts with
+        an explicit `denied_by_egress_policy` result (never silent).
         """
         if not self.webhook_url:
+            return False
+        # Egress allow-list gate (pre-connect, non-silent).
+        denied = _egress_check(self.webhook_url, self.egress)
+        if denied is not None:
+            self.last_result = denied
+            self.deliveries.append({"transition": transition,
+                                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "result": denied})
             return False
         try:
             payload = self._build(transition, incident)
@@ -395,10 +577,12 @@ class SignedWebhookNotifier:
     so the receiver can verify origin and integrity offline — no shared infra.
     """
 
-    def __init__(self, url: str, secret: str = "", http_post: Optional[Callable] = None):
+    def __init__(self, url: str, secret: str = "", http_post: Optional[Callable] = None,
+                 egress: Optional[EgressAllowListPolicy] = None):
         self.url = (url or "").strip()
         self.secret = (secret or "").strip()
         self._post = http_post or _default_http_post
+        self.egress = egress
         self.last_result: Optional[dict] = None
         self.deliveries: list[dict] = []
 
@@ -417,6 +601,14 @@ class SignedWebhookNotifier:
 
     def notify(self, transition: str, incident: dict) -> bool:
         if not self.url:
+            return False
+        # Egress allow-list gate (pre-connect, non-silent).
+        denied = _egress_check(self.url, self.egress)
+        if denied is not None:
+            self.last_result = denied
+            self.deliveries.append({"transition": transition,
+                                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "result": denied})
             return False
         try:
             payload = {
@@ -451,10 +643,12 @@ class NtfyNotifier:
     `token` (optional) is an ntfy access token sent as Bearer auth.
     """
 
-    def __init__(self, url: str, token: str = "", http_post: Optional[Callable] = None):
+    def __init__(self, url: str, token: str = "", http_post: Optional[Callable] = None,
+                 egress: Optional[EgressAllowListPolicy] = None):
         self.url = (url or "").strip()
         self.token = (token or "").strip()
         self._post = http_post or _default_http_post
+        self.egress = egress
         self.last_result: Optional[dict] = None
         self.deliveries: list[dict] = []
 
@@ -463,6 +657,14 @@ class NtfyNotifier:
 
     def notify(self, transition: str, incident: dict) -> bool:
         if not self.url:
+            return False
+        # Egress allow-list gate (pre-connect, non-silent).
+        denied = _egress_check(self.url, self.egress)
+        if denied is not None:
+            self.last_result = denied
+            self.deliveries.append({"transition": transition,
+                                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "result": denied})
             return False
         try:
             severity = (incident.get("severity") or "info").lower()
@@ -496,11 +698,21 @@ def build_incident_notifiers(config: dict, http_post: Optional[Callable] = None)
     compatibility) plus the multi-channel `incident_webhooks` list. Unknown
     types and empty URLs are skipped: a config typo must never take the
     engine down. Returns a (possibly empty) list of notifier objects.
+
+    Egress policy (t_f33e2f23): the tenant's `egress_policy` (from
+    integration.json) is parsed once and attached to every webhook notifier so
+    all outgoing webhook delivery is gated by the tenant allow-list in `strict`
+    mode. `http_post`, when supplied (e.g. by tests), replaces the transport but
+    the egress verdict is still enforced before it is called.
     """
+    # Build the per-tenant egress policy from config once.
+    egress = EgressAllowListPolicy.from_config(config)
+
     notifiers: list = []
     legacy = (config.get("incident_webhook_url") or "").strip()
     if legacy:
-        notifiers.append(IncidentNotifier(webhook_url=legacy, http_post=http_post))
+        notifiers.append(IncidentNotifier(webhook_url=legacy, http_post=http_post,
+                                           egress=egress))
     entries = config.get("incident_webhooks") or []
     if not isinstance(entries, list):
         return notifiers
@@ -512,12 +724,13 @@ def build_incident_notifiers(config: dict, http_post: Optional[Callable] = None)
             continue
         kind = (entry.get("type") or "generic").strip().lower()
         if kind == "slack":
-            notifiers.append(IncidentNotifier(webhook_url=url, http_post=http_post))
+            notifiers.append(IncidentNotifier(webhook_url=url, http_post=http_post,
+                                               egress=egress))
         elif kind == "ntfy":
             notifiers.append(NtfyNotifier(url, token=entry.get("token") or "",
-                                          http_post=http_post))
+                                          http_post=http_post, egress=egress))
         elif kind == "generic":
             notifiers.append(SignedWebhookNotifier(url, secret=entry.get("secret") or "",
-                                                   http_post=http_post))
+                                                   http_post=http_post, egress=egress))
         # tipos desconocidos: se ignoran (fail-soft)
     return notifiers

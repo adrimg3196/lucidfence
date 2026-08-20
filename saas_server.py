@@ -211,6 +211,12 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
     cfg["_applivery_api_key"] = key
     cfg.setdefault("applivery", {})["org_id"] = workspace_id
     cfg["incident_webhook_url"] = (runtime.get("incident_webhook_url") or "").strip()
+    # Per-tenant outbound webhook egress policy (t_f33e2f23). Opt-in `strict`
+    # mode adds an allow-list on top of the admission guard; default is
+    # `permissive` (current behaviour — never breaks existing deployments).
+    _egress = runtime.get("egress_policy")
+    if isinstance(_egress, dict) and _egress:
+        cfg["egress_policy"] = _egress
     # Atomic Mail Agentic: real email for the SaaS (opt-in per tenant).
     am = runtime.get("atomicmail") or {}
     if isinstance(am, dict) and am:
@@ -240,7 +246,8 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
 def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
                              incident_webhook_url: str = "",
                              atomicmail: dict | None = None,
-                             whitelabel: dict | None = None) -> None:
+                             whitelabel: dict | None = None,
+                             egress_policy: dict | None = None) -> None:
     path = tdir / "integration.json"
     runtime = {}
     try:
@@ -271,6 +278,15 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
             runtime["whitelabel"] = cleaned
         else:
             runtime.pop("whitelabel", None)
+    if egress_policy is not None:
+        # Persist the validated per-tenant egress policy (t_f33e2f23). Validation
+        # happens at the API layer (_validate_egress_policy); here we only store
+        # a well-formed dict. An empty/invalid value clears the policy (back to
+        # permissive default).
+        if isinstance(egress_policy, dict) and egress_policy:
+            runtime["egress_policy"] = egress_policy
+        else:
+            runtime.pop("egress_policy", None)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
@@ -865,6 +881,48 @@ def _safe_webhook_url(url: str):
                            or mapped.is_reserved):
                 return ""
         return url
+
+
+def _validate_egress_policy(raw: Any) -> tuple[bool, str, dict]:
+    """Validate a tenant egress policy payload sent from the dashboard.
+
+    Returns (ok, error_message, normalized_policy). An empty/absent policy is
+    valid and means "permissive" (current behaviour). A `*`` wildcard entry is
+    rejected because it would be an allow-all that nullifies the policy.
+
+    Format (see DECISION_EGRESS_ALLOWLIST.md / t_316b8ec5):
+        {"mode": "permissive"|"strict",
+         "allow": ["hooks.slack.com", ".slack.com", "10.20.30.40"],
+         "allow_private": false}
+    """
+    if raw is None:
+        return True, "", {}
+    if not isinstance(raw, dict):
+        return False, "egress_policy debe ser un objeto", {}
+    mode = str(raw.get("mode", "permissive")).strip().lower()
+    if mode not in ("permissive", "strict"):
+        return False, "egress_policy.mode debe ser 'permissive' o 'strict'", {}
+    allow = raw.get("allow", [])
+    normalized_allow: list[str] = []
+    if allow is not None:
+        if not isinstance(allow, list):
+            return False, "egress_policy.allow debe ser una lista", {}
+        for entry in allow:
+            if not isinstance(entry, str):
+                return False, "cada entrada de allow debe ser texto (host, sufijo .dominio o IP)", {}
+            e = entry.strip().lower()
+            if not e:
+                continue
+            if e == "*":
+                return False, "el comodín '*' no está permitido en allow (sería allow-all)", {}
+            normalized_allow.append(e)
+    ap_raw = raw.get("allow_private", False)
+    allow_private = bool(ap_raw)
+    policy = {"mode": mode}
+    if mode == "strict":
+        policy["allow"] = normalized_allow
+        policy["allow_private"] = allow_private
+    return True, "", policy
 
 
 def _request_id(handler) -> str:
@@ -1873,6 +1931,23 @@ class Handler(BaseHTTPRequestHandler):
             st["soar_webhook_hmac_configured"] = bool(runtime.get("soar_webhook_secret")
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
+            # Per-tenant outbound webhook egress policy (t_f33e2f23). Returned
+            # for the dashboard wizard; default permissive when absent.
+            _eg = runtime.get("egress_policy")
+            if not isinstance(_eg, dict) or not _eg:
+                st["egress_policy"] = {"mode": "permissive"}
+            else:
+                st["egress_policy"] = {
+                    "mode": str(_eg.get("mode", "permissive")).lower(),
+                    "allow": _eg.get("allow", []) if _eg.get("mode") == "strict" else [],
+                    "allow_private": bool(_eg.get("allow_private", False)),
+                }
+            # Last outgoing-webhook delivery outcome (incl. egress denials) so
+            # the dashboard can show `denied_by_egress_policy` explicitly.
+            try:
+                st["webhook_delivery"] = eng._webhook_delivery_status()
+            except Exception:
+                st["webhook_delivery"] = None
             return _send_json(self, st)
         if route == "/api/settings/enforcement" and method == "POST":
             # Editar la fase de enforcement (observe|enforce) desde el dashboard.
@@ -2071,16 +2146,22 @@ class Handler(BaseHTTPRequestHandler):
             url = _safe_webhook_url(url)
             if (body.get("url") or "").strip() and not url:
                 return _send_json(self, {"ok": False, "error": "URL no permitida (solo https, sin rangos privados)"}, 400)
+            # Per-tenant egress policy (t_f33e2f23): validate before persisting.
+            ok_eg, err_eg, policy_eg = _validate_egress_policy(body.get("egress_policy"))
+            if not ok_eg:
+                return _send_json(self, {"ok": False, "error": f"egress_policy inválido: {err_eg}"}, 400)
             tdir = _tenants.data_dir(org)
             _save_tenant_integration(tdir, eng.config.get("mode", "simulation"),
                                      eng.config.get("dry_run", True),
-                                     incident_webhook_url=url)
-            # rebuild engine so the notifier picks up the new webhook
+                                     incident_webhook_url=url,
+                                     egress_policy=policy_eg)
+            # rebuild engine so the notifier picks up the new webhook + policy
             try:
                 reload_engine(org)
             except Exception:
                 pass
-            return _send_json(self, {"ok": True, "configured": bool(url)})
+            return _send_json(self, {"ok": True, "configured": bool(url),
+                                     "egress_policy": policy_eg})
         if route == "/api/settings/soar-webhook-secret" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
                 return _send_json(self, {"error": "sin permiso"}, 403)

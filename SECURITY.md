@@ -75,19 +75,37 @@ unresolvable LAN names remain **allowed**; only the genuine SSRF pivots
 (loopback / link-local / cloud-metadata / reserved / multicast) are blocked. This is
 documented behaviour, not a defect.
 
-### Pending product decision: per-tenant egress allow/deny-list
+### Shipped (opt-in): per-tenant egress allow/deny-list  ·  task `t_f33e2f23`
 
-Hardening RFC1918 further (block-by-default private egress) is a **behaviour change**,
-not a bug fix, and requires:
-- per-tenant egress allow/deny lists (an appliance in a locked-down network may want
-  to permit *only* `hooks.slack.com` / `ntfy.sh` + the operator's SIEM), and
-- product sign-off (it would break on-prem UEM for tenants that rely on RFC1918).
+**Status: SHIPPED (opt-in).** Per the product decision (`t_316b8ec5`, APROBADA), a
+tenant-scoped allow/deny-list for **outgoing webhooks** is implemented in
+`lucidfence/core/notifier.py` (`EgressAllowListPolicy`) and wired through
+`build_incident_notifiers`, `Engine.status()`, and the dashboard wizard.
 
-This is tracked as a follow-up card for the Product Manager (`t_cd79333c` child) with
-the CTO recommendation to ship an explicit allow-list defaulting to "current
-behaviour" so existing deployments are unaffected. The building blocks
-(`PublicEgressPolicy`-style resolution + pinned-IP connect) already exist and are
-reused here.
+- **Default `permissive`** (current behaviour) — existing deployments are
+  unaffected. The admission guard (layer 1) still always runs.
+- **Opt-in `strict`** via `egress_policy` in the tenant `integration.json`
+  (chmod 0600). In `strict`, delivery additionally requires the destination
+  host to be on the `allow` list:
+  - exact hostname (`hooks.slack.com`),
+  - domain suffix (`.slack.com` — covers subdomains),
+  - literal IP (`10.20.30.40` for a fixed SIEM).
+  - A global wildcard `*` is **rejected** (it would be an allow-all that
+    nullifies the policy).
+- **`allow_private`** (default `false`) governs RFC1918 in `strict`: `false`
+  denies private egress even when the host is listed (closes the residual H-3
+  RFC1918 gap); `true` permits internal SIEMs / locked-down networks.
+- A delivery denied by the policy returns an **explicit, non-silent**
+  `{"ok": False, "result": "denied_by_egress_policy", ...}` that is surfaced in
+  the dashboard (`engine.status()` → `webhook_delivery`), never swallowed.
+- **Scope:** only outgoing webhooks (`incident_webhook_url`,
+  `incident_webhooks[]`, SOAR webhook). UEM adapters (Intune/Jamf/Workspace
+  ONE/Applivery/Fleet) are **out of scope** by product decision.
+- **Defense in depth:** the allow-list is a layer *on top of* the admission
+  guard — loopback / link-local / cloud-metadata `169.254.0.0/16` remain always
+  blocked. In `strict`: admission guard **AND** allow-list must both pass.
+
+Regression coverage: `tests/test_egress_allowlist.py`.
 
 ## Contact
 
