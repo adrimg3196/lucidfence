@@ -28,7 +28,21 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
+
+# #51: el repo exige Python >= 3.11 (tomllib, match statements, etc.). El
+# sistema trae 3.9 y `import tomllib` rompe verify.py al arrancar. Fallamos
+# temprano con un mensaje claro en vez de un traceback de ImportError.
+_MIN_PY = (3, 11)
+if sys.version_info < _MIN_PY:
+    sys.stderr.write(
+        "ERROR: LucidFence `verify` necesita Python >= "
+        f"{'%d.%d' % _MIN_PY}, pero usa {sys.version.split()[0]}.\n"
+        "Usa un venv: python3.11 -m venv .venv && . .venv/bin/activate\n"
+        "  luego: python3.11 scripts/verify.py\n"
+    )
+    sys.exit(2)
+
+import tomllib  # noqa: E402  (después del guard de versión)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
