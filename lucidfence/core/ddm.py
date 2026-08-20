@@ -226,6 +226,90 @@ def parse_status_report(report: Any) -> dict:
     return out
 
 
+#: Valores de ejemplo estables para el readback de `ddm_status` en mock.
+#: Solo se usan los campos que el device_state del producto persiste; el
+#: resto (p.ej. `model_marketing_name`) no viaja y se ignora en silencio.
+_MOCK_STATUS_VALUES = {
+    "os_version": "17.4.1",
+    "model": "iPhone15,2",
+    "serial_number": "SIMULATED-SN",
+    "passcode_compliant": True,
+    "filevault_enabled": None,
+    "model_marketing_name": "iPhone 15 Pro",
+}
+
+
+def _mock_decl_status(decl: dict) -> dict:
+    """Estado por declaración coherente con la respuesta real de Jamf DDM.
+
+    Jamf no publica endpoint para subir declarations propias. En mock el
+    dispositivo no rechaza nada, así que todas las declarations del juego
+    convergen en `accepted` - la misma forma que #89 leerá para decidir si
+    el camino declarativo es viable (todas `accepted` => declarativo).
+    """
+    return {
+        "identifier": decl["Identifier"],
+        "type": decl["Type"],
+        "status": "accepted",
+        "server_token": decl["ServerToken"],
+        "errors": [],
+    }
+
+
+def build_mock_apply_result(
+    policy: Any,
+    fence_state: str,
+    profile_url: str,
+    *,
+    predicate: Optional[str] = None,
+    status_items=None,
+) -> dict:
+    """Mock de `apply_ddm`: mismo contrato de retorno que el camino real.
+
+    Devuelve las declarations estructuradas (como el modo offline real) más
+    el estado por declaración que Jamf expondría tras la entrega.
+    """
+    declarations = build_declarations(
+        policy, fence_state, profile_url,
+        predicate=predicate, status_items=status_items,
+    )
+    return {
+        "declarations": declarations,
+        "declaration_status": [
+            _mock_decl_status(d)
+            for d in declarations["configurations"] + declarations["activations"]
+        ],
+    }
+
+
+def build_mock_status_result(*, status_items=None) -> dict:
+    """Mock de `ddm_status`: readback de status items como lo haría Jamf."""
+    items = tuple(status_items) if status_items is not None else DEFAULT_STATUS_ITEMS
+    device_state: dict = {}
+    for name in items:
+        field = _STATUS_FIELD_MAP.get(name)
+        if field is None:
+            continue
+        if field in _MOCK_STATUS_VALUES:
+            device_state[field] = _MOCK_STATUS_VALUES[field]
+    report = {
+        "StatusItems": {
+            name: device_state[_STATUS_FIELD_MAP[name]]
+            for name in items
+            if _STATUS_FIELD_MAP.get(name) in device_state
+        }
+    }
+    return {
+        "status_items": len(report["StatusItems"]),
+        "device_state": parse_status_report(report),
+    }
+
+
+def build_mock_sync_result(*, reason: str = "declarations_updated") -> dict:
+    """Mock de `ddm_sync`: respuesta 204-like coherente con el canal real."""
+    return {"jamf_status": 204, "synced": True, "reason": reason}
+
+
 __all__ = [
     "DDM_MIN_OS",
     "DEFAULT_STATUS_ITEMS",
@@ -233,4 +317,7 @@ __all__ = [
     "build_declarations",
     "build_status_subscriptions",
     "parse_status_report",
+    "build_mock_apply_result",
+    "build_mock_status_result",
+    "build_mock_sync_result",
 ]

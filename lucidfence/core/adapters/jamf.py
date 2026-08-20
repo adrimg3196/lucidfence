@@ -209,6 +209,11 @@ class JamfAdapter(MDMAdapter):
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if action == "apply_ddm":
             return self._apply_ddm(device, params)
+        # `ddm_status`/`ddm_sync` en mock devuelven un readback declarativo
+        # estructurado (igual FORMA que la respuesta real de Jamf), no el stub
+        # genérico del mock imperativo — ver issue #71.
+        if action in ("ddm_status", "ddm_sync") and not self.live:
+            return self._ddm_mock(device, action)
         # Jamf no expone "forzar conformidad" por API: la conformidad la
         # calculan smart groups + la integración compliance partner con
         # Microsoft (Jamf Pro <-> Intune). Degrada igual en mock y en live
@@ -266,6 +271,40 @@ class JamfAdapter(MDMAdapter):
         return {
             "adapter": "jamf", "ok": True, "device_id": device_id,
             "action": "apply_ddm", "declarations": declarations,
+            # Mock: estado por declaración coherente con la respuesta real de
+            # Jamf (ver build_mock_apply_result / issue #71). Solo el mock
+            # anexa esto; el camino live offline sigue sin inventar estado.
+            "declaration_status": [
+                {
+                    "identifier": d["Identifier"],
+                    "type": d["Type"],
+                    "status": "accepted",
+                    "server_token": d["ServerToken"],
+                    "errors": [],
+                }
+                for d in declarations["configurations"] + declarations["activations"]
+            ],
+        }
+
+    def _ddm_mock(self, device: Any, action: str) -> dict:
+        """Mock declarativo para `ddm_status`/`ddm_sync` (issue #71).
+
+        Devuelve un readback estructurado de la MISMA FORMA que la respuesta
+        real de Jamf (`status_items` + `device_state` para `ddm_status`;
+        `jamf_status=204` + `synced=True` para `ddm_sync`), en vez del stub
+        genérico de `_execute_mock`. El engine (#89) puede leer así el camino
+        declarativo sin un tenant Jamf real.
+        """
+        from lucidfence.core.ddm import build_mock_status_result, build_mock_sync_result
+
+        device_id = self._dev_id_str(device)
+        if action == "ddm_sync":
+            out = build_mock_sync_result()
+        else:
+            out = build_mock_status_result()
+        return {
+            "adapter": "jamf", "ok": True, "device_id": device_id,
+            "action": action, "mode": "mock", **out,
         }
 
     def _ddm_live(self, device: Any, action: str, dry_run: bool) -> dict:

@@ -131,6 +131,97 @@ def test_jamf_apply_ddm_builds_declarations_without_network():
     res = adapter.execute(device, "apply_ddm", {"policy": POLICY, "profile_url": URL})
     assert res["ok"] is True
     assert res["declarations"]["activations"][0]["Type"] == "com.apple.activation.simple"
+    # Issue #71: el mock NO es un stub genérico; anexa el estado por
+    # declaración que Jamf expondría tras la entrega.
+    assert "declaration_status" in res
+    status = res["declaration_status"]
+    assert isinstance(status, list) and len(status) == 3
+    for ds in status:
+        assert set(ds) == {"identifier", "type", "status", "server_token", "errors"}
+        assert ds["status"] == "accepted"
+        assert ds["errors"] == []
+        # El token del estado coincide con el de la declaration referenciada.
+        decl = next(d for d in res["declarations"]["configurations"]
+                    + res["declarations"]["activations"]
+                    if d["Identifier"] == ds["identifier"])
+        assert ds["server_token"] == decl["ServerToken"]
+        assert ds["type"] == decl["Type"]
+
+
+# --- Issue #71: el mock de DDM devuelve datos estructurados, no stub genérico ---
+
+def test_jamf_ddm_status_mock_returns_structured_readback():
+    """En mock, `ddm_status` devuelve status_items + device_state, no un stub."""
+    adapter = JamfAdapter()
+    device = {"device_id": "dev-003", "management_id": "mgmt-42",
+              "platform": "ios", "os_version": "17.4.1"}
+    res = adapter.execute(device, "ddm_status", {}, dry_run=False)
+    assert res["ok"] is True
+    assert res["mode"] == "mock"
+    # Misma FORMA que la respuesta real de Jamf: nº de items + device_state.
+    assert res["status_items"] >= 1
+    state = res["device_state"]
+    assert "os_version" in state and state["os_version"] == "17.4.1"
+    assert state.get("passcode_compliant") is True
+    # No debe parecerse al stub imperativo: ni "command_id" ni "jamf_verb".
+    assert "command_id" not in res
+    assert "jamf_verb" not in res
+
+
+def test_jamf_ddm_sync_mock_returns_204_like_response():
+    adapter = JamfAdapter()
+    device = {"device_id": "dev-003", "management_id": "mgmt-42"}
+    res = adapter.execute(device, "ddm_sync", {}, dry_run=False)
+    assert res["ok"] is True
+    assert res["mode"] == "mock"
+    assert res["jamf_status"] == 204
+    assert res["synced"] is True
+    assert "command_id" not in res
+
+
+def test_simulation_adapter_ddm_mock_is_structured_not_stub():
+    """El adapter `simulation` (modo por defecto) también es testeable DDM."""
+    from lucidfence.core.adapters.simulation import SimulationAdapter
+
+    sim = SimulationAdapter()
+    device = {"device_id": "dev-sim", "platform": "ios",
+              "os_version": "17.4.1", "fence_state": "outside"}
+    apply = sim.execute(device, "apply_ddm", {"policy": POLICY, "profile_url": URL})
+    assert apply["ok"] is True
+    assert apply["mode"] == "mock"
+    assert "declarations" in apply and "declaration_status" in apply
+    assert len(apply["declaration_status"]) == 3
+    assert all(d["status"] == "accepted" for d in apply["declaration_status"])
+
+    status = sim.execute(device, "ddm_status", {})
+    assert status["ok"] is True and status["status_items"] >= 1
+    assert status["device_state"]["os_version"] == "17.4.1"
+
+    sync = sim.execute(device, "ddm_sync", {})
+    assert sync["ok"] is True and sync["jamf_status"] == 204 and sync["synced"] is True
+
+
+def test_ddm_mock_builders_are_deterministic_and_shape_stable():
+    """Los builders de mock en ddm.py afirman la FORMA que #89 leerá."""
+    from lucidfence.core.ddm import (
+        build_mock_apply_result,
+        build_mock_status_result,
+        build_mock_sync_result,
+    )
+
+    apply = build_mock_apply_result(POLICY, "outside", URL)
+    assert set(apply) == {"declarations", "declaration_status"}
+    assert len(apply["declaration_status"]) == 3
+    for ds in apply["declaration_status"]:
+        assert set(ds) == {"identifier", "type", "status", "server_token", "errors"}
+        assert ds["status"] == "accepted" and ds["errors"] == []
+
+    status = build_mock_status_result()
+    assert set(status) == {"status_items", "device_state"}
+    assert status["status_items"] == len(status["device_state"]) >= 1
+
+    sync = build_mock_sync_result()
+    assert sync == {"jamf_status": 204, "synced": True, "reason": "declarations_updated"}
 
 
 def test_jamf_apply_ddm_falls_back_when_device_too_old():
