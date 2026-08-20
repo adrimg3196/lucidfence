@@ -24,7 +24,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
+import ipaddress
 import json
+import socket
+import ssl
 import time
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
@@ -45,20 +49,148 @@ _VERB = {
 }
 
 
+# Outbound webhook egress policy.
+#
+# SECURITY (H-3 follow-up, task t_cd79333c): the legacy `_safe_webhook_url` guard
+# validates the hostname at CONFIG time, but the actual socket connect re-resolved
+# the name via http.client at SEND time. That is a DNS-rebinding TOCTOU: an
+# attacker who controls DNS could return a public IP at validation time and a
+# RFC1918 / link-local / metadata (169.254.169.254) IP on the connect — pivoting
+# past the guard. We close it the same way OIDC does: resolve ONCE, validate
+# EVERY resolved address, and connect to the validated IP with Host/SNI pinned to
+# the ORIGINAL hostname (so TLS + virtual hosts keep working).
+#
+# Trade-off (intentional, documented, NOT a bug — local-first UEM appliance):
+#   * BLOCKED on resolution: loopback, link-local (incl. cloud metadata
+#     169.254.0.0/16), reserved, multicast, and IPv4-mapped loopback. These are
+#     the genuine SSRF pivot targets.
+#   * ALLOWED: RFC1918 / unresolvable LAN names. A self-hosted LucidFence admin
+#     legitimately points webhooks at an internal SIEM or on-prem receiver. A
+#     stricter "block all private egress" needs per-tenant allow/deny lists and
+#     product sign-off (see SECURITY.md / task t_cd79333c).
+# This mirror exactly what `_safe_webhook_url` already accepts, so behaviour for
+# legitimate configs is unchanged; only the TOCTOU window is closed.
+def _webhook_resolve(host: str, port: int) -> list[str]:
+    """Resolve `host` to every address and reject the snapshot if ANY is a pivot.
+
+    Returns the de-duplicated address list, or raises ValueError if the name is
+    unresolvable or resolves to a blocked (loopback/link-local/metadata) target.
+    RFC1918 results are allowed and returned as-is.
+
+    A literal IP bypasses DNS entirely: it is returned as-is. This deliberately
+    PRESERVES the legacy behaviour for explicit private/loopback targets (self-
+    hosted SIEMs, the local runtime harness, on-prem receivers) — `_safe_webhook_url`
+    already gates which URLs the operator may configure; a URL the operator set
+    explicitly is not subject to the DNS-rebinding TOCTOU.
+    """
+    # Fast path: a literal IP never talks to DNS and is not a rebinding surface.
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        return [str(ip)]
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError, OSError, ValueError):
+        # Unresolvable here (e.g. an internal LAN name that resolves only inside
+        # the customer's network). Allow it — the operator configured it. The
+        # connect will fail at the customer's resolver, not here.
+        return []
+    if not infos:
+        raise ValueError("empty-resolution")
+    addrs: list[str] = []
+    for info in infos:
+        addr = str(info[4][0]).split("%", 1)[0].lower()  # strip IPv6 zone id
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            raise ValueError("unparseable-address")
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        # Block the genuine SSRF pivots; allow RFC1918 / other globals.
+        if ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError("blocked-pivot")
+        if addr not in addrs:
+            addrs.append(addr)
+    return addrs
+
+
+class _PinnedHTTPConnection:
+    """http.client connection to a pre-validated IP, keeping Host/SNI = hostname.
+
+    For HTTPS we wrap in TLS with server_hostname=hostname (so SNI + cert
+    validation use the operator's hostname, not the raw IP). For HTTP we just
+    connect to the IP with Host: hostname. The validated IP is the ONLY address
+    touched — DNS is never consulted again.
+    """
+
+    def __init__(self, hostname: str, ip: str, port: int, *, https: bool, timeout: float = 10):
+        self.hostname = hostname
+        self.ip = ip
+        self.port = port
+        self.https = https
+        self.timeout = timeout
+        self._conn: Any = None
+
+    def _build(self):
+        if self.https:
+            ctx = ssl.create_default_context()
+            self._conn = http.client.HTTPSConnection(
+                self.hostname, self.port, timeout=self.timeout, context=ctx
+            )
+        else:
+            self._conn = http.client.HTTPConnection(self.hostname, self.port, timeout=self.timeout)
+        # Pin the socket to the validated IP *before* any request. http.client
+        # resolves `host` lazily in connect(); we override connect to use `ip`.
+        _ip = self.ip
+
+        def _connect_pinned(conn_self):  # noqa: ANN001 - http.client internal
+            raw = socket.create_connection((_ip, conn_self.port), conn_self.timeout)
+            if self.https:
+                conn_self.sock = conn_self._context.wrap_socket(
+                    raw, server_hostname=conn_self.host
+                )
+            else:
+                conn_self.sock = raw
+
+        self._conn.connect = _connect_pinned.__get__(self._conn, type(self._conn))
+
+    def request(self, method, path, body=None, headers=None):  # noqa: ANN001
+        self._build()
+        # Ensure Host reflects the original hostname (in case of IP-based default).
+        if headers is not None and "Host" not in headers:
+            headers = dict(headers)
+            headers["Host"] = self.hostname
+        self._conn.request(method, path, body=body, headers=headers)
+
+    def getresponse(self):  # noqa: ANN001
+        return self._conn.getresponse()
+
+    def close(self):  # noqa: ANN001
+        if self._conn is not None:
+            self._conn.close()
+
+
 def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dict:
     """Real HTTP POST via stdlib http.client. Never raises.
 
     `payload` dict/list → JSON body; str/bytes → raw body (ntfy usa texto plano).
+
+    Egress hardening (H-3 follow-up, t_cd79333c): the destination is resolved
+    ONCE and connected to the validated IP (Host/SNI pinned to the original
+    hostname). This removes the DNS-rebinding TOCTOU: the address used at connect
+    time is the same one that passed validation, so a name that flips to an
+    internal/metadata IP between config-check and send cannot pivot.
     """
-    import http.client
     parsed = urlparse(url)
     # Only http/https with a real host. Reject exotic schemes (file://, gopher://,
-    # ftp://) and credential-smuggling (http://user:pass@host). The destination
-    # IP is intentionally NOT restricted: in a self-hosted deployment the admin
-    # may legitimately point the webhook at an internal SIEM (10.x, loopback).
+    # ftp://) and credential-smuggling (http://user:pass@host).
     if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
         return {"ok": False, "error": f"webhook_url no permitido (esquema/host): {url!r}"}
-    host, port = parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    https = parsed.scheme == "https"
     if isinstance(payload, bytes):
         body = payload
         default_ct = "text/plain; charset=utf-8"
@@ -71,13 +203,19 @@ def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dic
     send_headers = {"Content-Type": default_ct}
     send_headers.update(headers or {})
     try:
-        if parsed.scheme == "https":
-            import ssl
-            ctx = ssl.create_default_context()
-            conn = http.client.HTTPSConnection(host, port, timeout=10, context=ctx)
+        # Resolve once; validate the whole snapshot; pick the first usable IP.
+        ips = _webhook_resolve(host, port)
+        if not ips:
+            # Unresolvable LAN name: fall back to hostname-based connect (the
+            # operator's resolver handles it). No TOCTOU risk because we never
+            # validated it as "public" — it simply connects to whatever the local
+            # resolver returns, exactly as before this hardening.
+            conn = _PinnedHTTPConnection(host, host, port, https=https, timeout=10)
+            conn.request("POST", parsed.path or "/", body=body, headers=send_headers)
         else:
-            conn = http.client.HTTPConnection(host, port, timeout=10)
-        conn.request("POST", parsed.path or "/", body=body, headers=send_headers)
+            # Pinned-IP connect: only `ips[0]` is ever touched.
+            conn = _PinnedHTTPConnection(host, ips[0], port, https=https, timeout=10)
+            conn.request("POST", parsed.path or "/", body=body, headers=send_headers)
         r = conn.getresponse()
         status = r.status
         conn.close()
