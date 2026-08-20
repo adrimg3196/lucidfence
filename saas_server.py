@@ -56,7 +56,7 @@ from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-from typing import Optional
+from typing import Any, Optional
 
 # make sure the 'lucidfence' package and its siblings are importable
 ROOT = Path(__file__).resolve().parent
@@ -1532,8 +1532,21 @@ class Handler(BaseHTTPRequestHandler):
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             from lucidfence.core.coverage import coverage_report
+            # ?stale_after_s=N ajusta el umbral de "lost sheep" por llamada
+            # (acotado 60s..30 días; fuera de rango o no numérico -> 400, no
+            # silencio: un umbral ignorado daría un informe que miente).
+            qs = parse_qs(urlparse(self.path).query)
+            stale_after_s = 86400
+            raw = (qs.get("stale_after_s") or [None])[0]
+            if raw is not None:
+                try:
+                    stale_after_s = int(raw)
+                except ValueError:
+                    return _send_json(self, {"error": "stale_after_s debe ser entero (segundos)"}, 400)
+                if not (60 <= stale_after_s <= 2592000):
+                    return _send_json(self, {"error": "stale_after_s fuera de rango (60..2592000)"}, 400)
             devices = [s.to_dict() for s in eng.store.snapshot().values()]
-            return _send_json(self, coverage_report(devices, eng.fences))
+            return _send_json(self, coverage_report(devices, eng.fences, stale_after_s=stale_after_s))
 
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is
