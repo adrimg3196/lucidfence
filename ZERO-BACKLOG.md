@@ -45,7 +45,7 @@ Backlog operativo de los turnos nocturnos de Zero. Los docs del repo
   runtime versionado); hoy no genera conflictos, pero es candidato a la misma
   regla si empieza a moverse.
 - Purga de menciones a planes de pago en docs legacy de marketing (`docs/launch-copy/`, `docs/marketing-copy.md`, `KANBAN.md`, `docs/PILOT_RUNBOOK.md`).
-- Capabilities `org:delete` y `user:role` están en la matriz RBAC pero ningún endpoint las comprueba — decidir: implementar endpoints o borrarlas.
+- ~~Capabilities `org:delete` y `user:role` están en la matriz RBAC pero ningún endpoint las comprueba — decidir: implementar endpoints o borrarlas.~~ Resuelto: `user:role` ya se enforce en `POST /api/members/role` y `org:delete` ahora se enforce en `DELETE /api/org` (owner-only + guardarraíl del último propietario).
 - Botón "Apoya el proyecto" (donaciones) discreto en el dashboard, alimentado por `FREE_PLAN.donations`.
 - Migrar los 2 tests multiuem que fallan por `TypeGuard` (Python 3.9 del sistema) a `typing_extensions` o guardas de versión — único rojo de la suite.
 - Rehacer `tests/coverage_analysis_cloud.md` tras la limpieza de billing.

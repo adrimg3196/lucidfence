@@ -94,6 +94,27 @@ class TenantStore:
     def get(self, org_id: str) -> Optional[Org]:
         return self._orgs.get(org_id)
 
+    def delete(self, org_id: str) -> bool:
+        """Remove an org from the index and wipe its isolated data dir.
+
+        Returns False if the org does not exist. Caller (HTTP layer) is
+        responsible for RBAC + the last-owner guardrail before calling this.
+        """
+        org = self._orgs.pop(org_id, None)
+        if org is None:
+            return False
+        self._by_slug.pop(org.slug, None)
+        self._save()
+        # Best-effort recursive removal of the tenant data directory. The
+        # tenant is local and isolated under tenants/<org_id>/, so this never
+        # touches other orgs or shared state.
+        import shutil
+
+        target = self.tenants_dir / org_id
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        return True
+
     def get_by_slug(self, slug: str) -> Optional[Org]:
         oid = self._by_slug.get(slug)
         return self._orgs.get(oid) if oid else None
