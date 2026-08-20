@@ -64,11 +64,11 @@ def test_dashboard_browser_smoke() -> None:
             assert len(hrefs) == 21, f"Expected 21 product views, got {len(hrefs)}"
             assert "#company" in hrefs
             for href in hrefs:
-                page.locator(f'#nav a[href="{href}"]').click()
+                page.locator(f'#nav a[href="{href}"], #navFoot a[href="{href}"]').click()
                 view_id = "view-" + href.lstrip("#")
                 page.wait_for_function("id => { const n=document.getElementById(id); return n && !n.classList.contains('hidden') && n.innerText.trim().length>0; }", arg=view_id, timeout=15000)
 
-            page.locator('#nav a[href="#company"]').click()
+            page.locator('#nav a[href="#company"], #navFoot a[href="#company"]').click()
             page.wait_for_selector("#companyNewGoal")
             assert "Compañía autónoma" in page.locator("#view-company").inner_text()
             assert "Mission Control" in page.locator("#view-company").inner_text()
