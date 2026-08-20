@@ -42,6 +42,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Gate de regresión (t_69acb514): las 4 invariantes mecánicas de release
+      # deben cumplirse antes de crear cualquier tag/release o artefacto.
+      - name: Release preflight gate (mecánicas de release; debe exit 0)
+        run: python3 scripts/release_preflight.py --repo "$GITHUB_WORKSPACE" --json
+
       - name: Resolver versión
         id: ver
         run: |
