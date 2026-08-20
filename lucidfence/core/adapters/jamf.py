@@ -29,6 +29,7 @@ from urllib.parse import quote
 import requests
 
 from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.multiuem import NormalizedDevice
 
 
 # Acción UEM -> comando Jamf (verb del endpoint de commands).
@@ -209,6 +210,11 @@ class JamfAdapter(MDMAdapter):
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if action == "apply_ddm":
             return self._apply_ddm(device, params)
+        # `ddm_status`/`ddm_sync` en mock devuelven un readback declarativo
+        # estructurado (igual FORMA que la respuesta real de Jamf), no el stub
+        # genérico del mock imperativo — ver issue #71.
+        if action in ("ddm_status", "ddm_sync") and not self.live:
+            return self._ddm_mock(device, action)
         # Jamf no expone "forzar conformidad" por API: la conformidad la
         # calculan smart groups + la integración compliance partner con
         # Microsoft (Jamf Pro <-> Intune). Degrada igual en mock y en live
@@ -266,6 +272,40 @@ class JamfAdapter(MDMAdapter):
         return {
             "adapter": "jamf", "ok": True, "device_id": device_id,
             "action": "apply_ddm", "declarations": declarations,
+            # Mock: estado por declaración coherente con la respuesta real de
+            # Jamf (ver build_mock_apply_result / issue #71). Solo el mock
+            # anexa esto; el camino live offline sigue sin inventar estado.
+            "declaration_status": [
+                {
+                    "identifier": d["Identifier"],
+                    "type": d["Type"],
+                    "status": "accepted",
+                    "server_token": d["ServerToken"],
+                    "errors": [],
+                }
+                for d in declarations["configurations"] + declarations["activations"]
+            ],
+        }
+
+    def _ddm_mock(self, device: Any, action: str) -> dict:
+        """Mock declarativo para `ddm_status`/`ddm_sync` (issue #71).
+
+        Devuelve un readback estructurado de la MISMA FORMA que la respuesta
+        real de Jamf (`status_items` + `device_state` para `ddm_status`;
+        `jamf_status=204` + `synced=True` para `ddm_sync`), en vez del stub
+        genérico de `_execute_mock`. El engine (#89) puede leer así el camino
+        declarativo sin un tenant Jamf real.
+        """
+        from lucidfence.core.ddm import build_mock_status_result, build_mock_sync_result
+
+        device_id = self._dev_id_str(device)
+        if action == "ddm_sync":
+            out = build_mock_sync_result()
+        else:
+            out = build_mock_status_result()
+        return {
+            "adapter": "jamf", "ok": True, "device_id": device_id,
+            "action": action, "mode": "mock", **out,
         }
 
     def _ddm_live(self, device: Any, action: str, dry_run: bool) -> dict:
@@ -434,6 +474,78 @@ class JamfAdapter(MDMAdapter):
             "devices": items,
             "count": len(items),
         }
+
+    # --- inventory (multi-UEM) ---
+    # Jamf Pro expone el modo de gestión de forma derivable desde la sección
+    # GENERAL de cada dispositivo móvil. No hay un string literal
+    # "managementMode" en la API de Jamf; lo inferimos de los booleanos reales
+    # que la respuesta trae (managed / supervised), nunca de suposiciones.
+    # Esto alimenta el gate declarativo (core.declarative) para que DDM deje
+    # de caer siempre a imperativo. Ver Issue #88.
+    #
+    # Mapeo (Jamf Pro API v1/v2, mobile-devices?section=GENERAL):
+    #   managed=False                       -> None (no gestionado: sin DDM)
+    #   managed=True  & supervised=True     -> "fully_managed" (ADE/DEP, DDM ok)
+    #   managed=True  & supervised=False    -> "mdm"           (MDM estándar)
+    #   ownership: dispositivo Jamf gestionado => "company" (activo de empresa)
+    def _derive_management_mode(self, general: dict) -> str | None:
+        if not general.get("managed"):
+            return None
+        return "fully_managed" if general.get("supervised") else "mdm"
+
+    def _derive_ownership(self, general: dict) -> str | None:
+        if not general.get("managed"):
+            return None
+        return "company"
+
+    def _normalize_fetch_device(self, raw: dict) -> NormalizedDevice:
+        general = raw.get("general") or {}
+        device_id = str(raw.get("id") or general.get("id") or "")
+        return NormalizedDevice(
+            canonical_id=device_id,
+            provider="jamf",
+            provider_device_id=device_id,
+            name=general.get("name") or raw.get("name") or device_id,
+            platform=(general.get("platform") or "").lower() or "unknown",
+            serial_number=general.get("serialNumber"),
+            compliant=None,  # Jamf mobile-devices no expone compliance directo
+            status=("managed" if general.get("managed") else "unmanaged"),
+            management_mode=self._derive_management_mode(general),
+            ownership=self._derive_ownership(general),
+            inventory={
+                "jamf_management_id": general.get("managementId"),
+                "model": general.get("model"),
+                "os_version": general.get("osVersion"),
+                "username": general.get("username"),
+            },
+        )
+
+    def fetch_devices(self) -> list:
+        """Inventory multi-UEM: lista dispositivos desde Jamf Pro.
+
+        En modo ``live`` llama a GET /api/v1/mobile-devices?section=GENERAL y
+        normaliza cada dispositivo incluyendo ``management_mode``/``ownership``
+        derivados de la respuesta real. En modo mock devuelve ``[]`` (sin flota
+        simulada) para no fabricar señales declarativas falsas.
+        """
+        if not self.live:
+            return []
+
+        url = f"{self.base_url}{JAMF_DEVICES_PATH}"
+        try:
+            resp = requests.get(
+                url,
+                headers=self._auth_headers(),
+                params={"page-size": 200, "section": "GENERAL"},
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise TransportError(f"Jamf list unreachable: {exc!r}") from exc
+        err = self._resp_error(resp, {"device_id": "", "name": ""}, "fetch_devices", "mobile-devices list")
+        if err:
+            return []
+        results = (resp.json() or {}).get("results", [])
+        return [self._normalize_fetch_device(x) for x in results]
 
     # --- mock fallback (unchanged contract behaviour) ---
 

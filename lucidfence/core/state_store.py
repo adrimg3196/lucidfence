@@ -55,7 +55,15 @@ class DeviceState:
     last_checkin: Optional[str] = None        # last successful MDM check-in (ISO)
     enrolled_at: Optional[str] = None         # enrollment date (ISO)
     device_tag: Optional[str] = None          # free-text asset tag / label
-    geofence_compliance: Optional[dict] = None  # simulated/live iOS geofence posture
+    geofence_compliance: Optional[dict] = None    # simulated/live iOS geofence posture
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Populated by the adapter from the real UEM/EMM response and carried
+    # through NormalizedDevice -> LocationReport -> DeviceState. None = the
+    # adapter did not report it (never inferred). Feed the declarative gate
+    # (core.declarative) so it no longer falls through to imperative for
+    # every device in production.
+    management_mode: Optional[str] = None        # e.g. device_owner|profile_owner|fully_managed|mdm|configurator
+    ownership: Optional[str] = None              # company|employee_owned|unknown
     # --- multi-UEM: which UEM provider(s) own this device, for action routing ---
     provider_refs: dict = field(default_factory=dict)  # {"applivery": "dev123", ...}
     # --- declarative readback (DDM status report / DSC compliance) ---

@@ -15,6 +15,9 @@ except ImportError:
     TypeGuard = bool  # type: ignore
 from typing import Callable
 
+# Issue #89: declarative-vs-imperative routing gate (shared with the engine).
+from lucidfence.core.declarative import declarative_path_for  # noqa: E402
+
 
 _UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_]*")
@@ -133,6 +136,14 @@ class NormalizedDevice:
     provider_refs: dict[str, str] = field(default_factory=dict)
     provenance: dict[str, str] = field(default_factory=dict)
     identity_conflict: bool = False
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Populated by the adapter from the real UEM/EMM response (e.g. Jamf's
+    # `managementId`/supervision, Intune's managedDeviceOwnerType, AMAPI's
+    # ownership). None = the adapter did not report it (never inferred). These
+    # feed the declarative-vs-imperative gate (core.declarative) so it no
+    # longer falls through to imperative for every device.
+    management_mode: str | None = None
+    ownership: str | None = None
 
 
 @dataclass(frozen=True)
@@ -307,6 +318,8 @@ class MultiUEMOrchestrator:
                 or type(item.provider_refs) is not dict
                 or type(item.provenance) is not dict
                 or type(item.identity_conflict) is not bool
+                or not cls._valid_optional_text(item.management_mode)
+                or not cls._valid_optional_text(item.ownership)
                 or not cls._valid_location(provider, item.location)
             ):
                 return False
@@ -343,6 +356,14 @@ class MultiUEMOrchestrator:
         return value is None or (
             type(value) is str
             and len(value) <= _MAX_REMOTE_ID_LENGTH
+            and value.isprintable()
+        )
+
+    @classmethod
+    def _valid_optional_text(cls, value: object) -> bool:
+        return value is None or (
+            type(value) is str
+            and 0 < len(value) <= _MAX_REMOTE_ID_LENGTH
             and value.isprintable()
         )
 
@@ -456,6 +477,19 @@ class MultiUEMOrchestrator:
         )
         return device
 
+    def _merge_declarative(self, members: list[NormalizedDevice], merged: NormalizedDevice):
+        """Carry management_mode/ownership across consolidated members.
+
+        Same "first non-null wins" rule as inventory: a device reported by two
+        UEMs keeps the first declarative signal it saw. None is never inferred,
+        so if no provider contributed a mode the field stays None.
+        """
+        for item in members:
+            if merged.management_mode is None and item.management_mode is not None:
+                merged.management_mode = item.management_mode
+            if merged.ownership is None and item.ownership is not None:
+                merged.ownership = item.ownership
+
     def _merge(self, members: list[NormalizedDevice], now: datetime) -> NormalizedDevice:
         members = sorted(members, key=lambda item: (item.provider, item.provider_device_id))
         merged = deepcopy(members[0])
@@ -486,6 +520,7 @@ class MultiUEMOrchestrator:
         ]
         choices = accepted or locations
         merged.location = min(choices, key=self._location_key) if choices else None
+        self._merge_declarative(members, merged)
         return merged
 
     @staticmethod
@@ -537,10 +572,66 @@ class MultiUEMOrchestrator:
                         "identity_conflict": device.identity_conflict,
                         "location_quality": "accepted" if accepted else "rejected",
                         "location_rejection_reason": None if accepted else reason,
+                        "management_mode": device.management_mode,
+                        "ownership": device.ownership,
                     },
                 )
             )
         return reports
+
+    def _declarative_route(self, device, action: str, params: dict, *, binding, dry_run: bool = False):
+        """Issue #89: route an eligible action declaratively before the
+        imperative ``binding.execute_action`` call.
+
+        Consults the binding adapter's ``supports_ddm`` / ``supports_dsc`` /
+        ``supports_amapi_policy`` flags together with the device's reported
+        ``management_mode``/``ownership`` via the shared ``declarative_path_for``
+        gate. When the gate says ``"declarative"`` we build the declaration
+        through the adapter's builder (``_apply_ddm`` / ``_apply_dsc`` /
+        ``_apply_amapi``) and tag the result with ``enforcement="declarative"``.
+
+        Returns the declarative result, or ``None`` when the device is not
+        eligible so the caller keeps its imperative fallback. Never raises.
+        """
+        cb = binding.execute_action
+        if cb is None or not hasattr(cb, "__self__"):
+            return None
+        adapter = cb.__self__
+        supports = (
+            bool(getattr(adapter, "supports_ddm", False)),
+            bool(getattr(adapter, "supports_dsc", False)),
+            bool(getattr(adapter, "supports_amapi_policy", False)),
+        )
+        if not any(supports):
+            return None
+        decision = declarative_path_for(
+            device,
+            supports_ddm=supports[0],
+            supports_dsc=supports[1],
+            supports_amapi_policy=supports[2],
+        )
+        if decision != "declarative":
+            return None
+        if supports[0] and hasattr(adapter, "_apply_ddm"):
+            sub = "apply_ddm"
+        elif supports[1] and hasattr(adapter, "_apply_dsc"):
+            sub = "apply_dsc"
+        elif supports[2] and hasattr(adapter, "_apply_amapi"):
+            sub = "apply_amapi"
+        else:
+            return None
+        decl_params = dict(params or {})
+        if "policy" not in decl_params and getattr(device, "policy_id", None):
+            decl_params["policy"] = {"id": device.policy_id}
+        if "profile_url" not in decl_params:
+            decl_params.setdefault("profile_url", getattr(adapter, "ddm_profile_url", "") or "")
+        res = adapter.execute(device, sub, decl_params, dry_run=dry_run)
+        if isinstance(res, dict):
+            res["enforcement"] = "declarative"
+            res["declarative_path"] = decision
+            res["declarative_subaction"] = sub
+            res["original_action"] = action
+        return res
 
     def execute(
         self,
@@ -615,6 +706,16 @@ class MultiUEMOrchestrator:
             "action": action,
             "dry_run": dry_run,
         }
+        # Issue #89: declarative-first. If the provider's adapter exposes a
+        # declarative channel and the device is eligible, build the declaration
+        # instead of issuing the blind imperative command. The binding's
+        # execute_action is the adapter's ``execute``; route through its
+        # declarative builder when the shared gate allows it.
+        decl = self._declarative_route(
+            device, action, params or {}, binding=binding, dry_run=dry_run,
+        )
+        if decl is not None:
+            return decl
         try:
             response = binding.execute_action(remote_id, action, deepcopy(params), dry_run)
         except Exception:
