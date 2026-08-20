@@ -37,9 +37,7 @@ render a graceful integration_error instead of a 500.
 """
 
 import json
-import math
 import os
-import random
 import time
 import urllib.request
 import urllib.error
@@ -109,6 +107,11 @@ class LocationReport:
     # True/False = UEM reported supervision explicitly; None = unknown (the
     # common case), never inferred. See docs/operations/apple_ddm.md.
     supervised: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 hardware-health status items, WWDC 2026:
+    # baseband, camera, biometrics, nfc, uwb...): dict of component -> bool
+    # (True=healthy, False=degraded) or status string. None = not reported (the
+    # common case), never inferred. See docs/operations/apple_ddm.md.
+    hardware_health: Optional[dict] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -350,6 +353,9 @@ class LiveLocationSource:
             # leave it unknown. It arrives via the DDM status channel
             # (device_state readback), not from this list endpoint.
             supervised=None,
+            # Same verified schema exposes NO hardware-health fields either:
+            # leave it unknown (arrives via the DDM status channel on OS 27).
+            hardware_health=None,
             carrier=summary.get("carrier") or summary.get("networkOperator"),
             assigned_user=summary.get("userName") or summary.get("assignedUser"),
             department=summary.get("department"),
@@ -476,6 +482,10 @@ class SimulationLocationSource:
                 # (unknown), never defaulted — the risk engine must not penalize
                 # a device just because a legacy seed omits enrollment supervision.
                 supervised=dev.get("supervised"),
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits hardware health.
+                hardware_health=dev.get("hardware_health"),
                 carrier=dev.get("carrier") or "Movistar",
                 assigned_user=dev.get("assigned_user") or dev.get("name"),
                 department=dev.get("department") or "Operaciones",

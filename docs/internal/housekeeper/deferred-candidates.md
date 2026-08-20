@@ -7,6 +7,30 @@ la entrada: se anota la resolución.
 
 ## Abiertos
 
+- **2026-08-19 · `lucidfence/core/storage.py` (módulo entero, 148 líneas)** —
+  etiqueta ponytail `delete`: cero importadores en todo el repo (código,
+  tests, scripts); incluye un cliente SigV4 de Cloudflare R2 hecho a mano que
+  nada invoca. NO se borra en este ciclo porque `docs/operations/DEPLOY_FREE.md`
+  lo referencia dos veces como parte de la historia de deploy gratis
+  ("Storage de reportes … R2 free"): retirar el módulo obliga a decidir si esa
+  capacidad documentada se elimina del relato de producto → decisión de
+  producto/docs, no de limpieza mecánica. Evidencia: `grep -rn "core.storage\|core/storage"`
+  solo devuelve el propio fichero y ese doc.
+- **2026-08-19 · `lucidfence/core/secrets.py` imports muertos (`json`, `stat`)
+  y variable `e` sin uso (L185)** — etiqueta ponytail `shrink`: pyflakes los
+  marca, pero el fichero es superficie de credenciales/seguridad y la carta
+  del ciclo prohíbe tocar guards de seguridad ("ni una línea") → diferido
+  para un ciclo con revisión de seguridad explícita.
+- **2026-08-19 · `lucidfence/core/adapter_marketplace.py` (`verify_index`,
+  30 líneas)** — etiqueta ponytail `yagni`: su único caller es
+  `tests/test_annual_roadmap.py`; ningún código de producto verifica el
+  índice del marketplace. Borrarlo exigiría borrar/debilitar un test
+  existente, cosa vetada por la carta → diferido hasta que el propietario
+  decida si el marketplace local sigue en el roadmap.
+- **2026-08-19 · `lucidfence/core/oidc.py`** — fuera de alcance deliberado
+  del ciclo (auth/SSO, 6 fallos baseline conocidos en su suite); cualquier
+  shrink ahí debe ir con el arreglo de esos tests, no con housekeeping.
+
 - **2026-08-16 · `loop_improve.py` (raíz)** — parece legacy (excluido del
   tarball en `build.sh`) pero está referenciado por `saas_server.py`,
   `lucidfence/core/roadmap_tooling.py`, `tests/test_audit_regressions.py`,

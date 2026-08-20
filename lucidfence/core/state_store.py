@@ -10,7 +10,7 @@ import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 
 @dataclass
@@ -63,6 +63,7 @@ class DeviceState:
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
     lockdown_mode: Optional[bool] = None       # security.lockdown-mode.enabled (Apple OS 27); None=unknown
     supervised: Optional[bool] = None          # enrollment supervision (Apple OS 27); None=unknown
+    hardware_health: Optional[dict] = None     # hardware-health status items (Apple OS 27); None=unknown
     # --- integridad de ubicación (anti-spoofing, ver location_integrity.py) ---
     location_integrity: Optional[dict] = None  # {"suspicious", "checks", "speed_kmh", ...}
     # --- endpoint posture evidence (osquery) ---

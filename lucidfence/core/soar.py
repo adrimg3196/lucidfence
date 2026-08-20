@@ -19,7 +19,7 @@ from __future__ import annotations
 import fnmatch
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 # --------------------------------------------------------------------------
 # Operadores reutilizables (estilo cloud-custodian OPERATORS)
@@ -71,9 +71,7 @@ def _resolve_field(device: dict, expr: str):
             items = cur[key]
             if not isinstance(items, list):
                 return None
-            # proyectamos el resto sobre cada elemento
-            rest = expr.split(".", 1)[1] if "." in expr.split("[]", 1)[1] else ""
-            # reconstruimos la sub-expresion restante
+            # proyectamos la sub-expresion restante sobre cada elemento
             sub = expr[expr.index("[]") + 2:].lstrip(".")
             if not sub:
                 return [i for i in items]

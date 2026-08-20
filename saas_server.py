@@ -52,7 +52,6 @@ import os
 import sys
 import threading
 import time
-import http.client  # bypass del proxy de entorno (GET a 127.0.0.1 pasa, pero usamos esto por robustez)
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -378,42 +377,6 @@ def _verify_soar_webhook_hmac(raw_body: bytes, headers, secret: str,
     if not hmac.compare_digest(expected, signature):
         return False, "invalid signature"
     return True, "ok"
-
-
-# ---------------------------------------------------------------------------
-# MoA bridge: llamadas directas a 127.0.0.1:8085 vía http.client (bypasea el
-# proxy de entorno que intercepta POST a localhost). No lanza nunca.
-# ---------------------------------------------------------------------------
-def _ai_get(url: str):
-    try:
-        p = urlparse(url)
-        c = http.client.HTTPConnection(p.hostname, p.port, timeout=5)
-        c.request("GET", p.path)
-        r = c.getresponse()
-        data = r.read().decode("utf-8", "replace")
-        c.close()
-        if r.status == 200:
-            return json.loads(data)
-    except Exception:
-        return None
-    return None
-
-
-def _ai_post(url: str, payload: dict):
-    try:
-        p = urlparse(url)
-        body = json.dumps(payload).encode("utf-8")
-        c = http.client.HTTPConnection(p.hostname, p.port, timeout=120)
-        c.request("POST", p.path, body=body,
-                  headers={"Content-Type": "application/json"})
-        r = c.getresponse()
-        data = r.read().decode("utf-8", "replace")
-        c.close()
-        if r.status == 200:
-            return json.loads(data)
-    except Exception:
-        return None
-    return None
 
 
 _REQUIRED_TENANT_SEEDS = ("routes.json", "policies.json", "fleet_seed.json", "fences.json")
@@ -1630,7 +1593,6 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/status" and method == "GET":
             raw = eng.status()
             st = raw.get("stats", {}) or {}
-            fences = raw.get("fences", [])
             # Derive live device counts from the actual state store so the
             # dashboard reflects devices even before the first auto-cycle.
             snap = list(eng.store.snapshot().values())

@@ -11,11 +11,10 @@ Runs locally, forever, on the configured interval (default 15 min).
 """
 from __future__ import annotations
 
-import json
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -29,7 +28,7 @@ from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
-from lucidfence.core.routes import load_routes, route_for_device, save_routes
+from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
@@ -98,7 +97,6 @@ class Engine:
         # digest). Opt-in per tenant: requires atomicmail config in integration.
         self.mailbox = None
         self._wire_atomicmail(config)
-        _data_dir = config.get("data_dir", "data")
         _default_fences = config.get("fences_path")
         if _default_fences is None:
             _seed = config.get("sim_seed_path")
@@ -150,7 +148,7 @@ class Engine:
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
         # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
         try:
-            from lucidfence.core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
+            from lucidfence.core.cve_feed_nvd import load_nvd_feed_into_cve, sync_nvd_feed
             cve_feed_path = config.get("cve_feed_path")
             if not cve_feed_path:
                 cve_feed_path = os.path.join(
@@ -252,7 +250,6 @@ class Engine:
         if self.mailbox is None:
             return False
         try:
-            stats = self.last_stats or {}
             devices = [s.to_dict() for s in self.store.snapshot().values()]
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
@@ -432,6 +429,7 @@ class Engine:
                     # DDM/UEM readback: carry None as None (unknown never fabricated).
                     lockdown_mode=rep.lockdown_mode,
                     supervised=rep.supervised,
+                    hardware_health=rep.hardware_health,
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,
@@ -855,7 +853,6 @@ class Engine:
     # ---- routes ---------------------------------------------------------
     def add_route(self, data: dict):
         """Create a route from API payload and persist it."""
-        from lucidfence.core.routes import Route, save_routes
         if not data.get("name"):
             raise ValueError("name es obligatorio")
         waypoint_data = list(data.get("waypoints") or [])
@@ -884,21 +881,18 @@ class Engine:
         save_routes(self.routes_path, self.routes)
 
     def delete_route(self, route_id: str):
-        from lucidfence.core.routes import save_routes
         self.routes = [r for r in self.routes if r.id != route_id]
         save_routes(self.routes_path, self.routes)
 
     # ---- policies / workflows (persisted to the tenant's policies.json) ----
     def add_policy(self, policy_dict: dict):
         """Persist a new policy (from a workflow template or custom builder)."""
-        from lucidfence.core.policies import save_policies
         # drop any existing policy with the same id (idempotent apply)
         self.policies = [p for p in self.policies if p.id != policy_dict.get("id")]
         self.policies.append(Policy(**_policy_kwargs(policy_dict)))
         save_policies(self.policies_path, self.policies)
 
     def delete_policy(self, policy_id: str):
-        from lucidfence.core.policies import save_policies
         self.policies = [p for p in self.policies if p.id != policy_id]
         save_policies(self.policies_path, self.policies)
 
@@ -1000,7 +994,6 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
-        from datetime import datetime
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:

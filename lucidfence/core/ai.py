@@ -95,7 +95,7 @@ def incident_narrative(device: dict, *, dry: bool = True) -> str:
     plain = (
         f"Incidente de geocerca: {name} está {state}. "
         f"Riesgo {risk}/100"
-        + (f", non-compliant." if compliant is False else ".")
+        + (", non-compliant." if compliant is False else ".")
     )
     if not available():
         return plain
