@@ -32,7 +32,6 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from typing import Optional
 
 _DOH_ENDPOINT = "https://dns.google/resolve"
 # DigitalPlat name servers (delegation target shown in their panel). Operators

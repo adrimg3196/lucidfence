@@ -18,10 +18,10 @@ import json
 import smtplib
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 ALERT_TYPES = {
     "outside_duration",   # device outside geofence > minutes

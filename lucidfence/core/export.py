@@ -9,7 +9,6 @@ Everything is local; no network, no third-party libraries.
 """
 from __future__ import annotations
 
-import csv
 import io
 import time
 from typing import Any

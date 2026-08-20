@@ -24,7 +24,6 @@ JSON locales (o se dejan en None para modo simulación).
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -90,6 +89,34 @@ def sig_device_health(device, ctx):
     }
 
 
+# Normalización de estados de componente de hardware (DDM OS 27). Solo se
+# considera degradado lo reportado EXPLÍCITAMENTE como tal: False o un string
+# reconocido. Un string desconocido/valor raro es "desconocido" y NO penaliza.
+_HW_DEGRADED_WORDS = {"degraded", "failed", "error"}
+_HW_HEALTHY_WORDS = {"ok", "healthy", "normal"}
+
+
+def _hardware_degraded_components(hardware_health) -> list:
+    """Claves del dict hardware_health reportadas explícitamente degradadas.
+
+    Readback honesto: None/no-dict/dict vacío -> []. Valores no interpretables
+    (ints, listas, strings fuera del vocabulario) se ignoran en silencio —
+    desconocido nunca inventa riesgo.
+    """
+    if not isinstance(hardware_health, dict):
+        return []
+    degraded = []
+    for component, value in hardware_health.items():
+        if not isinstance(component, str):
+            continue
+        if value is False:
+            degraded.append(component)
+        elif isinstance(value, str) and value.strip().lower() in _HW_DEGRADED_WORDS:
+            degraded.append(component)
+        # True / "ok"/"healthy"/"normal" = sano; cualquier otra cosa = desconocido.
+    return degraded
+
+
 @register_signal("device_posture")
 def sig_device_posture(device, ctx):
     """Señales de posture del endpoint (inspirado en Fleet/osquery):
@@ -121,6 +148,11 @@ def sig_device_posture(device, ctx):
     # SOLO es "unsupervised" cuando la UEM reporta supervised explícitamente
     # False. None/ausente NO penaliza — desconocido nunca inventa riesgo.
     unsupervised = device.get("supervised") is False
+    # Salud de hardware (Apple OS 27 hardware-health status items, WWDC 2026):
+    # SOLO degradado cuando algún componente lo reporta explícitamente
+    # (False o "degraded"/"failed"/"error"). None/dict vacío/valores raros
+    # NO penalizan — desconocido nunca inventa riesgo.
+    hw_degraded = _hardware_degraded_components(device.get("hardware_health"))
 
     return {
         "disk_low": disk_low,
@@ -129,6 +161,8 @@ def sig_device_posture(device, ctx):
         "encryption_off": not encryption,
         "lockdown_mode_off": lockdown_mode_off,
         "unsupervised": unsupervised,
+        "hardware_degraded": bool(hw_degraded),
+        "hardware_degraded_components": hw_degraded,
         "osquery_config_invalid": device.get("osquery_config_valid") is False,
     }
 
@@ -224,6 +258,72 @@ def load_policies(path: Path) -> list[Policy]:
     return out
 
 
+# Vocabulario que el motor entiende de verdad: ops de _cmp() y acciones que
+# los adapters saben ejecutar (APPLIVERY_ACTIONS + retire de policy_replay).
+VALID_OPS = {"gte", "gt", "lte", "lt", "eq", "ne", "in", "contains"}
+VALID_POLICY_ACTIONS = {
+    "lock", "wipe", "message", "locate", "reboot", "clear_passcode", "notify", "custom", "retire"
+}
+VALID_SEVERITIES = {"low", "medium", "high", "critical"}
+
+
+def validate_policies(raw: Any) -> list[str]:
+    """Espejo de fences.validate_fences para policies.json (lista vacía == OK).
+
+    Opera sobre el JSON parseado, no sobre Policy: load_policies() rellena
+    defaults y ocultaría los campos rotos. Cada problema lleva el id del
+    objeto para que el error sea accionable:
+      - fichero que no es lista / objeto que no es dict / id ausente o duplicado
+      - `when` vacío o con condiciones sin field/op válido/value
+      - acciones fuera del catálogo que los adapters ejecutan
+      - severidad fuera de low|medium|high|critical
+    """
+    if not isinstance(raw, list):
+        return ["el fichero debe ser una LISTA de políticas"]
+    problems: list[str] = []
+    seen: set[str] = set()
+    for i, p in enumerate(raw):
+        if not isinstance(p, dict):
+            problems.append(f"objeto #{i}: debe ser un objeto, no {type(p).__name__}")
+            continue
+        pid = str(p.get("id") or f"objeto #{i}")
+        if not p.get("id"):
+            problems.append(f"{pid}: falta 'id'")
+        elif p["id"] in seen:
+            problems.append(f"duplicate policy id: {pid}")
+        else:
+            seen.add(p["id"])
+        when = p.get("when")
+        if not isinstance(when, list) or not when:
+            problems.append(f"{pid}: 'when' debe ser una lista no vacía de condiciones")
+        else:
+            for j, c in enumerate(when):
+                if not isinstance(c, dict) or not c.get("field"):
+                    problems.append(f"{pid}: condición #{j} sin 'field'")
+                    continue
+                op = c.get("op", "gte")
+                if op not in VALID_OPS:
+                    problems.append(
+                        f"{pid}: condición '{c['field']}' con op desconocido {op!r}"
+                        f" (usa {'|'.join(sorted(VALID_OPS))})")
+                if "value" not in c:
+                    problems.append(f"{pid}: condición '{c['field']}' sin 'value'")
+        actions = p.get("actions", [])
+        if not isinstance(actions, list):
+            problems.append(f"{pid}: 'actions' debe ser una lista")
+        else:
+            for a in actions:
+                name = a.get("action") if isinstance(a, dict) else None
+                if name not in VALID_POLICY_ACTIONS:
+                    problems.append(
+                        f"{pid}: acción desconocida {name!r}"
+                        f" (usa {'|'.join(sorted(VALID_POLICY_ACTIONS))})")
+        sev = p.get("severity", "medium")
+        if sev not in VALID_SEVERITIES:
+            problems.append(f"{pid}: severidad {sev!r} inválida (low|medium|high|critical)")
+    return problems
+
+
 def save_policies(path: Path, policies: list[Policy]) -> None:
     """Persist the policy list (used by the Workflows module to add/remove)."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -288,6 +388,9 @@ class RiskEngine:
             score += 10; reasons.append("Lockdown Mode desactivado")
         if posture.get("unsupervised"):
             score += 10; reasons.append("dispositivo sin supervisión (enrolamiento personal)")
+        if posture.get("hardware_degraded"):
+            comps = ", ".join(posture.get("hardware_degraded_components") or [])
+            score += 10; reasons.append(f"salud de hardware degradada ({comps})")
         if posture.get("osquery_config_invalid"):
             score += 8; reasons.append("configuración de osquery no válida")
 
@@ -415,6 +518,15 @@ def _resolve_field(field_: str, risk: dict, device: dict, fence_state: str):
         return risk.get("severity")
     if field_ == "compliant":
         return device.get("compliant")
+    if field_ == "hardware_degraded":
+        # Señal derivada (no vive en el device dict, a diferencia de
+        # supervised/lockdown_mode): se resuelve desde la señal de postura ya
+        # calculada, con fallback a derivarla del propio device si el caller
+        # pasó un `risk` sin señales. Desconocido -> False (no casa eq true).
+        posture = (risk.get("signals") or {}).get("device_posture")
+        if isinstance(posture, dict) and "hardware_degraded" in posture:
+            return posture["hardware_degraded"]
+        return bool(_hardware_degraded_components(device.get("hardware_health")))
     if field_.startswith("signal:"):
         # signal:<provider>.<key>
         _, rest = field_.split(":", 1)

@@ -166,6 +166,48 @@ supervisado). Cuando Apple publique la clave del status item de enrolamiento, el
 único cambio es mapearla a `supervised` en `_STATUS_FIELD_MAP` (`ddm.py`); no se
 hardcodea una clave inventada mientras OS 27 no esté publicado.
 
+### Salud de hardware como postura (OS 27)
+
+El mismo anuncio de WWDC 2026 añade *status items* de **salud de hardware**
+(baseband, cámara, Face/Touch ID, NFC, UWB). LucidFence los ingiere como
+postura correlacionable, con idéntica disciplina de readback honesto:
+
+- El modelo lleva el campo de readback `hardware_health`
+  (`LocationReport` → `DeviceState`): un dict de componente → `bool`
+  (`True`=sano, `False`=degradado) o string de estado. **Solo se rellena cuando
+  la UEM lo reporta**; ausente es `None`.
+- `sig_device_posture` deriva `hardware_degraded` (y la lista
+  `hardware_degraded_components`), que es `True` **únicamente** cuando algún
+  componente reporta degradación explícita: `False`, o un string que normaliza
+  a degradado (`"degraded"`/`"failed"`/`"error"`, case-insensitive;
+  `"ok"`/`"healthy"`/`"normal"` = sano). `None`, dict vacío, o cualquier valor
+  no interpretable —incluido un string fuera de ese vocabulario— es
+  desconocido y **no penaliza**: nunca se inventa riesgo desde un desconocido.
+- Cuando contribuye, el motor suma riesgo (+10, el mismo peso que
+  `lockdown_mode_off`/`unsupervised`) con la razón textual
+  `"salud de hardware degradada (<componentes>)"`.
+
+Un dispositivo **fuera de su geocerca con el baseband degradado** (posible
+manipulación o avería que compromete la señal de ubicación) puntúa más alto que
+uno sano o desconocido. Política de ejemplo:
+
+```json
+{
+  "id": "hw-degraded-outside",
+  "name": "Fuera de geocerca con hardware degradado",
+  "when": [
+    {"field": "fence_state", "op": "eq", "value": "outside"},
+    {"field": "hardware_degraded", "op": "eq", "value": true}
+  ],
+  "actions": [{"action": "notify", "params": {}}]
+}
+```
+
+`hardware_health` desconocido (`None`/vacío) **no** dispara la regla. Cuando
+Apple publique las claves de los status items de salud de hardware, el único
+cambio es mapearlas a `hardware_health` en el canal de status (`ddm.py`); no se
+hardcodea una clave inventada mientras OS 27 no esté publicado.
+
 ## Fase 2 — canal de Jamf Pro (endpoints verificados)
 
 Verificado contra el OpenAPI oficial de la Jamf Pro API **v11.30**

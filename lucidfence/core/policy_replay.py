@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from lucidfence.core.geo import Point
 from lucidfence.core.policies import Policy, RiskEngine
