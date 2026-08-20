@@ -55,7 +55,12 @@ def test_dashboard_browser_smoke() -> None:
             # Reset expected anonymous /api/auth/me=401 from bootstrap, then
             # traverse every active product view and demand real rendered data.
             bad_responses.clear(); request_failures.clear(); console_msgs.clear(); page_errors.clear()
-            hrefs = page.locator("#nav a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+            # Rediseño 2026-08-20: la nav muestra 6 vistas esenciales y pliega el
+            # resto bajo "Avanzado" (+ Ajustes en #navFoot). Las 21 vistas siguen
+            # existiendo: se cuentan tras desplegar el grupo.
+            page.evaluate("localStorage.setItem('lf_nav_adv','1')")
+            page.reload(); page.wait_for_selector("#nav a", timeout=15000)
+            hrefs = page.locator("#nav a, #navFoot a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
             assert len(hrefs) == 21, f"Expected 21 product views, got {len(hrefs)}"
             assert "#company" in hrefs
             for href in hrefs:
