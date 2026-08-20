@@ -78,3 +78,5 @@ graphify-out/
 # SBOM: artefacto de build, lo genera CI (issue #74)
 sbom.cdx.json
 data/cloud_state.json
+design-work/*.html
+!design-work/*.dc.html
