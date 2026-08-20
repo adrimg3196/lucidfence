@@ -1191,12 +1191,52 @@ async function loadSoar(st){
 
   const pbs = (soar.playbooks||[]).map(p=>{
     const fired = (soar.matched||[]).filter(m=>m.playbook_id===p.id).length;
-    const acts = (p.actions||[]).map(a=>`<span class="chip">${esc(a.action)}</span>`).join(" ");
+    const acts = (p.actions||[]).map(a=>{
+      const gate = (a.action==="lock"||a.action==="wipe"||a.action==="clear_passcode"||a.action==="reboot")
+        ? ` <span class="tag warn" title="Acción destructiva: pausada para aprobación manual (SOAR human-gate)">human-gate</span>` : "";
+      return `<span class="chip">${esc(a.action)}</span>${gate}`;
+    }).join(" ");
     return `<div class="soar-pb">
       <div class="soar-pb-h"><b>${esc(p.name)}</b> ${p.enabled?`<span class="tag ok">activo</span>`:`<span class="tag">inactivo</span>`} ${fired?`<span class="nav-badge">${fired}</span>`:""}</div>
       <div class="sub">${esc(p.description||"")}</div>
       <div class="soar-acts">${acts||"<span class='sub'>sin acciones</span>"}</div>
     </div>`;
+  }).join("");
+
+  // Playbooks del tenant (REQ §5: editables desde la UI, sin código).
+  const tpb = (soar.tenant_playbooks||[]).map(p=>{
+    const fired = (soar.matched||[]).filter(m=>m.playbook_id===p.id).length;
+    const acts = (p.actions||[]).map(a=>{
+      const gate = (a.action==="lock"||a.action==="wipe"||a.action==="clear_passcode"||a.action==="reboot")
+        ? ` <span class="tag warn">human-gate</span>` : "";
+      return `<span class="chip">${esc(a.action)}</span>${gate}`;
+    }).join(" ");
+    const cond = esc(JSON.stringify(p.condition||{}));
+    return `<div class="soar-pb" data-pb="${esc(p.id)}">
+      <div class="soar-pb-h"><b>${esc(p.name)}</b>
+        <button class="mini" onclick="soarToggle('${esc(p.id)}', ${p.enabled?false:true})">${p.enabled?"desactivar":"activar"}</button>
+        <button class="mini danger" onclick="soarDelete('${esc(p.id)}')">borrar</button>
+        ${fired?`<span class="nav-badge">${fired}</span>`:""}</div>
+      <div class="sub">condición: <code>${cond}</code></div>
+      <div class="soar-acts">${acts||"<span class='sub'>sin acciones</span>"}</div>
+    </div>`;
+  }).join("");
+
+  const errs = (soar.tenant_playbook_errors||[]);
+  const errBlock = errs.length
+    ? `<div class="warn" style="margin-top:8px">⚠ Playbooks con errores de validación (no se evalúan):<ul>${errs.map(e=>`<li>${esc(e)}</li>`).join("")}</ul></div>` : "";
+
+  // Matriz de capacidades por UEM (diseño §3.1 / REQ §3).
+  const cap = soar.capability_matrix||{};
+  const capRows = Object.keys(cap).sort().map(name=>{
+    const c = cap[name];
+    const dry = (c.dry_run_actions||[]).map(a=>`<span class="tag warn" title="Endpoint pendiente de validar: se construye como handoff dry-run, no se ejecuta">${esc(a)}*</span>`).join(" ");
+    const real = (c.actions||[]).map(a=>`<span class="chip">${esc(a)}</span>`).join(" ");
+    const inv = c.inventory?`<span class="tag ok">inventario</span>`:"";
+    const loc = c.location?`<span class="tag ok">ubicación</span>`:"";
+    const nf = c.native_geofences?`<span class="tag ok">geovallas</span>`:"";
+    return `<tr><td><b>${esc(name)}</b></td><td>${inv}${loc}${nf}</td>
+      <td>${real||"<span class='sub'>solo inventario</span>"}</td><td>${dry||"—"}</td></tr>`;
   }).join("");
 
   const hits = (soar.matched||[]).map(m=>{
@@ -1222,14 +1262,62 @@ async function loadSoar(st){
     <div class="soar-grid">
       <div class="card"><div class="hd"><h3>${I.sitemap} Playbooks SOAR</h3><div class="grow"></div>
         <span class="sub">${soar.devices_scanned||0} dispositivos evaluados</span></div>
-        <div class="soar-pbs">${pbs||"<div class='sub'>Sin playbooks</div>"}</div></div>
+        <div class="soar-pbs">${pbs||"<div class='sub'>Sin playbooks</div>"}</div>
+        <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
+          <h4>Playbooks del tenant</h4>
+          <div class="soar-pbs">${tpb||"<div class='sub'>Aún no has creado playbooks propios.</div>"}</div>
+          ${errBlock}
+          <button class="btn" onclick="soarNew()">+ Nuevo playbook</button>
+          <div id="soarNew" style="display:none;margin-top:10px"></div>
+        </div></div>
       <div class="card"><div class="hd"><h3>${I.bolt} Coincidencias activas</h3><div class="grow"></div>
         <span class="sub">${(soar.matched||[]).length} ejecuciones este ciclo</span></div>
         <div class="tl">${hits||emptyState("Sin coincidencias","Ningún playbook coincide con el estado actual de la flota.")}</div></div>
     </div>
+    <div class="card" style="margin-top:14px"><div class="hd"><h3>${I.shieldAlert} Matriz de capacidades por UEM</h3><div class="grow"></div>
+      <span class="sub">La consola solo ofrece acciones que el UEM soporta</span></div>
+      <div class="tbl"><table class="mini"><thead><tr><th>UEM</th><th>Capacidades</th><th>Acciones live</th><th>Dry-run (pendiente validar)</th></tr></thead>
+      <tbody>${capRows||"<tr><td colspan=4 class='sub'>sin matriz</td></tr>"}</tbody></table></div></div>
     <div class="card" style="margin-top:14px"><div class="hd"><h3>${I.shieldAlert} Inventario CVE por dispositivo</h3><div class="grow"></div>
       <span class="sub">${ (cve.devices||[]).filter(d=>(d.apps||[]).some(a=>a.cves)).length } dispositivos con apps vulnerables</span></div>
       <div class="soar-devs">${devRows||"<div class='sub'>Sin apps vulnerables detectadas</div>"}</div></div>`;
+}
+
+// ---- Editor de playbooks del tenant (REQ §5) --------------------------
+function soarNew(){
+  const n = $("#soarNew"); if(!n) return;
+  n.style.display = n.style.display==="none"?"block":"none";
+  if(n.style.display!=="block") return;
+  n.innerHTML = `<div class="card">
+    <div class="row"><input id="spId" class="inp" placeholder="id (p.ej. soar-cliente-x)"></div>
+    <div class="row"><input id="spName" class="inp" placeholder="nombre"></div>
+    <div class="row"><input id="spSev" class="inp" placeholder="severidad mínima (low/medium/high/critical)" value="high"></div>
+    <div class="row"><textarea id="spCond" class="inp" rows="4" placeholder='condición JSON: {"all":[{"field":"compliant","op":"eq","value":false},{"field":"fence_state","op":"eq","value":"outside"}]}'></textarea></div>
+    <div class="row"><input id="spActions" class="inp" placeholder='acciones JSON: [{"action":"notify","params":{"channel":"soc"}},{"action":"lock","params":{}}]'></div>
+    <div class="row"><button class="btn" onclick="soarCreate()">Guardar playbook</button> <span id="spMsg" class="sub"></span></div>
+  </div>`;
+}
+async function soarCreate(){
+  const id = $("#spId").value.trim(), name = $("#spName").value.trim();
+  const cond = $("#spCond").value.trim(), actions = $("#spActions").value.trim();
+  const sev = $("#spSev").value.trim()||"high";
+  const msg = $("#spMsg"); if(!msg) return;
+  if(!id||!name||!cond||!actions){ msg.textContent="completa id, nombre, condición y acciones"; return; }
+  let condObj, actsObj;
+  try{ condObj = JSON.parse(cond); actsObj = JSON.parse(actions); }
+  catch(e){ msg.textContent="JSON inválido: "+e.message; return; }
+  try{
+    const r = await api("/api/soar/playbooks", "POST", {id, name, severity_min:sev, condition:condObj, actions:actsObj});
+    if(r && r.ok){ msg.textContent="✓ creado"; loadSoar(); }
+    else msg.textContent = "error: " + ((r&&r.error)||"desconocido");
+  }catch(e){ msg.textContent = "error: "+e.message; }
+}
+async function soarToggle(id, enabled){
+  try{ await api(`/api/soar/playbook/${encodeURIComponent(id)}/enable`, "POST", {enabled}); loadSoar(); }catch(e){}
+}
+async function soarDelete(id){
+  if(!confirm("¿Borrar el playbook "+id+"?")) return;
+  try{ await api(`/api/soar/playbook/${encodeURIComponent(id)}`, "DELETE"); loadSoar(); }catch(e){}
 }
 function sevCls(sev){
   sev=(sev||"").toLowerCase();
@@ -1495,6 +1583,9 @@ async function renderSettings(){
     out.textContent=lines.join("\n");
   };
 
+  // --- Egress de webhooks salientes (t_f33e2f23): policy + visibilidad de denegaciones.
+  renderEgressCard(s);
+
   const presets=ai.presets||[];
   $("#aiSetBody").innerHTML=`
     <div class="switch-row"><div style="flex:1"><div class="lab">Habilitar AI</div><div class="ds">Opcional. La clave se guarda localmente con permisos 0600.</div></div><div class="switch ${ai.enabled?'on':''}" id="aiEnabled"></div></div>
@@ -1519,6 +1610,80 @@ async function renderSettings(){
   // auditor una pantalla y responde "quién cambió qué" sin abrir audit.jsonl.
   renderAuditCard();
 }
+
+/* ===================== EGRESS DE WEBHOOKS SALIENTES (t_f33e2f23) ===================== */
+async function renderEgressCard(s){
+  const node = document.createElement("div");
+  node.className = "card";
+  node.style.marginTop = "14px";
+  node.innerHTML = `
+    <div class="hd"><h3>Egress de webhooks salientes</h3><div class="grow"></div><span class="tag unk"><span class="d"></span>opt-in</span></div>
+    <div class="bd">
+      <div class="help">Controla a qué destinos LucidFence puede entregar webhooks de incidente (Slack/Teams, genérico firmado, ntfy). Por defecto <b>permisivo</b> (comportamiento actual). El modo <b>estricto</b> solo entrega a los hosts de la allow-list y nunca silencia una denegación.</div>
+      <div class="field"><label>Modo</label><select class="input" id="egMode">
+        <option value="permissive">permisivo (allow-all, comportamiento actual)</option>
+        <option value="strict">estricto (solo allow-list)</option>
+      </select></div>
+      <div id="egStrictFields" style="display:none">
+        <div class="field"><label>Allow-list (host exacto, sufijo .dominio o IP; uno por línea)</label>
+          <textarea class="input" id="egAllow" rows="3" placeholder="hooks.slack.com&#10;.slack.com&#10;10.20.30.40"></textarea>
+          <div class="help">Sin comodín global <code>*</code>. En estricto, loopback/link-local/metadata 169.254.0.0/16 siguen siempre bloqueados (defense-in-depth).</div>
+        </div>
+        <div class="switch-row"><div style="flex:1"><div class="lab">Permitir destinos privados (RFC1918)</div><div class="ds">En estricto, permite SIEM internos/red bloqueada. Si está off, el egress privado se deniega aunque el host esté listado.</div></div><div class="switch" id="egPrivate"></div></div>
+      </div>
+      <div id="egDelivery" class="test-result" style="margin-top:12px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="egSave">Guardar egress</button></div>
+    </div>`;
+  $("#view-settings").appendChild(node);
+
+  const eg = (s && s.egress_policy) || {mode:"permissive"};
+  $("#egMode").value = eg.mode || "permissive";
+  if(eg.mode === "strict"){
+    $("#egStrictFields").style.display = "block";
+    $("#egAllow").value = ((eg.allow||[]).join("\n"));
+    if(eg.allow_private) $("#egPrivate").classList.add("on");
+  }
+  $("#egMode").onchange = ()=>{ $("#egStrictFields").style.display = $("#egMode").value==="strict" ? "block":"none"; };
+  $("#egPrivate").onclick = ()=> $("#egPrivate").classList.toggle("on");
+
+  const renderDelivery = (d)=>{
+    const box = $("#egDelivery");
+    if(!d || !d.configured){ box.className="test-result"; box.textContent=""; return; }
+    const lr = d.last_result;
+    const denied = JSON.stringify(lr||"").includes("denied_by_egress_policy");
+    if(denied){
+      box.className = "test-result bad show";
+      box.textContent = "Última entrega DENEGADA por egress policy (denied_by_egress_policy) — visible, no silenciada.";
+    } else if(lr && lr.ok){
+      box.className = "test-result ok show";
+      box.textContent = "Última entrega: OK.";
+    } else if(lr){
+      box.className = "test-result";
+      box.textContent = "Última entrega: " + (lr.error || (lr.result || "sin resultado"));
+    } else {
+      box.className = "test-result";
+      box.textContent = "Sin entregas recientes.";
+    }
+  };
+  renderDelivery(s && s.webhook_delivery);
+
+  $("#egSave").onclick = async ()=>{
+    const mode = $("#egMode").value;
+    const policy = { mode };
+    if(mode === "strict"){
+      const allow = $("#egAllow").value.split("\n").map(x=>x.trim().toLowerCase()).filter(Boolean);
+      policy.allow = allow;
+      policy.allow_private = $("#egPrivate").classList.contains("on");
+    }
+    // Persist alongside the (possibly empty) incident webhook URL.
+    const cur = (s && s.incident_webhook_url) || "";
+    const r = await api("/api/settings/incident-webhook", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url: cur, egress_policy: policy})});
+    if(r.ok){ toast("Egress guardado", policy.mode==="strict" ? "estricto · "+((policy.allow||[]).length)+" hosts" : "permisivo", "ok"); renderSettings(); }
+    else toast("Error", r.error||"", "bad");
+  };
+}
+
+
 
 async function renderAuditCard(){
   // Mismo círculo que autoriza el backend en GET /api/audit (403 en otro caso).

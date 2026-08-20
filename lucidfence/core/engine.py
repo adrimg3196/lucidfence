@@ -30,6 +30,7 @@ from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
+from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
@@ -83,6 +84,11 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
+        # Playbooks SOAR del tenant (REQ §5): builtin del producto + los del
+        # tenant persistidos en <data_dir>/soar_playbooks.json. El engine los
+        # fusiona en cada ciclo; un playbook roto se salta (auditado).
+        from lucidfence.core.soar_playbook_store import TenantPlaybookStore
+        self.soar_store = TenantPlaybookStore(data_dir=self.data_dir, builtin=DEFAULT_PLAYBOOKS)
         # Wire the incident lifecycle notifiers if configured: Slack/Teams
         # (incident_webhook_url, legacy) plus the multi-channel list
         # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
@@ -532,14 +538,18 @@ class Engine:
                 continue
         self.last_run = now_iso()
 
-        # ---- SOAR: evaluate orchestration playbooks per device --------------
-        # Each matched playbook yields UEM actions executed via the same adapter
-        # (and cooldown/dry_run machinery) used for geofence actions.
+        # ---- SOAR: evaluate orchestration playbooks per device --------------\n        # Combina los playbooks builtin del producto con los del tenant (REQ §5).
+        # Cada playbook matcheado produce acciones UEM. Las acciones destructivas
+        # (lock/wipe/clear_passcode/reboot) son SIEMPRE human-gated: en lugar de
+        # ejecutarlas, se emiten como handoff (diseño §5) y quedan registradas
+        # para aprobación manual en la consola; nunca se ejecutan de forma
+        # autónoma (REQ §5, design §2.3 / §5).
         soar_ctx = {"cycle": self.cycle_count, "on_error": None}
+        playbooks = self.soar_store.all_playbooks()
         for ds in states_cur.values():
             dev_dict = ds.to_dict()
             try:
-                execs = evaluate_soar(dev_dict, DEFAULT_PLAYBOOKS, soar_ctx)
+                execs = evaluate_soar(dev_dict, playbooks, soar_ctx)
             except Exception:
                 execs = []
             for ex in execs:
@@ -555,6 +565,25 @@ class Engine:
                             "playbook_id": ex.get("playbook_id"),
                             "note": act.get("params", {}).get("reason", ""),
                         })
+                        continue
+                    if aname in self.DESTRUCTIVE_ACTIONS:
+                        # Human-gate: handoff, no ejecución autónoma.
+                        self.store.log_event({
+                            "ts": now_iso(), "kind": "soar_handoff",
+                            "device_id": ds.device_id,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "action": aname,
+                            "severity": ex.get("severity", "high"),
+                            "matched_fields": ex.get("matched_fields", []),
+                            "params": act.get("params", {}) or {},
+                            "human_gate": True,
+                            "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
+                        })
+                        if self._cycle_actions:
+                            self._cycle_actions[-1]["soar"] = True
+                            self._cycle_actions[-1]["soar_handoff"] = True
+                            self._cycle_actions[-1]["playbook_id"] = ex.get("playbook_id")
                         continue
                     if self._dedupe_action(
                         ds, aname, "soar", ex.get("playbook_id", "soar"),
@@ -973,6 +1002,55 @@ class Engine:
             "wipe_allowlist_size": len(self.wipe_allowlist),
         }
 
+    def _egress_status(self) -> dict:
+        """Summarize the tenant's outbound webhook egress policy for the UI.
+
+        Reads the policy straight from the engine config (which is overlaid from
+        integration.json by _apply_tenant_integration). Defaults to `permissive`
+        so existing deployments are never reported as broken.
+        """
+        raw = (self.config or {}).get("egress_policy") or {}
+        mode = str(raw.get("mode", "permissive")).strip().lower()
+        if mode != "strict":
+            return {"mode": "permissive", "allow": [], "allow_private": False}
+        allow = raw.get("allow") or []
+        if not isinstance(allow, list):
+            allow = []
+        return {
+            "mode": "strict",
+            "allow": [str(a) for a in allow if isinstance(a, str)],
+            "allow_private": bool(raw.get("allow_private", False)),
+        }
+
+    def _webhook_delivery_status(self) -> dict:
+        """Latest outgoing-webhook delivery outcome, including egress denials.
+
+        Surfaces the most recent notifier result so the dashboard can show a
+        `denied_by_egress_policy` outcome explicitly (never silent — criterion
+        #3 of the product decision t_316b8ec5). Best-effort: never raises.
+        """
+        notifier = getattr(self.incidents, "notifier", None)
+        if notifier is None:
+            return {"configured": False, "last_result": None}
+        last = getattr(notifier, "last_result", None)
+        if isinstance(notifier, IncidentFanoutNotifier):
+            # Fan-out: report the most recent per-channel snapshot.
+            results = (last or {}).get("results") if isinstance(last, dict) else None
+            return {
+                "configured": True,
+                "fanout": True,
+                "last_result": last,
+                "channels": [
+                    {
+                        "channel": (r.get("channel") if isinstance(r, dict) else None),
+                        "ok": (r.get("ok") if isinstance(r, dict) else None),
+                        "result": (r.get("last_result") if isinstance(r, dict) else None),
+                    }
+                    for r in (results or [])
+                ],
+            }
+        return {"configured": True, "fanout": False, "last_result": last}
+
     # ---- loop ------------------------------------------------------------
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -1009,6 +1087,8 @@ class Engine:
             "interval_seconds": self.interval,
             "dry_run": self.dry_run,
             "enforcement": self.enforcement_status(),
+            "egress_policy": self._egress_status(),
+            "webhook_delivery": self._webhook_delivery_status(),
             "stats": self.last_stats,
             "fences": [
                 {
