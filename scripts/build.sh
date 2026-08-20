@@ -24,7 +24,7 @@ mkdir -p "$STAGE"
 # operativos del pipeline de la vitrina.
 rsync -a --exclude='data/tenants' --exclude='__pycache__' --exclude='.pytest_cache' \
       --exclude='*.pyc' --exclude='.env' --exclude='data/*.tmp' \
-      --exclude='.git' --exclude='dist' --exclude='graphify-out' \
+      --exclude='.git' --exclude='.worktrees' --exclude='dist' --exclude='graphify-out' \
       --exclude='brand' --exclude='.agents' --exclude='.claude' \
       --exclude='.claude-plugin' --exclude='.gemini' --exclude='.superpowers' \
       --exclude='.github' --exclude='data/reports' --exclude='data/cloud_tenants' \
