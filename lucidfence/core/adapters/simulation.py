@@ -19,6 +19,50 @@ class SimulationAdapter(MDMAdapter):
         pass
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
+        # Acciones declarativas DDM: respuesta estructurada (issue #71), no el
+        # stub genérico. Misma FORMA que la respuesta real de Jamf para que el
+        # engine pueda leer el camino declarativo sin un UEM real.
+        if action == "apply_ddm":
+            from lucidfence.core.ddm import build_mock_apply_result
+
+            policy = params.get("policy")
+            profile_url = str(params.get("profile_url", "") or "")
+            fence_state = self._dev_get(device, "fence_state", "unknown") or "unknown"
+            if not policy or not profile_url.startswith("https://"):
+                return {
+                    "adapter": self.name, "ok": False,
+                    "device_id": self._dev_id(device), "action": action,
+                    "error_type": "invalid_ddm_params",
+                    "error": "apply_ddm requires 'policy' and an https 'profile_url'",
+                }
+            result = build_mock_apply_result(
+                policy, fence_state, profile_url,
+                predicate=params.get("predicate"),
+                status_items=params.get("status_items"),
+            )
+            return {
+                "adapter": self.name, "ok": True,
+                "device_id": self._dev_id(device), "action": action,
+                "mode": "mock", **result,
+            }
+        if action == "ddm_status":
+            from lucidfence.core.ddm import build_mock_status_result
+
+            result = build_mock_status_result(status_items=params.get("status_items"))
+            return {
+                "adapter": self.name, "ok": True,
+                "device_id": self._dev_id(device), "action": action,
+                "mode": "mock", **result,
+            }
+        if action == "ddm_sync":
+            from lucidfence.core.ddm import build_mock_sync_result
+
+            result = build_mock_sync_result()
+            return {
+                "adapter": self.name, "ok": True,
+                "device_id": self._dev_id(device), "action": action,
+                "mode": "mock", **result,
+            }
         cmd_id = f"sim-{uuid.uuid4().hex[:12]}"
         return {
             "adapter": self.name,
@@ -31,6 +75,12 @@ class SimulationAdapter(MDMAdapter):
             "dry_run": dry_run,
             "note": "Simulated action (no real device contacted).",
         }
+
+    @staticmethod
+    def _dev_get(device: Any, key: str, default=None):
+        if isinstance(device, dict):
+            return device.get(key, default)
+        return getattr(device, key, default)
 
     def fetch_devices(self) -> list:
         """No real fleet: the simulator drives location, not inventory."""
