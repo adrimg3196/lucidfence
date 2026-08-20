@@ -41,6 +41,10 @@ jobs:
           git config user.name "lucidfence-cloud[bot]"
           git config user.email "cloud@lucidfence.local"
           cp data/cloud_state.json "$RUNNER_TEMP/cloud_state.json"
+          # El run del publisher deja sucios ficheros trackeados de data/ y el
+          # checkout de rama se niega con el arbol sucio. El runner es efimero
+          # y el snapshot ya esta copiado: descartar todo es seguro.
+          git checkout -- .
           git fetch origin cloud-state --depth 1 || true
           if git show-ref --verify --quiet refs/remotes/origin/cloud-state; then
             git checkout -B cloud-state origin/cloud-state
