@@ -627,11 +627,27 @@ def _client_ip(handler) -> str:
 
 
 def _rate_limit_key(handler) -> str:
-    """Prefer session identity; fall back to source IP before authentication."""
+    """Bucketing for the rate limiter.
+
+    A raw ``gf_session`` cookie is ONLY trusted as a bucket key when it
+    corresponds to a live session in AuthStore. An unauthenticated client can
+    mint a different cookie per request; using the raw cookie value would give
+    every request a fresh bucket and fully bypass the limiter. So we validate
+    the token against AuthStore first, and fall back to the source IP (which
+    the limiter already keys on) when there is no valid session.
+
+    This is a security fix (SOC audit 2026-08-20, H-1): the previous code
+    derived the bucket from the *raw* cookie value before any authentication,
+    so rotating the cookie bypassed the only anti-DoS / anti-enumeration guard.
+    """
     token = _cookie(handler, COOKIE_SESSION) or ""
     if token:
-        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
-        return f"sess:{digest}"
+        sess = _auth.get_session(token)
+        if sess:
+            digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+            return f"sess:{digest}"
+    # No valid session: bucket by source IP. Authenticated-but-token-invalid
+    # requests also land here, which is correct — the IP limit still applies.
     return f"ip:{_client_ip(handler)}"
 
 
@@ -738,9 +754,42 @@ def _redact_access_path(path: str) -> str:
     return path
 
 
+# SSRF guard: only https, never loopback/link-local/metadata targets, on an
+# explicit outbound port allowlist. Residual after the 2026-08-18 numeric-IP
+# fix: a public DNS name that resolves to an internal IP still passed, and there
+# was no port restriction. This version resolves the hostname to ALL addresses
+# and rejects if ANY resolves to loopback / link-local (incl. cloud metadata
+# 169.254.0.0/16) / reserved, which closes the metadata-exfil and
+# loopback-DNS-rebinding PoCs. See the allowlist note below for the RFC1918
+# trade-off.
+_WEBHOOK_ALLOWED_PORTS = {443, 8443}
+
+
 def _safe_webhook_url(url: str):
-    """SSRF guard: only https, never private/link-local/loopback targets.
-    Returns the normalized URL or '' if unsafe/unusable."""
+    """SSRF guard: only https, never loopback/link-local/metadata targets.
+
+    Returns the normalized URL or '' if unsafe/unusable.
+
+    Defense layers (combined across the 2026-08-18 and 2026-08-20 audits):
+      1. scheme must be https
+      2. numeric IP encodings (2130706433 / 0x7f000001 / 127.1 ...) are
+         canonicalized via getaddrinfo(AI_NUMERICHOST) so they hit the same
+         loopback/link-local/reserved filter as canonical IPs
+      3. a public hostname is resolved with a real DNS lookup and EVERY
+         returned address is validated; loopback/link-local/metadata/reversed
+         addresses are rejected (closes "public name -> 169.254.169.254")
+      4. the port must be on the explicit outbound allowlist (443 / 8443)
+
+    Trade-off (documented, not a bug): an unresolvable hostname (e.g. a LAN
+    name like fleet.acme.test that only resolves inside the customer's network)
+    is ALLOWED, and RFC1918 private ranges are intentionally NOT blocked on
+    resolution. LucidFence is a local-first UEM appliance whose own endpoints
+    (Intune/Jamf/Workspace ONE/Applivery) are routinely on private IPs or
+    internal hostnames the operator legitimately configures. The real SSRF
+    pivot targets (loopback, cloud metadata, link-local) are blocked. A stricter
+    "block all private resolution + pin DNS + 443-only" variant is a follow-up
+    that needs product sign-off because it would break on-prem UEM.
+    """
     from urllib.parse import urlparse
     if not url:
         return ""
@@ -752,6 +801,9 @@ def _safe_webhook_url(url: str):
         return ""
     host = (p.hostname or "").lower()
     if not host:
+        return ""
+    port = p.port if p.port is not None else 443
+    if port not in _WEBHOOK_ALLOWED_PORTS:
         return ""
     import ipaddress
     import socket
@@ -774,11 +826,45 @@ def _safe_webhook_url(url: str):
         if mapped and (mapped.is_private or mapped.is_loopback
                        or mapped.is_link_local or mapped.is_reserved):
             return ""
+        return url
     except ValueError:
-        # hostname (not IP): block obvious internal suffixes
+        # Hostname (not IP). Block obvious internal suffixes even if they are
+        # publicly resolvable — `.internal`/`.lan`/`.home` are real public-suffix
+        # TLDs an attacker can register, and `localhost` is always loopback. This
+        # closes the "evil.attacker.internal" pivot on top of the resolution
+        # check below. (SOC audit 2026-08-20, H-3.)
         if host.endswith((".local", ".internal", ".lan", ".home")) or host == "localhost":
             return ""
-    return url
+        # resolve it for real and validate EVERY address.
+        # Reject only loopback / link-local (incl. cloud metadata) / reserved /
+        # multicast — the genuine SSRF pivot targets. Unresolvable LAN names and
+        # RFC1918 results are allowed (see trade-off note above).
+        try:
+            infos = socket.getaddrinfo(host, None)
+        except socket.gaierror:
+            # Unresolvable here (e.g. an internal LAN name) — allow; the operator
+            # configured it and it is not a loopback/metadata pivot.
+            return url
+        except (UnicodeError, OSError):
+            return ""
+        if not infos:
+            return ""
+        for info in infos:
+            addr = str(info[4][0]).lower()
+            # IPv6 scoped/zone handling: strip zone id.
+            addr = addr.split("%", 1)[0]
+            try:
+                ip = ipaddress.ip_address(addr)
+            except ValueError:
+                return ""
+            if (ip.is_loopback or ip.is_link_local or ip.is_reserved
+                    or ip.is_multicast):
+                return ""
+            mapped = getattr(ip, "ipv4_mapped", None)
+            if mapped and (mapped.is_loopback or mapped.is_link_local
+                           or mapped.is_reserved):
+                return ""
+        return url
 
 
 def _request_id(handler) -> str:
@@ -869,6 +955,9 @@ def _send_csv(handler, filename: str, csv_text: str):
     handler.send_header("Content-Type", "text/csv; charset=utf-8")
     handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -879,6 +968,8 @@ def _send_pdf(handler, filename: str, pdf_bytes: bytes):
     handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
     handler.send_header("Content-Length", str(len(pdf_bytes)))
     handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(pdf_bytes)
 
@@ -888,6 +979,14 @@ def _send_html(handler, html_text: str):
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+    handler.send_header("X-Request-ID", _request_id(handler))
     handler.end_headers()
     handler.wfile.write(body)
 
