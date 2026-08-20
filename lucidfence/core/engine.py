@@ -30,6 +30,7 @@ from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
+from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
@@ -1001,6 +1002,55 @@ class Engine:
             "wipe_allowlist_size": len(self.wipe_allowlist),
         }
 
+    def _egress_status(self) -> dict:
+        """Summarize the tenant's outbound webhook egress policy for the UI.
+
+        Reads the policy straight from the engine config (which is overlaid from
+        integration.json by _apply_tenant_integration). Defaults to `permissive`
+        so existing deployments are never reported as broken.
+        """
+        raw = (self.config or {}).get("egress_policy") or {}
+        mode = str(raw.get("mode", "permissive")).strip().lower()
+        if mode != "strict":
+            return {"mode": "permissive", "allow": [], "allow_private": False}
+        allow = raw.get("allow") or []
+        if not isinstance(allow, list):
+            allow = []
+        return {
+            "mode": "strict",
+            "allow": [str(a) for a in allow if isinstance(a, str)],
+            "allow_private": bool(raw.get("allow_private", False)),
+        }
+
+    def _webhook_delivery_status(self) -> dict:
+        """Latest outgoing-webhook delivery outcome, including egress denials.
+
+        Surfaces the most recent notifier result so the dashboard can show a
+        `denied_by_egress_policy` outcome explicitly (never silent — criterion
+        #3 of the product decision t_316b8ec5). Best-effort: never raises.
+        """
+        notifier = getattr(self.incidents, "notifier", None)
+        if notifier is None:
+            return {"configured": False, "last_result": None}
+        last = getattr(notifier, "last_result", None)
+        if isinstance(notifier, IncidentFanoutNotifier):
+            # Fan-out: report the most recent per-channel snapshot.
+            results = (last or {}).get("results") if isinstance(last, dict) else None
+            return {
+                "configured": True,
+                "fanout": True,
+                "last_result": last,
+                "channels": [
+                    {
+                        "channel": (r.get("channel") if isinstance(r, dict) else None),
+                        "ok": (r.get("ok") if isinstance(r, dict) else None),
+                        "result": (r.get("last_result") if isinstance(r, dict) else None),
+                    }
+                    for r in (results or [])
+                ],
+            }
+        return {"configured": True, "fanout": False, "last_result": last}
+
     # ---- loop ------------------------------------------------------------
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -1037,6 +1087,8 @@ class Engine:
             "interval_seconds": self.interval,
             "dry_run": self.dry_run,
             "enforcement": self.enforcement_status(),
+            "egress_policy": self._egress_status(),
+            "webhook_delivery": self._webhook_delivery_status(),
             "stats": self.last_stats,
             "fences": [
                 {

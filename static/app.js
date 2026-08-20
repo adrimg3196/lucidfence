@@ -1538,6 +1538,9 @@ async function renderSettings(){
     out.textContent=lines.join("\n");
   };
 
+  // --- Egress de webhooks salientes (t_f33e2f23): policy + visibilidad de denegaciones.
+  renderEgressCard(s);
+
   const presets=ai.presets||[];
   $("#aiSetBody").innerHTML=`
     <div class="switch-row"><div style="flex:1"><div class="lab">Habilitar AI</div><div class="ds">Opcional. La clave se guarda localmente con permisos 0600.</div></div><div class="switch ${ai.enabled?'on':''}" id="aiEnabled"></div></div>
@@ -1562,6 +1565,80 @@ async function renderSettings(){
   // auditor una pantalla y responde "quién cambió qué" sin abrir audit.jsonl.
   renderAuditCard();
 }
+
+/* ===================== EGRESS DE WEBHOOKS SALIENTES (t_f33e2f23) ===================== */
+async function renderEgressCard(s){
+  const node = document.createElement("div");
+  node.className = "card";
+  node.style.marginTop = "14px";
+  node.innerHTML = `
+    <div class="hd"><h3>Egress de webhooks salientes</h3><div class="grow"></div><span class="tag unk"><span class="d"></span>opt-in</span></div>
+    <div class="bd">
+      <div class="help">Controla a qué destinos LucidFence puede entregar webhooks de incidente (Slack/Teams, genérico firmado, ntfy). Por defecto <b>permisivo</b> (comportamiento actual). El modo <b>estricto</b> solo entrega a los hosts de la allow-list y nunca silencia una denegación.</div>
+      <div class="field"><label>Modo</label><select class="input" id="egMode">
+        <option value="permissive">permisivo (allow-all, comportamiento actual)</option>
+        <option value="strict">estricto (solo allow-list)</option>
+      </select></div>
+      <div id="egStrictFields" style="display:none">
+        <div class="field"><label>Allow-list (host exacto, sufijo .dominio o IP; uno por línea)</label>
+          <textarea class="input" id="egAllow" rows="3" placeholder="hooks.slack.com&#10;.slack.com&#10;10.20.30.40"></textarea>
+          <div class="help">Sin comodín global <code>*</code>. En estricto, loopback/link-local/metadata 169.254.0.0/16 siguen siempre bloqueados (defense-in-depth).</div>
+        </div>
+        <div class="switch-row"><div style="flex:1"><div class="lab">Permitir destinos privados (RFC1918)</div><div class="ds">En estricto, permite SIEM internos/red bloqueada. Si está off, el egress privado se deniega aunque el host esté listado.</div></div><div class="switch" id="egPrivate"></div></div>
+      </div>
+      <div id="egDelivery" class="test-result" style="margin-top:12px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="egSave">Guardar egress</button></div>
+    </div>`;
+  $("#view-settings").appendChild(node);
+
+  const eg = (s && s.egress_policy) || {mode:"permissive"};
+  $("#egMode").value = eg.mode || "permissive";
+  if(eg.mode === "strict"){
+    $("#egStrictFields").style.display = "block";
+    $("#egAllow").value = ((eg.allow||[]).join("\n"));
+    if(eg.allow_private) $("#egPrivate").classList.add("on");
+  }
+  $("#egMode").onchange = ()=>{ $("#egStrictFields").style.display = $("#egMode").value==="strict" ? "block":"none"; };
+  $("#egPrivate").onclick = ()=> $("#egPrivate").classList.toggle("on");
+
+  const renderDelivery = (d)=>{
+    const box = $("#egDelivery");
+    if(!d || !d.configured){ box.className="test-result"; box.textContent=""; return; }
+    const lr = d.last_result;
+    const denied = JSON.stringify(lr||"").includes("denied_by_egress_policy");
+    if(denied){
+      box.className = "test-result bad show";
+      box.textContent = "Última entrega DENEGADA por egress policy (denied_by_egress_policy) — visible, no silenciada.";
+    } else if(lr && lr.ok){
+      box.className = "test-result ok show";
+      box.textContent = "Última entrega: OK.";
+    } else if(lr){
+      box.className = "test-result";
+      box.textContent = "Última entrega: " + (lr.error || (lr.result || "sin resultado"));
+    } else {
+      box.className = "test-result";
+      box.textContent = "Sin entregas recientes.";
+    }
+  };
+  renderDelivery(s && s.webhook_delivery);
+
+  $("#egSave").onclick = async ()=>{
+    const mode = $("#egMode").value;
+    const policy = { mode };
+    if(mode === "strict"){
+      const allow = $("#egAllow").value.split("\n").map(x=>x.trim().toLowerCase()).filter(Boolean);
+      policy.allow = allow;
+      policy.allow_private = $("#egPrivate").classList.contains("on");
+    }
+    // Persist alongside the (possibly empty) incident webhook URL.
+    const cur = (s && s.incident_webhook_url) || "";
+    const r = await api("/api/settings/incident-webhook", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url: cur, egress_policy: policy})});
+    if(r.ok){ toast("Egress guardado", policy.mode==="strict" ? "estricto · "+((policy.allow||[]).length)+" hosts" : "permisivo", "ok"); renderSettings(); }
+    else toast("Error", r.error||"", "bad");
+  };
+}
+
+
 
 async function renderAuditCard(){
   // Mismo círculo que autoriza el backend en GET /api/audit (403 en otro caso).

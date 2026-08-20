@@ -1,3 +1,7 @@
 # LucidFence — dependencias (100% local)
-# Solo una dependencia externa. El resto es stdlib de Python 3.9+.
-requests>=2.28
+# Mantener en sincronía con pyproject.toml (SOC audit 2026-08-20, L-5): quien
+# instale por requirements.txt debe obtener el mismo conjunto auditado que CI
+# usa vía requirements.lock.
+requests>=2.31,<3
+PyJWT[crypto]==2.13.0
+cryptography==50.0.0
