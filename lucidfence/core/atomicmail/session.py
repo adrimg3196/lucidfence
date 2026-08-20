@@ -14,7 +14,6 @@ from .config import (
     ResolvedAgentConfig,
     expand_credential_dir_input,
     resolve_agent_config_from_env,
-    resolve_credential_dir,
 )
 from .constants import (
     DEFAULT_API_URL,

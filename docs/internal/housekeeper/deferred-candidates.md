@@ -52,3 +52,5 @@ la entrada: se anota la resolución.
   (ciclo 0): `docs/roadmap/PRODUCT_ROADMAP.md` es el canónico vivo; ambos Q3
   quedan archivados como snapshots históricos con banner y puntero. No se
   borran (los referencia el CEO review de julio).
+
+- **[plankton 2026-08-20] adapters/base.py:96 — llamada requests sin timeout (bandit B113).** Un UEM colgado bloquearía el ciclo del engine para siempre. Diferido: base.py es contrato congelado (denylist: sin bump MAJOR + mock offline no se toca). Decisión para fleet-architect/iot-fleet-engineer: añadir timeout interno NO cambia la interfaz MDMAdapter — candidato a fix quirúrgico con test en el próximo ciclo que abra base.py legítimamente.

@@ -82,7 +82,7 @@ def main() -> int:
         # ============ 1. Webhooks multi-canal: entrega HTTP REAL + firma ====
         print("\n== P0.3 Webhooks (entrega HTTP real al receptor local) ==")
         from lucidfence.core.notifier import (IncidentFanoutNotifier, NtfyNotifier,
-                                              SignedWebhookNotifier, build_incident_notifiers)
+                                              SignedWebhookNotifier)
         incident = {"id": "inc-rt-1", "title": "Salida de geocerca (runtime QA)",
                     "severity": "high", "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq"}
         signed = SignedWebhookNotifier("http://127.0.0.1:9099/hook", secret="qa-secret")
@@ -136,7 +136,7 @@ def main() -> int:
 
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
-        r1 = eng.run_once()
+        eng.run_once()
         states = eng.store.snapshot()
         dev_id, st = next(iter(states.items()))
         has_field = isinstance(st.location_integrity, dict)
