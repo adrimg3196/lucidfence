@@ -313,8 +313,8 @@ from lucidfence.saas.providers import save_providers as _save_providers
 # Todas las claves que pueden portar un secreto de conexión. Ninguna sale nunca
 # en un GET (ni en el audit log): las credenciales viven en integration.json
 # (0600) y jamás se re-emiten al cliente.
-_PROVIDER_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token",
-                         "password", "token")
+_PROVIDER_SECRET_KEYS = ("secret", "api_key", "api_token", "client_secret",
+                         "refresh_token", "password", "token")
 
 
 def _provider_health(eng: "Engine | None") -> dict:
@@ -332,6 +332,7 @@ def _masked_provider(p: dict) -> dict:
     # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
     out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
     out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("api_token") or p.get("password")
                              or p.get("client_secret") or p.get("refresh_token")
                              or p.get("endpoint") or p.get("tenant_id"))
     return out
@@ -2126,7 +2127,8 @@ class Handler(BaseHTTPRequestHandler):
                     api_key=(body.get("api_key") or "").strip(),
                     **{k: v for k, v in creds.items()
                        if k in ("tenant_id", "client_id", "client_secret",
-                                "refresh_token", "base_url", "username", "password")},
+                                "refresh_token", "base_url", "username", "password",
+                                "api_token", "tenant_code", "customer_id")},
                 )
             except Exception as exc:
                 return _send_json(self, {"ok": False, "error_type": "init",
@@ -2182,7 +2184,8 @@ class Handler(BaseHTTPRequestHandler):
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
-                          "username", "password", "base_url"):
+                          "username", "password", "base_url",
+                          "api_token", "tenant_code", "customer_id"):
                 if body.get(extra):
                     provider[extra] = body[extra].strip()
             providers.append(provider)

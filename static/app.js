@@ -2580,19 +2580,13 @@ async function loadConnectors(){
   }
 }
 
-// Dónde vive el permiso mínimo real de cada UEM. Solo microcopy del wizard:
-// el protocolo con el backend (catalog/fields/segment/test/save) no cambia.
-const CW_HINTS = {
-  applivery: {perm:"API key con permiso de lectura", where:"Dashboard → Organization → API keys"},
-  intune:    {perm:"App con DeviceManagementManagedDevices.Read.All", where:"Entra ID → App registrations → Certificates & secrets"},
-  jamf:      {perm:"API role con permisos de lectura", where:"Settings → API roles and clients"},
-  fleet:     {perm:"Usuario API con rol observer", where:"fleetctl user create --api-only --global-role observer"},
-  simulation:{perm:"Sin credenciales · flota de ejemplo local", where:""},
-};
-const CW_HINT_DEFAULT = {perm:"Token de API de solo lectura", where:"consola de administración → API"};
+// El esquema de credenciales y el permiso mínimo de cada UEM vienen del
+// catálogo del backend (/api/providers/catalog): cada entrada trae
+// min_permission + fields [{key,label,type,placeholder,help,optional}], con
+// las keys EXACTAS que consume el adapter real. Aquí solo queda presentación.
 const CW_SEGMENTS = ["móviles","portátiles","mixta","servidores","otros"];
-const CW_SECRET_FIELDS = ["api_key","client_secret","refresh_token"];
 const CW_SHIELD_SVG = reicon("shield", {size:16});
+const CW_PERM_DEFAULT = "Token de API de solo lectura";
 
 async function openConnWizard(){
   let catalog = [];
@@ -2603,12 +2597,14 @@ async function openConnWizard(){
   const close = ()=>{ modal.classList.remove("show"); modal.setAttribute("aria-hidden","true"); };
   $("#cwClose").onclick = close;
 
-  function fieldLabel(f){
-    return {api_key:"API key / token", org_id:"ID de organización", endpoint:"Endpoint (URL base)",
-      tenant_id:"Tenant ID", client_id:"Client ID", client_secret:"Client secret",
-      refresh_token:"Refresh token"}[f] || f;
-  }
-  const hintFor = name=>CW_HINTS[name] || CW_HINT_DEFAULT;
+  // type del catálogo -> type del input (secret jamás se pinta en claro).
+  const inputType = f => f.type==="secret" ? "password" : (f.type==="url" ? "url" : "text");
+  const metaFields = () => (state.meta && Array.isArray(state.meta.fields)) ? state.meta.fields : [];
+  const metaPerm = () => (state.meta && state.meta.min_permission) || CW_PERM_DEFAULT;
+  // Payload de test/save: las keys reales del adapter, sin campos vacíos
+  // (un opcional vacío usa el default del adapter, p.ej. customer_id).
+  const cwCreds = () => Object.fromEntries(
+    Object.entries(state.fields).filter(([,v])=>v));
 
   function render(){
     const body = $("#cwBody"), foot = $("#cwFoot"), sub = $("#cwSub"), av = $("#cwAv"), title = $("#cwTitle");
@@ -2617,13 +2613,12 @@ async function openConnWizard(){
       title.textContent = "Conectar UEM"; sub.textContent = "Paso 1 de 3 · elige tu plataforma";
       av.textContent = "+";
       body.innerHTML = `<div class="cw-cards">` + catalog.map(c=>{
-        const h = hintFor(c.name);
         const ro = c.name==="simulation"
           ? `<span class="cw-ro">demo local</span>`
           : `<span class="cw-ro">solo lectura</span>`;
         return `<button type="button" class="cw-card${state.name===c.name?" sel":""}" data-name="${esc(c.name)}" aria-pressed="${state.name===c.name}">
           <span class="ini" aria-hidden="true">${esc((c.label||"?")[0])}</span>
-          <span><b>${esc(c.label)}</b><span class="hint">${esc(h.perm)}</span>${ro}</span>
+          <span><b>${esc(c.label)}</b><span class="hint">${esc(c.min_permission||CW_PERM_DEFAULT)}</span>${ro}</span>
         </button>`;
       }).join("") + `</div>`;
       $$(".cw-card", body).forEach(card=>card.onclick=()=>{
@@ -2634,22 +2629,24 @@ async function openConnWizard(){
       });
       const b = el("button","btn primary"); b.textContent="Siguiente"; b.onclick=()=>{
         if(!state.name){ toast("Elige una plataforma","","bad"); return; }
-        state.step=2; render();
+        // Simulación no pide credenciales: del paso 1 directo a la comprobación.
+        state.step = state.name==="simulation" ? 3 : 2; render();
       };
       foot.appendChild(b);
     } else if(state.step===2){
       sub.textContent = "Paso 2 de 3 · acceso de solo lectura"; av.textContent = state.meta?state.meta.label[0]:"·";
-      const fields = state.meta?state.meta.fields:[];
-      const h = hintFor(state.name);
+      const fields = metaFields();
       const band = `<div class="cw-band">${CW_SHIELD_SVG}
-        <div><b>Mínimo privilegio.</b> En modo observar basta un token de solo lectura: LucidFence lee tu UEM, nunca escribe en él sin que tú lo decidas.</div></div>`;
+        <div><b>Mínimo privilegio.</b> ${esc(metaPerm())}: LucidFence lee tu UEM, nunca escribe en él sin que tú lo decidas.</div></div>`;
+      // Cada UEM pide EXACTAMENTE sus credenciales (esquema del catálogo):
+      // label + input tipado (password/url/text) + "dónde encontrarlo" propio.
       const fieldsHtml = fields.length ? fields.map(f=>{
-        const secret = CW_SECRET_FIELDS.includes(f);
-        const help = (secret && h.where)
-          ? `<div class="cw-help">Dónde encontrarlo: <b>${esc(h.where)}</b></div>` : "";
-        return `<label class="fld"><span>${fieldLabel(f)}</span>
-          <input id="cw_${f}" class="${secret?"mono":""}" type="${secret?"password":"text"}" autocomplete="off"
-            value="${esc(state.fields[f]||"")}" placeholder="${fieldLabel(f)}"></label>${help}`;
+        const secret = f.type==="secret";
+        const help = f.help ? `<div class="cw-help">Dónde encontrarlo: <b>${esc(f.help)}</b></div>` : "";
+        const opt = f.optional ? ` <span class="hint">(opcional)</span>` : "";
+        return `<label class="fld"><span>${esc(f.label||f.key)}${opt}</span>
+          <input id="cw_${esc(f.key)}" class="${secret?"mono":""}" type="${inputType(f)}" autocomplete="off"
+            value="${esc(state.fields[f.key]||"")}" placeholder="${esc(f.placeholder||f.label||f.key)}"></label>${help}`;
       }).join("") : `<div class="empty"><div class="t">Este conector no requiere credenciales</div>
         <div class="s">La flota de ejemplo vive en tu máquina.</div></div>`;
       const chips = `<div class="fld"><span>Qué flota cubre este UEM</span>
@@ -2665,25 +2662,30 @@ async function openConnWizard(){
           x.classList.toggle("active", on); x.setAttribute("aria-pressed", on);
         });
       });
+      const grab = ()=>fields.forEach(f=>{ const n=$("#cw_"+f.key); if(n) state.fields[f.key]=n.value.trim(); });
       const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{
-        fields.forEach(f=>{ const n=$("#cw_"+f); if(n) state.fields[f]=n.value.trim(); });
-        state.step=1; render();
+        grab(); state.step=1; render();
       };
       const next = el("button","btn primary"); next.textContent = fields.length?"Probar conexión":"Siguiente";
       next.onclick=()=>{
-        fields.forEach(f=>{ state.fields[f] = $(("#cw_"+f)).value.trim(); });
+        grab();
+        const missing = fields.filter(f=>!f.optional && !state.fields[f.key]);
+        if(missing.length){ toast("Faltan credenciales", missing.map(f=>f.label||f.key).join(", "), "bad"); return; }
         state.step=3; render();
       };
       foot.appendChild(back); foot.appendChild(next);
     } else {
       sub.textContent = "Paso 3 de 3 · comprobación"; av.textContent = "✓";
-      const fields = state.meta?state.meta.fields:[];
+      const fields = metaFields();
       const segTag = state.segment?` <span class="pill">${esc(state.segment)}</span>`:"";
       body.innerHTML = `
         <div style="font-size:13px;font-weight:600;margin-bottom:10px">${esc(state.meta?state.meta.label:"")}${segTag}</div>
         <div class="cw-checks" id="cwChecks"></div>
         <div class="cw-final">${CW_SHIELD_SVG}<span>Arrancas en observar: nada actúa sin ti.</span></div>`;
-      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=2;render();};
+      // Simulación saltó el paso 2: su "Atrás" vuelve a la elección de UEM.
+      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{
+        state.step = state.name==="simulation" ? 1 : 2; render();
+      };
       foot.appendChild(back);
       if(fields.length){
         const retry = el("button","btn outline"); retry.textContent="Probar de nuevo";
@@ -2698,7 +2700,7 @@ async function openConnWizard(){
         save.disabled = true; save.textContent = "Guardando…";
         try{
           const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:state.name, segment:state.segment||"", ...state.fields})});
+            body:JSON.stringify({name:state.name, segment:state.segment||"", ...cwCreds()})});
           if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
           else toast("Error", (r.error||"no se pudo guardar"), "bad");
         }catch(e){ toast("Error", e.message, "bad"); }
@@ -2716,14 +2718,13 @@ async function openConnWizard(){
   // sale SOLO de la respuesta y de la latencia medida aquí: nada inventado.
   async function runTest(btn){
     const checks = $("#cwChecks"); if(!checks) return;
-    const h = hintFor(state.name);
     checks.innerHTML = cwCheck("warn","·","Probando conexión…", state.meta?state.meta.label:"");
     if(btn){ btn.disabled = true; }
     const t0 = performance.now();
     let r = null, err = null;
     try{
       r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name:state.name, ...state.fields})});
+        body:JSON.stringify({name:state.name, ...cwCreds()})});
     }catch(e){ err = e; }
     const ms = Math.round(performance.now()-t0);
     if(btn){ btn.disabled = false; }
@@ -2741,7 +2742,7 @@ async function openConnWizard(){
       html += cwCheck("warn","!","Permisos sin comprobar en vivo","este conector se verifica en el primer ciclo de lectura");
     } else {
       html += cwCheck("bad","✗", r.error_type==="auth"?"Credencial rechazada":"La conexión falló", r.error||"");
-      html += cwCheck("warn","!","Revisa el permiso mínimo", h.perm);
+      html += cwCheck("warn","!","Revisa el permiso mínimo", metaPerm());
     }
     // N dispositivos visibles: solo si la respuesta lo trae de verdad.
     const nDev = [r.device_count, r.devices_visible, Array.isArray(r.devices)?r.devices.length:null]

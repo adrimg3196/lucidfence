@@ -54,3 +54,5 @@ la entrada: se anota la resolución.
   borran (los referencia el CEO review de julio).
 
 - **[plankton 2026-08-20] adapters/base.py:96 — llamada requests sin timeout (bandit B113).** Un UEM colgado bloquearía el ciclo del engine para siempre. Diferido: base.py es contrato congelado (denylist: sin bump MAJOR + mock offline no se toca). Decisión para fleet-architect/iot-fleet-engineer: añadir timeout interno NO cambia la interfaz MDMAdapter — candidato a fix quirúrgico con test en el próximo ciclo que abra base.py legítimamente.
+
+- **[wizard 2026-08-20] saas_server.py:237-242 — el build del engine solo pasa name/org_id/endpoint/api_key a build_bindings: los providers OAuth guardados (Intune/Jamf/WS1/Google) no llegan al ciclo del engine.** Gap preexistente (el wizard ya guarda las credenciales correctas; el test las usa; el CICLO no). Candidato para el proximo incremento de Admin-value: pasar el dict completo del provider al binding.
