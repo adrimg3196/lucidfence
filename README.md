@@ -93,6 +93,8 @@ Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista
   Onboarding por UEM con mínimo privilegio en [`docs/integrations/`](docs/integrations/)
   (Intune, Jamf, Applivery, Fleet) y la [matriz de ubicación](docs/integrations/LOCATION_MATRIX.md)
   con lo que cada UEM da de verdad.
+- **Multi-UEM simultáneo por tenant:** Applivery live por defecto; Intune (Microsoft Graph) y Jamf Pro en modo live al conectar tu token del tenant (caen a simulación sin token). Cero exfiltración de datos. Ver [matriz de UEMs](docs/integrations/MULTI_UEM.md) y [PRODUCT_SPEC](docs/architecture/PRODUCT_SPEC.md).
+- **SOAR declarativo:** 4 playbooks frontline (CVE crítico, CVE + fuera de perímetro, no conforme + fuera, EPSS alto) con auditoría por dispositivo (`matched_fields`).
 - Rollout seguro para pilotos: `enforcement.mode: observe|enforce`, gating por
   acción y doble llave para wipe. Runbook: [`docs/operations/ENFORCEMENT.md`](docs/operations/ENFORCEMENT.md);
   día 2 (servicio, backup, upgrade): [`docs/operations/DAY2.md`](docs/operations/DAY2.md).
