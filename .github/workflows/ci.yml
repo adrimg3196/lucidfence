@@ -161,3 +161,19 @@ jobs:
           python3 -m pip install --require-hashes -r requirements.lock
       - name: Validar claims en runtime
         run: python3 scripts/runtime_validation.py
+
+  workflows-lint:
+    name: Workflows lint (actionlint)
+    # Los workflows solo se "prueban" al ejecutarse en produccion; este gate
+    # caza YAML/expresiones/shell rotos (shellcheck incluido) en la PR, antes
+    # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint (pinned)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/al.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
+          tar -C /tmp -xzf /tmp/al.tar.gz actionlint
+          /tmp/actionlint -color
