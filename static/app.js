@@ -60,6 +60,13 @@ const fmt = {
   n: (x, d=0) => (x==null?"—":Number(x).toLocaleString("es", {maximumFractionDigits:d})),
 };
 
+// Charts y trazas Leaflet no re-renderizan con el tema: leen el acento
+// vigente del CSS en el momento de pintar (fallback = acento claro).
+function accentColor(){
+  try{ return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#3E7A5E"; }
+  catch(e){ return "#3E7A5E"; }
+}
+const ACCENT_SOFT_RGBA = "rgba(62,122,94,.12)";
 function avatarColor(id){ const h=([...String(id)].reduce((a,c)=>a+c.charCodeAt(0),0))%360; return `hsl(${h} 55% 45%)`; }
 function avatarText(name){ return (name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
 const PLAT_ICON = {
@@ -240,21 +247,47 @@ const NAV = [
   {id:"roi",        label:"ROI · Valor", icon:"trending-up"},
 ];
 
+// Pocos clics: lo operativo a un clic, el resto plegado bajo "Avanzado"
+// (persistencia en localStorage lf_nav_adv) y Ajustes al pie del sidebar.
+const NAV_OPS = ["overview","map","devices","fences","connectors","incidents"];
+const NAV_FOOT = ["settings"];
+function navAdvOpen(){ try{ return localStorage.getItem("lf_nav_adv")==="1"; }catch(e){ return false; } }
+function setNavAdvOpen(open){ try{ localStorage.setItem("lf_nav_adv", open?"1":"0"); }catch(e){} }
+function navLink(item){
+  const a = el("a", App.view===item.id?"active":"");
+  a.href = "#"+item.id;
+  a.setAttribute("aria-current", App.view===item.id ? "page" : "false");
+  let badge="";
+  if(item.id==="incidents" && App._openIncidents){
+    badge = ` <span class="nav-badge">${App._openIncidents}</span>`;
+  }
+  const ic = reicon(item.icon, {size:18, className:"nav-ic"});
+  a.innerHTML = `${ic}<span>${item.label}</span>${badge}`;
+  a.onclick = event=>{ event.preventDefault(); goView(item.id); };
+  return a;
+}
 function renderNav(){
   const n = $("#nav"); n.innerHTML="";
-  NAV.forEach(item=>{
-    const a = el("a", App.view===item.id?"active":"");
-    a.href = "#"+item.id;
-    a.setAttribute("aria-current", App.view===item.id ? "page" : "false");
-    let badge="";
-    if(item.id==="incidents" && App._openIncidents){
-      badge = ` <span class="nav-badge">${App._openIncidents}</span>`;
-    }
-    const ic = reicon(item.icon, {size:18, className:"nav-ic"});
-    a.innerHTML = `${ic}<span>${item.label}</span>${badge}`;
-    a.onclick = event=>{ event.preventDefault(); goView(item.id); };
-    n.appendChild(a);
-  });
+  const byId = id=>NAV.find(x=>x.id===id);
+  n.appendChild(el("div","nav-sec","Operación"));
+  NAV_OPS.forEach(id=>{ const it=byId(id); if(it) n.appendChild(navLink(it)); });
+  const adv = NAV.filter(x=>!NAV_OPS.includes(x.id) && !NAV_FOOT.includes(x.id));
+  const open = navAdvOpen();
+  const btn = el("button","nav-adv-btn");
+  btn.type = "button";
+  btn.setAttribute("aria-expanded", open?"true":"false");
+  btn.innerHTML = `${reicon("arrow-down2", {size:12, className:"car"})}<span>Avanzado</span>`;
+  btn.onclick = ()=>{ setNavAdvOpen(!navAdvOpen()); renderNav(); };
+  n.appendChild(btn);
+  if(open){
+    adv.forEach(it=>n.appendChild(navLink(it)));
+  } else {
+    // Plegado: la vista activa sigue visible aunque viva en Avanzado.
+    const active = adv.find(x=>x.id===App.view);
+    if(active) n.appendChild(navLink(active));
+  }
+  const f = $("#navFoot");
+  if(f){ f.innerHTML=""; NAV_FOOT.forEach(id=>{ const it=byId(id); if(it) f.appendChild(navLink(it)); }); }
 }
 function goView(id){
   App.view = id;
@@ -581,6 +614,20 @@ const I = {
   bell:  reicon("bell"),
   trash: reicon("trash"),
 };
+// Firma visual: la línea de perímetro. Verde continuo = ningún incidente
+// abierto; cada muesca ámbar es un incidente que espera una mirada. Lee el
+// contador real que ya alimenta el badge del menú (App._openIncidents).
+function perimeterBar(){
+  const n = Number(App._openIncidents)||0;
+  if(!n) return `<div class="perimeter" role="img" title="Perímetro: todo en orden" aria-label="Perímetro: todo en orden"></div>`;
+  const shown = Math.min(n, 12);
+  const notches = Array.from({length:shown},(_,i)=>{
+    const pct = ((i+1)/(shown+1)*100).toFixed(2);
+    return `<span class="notch" style="left:calc(${pct}% - 12px)"></span>`;
+  }).join("");
+  const label = `Perímetro: ${n} aviso${n===1?"":"s"}`;
+  return `<div class="perimeter" role="img" title="${label}" aria-label="${label}">${notches}</div>`;
+}
 function renderOverview(){
   const st = App.status; if(!st) return;
   const devs = st.devices||[];
@@ -599,6 +646,11 @@ function renderOverview(){
   const fences = st.fences||[];
 
   $("#view-overview").innerHTML = `
+    <div class="view-head">
+      <div><h2>Resumen</h2>
+        <div class="sub">${total} dispositivos vigilados · ${fences.length} geovallas</div></div>
+    </div>
+    ${perimeterBar()}
     <div class="kpis">
       ${kpiCard("Dispositivos", devs.length||total, "acc", I.dev)}
       ${kpiCard("Dentro", inside, "ok", I.in)}
@@ -655,11 +707,49 @@ function renderOverview(){
           <button class="btn primary" style="width:100%;margin-top:14px;justify-content:center" onclick="openAiFromOverview()">${I.bolt} Pregunta a la IA sobre tu flota</button>
         </div>
       </div>
+    </div>
+    <div class="card" id="ovCoverage" style="margin-top:14px;display:none">
+      <div class="hd"><h3>Puntos ciegos</h3><div class="grow"></div><span class="sub">lo que la config actual NO cubre</span></div>
+      <div class="bd" id="ovCoverageBody"></div>
     </div>`;
   renderDonut($("#compDonut"), compPct, total-noncomp, total);
   renderComplianceChart(st);
   renderEventList($("#ovEvents"), events.slice(0,8));
   initMap(devs, "overviewMap");
+  renderCoverageCard();
+}
+
+// Tarjeta "Puntos ciegos" (GET /api/coverage): el negativo de la cobertura.
+// Si la petición falla (p.ej. rol sin permiso device:read) la tarjeta se queda
+// oculta en silencio — el Resumen nunca se rompe por este extra.
+async function renderCoverageCard(){
+  let cov;
+  try{ cov = await api("/api/coverage"); }catch(e){ return; }
+  const card = $("#ovCoverage"), body = $("#ovCoverageBody");
+  if(!card || !body || App.view!=="overview") return;
+  const r = cov.resumen||{};
+  const sinSenal = cov.devices_sin_senal||[];
+  const sinReportar = cov.devices_sin_reportar||[];
+  const vacias = cov.fences_vacias||[];
+  const pct = r.coverage_percent!=null? r.coverage_percent : 100;
+  const counters = `
+    <span class="tag ${sinSenal.length?'warn':'in'}"><span class="d"></span>${sinSenal.length} sin señal</span>
+    <span class="tag ${sinReportar.length?'warn':'in'}"><span class="d"></span>${sinReportar.length} sin reportar</span>
+    <span class="tag ${vacias.length?'warn':'in'}"><span class="d"></span>${vacias.length} cercas vacías</span>`;
+  const entries = [
+    ...sinSenal.map(d=>({icon:I.dev, nm:d.name||d.device_id, ds:d.reason||"sin señal"})),
+    ...sinReportar.map(d=>({icon:I.dev, nm:d.name||d.device_id, ds:d.reason||"sin reportar"})),
+    ...vacias.map(f=>({icon:I.shield, nm:f.name||f.fence_id, ds:"geocerca sin ningún dispositivo dentro"})),
+  ].slice(0,5);
+  const list = entries.length
+    ? `<div class="alist" style="margin-top:12px">${entries.map(e=>`<div class="aitem"><div class="ic">${e.icon}</div><div class="grow"><div class="nm">${esc(e.nm)}</div><div class="ds">${esc(e.ds)}</div></div></div>`).join("")}</div>`
+    : `<div style="margin-top:12px"><span class="tag in"><span class="d"></span>Cobertura completa: sin puntos ciegos</span></div>`;
+  body.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div><span style="font-size:26px;font-weight:600;letter-spacing:-.03em">${esc(pct)}%</span> <span class="sub">de la flota evaluable contra geocercas</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${counters}</div>
+    </div>${list}`;
+  card.style.display="";
 }
 function openAiFromOverview(){ goView("ai"); }
 
@@ -698,7 +788,7 @@ function renderComplianceChart(st){
   if(App.complianceChart) App.complianceChart.destroy();
   App.complianceChart = new Chart(cv, {
     type:"line",
-    data:{ labels, datasets:[{ data, borderColor:"#5e6ad5", backgroundColor:"rgba(94,106,213,.12)",
+    data:{ labels, datasets:[{ data, borderColor:accentColor(), backgroundColor:ACCENT_SOFT_RGBA,
       borderWidth:2, fill:true, tension:.35, pointRadius:0 }]},
     options:{ responsive:true, plugins:{legend:{display:false}},
       scales:{ x:{display:false}, y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"var(--muted-2)",font:{size:9}}} },
@@ -753,6 +843,49 @@ function renderMapView(){
 function recenterMap(){ if(App.map) App.map.setView([40.42,-3.70], 6); }
 
 /* ---------- MAP engine (Leaflet) ---------- */
+// Estilo de mapa: "local" (SVG vendorizado, cero red — el DEFECTO, Constitución I)
+// u "osm" (teselas reales de openstreetmap.org, SOLO opt-in explícito del admin:
+// cada tesela pedida revela al proveedor la zona del visor, aunque jamás se
+// envían posiciones ni inventario). La elección vive en localStorage.
+function mapStyleIsOSM(){ try{ return localStorage.getItem("lf_map_style")==="osm"; }catch(_e){ return false; } }
+function basemapLayer(){
+  return mapStyleIsOSM()
+    ? L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'})
+    : L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false});
+}
+function toggleMapStyle(){
+  if(!mapStyleIsOSM()){
+    const msg = "Mapa detallado (OpenStreetMap)\n\n" +
+      "El fondo del mapa se descargará de openstreetmap.org. Cada movimiento del visor " +
+      "revela a ese servicio la zona del mapa que estás mirando (aprox. el área de tu flota). " +
+      "Tus dispositivos, posiciones e inventario NUNCA se envían: solo se piden las imágenes del fondo.\n\n" +
+      "¿Activar el mapa detallado?";
+    if(!confirm(msg)) return;
+    try{ localStorage.setItem("lf_map_style","osm"); }catch(_e){}
+  } else {
+    try{ localStorage.setItem("lf_map_style","local"); }catch(_e){}
+  }
+  if(App.map){
+    const nodeId = App.map.getContainer().id;
+    App.map.remove(); App.map=null; App.mapMarkers={}; App.trailLayer=null;
+    initMap((App.status&&App.status.devices)||[], nodeId);
+  }
+}
+const MapStyleControl = L.Control ? L.Control.extend({
+  options:{position:"bottomright"},
+  onAdd(){
+    const b=L.DomUtil.create("button","map-style-btn");
+    b.type="button";
+    b.textContent = mapStyleIsOSM() ? "Mapa local" : "Mapa detallado";
+    b.title = mapStyleIsOSM()
+      ? "Volver al mapa local (cero peticiones de red)"
+      : "Fondo real de OpenStreetMap (opt-in: pide teselas a un tercero)";
+    b.style.cssText="background:var(--panel,#141924);color:var(--fg,#e6e9f0);border:1px solid var(--line,#232a3a);border-radius:6px;padding:5px 10px;font:12px system-ui;cursor:pointer";
+    L.DomEvent.on(b,"click",(e)=>{ L.DomEvent.stop(e); toggleMapStyle(); });
+    return b;
+  }
+}) : null;
 function initMap(devs, targetId){
   if(typeof L === "undefined") return;
   const node=document.getElementById(targetId); if(!node) return;
@@ -763,9 +896,11 @@ function initMap(devs, targetId){
     App.map=null; App.mapMarkers={}; App.trailLayer=null;
   }
   if(!App.map){
-    App.map = L.map(node, {zoomControl:true, attributionControl:false}).setView([40.42,-3.70], 6);
-    // Single vendored vector basemap: no tile provider, tracking or network.
-    L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(App.map);
+    App.map = L.map(node, {zoomControl:true, attributionControl:mapStyleIsOSM()}).setView([40.42,-3.70], 6);
+    // Basemap por defecto: vector vendorizado, sin proveedor de teselas ni red.
+    // El fondo OSM real existe SOLO como opt-in explícito (ver basemapLayer).
+    basemapLayer().addTo(App.map);
+    if(MapStyleControl) new MapStyleControl().addTo(App.map);
     App.trailLayer = L.layerGroup().addTo(App.map);
     const settleMap = (attempt=0)=>{
       if(!App.map || App.map.getContainer()!==node) return;
@@ -891,6 +1026,26 @@ function renderDeviceRows(){
 }
 
 /* ---------- device modal ---------- */
+// Postura DDM (readback honesto): true → positivo; false explícito → atención;
+// null/ausente → neutro "el UEM no lo reporta" — lo desconocido nunca alarma,
+// tampoco visualmente (clase .sub muted, jamás un tag de alerta).
+function postureBadge(v, onText, offText){
+  if(v===true)  return `<span class="tag in"><span class="d"></span>${esc(onText)}</span>`;
+  if(v===false) return `<span class="tag warn"><span class="d"></span>${esc(offText)}</span>`;
+  return `<span class="sub">— (el UEM no lo reporta)</span>`;
+}
+// Misma semántica que policies._hardware_degraded_components: False o
+// "degraded"/"failed"/"error" = degradado explícito; cualquier otro valor es
+// desconocido y no cuenta como degradación.
+function hardwareHealthBadge(hh){
+  if(!hh || typeof hh!=="object" || Array.isArray(hh)) return `<span class="sub">— (el UEM no lo reporta)</span>`;
+  const bad = Object.keys(hh).filter(k=>{
+    const v = hh[k];
+    return v===false || (typeof v==="string" && ["degraded","failed","error"].includes(v.trim().toLowerCase()));
+  });
+  if(!bad.length) return `<span class="tag in"><span class="d"></span>Todos los componentes OK</span>`;
+  return bad.map(k=>`<span class="tag warn"><span class="d"></span>${esc(k)}: degradado</span>`).join(" ");
+}
 async function openDeviceModal(id){
   App._modalReturnFocus = document.activeElement;
   const d = (App.status.devices||[]).find(x=>x.device_id===id);
@@ -908,8 +1063,14 @@ async function openDeviceModal(id){
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
     ["Visto", fmt.date(d.last_seen)],
+    // Postura DDM (Apple OS 27) + cifrado: campos reales de DeviceState.to_dict().
+    ["Lockdown Mode", postureBadge(d.lockdown_mode, "Activado", "Desactivado"), true],
+    ["Supervisión", postureBadge(d.supervised, "Supervisado (corporativo)", "No supervisado (personal)"), true],
+    ["Salud de hardware", hardwareHealthBadge(d.hardware_health), true],
+    ["Cifrado", postureBadge(d.encryption_enabled, "Activado", "Desactivado"), true],
   ];
-  $("#mKv").innerHTML = rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(r[1])}</div>`).join("");
+  // r[2] === true → r[1] ya es HTML seguro (construido con esc() dentro).
+  $("#mKv").innerHTML = rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${r[2]?r[1]:esc(r[1])}</div>`).join("");
   // ---- G2a: Risk Engine explicable (reasons + verified) ----
   const mRisk = $("#mRisk");
   if(mRisk){
@@ -961,9 +1122,9 @@ async function openDeviceModal(id){
     const tr = (det.trail||[]).slice(-40);
     if(tr.length>1 && typeof L!=="undefined"){
       const tm = L.map(trailNode, {zoomControl:false, attributionControl:false}).setView([tr[0].lat,tr[0].lng], 9);
-      L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(tm);
-      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]!=null&&p[1]!=null), {color:"#5e6ad5",weight:2}).addTo(tm);
-      tr.forEach(p=>{ if(p.lat!=null&&p.lng!=null) L.circleMarker([p.lat,p.lng],{radius:3,color:"#5e6ad5",fillOpacity:.7}).addTo(tm); });
+      basemapLayer().addTo(tm);
+      L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]!=null&&p[1]!=null), {color:accentColor(),weight:2}).addTo(tm);
+      tr.forEach(p=>{ if(p.lat!=null&&p.lng!=null) L.circleMarker([p.lat,p.lng],{radius:3,color:accentColor(),fillOpacity:.7}).addTo(tm); });
       setTimeout(()=>tm.invalidateSize(),40);
     }
     const evs = (det.events||[]).slice(-8).reverse();
@@ -1873,7 +2034,7 @@ function renderGoals(){
   const cv = $("#goalTrend"); if(cv && trend.length){
     if(App.__goalChart) App.__goalChart.destroy();
     App.__goalChart = new Chart(cv, {type:"line",
-      data:{labels:trend.map((_,i)=>i+1), datasets:[{data:trend, borderColor:"#5e6ad5", backgroundColor:"rgba(94,106,213,.12)", borderWidth:2, fill:true, tension:.35, pointRadius:0}]},
+      data:{labels:trend.map((_,i)=>i+1), datasets:[{data:trend, borderColor:accentColor(), backgroundColor:ACCENT_SOFT_RGBA, borderWidth:2, fill:true, tension:.35, pointRadius:0}]},
       options:{responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"var(--muted-2)",font:{size:9}}}}} });
   }
 }
@@ -1993,7 +2154,7 @@ async function renderIntelligence(){
     const cv = $("#intelTrend");
     if(cv && series.length){
       if(App.__intelChart) App.__intelChart.destroy();
-      App.__intelChart = new Chart(cv,{type:"line",data:{labels:series.map(x=>x.idx),datasets:[{label:"Conformidad",data:series.map(x=>x.value),borderColor:"#5e6ad5",backgroundColor:"rgba(94,106,213,.12)",borderWidth:2,fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"#8b949e",callback:v=>v+"%"}}}}});
+      App.__intelChart = new Chart(cv,{type:"line",data:{labels:series.map(x=>x.idx),datasets:[{label:"Conformidad",data:series.map(x=>x.value),borderColor:accentColor(),backgroundColor:ACCENT_SOFT_RGBA,borderWidth:2,fill:true,tension:.3,pointRadius:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,max:100,grid:{color:"rgba(148,163,184,.08)"},ticks:{color:"#8b949e",callback:v=>v+"%"}}}}});
     }
   }catch(error){
     node.innerHTML = `<div aria-live="assertive">${emptyState("No se pudo cargar la inteligencia", error.message||"Error de conexión")}</div>`;
@@ -2025,9 +2186,11 @@ function showModal(title, avatarHtml, bodyHtml, onSave, saveLabel="Guardar"){
   $("#mCancel").focus();
 }
 function toggleTheme(){
+  // Claro es el defecto (sin atributo); "dark" es el opt-in que persiste.
   const cur = document.documentElement.getAttribute("data-theme");
-  document.documentElement.setAttribute("data-theme", cur==="light"?"dark":"light");
-  try{ localStorage.setItem("gf_theme", cur==="light"?"dark":"light"); }catch(e){}
+  const next = cur==="dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try{ localStorage.setItem("gf_theme", next); }catch(e){}
 }
 
 /* ---------- command palette ---------- */
@@ -2407,7 +2570,7 @@ async function loadConnectors(){
     }
     list.innerHTML = `<ul class="alist">` + ps.map(p=>`
       <li>
-        <span>${esc(p.label||p.name)}${p.segment?' <span class="pill">'+esc(p.segment)+'</span>':''} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
+        <span>${esc(p.label||p.name)}${p.segment?' <span class="pill">'+esc(p.segment)+'</span>':''} ${p.configured?'<b style="color:var(--green)">· conectado</b>':'<b style="color:var(--amber)">· sin credenciales</b>'}</span>
         <span class="row gap">
           <button class="btn sm ghost" onclick="removeConn('${esc(p.name)}')">Quitar</button>
         </span>
@@ -2417,82 +2580,177 @@ async function loadConnectors(){
   }
 }
 
+// El esquema de credenciales y el permiso mínimo de cada UEM vienen del
+// catálogo del backend (/api/providers/catalog): cada entrada trae
+// min_permission + fields [{key,label,type,placeholder,help,optional}], con
+// las keys EXACTAS que consume el adapter real. Aquí solo queda presentación.
+const CW_SEGMENTS = ["móviles","portátiles","mixta","servidores","otros"];
+const CW_SHIELD_SVG = reicon("shield", {size:16});
+const CW_PERM_DEFAULT = "Token de API de solo lectura";
+
 async function openConnWizard(){
   let catalog = [];
   try{ const c = await api("/api/providers/catalog"); catalog = (c&&c.catalog)||[]; }catch(e){}
-  const state = {step:1, name:null, meta:null, fields:{}};
+  const state = {step:1, name:null, meta:null, fields:{}, segment:""};
   const modal = $("#connWizard");
   const open = ()=>{ modal.classList.add("show"); modal.setAttribute("aria-hidden","false"); };
   const close = ()=>{ modal.classList.remove("show"); modal.setAttribute("aria-hidden","true"); };
   $("#cwClose").onclick = close;
 
-  function fieldLabel(f){
-    return {api_key:"API key / token", org_id:"ID de organización", endpoint:"Endpoint (URL base)"}[f] || f;
-  }
+  // type del catálogo -> type del input (secret jamás se pinta en claro).
+  const inputType = f => f.type==="secret" ? "password" : (f.type==="url" ? "url" : "text");
+  const metaFields = () => (state.meta && Array.isArray(state.meta.fields)) ? state.meta.fields : [];
+  const metaPerm = () => (state.meta && state.meta.min_permission) || CW_PERM_DEFAULT;
+  // Payload de test/save: las keys reales del adapter, sin campos vacíos
+  // (un opcional vacío usa el default del adapter, p.ej. customer_id).
+  const cwCreds = () => Object.fromEntries(
+    Object.entries(state.fields).filter(([,v])=>v));
+
   function render(){
     const body = $("#cwBody"), foot = $("#cwFoot"), sub = $("#cwSub"), av = $("#cwAv"), title = $("#cwTitle");
     body.innerHTML = ""; foot.innerHTML = "";
     if(state.step===1){
       title.textContent = "Conectar UEM"; sub.textContent = "Paso 1 de 3 · elige tu plataforma";
       av.textContent = "+";
-      body.innerHTML = `<div class="grid cols-2" style="gap:10px">` + catalog.map(c=>`
-        <button class="btn outline" style="text-align:left;justify-content:flex-start" onclick="cwPick('${esc(c.name)}')">
-          <b>${esc(c.label)}</b></button>`).join("") + `</div>`;
+      body.innerHTML = `<div class="cw-cards">` + catalog.map(c=>{
+        const ro = c.name==="simulation"
+          ? `<span class="cw-ro">demo local</span>`
+          : `<span class="cw-ro">solo lectura</span>`;
+        return `<button type="button" class="cw-card${state.name===c.name?" sel":""}" data-name="${esc(c.name)}" aria-pressed="${state.name===c.name}">
+          <span class="ini" aria-hidden="true">${esc((c.label||"?")[0])}</span>
+          <span><b>${esc(c.label)}</b><span class="hint">${esc(c.min_permission||CW_PERM_DEFAULT)}</span>${ro}</span>
+        </button>`;
+      }).join("") + `</div>`;
+      $$(".cw-card", body).forEach(card=>card.onclick=()=>{
+        state.name = card.dataset.name;
+        state.meta = catalog.find(x=>x.name===state.name) || null;
+        state.fields = {};
+        render();
+      });
       const b = el("button","btn primary"); b.textContent="Siguiente"; b.onclick=()=>{
         if(!state.name){ toast("Elige una plataforma","","bad"); return; }
-        state.step=2; render();
+        // Simulación no pide credenciales: del paso 1 directo a la comprobación.
+        state.step = state.name==="simulation" ? 3 : 2; render();
       };
       foot.appendChild(b);
     } else if(state.step===2){
-      sub.textContent = "Paso 2 de 3 · credenciales"; av.textContent = state.meta?state.meta.label[0]:"·";
-      const fields = state.meta?state.meta.fields:[];
-      const segOpts = ["","móviles","portátiles","mixta","servidores","otros"];
-      const segSel = `<label class="fld"><span>Segmento de flota <small style="opacity:.6">(qué cubre este UEM)</small></span>
-          <select id="cw_segment">${segOpts.map(o=>`<option value="${o}"${o===(state.segment||"")?" selected":""}>${o||"— sin etiqueta —"}</option>`).join("")}</select></label>`;
-      body.innerHTML = (fields.length ? fields.map(f=>`
-        <label class="fld"><span>${fieldLabel(f)}</span>
-          <input id="cw_${f}" type="${f==='api_key'?'password':'text'}" autocomplete="off" placeholder="${fieldLabel(f)}"></label>`).join("")
-        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`) + segSel;
-      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=1;render();};
-      const next = el("button","btn primary"); next.textContent="Siguiente"; next.onclick=()=>{
-        state.fields = {}; fields.forEach(f=>{ state.fields[f] = $(("#cw_"+f)).value.trim(); });
-        const seg = $("#cw_segment"); state.segment = seg ? seg.value : "";
+      sub.textContent = "Paso 2 de 3 · acceso de solo lectura"; av.textContent = state.meta?state.meta.label[0]:"·";
+      const fields = metaFields();
+      const band = `<div class="cw-band">${CW_SHIELD_SVG}
+        <div><b>Mínimo privilegio.</b> ${esc(metaPerm())}: LucidFence lee tu UEM, nunca escribe en él sin que tú lo decidas.</div></div>`;
+      // Cada UEM pide EXACTAMENTE sus credenciales (esquema del catálogo):
+      // label + input tipado (password/url/text) + "dónde encontrarlo" propio.
+      const fieldsHtml = fields.length ? fields.map(f=>{
+        const secret = f.type==="secret";
+        const help = f.help ? `<div class="cw-help">Dónde encontrarlo: <b>${esc(f.help)}</b></div>` : "";
+        const opt = f.optional ? ` <span class="hint">(opcional)</span>` : "";
+        return `<label class="fld"><span>${esc(f.label||f.key)}${opt}</span>
+          <input id="cw_${esc(f.key)}" class="${secret?"mono":""}" type="${inputType(f)}" autocomplete="off"
+            value="${esc(state.fields[f.key]||"")}" placeholder="${esc(f.placeholder||f.label||f.key)}"></label>${help}`;
+      }).join("") : `<div class="empty"><div class="t">Este conector no requiere credenciales</div>
+        <div class="s">La flota de ejemplo vive en tu máquina.</div></div>`;
+      const chips = `<div class="fld"><span>Qué flota cubre este UEM</span>
+        <div class="cw-chips">${CW_SEGMENTS.map(s=>`
+          <button type="button" class="chip${state.segment===s?" active":""}" data-seg="${s}" aria-pressed="${state.segment===s}">${s}</button>`).join("")}</div></div>`;
+      const note = `<div class="cw-note">${CW_SHIELD_SVG}<span>Tu token se guarda solo en tu máquina, aislado por organización; nunca sale de este servidor local.</span></div>`;
+      body.innerHTML = band + fieldsHtml + chips + note;
+      $$(".cw-chips .chip", body).forEach(ch=>ch.onclick=()=>{
+        // segundo clic sobre el mismo chip = quitar la etiqueta (opcional)
+        state.segment = state.segment===ch.dataset.seg ? "" : ch.dataset.seg;
+        $$(".cw-chips .chip", body).forEach(x=>{
+          const on = state.segment===x.dataset.seg;
+          x.classList.toggle("active", on); x.setAttribute("aria-pressed", on);
+        });
+      });
+      const grab = ()=>fields.forEach(f=>{ const n=$("#cw_"+f.key); if(n) state.fields[f.key]=n.value.trim(); });
+      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{
+        grab(); state.step=1; render();
+      };
+      const next = el("button","btn primary"); next.textContent = fields.length?"Probar conexión":"Siguiente";
+      next.onclick=()=>{
+        grab();
+        const missing = fields.filter(f=>!f.optional && !state.fields[f.key]);
+        if(missing.length){ toast("Faltan credenciales", missing.map(f=>f.label||f.key).join(", "), "bad"); return; }
         state.step=3; render();
       };
       foot.appendChild(back); foot.appendChild(next);
     } else {
-      sub.textContent = "Paso 3 de 3 · guardar"; av.textContent = "✓";
-      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}${state.segment?' <span class="pill">'+esc(state.segment)+'</span>':''}</div>
-        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales aisladas en tu tenant, 0600)":""}.</div></div>`;
-      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=2;render();};
+      sub.textContent = "Paso 3 de 3 · comprobación"; av.textContent = "✓";
+      const fields = metaFields();
+      const segTag = state.segment?` <span class="pill">${esc(state.segment)}</span>`:"";
+      body.innerHTML = `
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">${esc(state.meta?state.meta.label:"")}${segTag}</div>
+        <div class="cw-checks" id="cwChecks"></div>
+        <div class="cw-final">${CW_SHIELD_SVG}<span>Arrancas en observar: nada actúa sin ti.</span></div>`;
+      // Simulación saltó el paso 2: su "Atrás" vuelve a la elección de UEM.
+      const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{
+        state.step = state.name==="simulation" ? 1 : 2; render();
+      };
+      foot.appendChild(back);
+      if(fields.length){
+        const retry = el("button","btn outline"); retry.textContent="Probar de nuevo";
+        retry.onclick = ()=>runTest(retry);
+        foot.appendChild(retry);
+        runTest(retry);
+      } else {
+        $("#cwChecks").innerHTML = cwCheck("ok","✓","Sin credenciales que comprobar","este conector genera una flota de ejemplo local");
+      }
       const save = el("button","btn primary"); save.textContent="Guardar conector";
       save.onclick = async ()=>{
         save.disabled = true; save.textContent = "Guardando…";
         try{
           const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:state.name, segment:state.segment||"", ...state.fields})});
+            body:JSON.stringify({name:state.name, segment:state.segment||"", ...cwCreds()})});
           if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
           else toast("Error", (r.error||"no se pudo guardar"), "bad");
         }catch(e){ toast("Error", e.message, "bad"); }
         finally{ save.disabled=false; save.textContent="Guardar conector"; }
       };
-      foot.appendChild(back); foot.appendChild(window.cwTest()); foot.appendChild(save);
+      foot.appendChild(save);
     }
   }
-  window.cwTest = ()=>{
-    const b = el("button","btn outline"); b.textContent="Probar conexión";
-    b.onclick = async ()=>{
-      b.disabled = true; b.textContent = "Probando…";
-      try{
-        const r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({name:state.name, ...state.fields})});
-        if(r.ok) toast("Conexión OK", (r.verified==="live"?"verificada en vivo":r.note||""), "ok");
-        else toast("Fallo", (r.error||"no se pudo conectar"), "bad");
-      }catch(e){ toast("Error al probar", e.message, "bad"); }
-      finally{ b.disabled=false; b.textContent="Probar conexión"; }
-    };
-    return b;
-  };
+
+  function cwCheck(cls, mark, txt, ev){
+    return `<div class="cw-check ${cls}"><span class="st" aria-hidden="true">${mark}</span>
+      <div>${esc(txt)}${ev?`<div class="cw-ev">${esc(ev)}</div>`:""}</div></div>`;
+  }
+  // El test real de siempre (POST /api/providers/test). La evidencia mostrada
+  // sale SOLO de la respuesta y de la latencia medida aquí: nada inventado.
+  async function runTest(btn){
+    const checks = $("#cwChecks"); if(!checks) return;
+    checks.innerHTML = cwCheck("warn","·","Probando conexión…", state.meta?state.meta.label:"");
+    if(btn){ btn.disabled = true; }
+    const t0 = performance.now();
+    let r = null, err = null;
+    try{
+      r = await api("/api/providers/test",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({name:state.name, ...cwCreds()})});
+    }catch(e){ err = e; }
+    const ms = Math.round(performance.now()-t0);
+    if(btn){ btn.disabled = false; }
+    if(err || !r){
+      checks.innerHTML = cwCheck("bad","✗","No se pudo probar la conexión", (err&&err.message)||"error de red");
+      return;
+    }
+    let html = "";
+    if(r.ok && r.verified==="live"){
+      html += cwCheck("ok","✓","Credencial válida",
+        `verificada en vivo · ${ms} ms${r.http_status?` · HTTP ${r.http_status}`:""}`);
+      html += cwCheck("ok","✓","Permisos suficientes para leer", r.note||"la API aceptó el token de solo lectura");
+    } else if(r.ok){
+      html += cwCheck("ok","✓","Formato de credencial válido", `${ms} ms · ${r.note||"comprobación de formato"}`);
+      html += cwCheck("warn","!","Permisos sin comprobar en vivo","este conector se verifica en el primer ciclo de lectura");
+    } else {
+      html += cwCheck("bad","✗", r.error_type==="auth"?"Credencial rechazada":"La conexión falló", r.error||"");
+      html += cwCheck("warn","!","Revisa el permiso mínimo", metaPerm());
+    }
+    // N dispositivos visibles: solo si la respuesta lo trae de verdad.
+    const nDev = [r.device_count, r.devices_visible, Array.isArray(r.devices)?r.devices.length:null]
+      .find(v=>typeof v==="number" && isFinite(v));
+    if(nDev!=null) html += cwCheck("ok","✓", `${nDev} dispositivos visibles`, "leídos de la respuesta del UEM");
+    checks.innerHTML = html;
+  }
+
   render();
   open();
 }

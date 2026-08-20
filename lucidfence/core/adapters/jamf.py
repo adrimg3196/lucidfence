@@ -19,8 +19,6 @@ Errors are mapped to AuthError / TransportError so the dashboard never
 
 from __future__ import annotations
 
-import json
-import logging
 import os
 import time
 from typing import Any, Optional

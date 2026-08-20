@@ -82,7 +82,7 @@ def main() -> int:
         # ============ 1. Webhooks multi-canal: entrega HTTP REAL + firma ====
         print("\n== P0.3 Webhooks (entrega HTTP real al receptor local) ==")
         from lucidfence.core.notifier import (IncidentFanoutNotifier, NtfyNotifier,
-                                              SignedWebhookNotifier, build_incident_notifiers)
+                                              SignedWebhookNotifier)
         incident = {"id": "inc-rt-1", "title": "Salida de geocerca (runtime QA)",
                     "severity": "high", "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq"}
         signed = SignedWebhookNotifier("http://127.0.0.1:9099/hook", secret="qa-secret")
@@ -136,7 +136,7 @@ def main() -> int:
 
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
-        r1 = eng.run_once()
+        eng.run_once()
         states = eng.store.snapshot()
         dev_id, st = next(iter(states.items()))
         has_field = isinstance(st.location_integrity, dict)
@@ -462,6 +462,14 @@ def main() -> int:
         check("cerca sin dispositivos aparece en fences_vacias",
               s == 200 and "qa-vacia" in vacias, f"http={s}, fences_vacias={vacias}")
         http_req("DELETE", "/api/fences/qa-vacia", cookie=cookie)
+
+        # umbral de lost-sheep configurable por llamada, con rechazo honesto
+        s, covq, _ = http_req("GET", "/api/coverage?stale_after_s=60", cookie=cookie)
+        s2, err, _ = http_req("GET", "/api/coverage?stale_after_s=abc", cookie=cookie)
+        check("stale_after_s por query se aplica (60) y el invalido da 400",
+              s == 200 and ((covq or {}).get("resumen") or {}).get("stale_after_s") == 60
+              and s2 == 400,
+              f"http={s}, stale_after_s={((covq or {}).get('resumen') or {}).get('stale_after_s')}, invalido={s2}")
 
         # dispositivo ciego inyectado en el estado REAL del engine local: sin
         # coordenadas -> sin_senal; sin last_seen -> sin_reportar con motivo.

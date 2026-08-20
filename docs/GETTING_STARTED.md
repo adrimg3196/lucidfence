@@ -1,5 +1,7 @@
 # Empezar con LucidFence
 
+> 📖 ¿Prefieres verlo con capturas? **[Manual de uso](manual/MANUAL_DE_USO.md)** — interactivo en `/static/manual.html` de tu instalación.
+
 Guía de arranque para alguien que **usa** LucidFence por primera vez (no para
 contribuir al código — eso está en [CONTRIBUTING](../CONTRIBUTING.md)).
 LucidFence es geofencing de flota + motor de riesgo, **local-first** y

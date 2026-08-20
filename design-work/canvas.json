@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Resumen — propuesta" },
+    { "file": "Wizard.dc.html", "x": 1500, "y": 0, "w": 560, "h": 780, "title": "Wizard UEM — clicable" }
+  ],
+  "annotations": [
+    { "id": "nota-direccion", "x": 0, "y": -150, "w": 420, "text": "Dirección: mismos tokens que la app (Inter 13px, #5e6ad5, paneles #111214) — esto extiende, no reinventa.\nResumen: saludo + estado global en una frase, KPI con el dato y su matiz, «Requiere tu mirada» en vez de listas frías." },
+    { "id": "nota-wizard", "x": 1500, "y": -150, "w": 440, "text": "Wizard (haz clic: los 3 pasos funcionan): 1 credencial de solo lectura y ya. Cada UEM dice DÓNDE encontrar el token, el sello de mínimo privilegio tranquiliza, y el paso final prueba en vivo y promete observe-por-defecto.\nPrincipio: el wizard vende confianza, no pide datos." }
+  ],
+  "launch": { "view": "canvas" }
+}

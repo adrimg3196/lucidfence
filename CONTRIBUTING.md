@@ -35,6 +35,47 @@ TODO: completar la guía de plugin con el contrato de adapter (qué methodos/est
 
 Los tags y releases se hacen desde el mantenedor. El README externo declara la versión actual.
 
+## Language policy / Política de idioma
+
+**English-first for new technical material.** New code, code comments, commit
+messages and technical reference docs are written in **English**. This keeps the
+codebase legible to any contributor and stops the language from drifting file to
+file.
+
+Two deliberate exceptions:
+
+1. **Existing Spanish stays.** We do not do repo-wide rewrites. Where a file is
+   already in Spanish, keep editing it in Spanish until it is rewritten for
+   another reason. New code converges to English; old code is not churned just
+   to translate it.
+2. **The user manual is bilingual.** The end-user manual
+   (`docs/manual/`, client-facing READMEs) is intentionally bilingual
+   ES/EN, because our users are.
+
+The goal is convergence, not a flag day: touch a file, leave it a little more
+English than you found it (for code) — and leave the user manual bilingual.
+
+---
+
+**English-first para material técnico nuevo.** El código nuevo, los comentarios,
+los mensajes de commit y los docs de referencia técnica se escriben en
+**inglés**. Así el código queda legible para cualquiera y el idioma deja de
+variar de fichero en fichero.
+
+Dos excepciones deliberadas:
+
+1. **El español existente se mantiene.** No reescribimos el repo entero. Donde
+   un fichero ya está en español, se sigue editando en español hasta que se
+   reescriba por otro motivo. El código nuevo converge a inglés; el viejo no se
+   remueve solo para traducirlo.
+2. **El manual de usuario es bilingüe.** El manual para el usuario final
+   (`docs/manual/`, READMEs de cliente) es bilingüe ES/EN a propósito, porque
+   nuestros usuarios lo son.
+
+El objetivo es convergencia, no un corte seco: al tocar un fichero, déjalo algo
+más en inglés de como estaba (para código) — y deja el manual de usuario
+bilingüe.
+
 ## Código de conducta
 
 TODO: agregar el código de conducta del proyecto (Contributor Covenant o equivalente) cuando el proyecto esté listo para recibir contribuciones externas.

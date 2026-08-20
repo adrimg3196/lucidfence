@@ -1,5 +1,12 @@
 # LucidFence 1.1 — Spec: configuración local, AI opcional y MCP
 
+> **ARCHIVADO — snapshot histórico.** La spec técnica viva y canónica es
+> [`SPEC.md`](SPEC.md) (as-built), bajo la [Constitución](CONSTITUTION.md). Este
+> fichero se conserva como registro de la decisión de diseño 1.1 (BYO-AI +
+> gateway OpenAI-compatible + MCP local): documenta el onboarding, los endpoints
+> y los criterios de aceptación de aquella entrega, no el estado actual. La
+> referencia de uso viva de AI/MCP es [`AI_AND_MCP.md`](AI_AND_MCP.md).
+
 Fecha: 2026-07-15
 Estado: LOCKED para implementación TDD
 Referencia de proceso: grill → spec → tareas pequeñas → revisión independiente → QA → ship.

@@ -56,7 +56,7 @@ from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-from typing import Optional
+from typing import Any, Optional
 
 # make sure the 'lucidfence' package and its siblings are importable
 ROOT = Path(__file__).resolve().parent
@@ -66,6 +66,7 @@ from lucidfence.core import config_loader
 from lucidfence.core import cloud_publisher
 from lucidfence.saas.tenant import TenantStore, FREE_PLAN
 from lucidfence.saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
+from lucidfence.saas import routing
 from lucidfence.core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
 from lucidfence.core.engine import Engine
@@ -312,8 +313,8 @@ from lucidfence.saas.providers import save_providers as _save_providers
 # Todas las claves que pueden portar un secreto de conexión. Ninguna sale nunca
 # en un GET (ni en el audit log): las credenciales viven en integration.json
 # (0600) y jamás se re-emiten al cliente.
-_PROVIDER_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token",
-                         "password", "token")
+_PROVIDER_SECRET_KEYS = ("secret", "api_key", "api_token", "client_secret",
+                         "refresh_token", "password", "token")
 
 
 def _provider_health(eng: "Engine | None") -> dict:
@@ -331,6 +332,7 @@ def _masked_provider(p: dict) -> dict:
     # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
     out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
     out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("api_token") or p.get("password")
                              or p.get("client_secret") or p.get("refresh_token")
                              or p.get("endpoint") or p.get("tenant_id"))
     return out
@@ -961,7 +963,7 @@ def _send_json(handler, obj, code=200):
     # CSP: only same-origin resources; blocks injected third-party scripts (XSS)
     handler.send_header(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     )
     for c in getattr(handler, "_set_cookies", []) or []:
@@ -997,10 +999,10 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("X-Request-ID", _request_id(handler))
-    csp = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    csp = ("default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self' 'unsafe-inline'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
            "frame-ancestors 'none'") if path.name in ("cloud.html", "index.html") else (
-           "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+           "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
     handler.send_header("Content-Security-Policy", csp)
     handler.end_headers()
@@ -1042,7 +1044,7 @@ def _send_html(handler, html_text: str):
     handler.send_header("Cache-Control", "no-store")
     handler.send_header(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
     handler.send_header("X-Request-ID", _request_id(handler))
     handler.end_headers()
@@ -1177,6 +1179,96 @@ def _product_bundle(eng: Engine) -> dict:
     st = eng.status()
     st["stats_history"] = eng.store.stats_history(120)
     return build_product(st, eng)
+
+
+# ---- rutas declarativas (SD-1 paso 1) -----------------------------------
+# Rutas GET de solo lectura con el ritual estándar (sesión + org + engine +
+# capability + JSON) viven en lucidfence/saas/routing.py: el handler declara
+# QUÉ devuelve y QUÉ capability exige; el ritual completo queda detrás del
+# seam. Las rutas con gating especial (auth, escrituras, doble llave) siguen
+# en la cadena `if` de _route() hasta futuros incrementos.
+# El registro es de ESTE módulo (no un global de routing): re-ejecutar
+# saas_server.py (tests que lo cargan por path) parte de una tabla limpia.
+_api_routes = routing.RouteRegistry()
+api_route = _api_routes.route
+
+@api_route("GET", "/api/coverage", cap="device:read")
+def _api_coverage(ctx: routing.Ctx):
+    """Informe de puntos ciegos (coverage gap): el negativo de la cobertura
+    del tenant — solo lectura sobre estado ya existente, estrictamente
+    local (ver core/coverage.py). Mismo gating que /api/cve."""
+    from lucidfence.core.coverage import coverage_report
+    # ?stale_after_s=N ajusta el umbral de "lost sheep" por llamada
+    # (acotado 60s..30 días; fuera de rango o no numérico -> 400, no
+    # silencio: un umbral ignorado daría un informe que miente).
+    stale_after_s = 86400
+    raw = (ctx.qs.get("stale_after_s") or [None])[0]
+    if raw is not None:
+        try:
+            stale_after_s = int(raw)
+        except ValueError:
+            return {"error": "stale_after_s debe ser entero (segundos)"}, 400
+        if not (60 <= stale_after_s <= 2592000):
+            return {"error": "stale_after_s fuera de rango (60..2592000)"}, 400
+    devices = [s.to_dict() for s in ctx.eng.store.snapshot().values()]
+    return coverage_report(devices, ctx.eng.fences, stale_after_s=stale_after_s)
+
+
+@api_route("GET", "/api/risk", cap="device:read")
+def _api_risk(ctx: routing.Ctx):
+    product = _product_bundle(ctx.eng)
+    return {"risk": product.get("risk", []),
+            "summary": product.get("summary", {})}
+
+
+@api_route("GET", "/api/cve", cap="device:read")
+def _api_cve(ctx: routing.Ctx):
+    devices = [
+        {"device_id": s.device_id, "name": s.name, "apps": s.apps}
+        for s in ctx.eng.store.snapshot().values()
+    ]
+    summary = ctx.eng._cve_summary()
+    if not (summary.get("vulnerable_apps") or 0):
+        # No real signal (local dev / offline / empty fleet): broadcast
+        # demo fallback aligned with cloud publisher behavior.
+        summary = dict(summary)
+        summary.update(cloud_publisher._demo_cve_summary(summary, total=len(devices)))
+    else:
+        summary = dict(summary)
+        try:
+            from lucidfence.core import cve as _cve
+            nvd_keys = [k for k, v in _cve._FEED.items() if v]
+            summary["demo"] = False
+            summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
+        except Exception:
+            summary["source"] = "local-db"
+    return {"cve_summary": summary, "devices": devices}
+
+
+@api_route("GET", "/api/pois", cap="device:read")
+def _api_pois(ctx: routing.Ctx):
+    lat = ctx.qs.get("lat", [None])[0]
+    lng = ctx.qs.get("lng", [None])[0]
+    if lat is not None and lng is not None:
+        try:
+            lat_f, lng_f = float(lat), float(lng)
+            radius_m = float(ctx.qs.get("radius_m", ["1000"])[0])
+            limit = min(int(ctx.qs.get("limit", ["5"])[0]), 100)
+        except (TypeError, ValueError):
+            return {"error": "lat/lng/radius_m/limit inválidos"}, 400
+        nearby = _poi_service.search_nearby(lat_f, lng_f, radius_m, limit=limit)
+        return [dict(p.to_dict(), distance_m=round(d, 1)) for p, d in nearby]
+    return [p.to_dict() for p in _poi_service.all()]
+
+
+@api_route("GET", "/api/incidents/analytics", cap="incident:read")
+def _api_incidents_analytics(ctx: routing.Ctx):
+    return {"analytics": ctx.eng.incidents.analytics()}
+
+
+@api_route("GET", "/api/fences", cap="fence:read")
+def _api_fences_list(ctx: routing.Ctx):
+    return {"fences": ctx.eng.status().get("fences", [])}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1499,6 +1591,14 @@ class Handler(BaseHTTPRequestHandler):
         # engine is per-org; build/lookup it once for the whole request
         eng = engine_for(org)
 
+        # Patrón nuevo (SD-1 paso 1): las rutas GET de solo lectura con el
+        # ritual estándar viven en el registro declarativo de
+        # lucidfence/saas/routing.py, no en esta cadena `if`.
+        ctx = routing.Ctx(http=self, user=user, org=org, eng=eng, qs=qs)
+        if _api_routes.dispatch(method, route, ctx,
+                                send=lambda obj, code=200: _send_json(self, obj, code)):
+            return
+
         if route == "/api/evidence/export" and method == "GET":
             # Informe de evidencia con cadena de hashes verificable offline
             # (ver core/evidence_export.py). Mismo círculo de visibilidad que
@@ -1525,15 +1625,7 @@ class Handler(BaseHTTPRequestHandler):
             })
             return _send_json(self, report)
 
-        # Informe de puntos ciegos (coverage gap): el negativo de la cobertura
-        # del tenant — solo lectura sobre estado ya existente, estrictamente
-        # local (ver core/coverage.py). Mismo gating que /api/cve.
-        if route == "/api/coverage" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "device:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            from lucidfence.core.coverage import coverage_report
-            devices = [s.to_dict() for s in eng.store.snapshot().values()]
-            return _send_json(self, coverage_report(devices, eng.fences))
+        # GET /api/coverage migrado al registro declarativo (_api_routes, patrón SD-1).
 
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is
@@ -1589,10 +1681,7 @@ class Handler(BaseHTTPRequestHandler):
             append_audit(_tenants.data_dir(org), {"event": f"company.task.{action}d", "actor": user["id"], "task_id": task_id, "risk": task.get("risk")})
             return _send_json(self, task)
 
-        if route == "/api/fences" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "fence:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            return _send_json(self, {"fences": eng.status().get("fences", [])})
+        # GET /api/fences migrado al registro declarativo (_api_routes, patrón SD-1).
         if route == "/api/fences" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "fence:write"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -1706,21 +1795,7 @@ class Handler(BaseHTTPRequestHandler):
                 states = [s for s in states if s.fence_state == st]
             return _send_json(self, [s.to_dict() for s in states])
 
-        if route == "/api/pois" and method == "GET":
-            lat = qs.get("lat", [None])[0]
-            lng = qs.get("lng", [None])[0]
-            if lat is not None and lng is not None:
-                try:
-                    lat_f, lng_f = float(lat), float(lng)
-                    radius_m = float(qs.get("radius_m", ["1000"])[0])
-                    limit = min(int(qs.get("limit", ["5"])[0]), 100)
-                except (TypeError, ValueError):
-                    return _send_json(self, {"error": "lat/lng/radius_m/limit inválidos"}, 400)
-                nearby = _poi_service.search_nearby(lat_f, lng_f, radius_m, limit=limit)
-                return _send_json(self, [dict(p.to_dict(), distance_m=round(d, 1))
-                                         for p, d in nearby])
-            return _send_json(self, [p.to_dict() for p in _poi_service.all()])
-
+        # GET /api/pois (exacto) migrado al registro declarativo (_api_routes, patrón SD-1).
         if route.startswith("/api/pois/") and method == "GET":
             poi = _poi_service.get_poi(route[len("/api/pois/"):])
             if poi is None:
@@ -1829,10 +1904,11 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/product" and method == "GET":
             return _send_json(self, _product_bundle(eng))
 
-        # product intelligence
-        if route in ("/api/risk", "/api/incidents", "/api/incidents/export", "/api/incidents/analytics",
+        # product intelligence (/api/risk, /api/cve y /api/incidents/analytics
+        # migrados al registro declarativo _api_routes, patrón SD-1)
+        if route in ("/api/incidents", "/api/incidents/export",
                      "/api/policies", "/api/analytics", "/api/activation",
-                     "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
+                     "/api/compliance", "/api/report", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
 
         # --- Playbooks SOAR del tenant (REQ §5): editor desde UI, sin código) ---
@@ -2051,7 +2127,8 @@ class Handler(BaseHTTPRequestHandler):
                     api_key=(body.get("api_key") or "").strip(),
                     **{k: v for k, v in creds.items()
                        if k in ("tenant_id", "client_id", "client_secret",
-                                "refresh_token", "base_url", "username", "password")},
+                                "refresh_token", "base_url", "username", "password",
+                                "api_token", "tenant_code", "customer_id")},
                 )
             except Exception as exc:
                 return _send_json(self, {"ok": False, "error_type": "init",
@@ -2107,7 +2184,8 @@ class Handler(BaseHTTPRequestHandler):
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
-                          "username", "password", "base_url"):
+                          "username", "password", "base_url",
+                          "api_token", "tenant_code", "customer_id"):
                 if body.get(extra):
                     provider[extra] = body[extra].strip()
             providers.append(provider)
@@ -2674,9 +2752,6 @@ class Handler(BaseHTTPRequestHandler):
     # ---- product intelligence ------------------------------------------
     def _product(self, route: str, eng: Engine, user: dict, org: str, method: str, qs: dict):
         product = _product_bundle(eng)
-        if route == "/api/risk":
-            return _send_json(self, {"risk": product.get("risk", []),
-                                     "summary": product.get("summary", {})})
         if route == "/api/incidents":
             return _send_json(self, {"incidents": product.get("incidents", []),
                                      "summary": product.get("summary", {})})
@@ -2699,33 +2774,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 return
             return _send_json(self, {"incidents": rows, "summary": product.get("summary", {})})
-        if route == "/api/incidents/analytics" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "incident:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            return _send_json(self, {"analytics": eng.incidents.analytics()})
-        if route == "/api/cve" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "device:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            devices = [
-                {"device_id": s.device_id, "name": s.name, "apps": s.apps}
-                for s in eng.store.snapshot().values()
-            ]
-            summary = eng._cve_summary()
-            if not (summary.get("vulnerable_apps") or 0):
-                # No real signal (local dev / offline / empty fleet): broadcast
-                # demo fallback aligned with cloud publisher behavior.
-                summary = dict(summary)
-                summary.update(cloud_publisher._demo_cve_summary(summary, total=len(devices)))
-            else:
-                summary = dict(summary)
-                try:
-                    from lucidfence.core import cve as _cve
-                    nvd_keys = [k for k, v in _cve._FEED.items() if v]
-                    summary["demo"] = False
-                    summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
-                except Exception:
-                    summary["source"] = "local-db"
-            return _send_json(self, {"cve_summary": summary, "devices": devices})
         if route == "/api/soar" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
