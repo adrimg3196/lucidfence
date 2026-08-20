@@ -28,6 +28,7 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/devices/<id>
   GET  /api/fences           -> fence IDs only (geometry comes from /api/status.st.fences)
   GET  /api/risk
+  GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -80,6 +81,7 @@ from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
 from lucidfence.core.compliance_controls import map_controls
 from lucidfence.core.cluster import ClusterLease
 from lucidfence.core.autonomous_company import CompanyControlPlane
+from lucidfence.core.poi import POIService
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
@@ -100,6 +102,16 @@ MAX_REQUEST_BODY = 1024 * 1024
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
 _tenants = TenantStore(DATA_ROOT)
 _auth = AuthStore(DATA_ROOT)
+
+# POIs: seed público read-only (data/pois.json), opcional. Fail-soft si falta
+# o está corrupto — el resto del servidor no depende de él.
+_poi_service = POIService()
+try:
+    _pois_seed = TEMPLATE_DATA / "pois.json"
+    if _pois_seed.exists():
+        _poi_service.load_from_json(_pois_seed)
+except Exception:
+    pass
 def _load_oidc_providers() -> dict[str, OIDCProvider]:
     """Load deployment-only OIDC configuration; never values from requests."""
     providers: dict[str, OIDCProvider] = {}
@@ -187,6 +199,16 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
         mode = "simulation"
     cfg["mode"] = mode
     cfg["dry_run"] = bool(runtime.get("dry_run", cfg.get("dry_run", True)))
+    # Fase de enforcement (observe|enforce): editable por un admin desde el
+    # dashboard y persistida por tenant aquí. Sobreescribe `mode` dentro del
+    # bloque enforcement, que el Engine usa para fijar dry_run; live_actions,
+    # allow_wipe y wipe_allowlist siguen viniendo de config.json (la doble
+    # llave del wipe nunca se amplía desde la UI).
+    enf_mode = runtime.get("enforcement_mode")
+    if enf_mode in ("observe", "enforce"):
+        base_enf = dict(cfg.get("enforcement") or {})
+        base_enf["mode"] = enf_mode
+        cfg["enforcement"] = base_enf
     cfg["_applivery_api_key"] = key
     cfg.setdefault("applivery", {})["org_id"] = workspace_id
     cfg["incident_webhook_url"] = (runtime.get("incident_webhook_url") or "").strip()
@@ -271,7 +293,12 @@ def _tenant_runtime(tdir: Path) -> dict:
 # lives in integration.json (tenant-isolated, chmod 0600); masked on GET.
 from lucidfence.saas.providers import list_providers as _list_providers
 from lucidfence.saas.providers import save_providers as _save_providers
-from lucidfence.saas.providers import mask_provider as _masked_provider
+
+# Todas las claves que pueden portar un secreto de conexión. Ninguna sale nunca
+# en un GET (ni en el audit log): las credenciales viven en integration.json
+# (0600) y jamás se re-emiten al cliente.
+_PROVIDER_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token",
+                         "password", "token")
 
 
 def _provider_health(eng: "Engine | None") -> dict:
@@ -284,8 +311,13 @@ def _provider_health(eng: "Engine | None") -> dict:
 
 
 def _masked_provider(p: dict) -> dict:
-    out = {k: v for k, v in p.items() if k != "secret"}
-    out["configured"] = bool(p.get("secret") or p.get("endpoint"))
+    # Elimina TODA clave que porte un secreto (no solo "secret": Intune/Jamf/
+    # ChromeOS guardan client_secret/refresh_token). `segment` (la etiqueta de
+    # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
+    out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
+    out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("client_secret") or p.get("refresh_token")
+                             or p.get("endpoint") or p.get("tenant_id"))
     return out
 
 
@@ -759,9 +791,25 @@ def _safe_webhook_url(url: str):
     if not host:
         return ""
     import ipaddress
+    import socket
+    # Canonicaliza encodings numéricos de IP (decimal/hex/octal/dotless, p.ej.
+    # 2130706433 / 0x7f000001 / 017700000001 / 127.1 == 127.0.0.1; 2852039166 ==
+    # 169.254.169.254) que glibc getaddrinfo acepta pero ipaddress rechaza. Sin
+    # esto, un destino interno escrito en forma no canónica se colaba por la rama
+    # `except ValueError` como "hostname externo". AI_NUMERICHOST NO hace lookup
+    # DNS: un hostname real lanza gaierror y se deja intacto (fleet.acme.test no
+    # se rompe). Hallazgo del Centinela 2026-08-18 (SSRF bypass).
+    try:
+        host = socket.getaddrinfo(host, None, flags=socket.AI_NUMERICHOST)[0][4][0].lower()
+    except socket.gaierror:
+        pass
     try:
         ip = ipaddress.ip_address(host)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return ""
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped and (mapped.is_private or mapped.is_loopback
+                       or mapped.is_link_local or mapped.is_reserved):
             return ""
     except ValueError:
         # hostname (not IP): block obvious internal suffixes
@@ -1331,6 +1379,42 @@ class Handler(BaseHTTPRequestHandler):
         # engine is per-org; build/lookup it once for the whole request
         eng = engine_for(org)
 
+        if route == "/api/evidence/export" and method == "GET":
+            # Informe de evidencia con cadena de hashes verificable offline
+            # (ver core/evidence_export.py). Mismo círculo de visibilidad que
+            # /api/audit: el rol auditor existe precisamente para esto.
+            if role not in ("owner", "admin", "viewer", "auditor"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            from lucidfence.core.evidence_export import build_evidence_report
+            devices = [s.to_dict() for s in eng.store.snapshot().values()]
+            apps_total = sum(len(d.get("apps") or []) for d in devices)
+            report = build_evidence_report(
+                org=org,
+                devices=devices,
+                events=eng.store.recent_events(limit=2000),
+                actions=eng.store.recent_actions(limit=2000),
+                cve_summary={"apps_total": apps_total},
+                audit_integrity=verify_audit(_tenants.data_dir(org)),
+                since=qs.get("from", [None])[0],
+                until=qs.get("to", [None])[0],
+            )
+            append_audit(_tenants.data_dir(org), {
+                "event": "evidence.exported", "actor": user.get("id"),
+                "period": report["period"], "records": len(report["records"]),
+                "chain_head": report["chain_head"],
+            })
+            return _send_json(self, report)
+
+        # Informe de puntos ciegos (coverage gap): el negativo de la cobertura
+        # del tenant — solo lectura sobre estado ya existente, estrictamente
+        # local (ver core/coverage.py). Mismo gating que /api/cve.
+        if route == "/api/coverage" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "device:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            from lucidfence.core.coverage import coverage_report
+            devices = [s.to_dict() for s in eng.store.snapshot().values()]
+            return _send_json(self, coverage_report(devices, eng.fences))
+
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is
         # handed back to the existing audited UEM action flow.
@@ -1438,6 +1522,33 @@ class Handler(BaseHTTPRequestHandler):
                 "actions": WF.action_options(),
                 "active": eng.active_workflows(),
             })
+        if route == "/api/policies/replay" and method == "POST":
+            # Simulador what-if: evalúa una policy CANDIDATA contra el trail
+            # histórico del tenant. Solo lectura — jamás ejecuta acciones —
+            # así que basta la capability de lectura de workflows.
+            if not AuthStore.can(user["org_roles"].get(org), "workflow:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            candidate = body.get("policy") if isinstance(body, dict) else None
+            if not isinstance(candidate, dict) or not candidate.get("when"):
+                return _send_json(self, {"error": "policy con 'when' es obligatoria"}, 400)
+            from lucidfence.core.policy_replay import load_trail_points, replay_policy
+            try:
+                limit = min(int(body.get("limit", 5000)), 20000)
+            except (TypeError, ValueError):
+                limit = 5000
+            points = load_trail_points(eng.store.trails_path, limit=limit)
+            states = {d_id: s.to_dict() for d_id, s in eng.store.snapshot().items()}
+            result = replay_policy(
+                candidate, points,
+                fences=eng.fences if body.get("recompute_fences") else None,
+                device_states=states,
+                risk_engine=eng.risk,
+                risk_ctx={"shift_zones": eng._ctx_shift_zones(),
+                          "zone_risk": eng._ctx_zone_risk()},
+            )
+            return _send_json(self, result)
+
         if route == "/api/workflows/apply" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "workflow:write"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -1474,6 +1585,27 @@ class Handler(BaseHTTPRequestHandler):
             if st:
                 states = [s for s in states if s.fence_state == st]
             return _send_json(self, [s.to_dict() for s in states])
+
+        if route == "/api/pois" and method == "GET":
+            lat = qs.get("lat", [None])[0]
+            lng = qs.get("lng", [None])[0]
+            if lat is not None and lng is not None:
+                try:
+                    lat_f, lng_f = float(lat), float(lng)
+                    radius_m = float(qs.get("radius_m", ["1000"])[0])
+                    limit = min(int(qs.get("limit", ["5"])[0]), 100)
+                except (TypeError, ValueError):
+                    return _send_json(self, {"error": "lat/lng/radius_m/limit inválidos"}, 400)
+                nearby = _poi_service.search_nearby(lat_f, lng_f, radius_m, limit=limit)
+                return _send_json(self, [dict(p.to_dict(), distance_m=round(d, 1))
+                                         for p, d in nearby])
+            return _send_json(self, [p.to_dict() for p in _poi_service.all()])
+
+        if route.startswith("/api/pois/") and method == "GET":
+            poi = _poi_service.get_poi(route[len("/api/pois/"):])
+            if poi is None:
+                return _send_json(self, {"error": "POI no encontrado"}, 404)
+            return _send_json(self, poi.to_dict())
 
         if route == "/api/org" and method == "GET":
             o = _tenants.get(org)
@@ -1584,6 +1716,49 @@ class Handler(BaseHTTPRequestHandler):
                      "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
 
+        # --- Playbooks SOAR del tenant (REQ §5): editor desde UI, sin código) ---
+        if route in ("/api/soar/playbooks", "/api/soar/playbook") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            store = getattr(eng, "soar_store", None)
+            if store is None:
+                return _send_json(self, {"error": "engine sin playbook store"}, 500)
+            try:
+                pb = store.upsert(body)
+            except ValueError as exc:
+                return _send_json(self, {"ok": False, "error": f"validacion: {exc}"}, 400)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.created", "actor": user.get("id"), "playbook": pb.id})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook": {"id": pb.id, "name": pb.name, "enabled": pb.enabled, "severity_min": pb.severity_min, "condition": pb.condition, "actions": pb.actions}})
+        if route.startswith("/api/soar/playbook/") and route.endswith("/enable") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):-len("/enable")].strip("/")
+            body = _read_body(self)
+            enabled = bool((body or {}).get("enabled", True))
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.set_enabled(pid, enabled):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.enabled", "actor": user.get("id"), "playbook": pid, "enabled": enabled})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid, "enabled": enabled})
+        if route.startswith("/api/soar/playbook/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):].split("/")[0].strip("/")
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.delete(pid):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.deleted", "actor": user.get("id"), "playbook": pid})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid})
+
+        # users
+
         # users
         if route == "/api/users" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "user:invite"):
@@ -1618,6 +1793,55 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, KeyError) as e:
                 return _send_json(self, {"error": str(e)}, 400)
 
+        # members / RBAC surface (strictly tenant-local: only THIS org)
+        if route == "/api/members" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "user:invite"):
+                return _send_json(self, {"error": "sin permiso", "capability": "user:invite"}, 403)
+            members = []
+            for u in _auth.org_members(org):
+                r = u.org_roles.get(org)
+                members.append({
+                    "id": u.id, "email": u.email, "name": u.name,
+                    "role": r, "role_label": ROLE_LABELS.get(r, r),
+                    "active": u.active, "created_at": u.created_at,
+                    "is_self": u.id == user.get("id"),
+                })
+            members.sort(key=lambda m: (m["role"] != "owner", m["email"]))
+            roles = [{"id": rid, "label": ROLE_LABELS.get(rid, rid),
+                      "caps": sorted(ROLE_CAPS[rid])} for rid in ROLE_CAPS]
+            return _send_json(self, {"members": members, "roles": roles,
+                                     "self_id": user.get("id"),
+                                     "owners": _auth.count_org_owners(org)})
+        if route == "/api/members/role" and method == "POST":
+            # Cambiar el rol de un miembro es sensible: exige la capability de
+            # gestión de roles (user:role, solo owner). Un admin con user:invite
+            # puede crear usuarios pero no reasignar roles existentes.
+            if not AuthStore.can(user["org_roles"].get(org), "user:role") \
+                    or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo un propietario con sesión puede gestionar roles",
+                                         "capability": "user:role"}, 403)
+            body = _read_body(self)
+            new_role = (body.get("role") or "").strip()
+            if new_role not in ROLE_CAPS:
+                return _send_json(self, {"error": "rol inválido"}, 400)
+            target_id = (body.get("user_id") or "").strip()
+            target = _auth.get(target_id) if target_id else None
+            if target is None:
+                email = (body.get("email") or "").strip()
+                target = _auth.get_by_email(email) if email else None
+            if target is None or org not in target.org_roles:
+                return _send_json(self, {"error": "el usuario no pertenece a la organización"}, 404)
+            try:
+                updated = _auth.set_org_role(target.id, org, new_role)
+            except ValueError as e:
+                return _send_json(self, {"error": str(e)}, 400)
+            append_audit(_tenants.data_dir(org), {
+                "event": "member.role.changed", "actor": user.get("id"),
+                "target": updated.id, "target_email": updated.email, "role": new_role})
+            return _send_json(self, {"ok": True, "member": {
+                "id": updated.id, "email": updated.email, "name": updated.name,
+                "role": new_role, "role_label": ROLE_LABELS.get(new_role, new_role)}})
+
 
         # settings / credentials (strictly tenant-local)
         if route == "/api/settings/status" and method == "GET":
@@ -1625,12 +1849,38 @@ class Handler(BaseHTTPRequestHandler):
             st = core_secrets.status(tdir)
             st["mode"] = eng.config.get("mode")
             st["dry_run"] = eng.config.get("dry_run")
+            st["enforcement"] = eng.enforcement_status()
             st["masked_key"] = core_secrets.mask_key(tdir)
             runtime = _tenant_runtime(tdir)
             st["soar_webhook_hmac_configured"] = bool(runtime.get("soar_webhook_secret")
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
             return _send_json(self, st)
+        if route == "/api/settings/enforcement" and method == "POST":
+            # Editar la fase de enforcement (observe|enforce) desde el dashboard.
+            # observe = todo dry-run; enforce = las live_actions salen en vivo.
+            # Cambiar el modo no ejecuta ninguna acción por sí mismo.
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            new_mode = (_read_body(self).get("mode") or "").strip().lower()
+            if new_mode not in ("observe", "enforce"):
+                return _send_json(self, {"error": "modo inválido (observe|enforce)"}, 400)
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            runtime["enforcement_mode"] = new_mode
+            tmp = tdir / "integration.json.tmp"
+            tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+            os.chmod(tmp, 0o600)
+            tmp.replace(tdir / "integration.json")
+            os.chmod(tdir / "integration.json", 0o600)
+            try:
+                eng = reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "mode": new_mode,
+                                         "warning": f"guardado pero el engine no se recargó: {exc}"})
+            append_audit(tdir, {"event": "enforcement.mode.changed",
+                                "actor": user.get("id"), "mode": new_mode})
+            return _send_json(self, {"ok": True, "enforcement": eng.enforcement_status()})
         # ---- Multi-UEM provider registry (tenant-local, isolated) ----------
         if route == "/api/providers/catalog" and method == "GET":
             from lucidfence.saas.providers import catalog
@@ -1643,6 +1893,15 @@ class Handler(BaseHTTPRequestHandler):
             from lucidfence.core.adapters import ADAPTER_REGISTRY
             if name not in ADAPTER_REGISTRY:
                 return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF: un endpoint/base_url de proveedor debe ser un host
+            # externo https, jamás loopback/privado/link-local (misma política
+            # que el webhook de incidentes). Vacío = el adapter usa su default
+            # empaquetado. Sin esto, el asistente de conector permitía escanear
+            # infra interna y reflejar la respuesta del host interno al llamante.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
             cls = ADAPTER_REGISTRY[name]
             # Build the adapter with every credential field the wizard sent.
             # Map "endpoint" -> endpoint_template; pass OAuth fields as-is.
@@ -1671,7 +1930,7 @@ class Handler(BaseHTTPRequestHandler):
             result = adapter.test_connection()
             result["provider"] = name
             return _send_json(self, result)
-        if route == "/api/providers" and method == "POST":
+        if route == "/api/providers" and method == "GET":
             tdir = _tenants.data_dir(org)
             return _send_json(self, {
                 "providers": [_masked_provider(p) for p in _list_providers(tdir)],
@@ -1685,10 +1944,20 @@ class Handler(BaseHTTPRequestHandler):
             from lucidfence.core.adapters import ADAPTER_REGISTRY
             if name not in ADAPTER_REGISTRY:
                 return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF (igual que /api/providers/test): un endpoint/base_url
+            # persistido se usa en cada ciclo del engine; debe ser https externo.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
             tdir = _tenants.data_dir(org)
             providers = _list_providers(tdir)
             providers = [p for p in providers
                          if not (p.get("name") == name and p.get("org_id") == body.get("org_id", ""))]
+            # segment: etiqueta de flota (móviles/portátiles/…). No es secreto
+            # y es lo que hace útil el multi-UEM: qué UEM cubre qué clase de
+            # dispositivo (p.ej. Applivery=móviles + Fleet=portátiles).
+            segment = (body.get("segment") or "").strip()[:40]
             # ponytail: secret stored in tenant-isolated integration.json (0600),
             # same trust boundary as core_secrets' .env; masked on GET.
             provider = {
@@ -1697,6 +1966,8 @@ class Handler(BaseHTTPRequestHandler):
                 "endpoint": (body.get("endpoint") or "").strip(),
                 "secret": (body.get("api_key") or "").strip(),
             }
+            if segment:
+                provider["segment"] = segment
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
@@ -1705,18 +1976,27 @@ class Handler(BaseHTTPRequestHandler):
                     provider[extra] = body[extra].strip()
             providers.append(provider)
             _save_providers(tdir, providers)
+            # Rastro auditable: quién conectó qué UEM y para qué segmento. Nunca
+            # el secreto (solo el nombre del proveedor y la etiqueta de flota).
+            append_audit(tdir, {"event": "provider.registered",
+                                "actor": user.get("id"), "provider": name,
+                                "segment": segment})
             try:
                 reload_engine(org)
             except Exception as exc:
                 return _send_json(self, {"ok": True, "registered": name,
                                         "warning": f"engine reload falló: {exc}"}, 200)
-            return _send_json(self, {"ok": True, "registered": name})
+            return _send_json(self, {"ok": True, "registered": name, "segment": segment})
         if route.startswith("/api/providers/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
             name = route[len("/api/providers/"):].split("/")[0]
             tdir = _tenants.data_dir(org)
             providers = [p for p in _list_providers(tdir)
                          if not (p.get("name") == name)]
             _save_providers(tdir, providers)
+            append_audit(tdir, {"event": "provider.removed",
+                                "actor": user.get("id"), "provider": name})
             try:
                 reload_engine(org)
             except Exception:
@@ -2308,12 +2588,16 @@ class Handler(BaseHTTPRequestHandler):
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             from lucidfence.core.soar import DEFAULT_PLAYBOOKS, evaluate_soar
+            from lucidfence.core.adapters.capabilities import capability_for
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
             devs = list(eng.store.snapshot().values())
+            # Evalúa builtin + tenant (REQ §5) para el "matched" en vivo.
+            playbooks = eng.soar_store.all_playbooks() if getattr(eng, "soar_store", None) else DEFAULT_PLAYBOOKS
             soar_ctx = {"cycle": getattr(eng, "cycle_count", 0), "on_error": None}
             recent = []
             for d in devs:
                 try:
-                    execs = evaluate_soar(d.to_dict(), DEFAULT_PLAYBOOKS, soar_ctx)
+                    execs = evaluate_soar(d.to_dict(), playbooks, soar_ctx)
                 except Exception:
                     execs = []
                 for ex in execs:
@@ -2325,12 +2609,38 @@ class Handler(BaseHTTPRequestHandler):
                         "severity": ex.get("severity"),
                         "actions": ex.get("actions"),
                     })
+            # Matriz de capacidades por UEM (diseño §3.1 / REQ §3): la UI ofrece
+            # solo lo que el UEM soporta y marca las acciones en dry-run pendientes
+            # de validar (decisión §10.2).
+            capability_matrix = {}
+            for name in ADAPTER_REGISTRY:
+                cap = capability_for(name)
+                if cap is not None:
+                    capability_matrix[name] = {
+                        "inventory": cap.inventory,
+                        "location": cap.location,
+                        "native_geofences": cap.native_geofences,
+                        "actions": sorted(cap.actions),
+                        "dry_run_actions": sorted(cap.dry_run_actions),
+                    }
+            tenant_pbs = []
+            errors = []
+            if getattr(eng, "soar_store", None) is not None:
+                tenant_pbs = [{
+                    "id": pb.id, "name": pb.name, "description": pb.description,
+                    "enabled": pb.enabled, "severity_min": pb.severity_min,
+                    "condition": pb.condition, "actions": pb.actions,
+                } for pb in eng.soar_store.load()]
+                errors = eng.soar_store.errors()
             return _send_json(self, {
                 "playbooks": [{
                     "id": pb.id, "name": pb.name, "description": pb.description,
                     "enabled": pb.enabled, "severity_min": pb.severity_min,
-                    "actions": pb.actions,
+                    "actions": pb.actions, "builtin": True,
                 } for pb in DEFAULT_PLAYBOOKS],
+                "tenant_playbooks": tenant_pbs,
+                "tenant_playbook_errors": errors,
+                "capability_matrix": capability_matrix,
                 "matched": recent,
                 "devices_scanned": len(devs),
             })

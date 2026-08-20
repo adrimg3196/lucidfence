@@ -223,6 +223,16 @@
         }
       }
     },
+    "/coverage": {
+      "get": {
+        "summary": "Coverage gap (blind spots) report",
+        "responses": {
+          "200": {
+            "description": "Coverage report"
+          }
+        }
+      }
+    },
     "/analytics": {
       "get": {
         "summary": "Descriptive and predictive analytics",

@@ -1,14 +1,29 @@
-"""Incident lifecycle webhook notifier (Slack/Teams incoming-webhook shape).
+"""Incident lifecycle notifiers (Slack/Teams, webhook firmado, ntfy, email).
 
 Stdlib only. The notifier NEVER raises: a failed delivery is recorded and
 returns False so the dashboard/engine never crash on a bad webhook URL.
 
-Payload shape follows the Slack incoming-webhook contract
-(https://api.slack.com/messaging/webhooks) which Teams also accepts:
+Channels:
+- IncidentNotifier — Slack incoming-webhook shape (Teams also accepts it):
     {"text": "...", "attachments": [{"color": ..., "fields": [...]}]}
+- SignedWebhookNotifier — full incident JSON to any endpoint, optionally
+  signed with HMAC-SHA256 (header X-LucidFence-Signature) so the receiver
+  can verify origin without any shared infrastructure.
+- NtfyNotifier — plain-text push to an ntfy topic (ntfy.sh or self-hosted).
+- AtomicMailNotifier — email via the tenant's Atomic Mail inbox.
+- IncidentFanoutNotifier — best-effort fan-out over any of the above.
+
+Config (tenant config / config.json):
+    incident_webhook_url: "https://hooks.slack.com/..."   # legacy, Slack-shape
+    incident_webhooks:                                     # multi-canal
+      - {"type": "slack",   "url": "https://hooks.slack.com/..."}
+      - {"type": "generic", "url": "https://mi-endpoint/hook", "secret": "s3cr3t"}
+      - {"type": "ntfy",    "url": "https://ntfy.sh/mi-topic", "token": "tk_..."}
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import time
 from typing import Any, Callable, Optional
@@ -30,12 +45,31 @@ _VERB = {
 }
 
 
-def _default_http_post(url: str, payload: dict) -> dict:
-    """Real HTTP POST via stdlib http.client. Never raises."""
+def _default_http_post(url: str, payload, headers: Optional[dict] = None) -> dict:
+    """Real HTTP POST via stdlib http.client. Never raises.
+
+    `payload` dict/list → JSON body; str/bytes → raw body (ntfy usa texto plano).
+    """
     import http.client
     parsed = urlparse(url)
+    # Only http/https with a real host. Reject exotic schemes (file://, gopher://,
+    # ftp://) and credential-smuggling (http://user:pass@host). The destination
+    # IP is intentionally NOT restricted: in a self-hosted deployment the admin
+    # may legitimately point the webhook at an internal SIEM (10.x, loopback).
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+        return {"ok": False, "error": f"webhook_url no permitido (esquema/host): {url!r}"}
     host, port = parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
-    body = json.dumps(payload).encode("utf-8")
+    if isinstance(payload, bytes):
+        body = payload
+        default_ct = "text/plain; charset=utf-8"
+    elif isinstance(payload, str):
+        body = payload.encode("utf-8")
+        default_ct = "text/plain; charset=utf-8"
+    else:
+        body = json.dumps(payload).encode("utf-8")
+        default_ct = "application/json"
+    send_headers = {"Content-Type": default_ct}
+    send_headers.update(headers or {})
     try:
         if parsed.scheme == "https":
             import ssl
@@ -43,8 +77,7 @@ def _default_http_post(url: str, payload: dict) -> dict:
             conn = http.client.HTTPSConnection(host, port, timeout=10, context=ctx)
         else:
             conn = http.client.HTTPConnection(host, port, timeout=10)
-        conn.request("POST", parsed.path or "/", body=body,
-                     headers={"Content-Type": "application/json"})
+        conn.request("POST", parsed.path or "/", body=body, headers=send_headers)
         r = conn.getresponse()
         status = r.status
         conn.close()
@@ -212,3 +245,141 @@ class AtomicMailNotifier:
             return bool(ok)
         except Exception:  # noqa: BLE001 - never propagate
             return False
+
+
+class SignedWebhookNotifier:
+    """Generic webhook: full incident JSON, optionally HMAC-SHA256 signed.
+
+    Payload: {"event": "lucidfence.incident", "transition": ..., "ts": ...,
+              "incident": {...}}
+    With `secret` set, adds header:
+        X-LucidFence-Signature: sha256=<hex hmac of the exact request body>
+    so the receiver can verify origin and integrity offline — no shared infra.
+    """
+
+    def __init__(self, url: str, secret: str = "", http_post: Optional[Callable] = None):
+        self.url = (url or "").strip()
+        self.secret = (secret or "").strip()
+        self._post = http_post or _default_http_post
+        self.last_result: Optional[dict] = None
+        self.deliveries: list[dict] = []
+
+    def enabled(self) -> bool:
+        return bool(self.url)
+
+    @staticmethod
+    def signature(secret: str, body: bytes) -> str:
+        return "sha256=" + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def verify(secret: str, body: bytes, header_value: str) -> bool:
+        """Receiver-side helper: constant-time signature check."""
+        expected = SignedWebhookNotifier.signature(secret, body)
+        return hmac.compare_digest(expected, (header_value or "").strip())
+
+    def notify(self, transition: str, incident: dict) -> bool:
+        if not self.url:
+            return False
+        try:
+            payload = {
+                "event": "lucidfence.incident",
+                "transition": transition,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "incident": incident,
+            }
+            # Firmamos los bytes exactos que se envían: el body va como bytes
+            # para que la firma no dependa de re-serializaciones del receptor.
+            body = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            headers = {"Content-Type": "application/json"}
+            if self.secret:
+                headers["X-LucidFence-Signature"] = self.signature(self.secret, body)
+            res = self._post(self.url, body, headers)
+            self.last_result = res
+            self.deliveries.append({"transition": transition,
+                                    "ts": payload["ts"], "result": res})
+            return bool(res.get("ok")) if isinstance(res, dict) else False
+        except Exception:  # noqa: BLE001 - never propagate
+            return False
+
+
+# ntfy priority per incident severity (https://docs.ntfy.sh/publish/#message-priority)
+_NTFY_PRIORITY = {"critical": "5", "high": "4", "medium": "3", "low": "2", "info": "1"}
+
+
+class NtfyNotifier:
+    """Push to an ntfy topic (ntfy.sh or self-hosted) — plain text + headers.
+
+    `url` is the full topic URL (e.g. https://ntfy.sh/lucidfence-alertas).
+    `token` (optional) is an ntfy access token sent as Bearer auth.
+    """
+
+    def __init__(self, url: str, token: str = "", http_post: Optional[Callable] = None):
+        self.url = (url or "").strip()
+        self.token = (token or "").strip()
+        self._post = http_post or _default_http_post
+        self.last_result: Optional[dict] = None
+        self.deliveries: list[dict] = []
+
+    def enabled(self) -> bool:
+        return bool(self.url)
+
+    def notify(self, transition: str, incident: dict) -> bool:
+        if not self.url:
+            return False
+        try:
+            severity = (incident.get("severity") or "info").lower()
+            verb = _VERB.get(transition, transition)
+            title = incident.get("title") or incident.get("id") or "Incidente"
+            device = incident.get("device_name") or incident.get("device_id") or "—"
+            lines = [f"{verb.capitalize()}: {title}", f"Dispositivo: {device}"]
+            if incident.get("fence_id"):
+                lines.append(f"Geocerca: {incident['fence_id']}")
+            headers = {
+                "Title": f"[LucidFence] [{severity.upper()}] {verb}",
+                "Priority": _NTFY_PRIORITY.get(severity, "3"),
+                "Tags": "round_pushpin" if transition == "open" else "white_check_mark",
+            }
+            if self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+            res = self._post(self.url, "\n".join(lines), headers)
+            self.last_result = res
+            self.deliveries.append({"transition": transition,
+                                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                    "result": res})
+            return bool(res.get("ok")) if isinstance(res, dict) else False
+        except Exception:  # noqa: BLE001 - never propagate
+            return False
+
+
+def build_incident_notifiers(config: dict, http_post: Optional[Callable] = None) -> list:
+    """Build the incident notifier channels declared in config.
+
+    Reads the legacy `incident_webhook_url` (Slack-shape, kept for
+    compatibility) plus the multi-channel `incident_webhooks` list. Unknown
+    types and empty URLs are skipped: a config typo must never take the
+    engine down. Returns a (possibly empty) list of notifier objects.
+    """
+    notifiers: list = []
+    legacy = (config.get("incident_webhook_url") or "").strip()
+    if legacy:
+        notifiers.append(IncidentNotifier(webhook_url=legacy, http_post=http_post))
+    entries = config.get("incident_webhooks") or []
+    if not isinstance(entries, list):
+        return notifiers
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        url = (entry.get("url") or "").strip()
+        if not url:
+            continue
+        kind = (entry.get("type") or "generic").strip().lower()
+        if kind == "slack":
+            notifiers.append(IncidentNotifier(webhook_url=url, http_post=http_post))
+        elif kind == "ntfy":
+            notifiers.append(NtfyNotifier(url, token=entry.get("token") or "",
+                                          http_post=http_post))
+        elif kind == "generic":
+            notifiers.append(SignedWebhookNotifier(url, secret=entry.get("secret") or "",
+                                                   http_post=http_post))
+        # tipos desconocidos: se ignoran (fail-soft)
+    return notifiers

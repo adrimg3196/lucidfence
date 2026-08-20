@@ -16,6 +16,27 @@ class Point:
         return (self.lat, self.lng)
 
 
+def valid_coord(value, lo: float, hi: float, label: str) -> float:
+    """Parse a coordinate, rejecting NaN/inf and out-of-range values.
+
+    Geofences and route corridors are security controls: a NaN/9999 latitude
+    must fail loudly here, never slip into haversine/point-in-polygon as
+    undefined behaviour and silently mis-evaluate a watched zone.
+    """
+    f = float(value)
+    if not math.isfinite(f) or not (lo <= f <= hi):
+        raise ValueError(f"{label} fuera de rango o no finito: {value!r}")
+    return f
+
+
+def point_from(raw: dict) -> "Point":
+    """Build a Point from a {lat, lng} dict with range/NaN validation."""
+    return Point(
+        lat=valid_coord(raw["lat"], -90.0, 90.0, "lat"),
+        lng=valid_coord(raw["lng"], -180.0, 180.0, "lng"),
+    )
+
+
 def haversine_m(a: Point, b: Point) -> float:
     """Great-circle distance in meters between two points."""
     d_lat = math.radians(b.lat - a.lat)

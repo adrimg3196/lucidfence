@@ -80,10 +80,12 @@ def sig_shift_match(device, ctx):
 
 @register_signal("device_health")
 def sig_device_health(device, ctx):
+    encryption = device.get("encryption_enabled")
     return {
         "compliant": bool(device.get("compliant")),
         "rooted": bool(device.get("rooted", False)),
-        "encryption": bool(device.get("encryption_enabled", True)),
+        # Unknown posture is not evidence of disabled encryption.
+        "encryption": True if encryption is None else bool(encryption),
         "os_outdated": bool(device.get("os_outdated", False)),
     }
 
@@ -97,7 +99,8 @@ def sig_device_posture(device, ctx):
     total = device.get("storage_total_gb")
     battery = device.get("battery_level")
     os_ver = (device.get("os_version") or "").lower()
-    encryption = bool(device.get("encryption_enabled", True))
+    encryption_value = device.get("encryption_enabled")
+    encryption = True if encryption_value is None else bool(encryption_value)
 
     disk_low = False
     if free is not None and total:
@@ -109,11 +112,38 @@ def sig_device_posture(device, ctx):
     # Heurística de SO sin parchear: versiones "antiguas" conocidas por plataforma.
     os_unpatched = any(tok in os_ver for tok in ("android 12", "android 11", "ios 15", "windows 10", "windows 10 pro", "win10"))
 
+    # Lockdown Mode (Apple OS 27 DDM status item, WWDC 2026): readback de la UEM.
+    # SOLO es "off" cuando la UEM lo reporta explícitamente False. None/ausente
+    # (el caso común: la UEM aún no lo expone) NO penaliza — nunca se inventa
+    # riesgo a partir de un dato desconocido.
+    lockdown_mode_off = device.get("lockdown_mode") is False
+    # Enrolamiento sin supervisión (Apple OS 27 enrollment-type status item):
+    # SOLO es "unsupervised" cuando la UEM reporta supervised explícitamente
+    # False. None/ausente NO penaliza — desconocido nunca inventa riesgo.
+    unsupervised = device.get("supervised") is False
+
     return {
         "disk_low": disk_low,
         "battery_critical": battery_critical,
         "os_unpatched": os_unpatched,
         "encryption_off": not encryption,
+        "lockdown_mode_off": lockdown_mode_off,
+        "unsupervised": unsupervised,
+        "osquery_config_invalid": device.get("osquery_config_valid") is False,
+    }
+
+
+@register_signal("location_integrity")
+def sig_location_integrity(device, ctx):
+    """Anti-spoofing: verosimilitud del report de ubicación (ver
+    location_integrity.py). El engine calcula los checks contra el último
+    estado persistido y los adjunta al device; aquí solo se exponen como
+    señal explicable para el score."""
+    li = device.get("location_integrity") or {}
+    return {
+        "suspicious": bool(li.get("suspicious")),
+        "checks": list(li.get("checks") or []),
+        "speed_kmh": li.get("speed_kmh"),
     }
 
 
@@ -254,6 +284,29 @@ class RiskEngine:
             score += 12; reasons.append("SO sin parchear de seguridad")
         if posture.get("encryption_off"):
             score += 15; reasons.append("almacenamiento sin cifrar")
+        if posture.get("lockdown_mode_off"):
+            score += 10; reasons.append("Lockdown Mode desactivado")
+        if posture.get("unsupervised"):
+            score += 10; reasons.append("dispositivo sin supervisión (enrolamiento personal)")
+        if posture.get("osquery_config_invalid"):
+            score += 8; reasons.append("configuración de osquery no válida")
+
+        # Anti-spoofing: un report inverosímil convierte el "dónde" en no
+        # confiable — y todo lo demás (geocerca, ruta, turno) cuelga del dónde.
+        li_checks = signals.get("location_integrity", {}).get("checks") or []
+        if "impossible_speed" in li_checks:
+            kmh = signals.get("location_integrity", {}).get("speed_kmh") or 0
+            score += 30
+            reasons.append(f"velocidad imposible entre reportes ({int(kmh)} km/h): posible spoofing de ubicación")
+        if "country_flip_without_movement" in li_checks:
+            score += 15
+            reasons.append("país declarado cambió sin movimiento acorde: metadatos de ubicación incoherentes")
+        if "accuracy_invalid" in li_checks:
+            score += 8
+            reasons.append("precisión GPS inválida (accuracy ≤ 0): report no fiable")
+        if "accuracy_too_perfect" in li_checks:
+            score += 8
+            reasons.append("precisión imposible para geolocalización por IP: campo falseado")
 
         if signals.get("time_of_day", {}).get("off_hours"):
             score += 10; reasons.append("fuera de horario laboral")

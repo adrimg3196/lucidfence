@@ -24,6 +24,14 @@ assuming either way; don't dedupe against it as if it were a known agent.
   resolved). Task split with the other two still informal: Adri/Zero assign work via
   `hermes kanban` (board `lucidfence`), no shared queue with Jules.
 
+**The shared queue now exists — read it before claiming anything.** The open
+issue labelled `merge-train` holds the authoritative order of entry, regenerated
+by `scripts/merge_train.py` (workflow `merge-train.yml`, twice daily). Rules of
+engagement — WIP limits, claim protocol, rebase discipline, merge order, what
+escalates to Adri — live in `docs/references/agent-team-charter.md`. Read it
+before opening a PR: on 2026-08-13 this repo had 19 open PRs and **zero**
+mergeable, because everyone kept producing and nobody drained.
+
 Before starting work that could overlap, check `git log --all --format='%an %s' -20`
 for recent activity from the other identities — same dedup practice already used
 for the #46/#47 duplicate-PR precedent (see `memory/lucidfence-jules-log.md` in the
@@ -44,9 +52,20 @@ awareness another agent is editing it interactively. **Rule: use `git worktree a
 don't edit the shared checkout directly, even briefly.** Commit fast is not enough;
 the reset can land mid-edit.
 
+## Verify — la definición de "hecho" en UN comando
+`python3 scripts/verify.py` es el gate de calidad del repo (estilo el
+`pnpm verify` de agentic-ship): coherencia de versión + enlaces de docs +
+batería runtime en vivo (N/N) + suite honesta (tolera solo la baseline OIDC
+del contenedor, verde en CI). **Verde en `verify.py` = mergeable.** No
+re-listes los pasos sueltos: corre `verify.py`. `--fast` omite la batería
+runtime; `--quiet` solo el resumen. El CI (`.github/workflows/ci.yml`)
+re-corre las mismas comprobaciones como autoridad final.
+
 ## Stack & commands
 - Python 3.11, stdlib-first. No web frameworks (HTTP propio en `saas_server.py`).
-- Test: `python3 tests/run_tests.py` (honest runner; 105 pass = green).
+- Verificar todo: `python3 scripts/verify.py` (ver arriba — el gate).
+- Test suelto: `python3 tests/run_tests.py` (honest runner; el tally vive en
+  CI/`verify.py`, no en prosa).
 - Cloud vitrina: `python3 -m lucidfence.core.cloud_publisher --cycles 2` → `data/cloud_state.json`.
   **No commitees ese fichero desde una rama**: lo republica `engine-cron` en main cada hora, así
   que tu PR conflictaría siempre (el job `runtime-artifacts` de CI lo rechaza). Si lo has tocado:
@@ -97,7 +116,27 @@ the reset can land mid-edit.
 - NEVER: hardcode secrets; expose a token in the Pages client; use `flyctl auth
   login` headless (fails silently); leave zombie processes between sessions.
 
+## Flota autónoma de loops (el modelo de operación hoy)
+Este repo lo mantiene una flota de 9 loops agénticos coordinados por un
+contrato escrito. Léelo antes de tocar nada estructural:
+- **`docs/internal/LOOP.md`** — los 9 loops (Admin-value, Housekeeper,
+  Guardián, Deps-sweeper, Growth, Centinela, Lanzamiento, Dirección, Roadmap),
+  sus ramas dedicadas, el calendario sin solapes, y las 9 reglas de coordinación
+  (incl. auto-merge total en verde y el estilo de reporting).
+- **`docs/roadmap/PRODUCT_ROADMAP.md`** — el roadmap de producto VIVO (dueño:
+  loop Roadmap). `roadmap.json` es histórico del tooling de auto-mejora,
+  archivado; no reabrir.
+- **`docs/internal/loop-constraints.md`** — la denylist absoluta y el único
+  gate humano que queda (outreach a terceros).
+- **`docs/internal/agency/ORG.md`** — el organigrama: cada loop es un
+  departamento que delega decisiones de dominio en el bench de especialistas de
+  `.claude/agents/` (subagentes nativos, taxonomía de agency-agents adaptada al
+  repo). Los agentes deciden; el humano solo aprueba outreach.
+- Cada cambio a `main` auto-mergea si `verify.py` + CI están verdes; nadie es
+  el merger por defecto. El propietario solo recibe el digest semanal del
+  loop Dirección y aprueba outreach.
+
 ## Quality floor
-- Definition of Done: `docs/references/definition-of-done.md`.
-- Testing: `docs/references/testing-patterns.md`.
-- Security: `docs/references/security-checklist.md`.
+- Definition of Done ejecutable: **`python3 scripts/verify.py`** (canónico).
+- Docs de referencia: `docs/references/definition-of-done.md`,
+  `docs/references/testing-patterns.md`, `docs/references/security-checklist.md`.

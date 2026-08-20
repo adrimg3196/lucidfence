@@ -1,0 +1,40 @@
+name: nightly-health-check
+
+# Verifica que la vitrina pública de LucidFence esté reach able cada día.
+# No requiere credenciales, servidor local, ni gh CLI.
+# Falla si la vitrina no responde en 30s — eso es suficiente para alertar.
+#
+# El check es contra el estado publicado (data/cloud_state.json vía
+# raw.githubusercontent.com), no contra el servidor local.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"            # 08:00 UTC cada día
+  workflow_dispatch:                # permitido forzar manualmente
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar vitrina pública (reachability)
+        run: |
+          set -euo pipefail
+          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
+          TIMEOUT=30
+          echo "Checking vitrina publica: $URL"
+          if curl -fsS --max-time "$TIMEOUT" -o /dev/null "$URL"; then
+            echo "OK: vitrina publica reach able"
+          else
+            echo "::error::Vitrina publica NO reach able: $URL"
+            exit 1
+          fi
+
+      - name: Validar estructura minima de cloud_state.json
+        run: |
+          set -euo pipefail
+          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
+          TIMEOUT=30
+          curl -fsS --max-time "$TIMEOUT" "$URL" | python3 -c "import json, sys; data=json.load(sys.stdin); required=['fleet','compliance','geofences']; missing=[k for k in required if k not in data]; assert not missing, f'Faltan: {missing}'; print('OK: estructura minima validada')"

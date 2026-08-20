@@ -20,6 +20,7 @@ import os
 import time
 import uuid
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -113,7 +114,9 @@ class AppliveryAdapter(MDMAdapter):
                 "action": action,
                 "error": "APPLIVERY_API_KEY not set",
             }
-        path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
+        path = self.endpoint_template.format(
+            org_id=self.org_id, device_id=quote(str(device_id), safe="")
+        )
         base = os.environ.get("APPLIVERY_API_BASE", "https://api.applivery.io/v1").rstrip("/")
         url = f"{base}{path}"
         body = {"command": action, "params": params or {}}

@@ -124,7 +124,7 @@ def test_self_service_issue_to_tenant_to_vitrina_playwright():
                 """
                 ([tenantId]) => {
                   const opt = document.querySelector('#tenantSel option');
-                  return opt && opt.textContent.includes(`${tenantId} — 2 dev`);
+                  return opt && opt.textContent.includes(`${tenantId} · 2 dev`);
                 }
                 """,
                 arg=[tenant_id],

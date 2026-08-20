@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from lucidfence.core.app_paths import ensure_data_dir  # noqa: E402
 
-VERSION = "1.2.0"
+VERSION = "1.6.0"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
@@ -268,6 +268,25 @@ def cmd_validate_config(args) -> int:
     return validate_main(["--config", args.config] + (["--json"] if args.json else []))
 
 
+def cmd_adapter_new(args) -> int:
+    from lucidfence.core.adapter_scaffold import scaffold_adapter
+    # El scaffolding es un flujo de contribuidor: opera sobre el checkout
+    # actual si lo hay; si no, sobre el árbol del paquete instalado.
+    cwd = Path.cwd()
+    root = cwd if (cwd / "lucidfence" / "core" / "adapters").is_dir() else ROOT
+    result = scaffold_adapter(args.name, root)
+    if not result.get("ok"):
+        print(f"ERROR: {result.get('error')}", file=sys.stderr)
+        return 2
+    print(f"Adapter '{args.name}' generado ({result['class_name']}):")
+    print(f"  {result['adapter_path']}")
+    print(f"  {result['test_path']}")
+    print("\nSiguientes pasos:")
+    for step in result["next_steps"]:
+        print(f"  {step}")
+    return 0
+
+
 def cmd_mcp(_args) -> int:
     server = Path(__file__).resolve().parent / "mcp" / "lucidfence_mcp.py"
     if not server.is_file():
@@ -295,6 +314,60 @@ def cmd_doctor(args) -> int:
             print(f"[{mark:4}] {check['name']}: {check['detail']}")
         print(f"doctor: {'PASS' if report['ok'] else 'FAIL'} ({report['errors']} errors, {report['warnings']} warnings)")
     return 0 if report["ok"] else 1
+
+
+def cmd_quickstart(args) -> int:
+    """Del install a ver tu flota, en pasos autoverificados.
+
+    Reduce el time-to-first-value: un admin que acaba de instalar corre
+    `lucidfence quickstart` y en 4 pasos comprobados (entorno → app → dashboard
+    → fuente de datos) llega a su flota, con la acción concreta si algo falta.
+    """
+    host, port = _host(args.host), _port(args.port)
+    url = _url(host, port)
+    print(f"LucidFence · quickstart · gratis y 100% local\n")
+
+    # 1/4 — entorno (reutiliza el mismo diagnóstico que `lucidfence doctor`)
+    from lucidfence.core.app_paths import ensure_data_dir
+    from lucidfence.core.doctor import run_doctor
+    report = run_doctor(ROOT, ensure_data_dir(), port)
+    if report["ok"]:
+        print("[1/4] OK  Entorno listo (Python, dependencias, ficheros).")
+    else:
+        print(f"[1/4] FAIL Entorno con {report['errors']} problema(s):")
+        for check in report["checks"]:
+            if not check["ok"] and check["severity"] != "warning":
+                print(f"          - {check['name']}: {check['detail']}")
+        print("      Arréglalo y repite `lucidfence quickstart`.")
+        return 1
+
+    # 2/4 — app local arrancada
+    if _healthy(host, port):
+        print(f"[2/4] OK  App ya activa en {url}")
+    else:
+        rc = cmd_start(SimpleNamespace(host=host, port=port, open_browser=False))
+        if rc != 0 or not _healthy(host, port):
+            print("[2/4] FAIL La app no arrancó. Revisa `lucidfence status` y el log.")
+            return 1
+        print(f"[2/4] OK  App arrancada en {url}")
+
+    # 3/4 — dashboard vivo
+    print(f"[3/4] OK  Dashboard vivo: {url}")
+
+    # 4/4 — fuente de datos de la flota
+    if Path("config.json").is_file():
+        print("[4/4] OK  config.json detectado — valida tu UEM: `lucidfence validate-config`")
+    else:
+        print("[4/4] --  Sin config.json: arranca en modo demo (flota simulada).")
+        print("          Conecta tu UEM real (Intune/Jamf/Applivery/Fleet):")
+        print("          copia config.example.json a config.json, edítalo y")
+        print("          verifica con `lucidfence validate-config`.")
+
+    print(f"\nListo. Abre tu flota:  {url}")
+    print("Integra un UEM real:   docs/integrations/  (mínimo privilegio por UEM)")
+    if getattr(args, "open_browser", False):
+        webbrowser.open(url)
+    return 0
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -341,11 +414,25 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--json", action="store_true", help="salida estructurada")
     doctor.set_defaults(func=cmd_doctor)
 
+    quickstart = sub.add_parser(
+        "quickstart", help="del install a ver tu flota, en pasos autoverificados")
+    _common(quickstart)
+    quickstart.add_argument("--open", dest="open_browser", action="store_true",
+                            help="abre el dashboard en el navegador al terminar")
+    quickstart.set_defaults(func=cmd_quickstart, open_browser=False)
+
     validate = sub.add_parser("validate-config",
                               help="valida el mapeo location_source contra la API real (cualquier UEM)")
     validate.add_argument("--config", default="config.json", help="ruta a config.json")
     validate.add_argument("--json", action="store_true", help="salida estructurada")
     validate.set_defaults(func=cmd_validate_config)
+
+    adapter = sub.add_parser("adapter", help="herramientas del SDK de adapters MDM")
+    adapter_sub = adapter.add_subparsers(dest="adapter_command", required=True)
+    adapter_new = adapter_sub.add_parser(
+        "new", help="genera el esqueleto de un adapter MDM nuevo + su contract test")
+    adapter_new.add_argument("name", help="identificador del MDM (minúsculas, p.ej. mosyle)")
+    adapter_new.set_defaults(func=cmd_adapter_new)
 
     mcp = sub.add_parser("mcp", help="ejecuta el MCP local read-only por stdio")
     mcp.set_defaults(func=cmd_mcp)

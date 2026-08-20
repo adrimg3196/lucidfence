@@ -3,6 +3,130 @@
 This file is the living state of the improvement loop. It is updated by the
 maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots.
 
+## Loop admin-value (patrón: `loop-admin-value.md`) — updated 2026-08-15
+
+- **Level:** L2 (asistido; 1 PR/run con gate QA; gates humanos intactos)
+- **Last run:** 2026-08-15 (ciclo 0: triage sembrado en sesión interactiva)
+- **Base:** v1.5.0 publicada (release + brew tap alineados); enforcement
+  observe→enforce con doble llave (#135); onboarding 4 UEMs + matriz de
+  ubicación + día 2 (#136); batería runtime 28/28 en CI.
+
+### Backlog priorizado (evidencia: análisis de practicidad 2026-08-15)
+
+1. ~~**Enforcement desde el dashboard**~~ — **HECHO**: el control existe y está
+   cableado (`static/dashboard.html` `#enfSelect` → `POST /api/settings/enforcement`,
+   gated a owner/admin por `engine:config`, con audit y recarga del engine). El
+   chip muestra el estado (#135) y el select edita la fase (observe|enforce).
+2. ~~**Multi-UEM onboarding**~~ — **HECHO 2026-08-17 (#158)**: registro de
+   providers con etiqueta de segmento de flota (móviles/portátiles) + guía
+   `docs/integrations/MULTI_UEM.md`; de paso 2 fixes de seguridad (fuga de
+   secretos en GET, DELETE sin permiso).
+3. ~~**RBAC visible**~~ — **HECHO 2026-08-17 (#159)**: `GET /api/members` +
+   `POST /api/members/role` (owner-only, guardarraíl del último propietario,
+   audit), tarjeta "Equipo · Roles" en el dashboard, `docs/operations/RBAC.md`.
+4. ~~**Agente iOS empaquetado**~~ — **HECHO 2026-08-17 (#160)**: exportador de
+   config de despliegue (managed app config + `.mobileconfig`, stdlib) +
+   `docs/integrations/IOS_ONDEVICE.md`; cero exfiltración (solo geocercas de
+   política, nunca coords/device_id — test con datos envenenados).
+5. ~~**Quickstart guiado**~~ — **HECHO 2026-08-16**: `lucidfence quickstart`
+   (entorno → app → dashboard → fuente de datos, autoverificado; check runtime
+   en la batería + tests). Baja el time-to-first-value del admin nuevo.
+6. ~~**Windows geofencing lógico**~~ — **HECHO 2026-08-17**: ubicación gruesa por
+   señal de red para portátiles/Windows sin GPS. `lucidfence/core/network_location.py`
+   (stdlib `ipaddress`; mapeo declarado por el operador IP-CIDR/SSID/BSSID → sitio
+   con coords + radio; cero geoip de terceros, nunca inventa, `accuracy_m` = radio,
+   `location_source="network"`); enriquecimiento inerte-por-defecto en
+   `location_source.py` (nunca sobreescribe GPS real); `docs/integrations/NETWORK_LOCATION.md`
+   + matriz actualizada; 20 tests (CIDR/SSID/BSSID, precedencia, envenenado).
+7. **Postura Apple DDM (OS 27) como señal del motor de riesgo** — *derivado del
+   loop Tendencias 2026-08-18, ver `docs/internal/trends/signals.md`.* En WWDC 2026
+   Apple hizo DDM **obligatorio** en la generación OS 27 y añadió nuevos *status
+   items*: **Lockdown Mode**, **salud de hardware** (baseband, cámara, Face/Touch
+   ID, NFC, UWB), tipo de enrolamiento y Shared iPad. LucidFence ya soporta DDM
+   (`supports_ddm` en jamf, `apply_ddm`, `docs/operations/apple_ddm.md`); el
+   siguiente paso de producto es **ingerir esos status por el canal `device_state`
+   que ya existe** (merge, no reemplazo) y dejar que las políticas correlacionen,
+   p. ej., "fuera de geocerca **y** Lockdown Mode desactivado" o salud de hardware
+   degradada. Fuente: [Jamf WWDC26](https://www.jamf.com/blog/wwdc26-key-takeaways-for-apple-admins/),
+   [42Gears](https://www.42gears.com/blog/wwdc-2026-whats-new-apple-device-management/).
+   Esfuerzo medio; empezar por el status de Lockdown Mode (booleano, alto valor).
+   **Primer incremento HECHO 2026-08-18** (mergeado vía `claude/pm-features` /
+   `claude/trends-loop`): `lockdown_mode` y `supervised` como señales
+   readback-honestas del motor de riesgo (None nunca penaliza), con tests y
+   docs. **Queda (nuevo nº1 del backlog):** salud de hardware (baseband,
+   cámara, Face/Touch ID, NFC, UWB) por el mismo canal `device_state`.
+8. ~~**Informe de puntos ciegos (coverage gap)**~~ — **HECHO 2026-08-19**
+   (backlog evaluado #15, `docs/internal/product/BACKLOG.md`):
+   `lucidfence/core/coverage.py` (función pura stdlib, readback-honesta) +
+   `GET /api/coverage` (gating `device:read`, tenant-scoped) + 10 tests +
+   3 checks runtime (43/43) + `docs/operations/coverage.md`. El negativo que
+   ningún panel del sector enseña: dispositivos sin señal, "lost sheep" sin
+   reportar, cercas vacías — visible para el admin, jamás acción automática.
+
+### Pasada de la flota completa sobre el producto (2026-08-17)
+
+Con la entrega desbloqueada, los loops corrieron en paralelo sobre el producto;
+cada uno entregó una mejora real y verificada (`verify.py` APTO 4/4). Todas
+mergeadas en **#164**:
+
+- **Centinela (seguridad):** SSRF corregida en `/api/providers[/test]` —
+  `endpoint`/`base_url` ahora validados con `_safe_webhook_url` (solo https
+  externo). Antes: escaneo de infra interna + reflejo de respuesta. Test PoC.
+- **Revisión (correctness):** bug de paginación por cursor en
+  `location_source.py` (separador sobre `url` en vez de `path`) que perdía todo
+  dispositivo desde la página 3 y hacía descartar el ciclo. Fix de un token + test.
+- **Admin-value:** tarjeta "Registro de auditoría" en el dashboard (integridad de
+  la cadena + export CEF a SIEM); da pantalla al rol `auditor`. Cero backend nuevo.
+- **Realidad (honestidad):** corregido el claim falso "105 tests" (real 525) y un
+  enlace roto en `demo-walkthrough.md`.
+
+### Derivado del loop Roadmap (2026-08-16, pasada ciclo 1)
+
+Empujado desde `docs/roadmap/PRODUCT_ROADMAP.md` §Próximo (el loop Roadmap
+prioriza; Admin-value ejecuta):
+
+7. ~~**Corregir la tabla "No está terminado" del README**~~ — **HECHO
+   2026-08-16**: 4 entregas marcadas como completas (release v1.5.0, guía de
+   adaptadores, CONTRIBUTING, SECURITY.md).
+8. ~~**Declarar pricing / modelo de negocio**~~ — **HECHO 2026-08-16** por
+   decisión del propietario: 100% free OSS, sin pricing ni enterprise (ver
+   §Overrides). Declarado en `README.md` §Modelo.
+
+~~Queda abierto de producto: **onboarding externo**~~ — **HECHO 2026-08-17**:
+`docs/GETTING_STARTED.md` (npm-style: qué necesitas, instalar, comprobar que
+funciona, primer paso real conectando UEM, FAQ, cómo reportar bugs/seguridad),
+enlazada desde el README y con la fila "No está terminado" #73 cerrada.
+
+> Nota: el #1 del roadmap (verificar los 8 hallazgos Strix `open` de
+> `security/findings.md`) es **p0 pero dueño del Centinela**, no de Admin-value;
+> queda en su cola (jueves 22:07 UTC), no aquí.
+
+### Watch list
+
+- Cadencia de release: que formulas (repo+tap) no vuelvan a quedarse atrás —
+  el workflow lo automatiza, pero el sha256 de las fórmulas sigue siendo paso
+  manual post-release.
+- Body de release v1.5.0 quedó con fallback ("Release v1.5.0") — cosmético,
+  fix del awk ya mergeado (#134) para futuras; el propietario puede editarlo.
+- `loop-audit` score (33/100 en julio) — rancio; recalcular en un run L1.
+
+### Ruido descartado
+
+- Reescribir el loop de mantenimiento existente: no — este loop es hermano,
+  no sustituto.
+
+### Overrides del propietario
+
+- 2026-08-15: "todo lo que se anuncie debe validarse en runtime" (regla
+  permanente; batería + gate CI).
+- 2026-08-15: "gratis y del lado del cliente, siempre".
+- 2026-08-15: "Fleet es importante" — paridad de primera clase con el resto
+  de UEMs en cualquier mejora.
+- 2026-08-16: **"La idea es que sea free open source."** El modelo es 100% free
+  y open-source (Apache-2.0): sin pricing, sin edición enterprise, sin funciones
+  de pago, sin telemetría. Cierra el gap de "modelo de negocio" (no hay uno de
+  pago por diseño). Regla permanente para toda superficie pública y roadmap.
+
 ## Loop status (updated 2026-07-20)
 
 - **Level:** L1 (report-only + human-gated merges)

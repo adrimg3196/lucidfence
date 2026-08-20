@@ -34,6 +34,21 @@ jobs:
           LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
         run: python3 tests/run_tests.py
 
+  verify-docs:
+    name: Verify (versión + enlaces de docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
+      # rotos en la documentación. Instantáneo, sin deps. La suite y la
+      # batería runtime van en sus jobs; verify.py --docs-only cubre lo que
+      # ningún otro job gateaba.
+      - name: python3 scripts/verify.py --docs-only
+        run: python3 scripts/verify.py --docs-only
+
   frontend:
     name: Frontend syntax check
     runs-on: ubuntu-latest
@@ -107,3 +122,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+
+  # "Verificar en runtime, no solo compila": la batería arranca el server
+  # real, un receptor webhook real y el MCP por stdio, y ejercita cada claim
+  # anunciado por su interfaz pública (25 checks). Un claim que no funciona
+  # en vivo bloquea el merge aunque los unit tests estén verdes — este job
+  # existe porque dos features llegaron a main con tests verdes y rotas en
+  # uso real (reloj del anti-spoofing y parsing del MCP explain-risk).
+  runtime-validation:
+    name: Runtime validation (claims en vivo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --require-hashes -r requirements.lock
+      - name: Validar claims en runtime
+        run: python3 scripts/runtime_validation.py

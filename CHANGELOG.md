@@ -4,7 +4,49 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-18
+
 ### Added
+
+- feat(enforcement): rollout seguro para pilotos reales — `enforcement.mode: observe|enforce`, `live_actions` (gating por acción) y doble llave para `wipe` (`allow_wipe` + `wipe_allowlist`); estado visible en `/api/status` y editable desde el dashboard con permiso + auditoría
+- feat(compliance): acción `set_compliance` — Intune la ejecuta vía Graph (managedDevice → objeto Entra → `PATCH isCompliant`) para que Conditional Access corte el acceso; Jamf y Fleet degradan con el mecanismo equivalente de su plataforma
+- feat(onboarding): `lucidfence quickstart` — del install a ver la flota en pasos autoverificados (entorno → app → dashboard → fuente de datos); baja el time-to-first-value del admin nuevo
+- feat(multi-uem): registro de proveedores con etiqueta de segmento de flota (móviles/portátiles) + guía `docs/integrations/MULTI_UEM.md`
+- feat(rbac): gestión de miembros y roles visible en el dashboard (`GET /api/members`, `POST /api/members/role`; owner-only, guardarraíl del último propietario, auditado)
+- feat(ios): exportador de config de despliegue on-device (managed app config + `.mobileconfig`, stdlib); solo geocercas de política, nunca coordenadas ni `device_id`
+- feat(location): geofencing lógico por red para Windows/portátiles sin GPS — mapeo declarado por el operador de IP-CIDR/SSID/BSSID → sitio con coordenadas; local-first, sin geoip de terceros, nunca inventa la posición
+- feat(audit): tarjeta "Registro de auditoría" en el dashboard — cadena de hashes con verdicto de integridad y export CEF a SIEM; da pantalla al rol `auditor`
+- feat(risk): Lockdown Mode (Apple DDM, OS 27 / WWDC 2026) como señal de postura del motor de riesgo — un dispositivo fuera de geocerca con Lockdown Mode desactivado sube de riesgo y es direccionable por política; readback honesto (`None`/desconocido nunca penaliza)
+- docs: guía de arranque externa `docs/GETTING_STARTED.md` (npm-style: qué necesitas, instalar, comprobar, FAQ, cómo reportar bugs)
+
+### Fixed
+
+- fix(security): SSRF en el asistente de proveedores — `endpoint`/`base_url` de `/api/providers[/test]` ahora validados (solo https externo, sin loopback/privado/link-local), con test de regresión (PoC)
+- fix(location): la paginación por cursor de la fuente live perdía todos los dispositivos desde la página 3 (separador de URL calculado sobre `url` en vez de `path`), lo que hacía descartar el ciclo entero; corregido con test de regresión
+
+## [1.5.0] - 2026-08-15
+
+### Added
+
+- feat(alertas): webhooks multi-canal de incidentes — genérico con firma HMAC-SHA256 verificable en el receptor y canal ntfy, con fan-out (#120)
+- feat(risk): detección de spoofing de ubicación con señales explicables — velocidad imposible, flip de país sin movimiento, accuracy anómala (#121, endurecido en #127)
+- feat(policies): simulador what-if — `POST /api/policies/replay` evalúa una policy candidata contra el histórico de trails sin ejecutar acciones (#122)
+- feat(sdk): `lucidfence adapter new <nombre>` genera un adapter MDM + contract test listos para contribuir (#123)
+- feat(compliance): `GET /api/evidence/export` — informe por periodo con cadena de hashes verificable offline y registro en la auditoría del tenant (#124)
+- feat(mcp): tool `lucidfence_explain_risk` — score, razones, señales y políticas de un dispositivo (#125, fix de parsing en #127)
+- feat(posture): integración osquery en el ciclo del engine + señales al Risk Engine (#116)
+- feat(poi): servicio de Points of Interest con API y tool MCP (#55)
+- feat(ci): gate `runtime-validation` — 25 claims ejecutados en vivo en cada PR (#129) y workflow `release.yml` para publicar releases con asset y smoke del artefacto
+- feat(pages): publicación continua de la superficie estática en GitHub Pages con guardarraíl de integridad (#128)
+
+### Changed
+
+- feat(ui): rediseño de landing/vitrina con pase de diseño anti-slop; accesibilidad (focus-visible, reduced-motion) y CTA de descarga en primer viewport (#126, #119)
+- fix(security): pin de `cryptography` alineado con la lock + guardarraíl anti-divergencia (#117); testimonios y métricas sin fuente retirados de la vitrina (#119)
+- fix(windows-dsc): escapado de comillas en documentos DSC (#114); state store robusto ante registros corruptos (#103); coordenadas 0.0 sobreviven (#100)
+- chore(sbom): `sbom.cdx.json` deja de versionarse; lo genera CI (#115)
+
+### Added (previo, sin release)
 
 - feat(ddm): enforcement declarativo Apple DDM para policies de geocerca (`lucidfence/core/ddm.py`, acción `apply_ddm` en el adapter Jamf) — issue #40
 - feat(ddm): canal DDM de Jamf Pro — `ddm_status` (readback de `GET /v1/ddm/{clientManagementId}/status-items`) y `ddm_sync` (`POST /v1/ddm/{clientManagementId}/sync`), endpoints verificados contra el OpenAPI oficial v11.30; subir declarations propias sigue siendo hueco declarado porque Jamf no publica endpoint — issue #52

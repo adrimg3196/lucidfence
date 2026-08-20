@@ -85,6 +85,87 @@ planas y anidadas, ignora items desconocidos y expone los fallos del reporte en
 Los nombres de status item suscritos por defecto salen de
 `declarative/status/` del repo de Apple; no se inventan.
 
+### Lockdown Mode como postura (OS 27)
+
+WWDC 2026 anunció que DDM se vuelve **obligatorio** en la generación OS 27 y
+añade nuevos *status items*, entre ellos **Lockdown Mode** (ver
+`docs/internal/trends/signals.md`). LucidFence lo ingiere como **postura
+correlacionable**, no como una nueva fuente de ubicación:
+
+- El modelo de dispositivo lleva un campo booleano de readback `lockdown_mode`
+  (`LocationReport` → `DeviceState`). Igual que `passcode_compliant` y
+  `filevault_enabled`, **solo se rellena cuando la UEM lo reporta**.
+- `sig_device_posture` deriva `lockdown_mode_off`, que es `True` **únicamente**
+  cuando `lockdown_mode is False` (reportado OFF de forma explícita). Un valor
+  `None`/ausente —el caso común hoy, porque Apple aún no publica la clave del
+  status item— **no penaliza**: nunca se inventa riesgo a partir de un dato
+  desconocido.
+- Cuando contribuye, el motor suma riesgo con la razón textual
+  `"Lockdown Mode desactivado"`, junto al resto de flags de postura.
+
+Así, un dispositivo **fuera de su geocerca con Lockdown Mode OFF** puntúa más
+alto que uno con Lockdown Mode ON o desconocido, y el admin puede escribir una
+política sobre ese estado:
+
+```json
+{
+  "id": "lockdown-off-outside",
+  "name": "Fuera de geocerca sin Lockdown Mode",
+  "when": [
+    {"field": "fence_state", "op": "eq", "value": "outside"},
+    {"field": "lockdown_mode", "op": "eq", "value": false}
+  ],
+  "actions": [{"action": "notify", "params": {}}]
+}
+```
+
+La política casa solo cuando el status llega como `false`: un dispositivo con
+`lockdown_mode` desconocido (`None`) **no** dispara la regla (desconocido ≠ OFF).
+
+Cuando Apple publique la clave del status item de Lockdown Mode, el único cambio
+es mapearla a `lockdown_mode` en `_STATUS_FIELD_MAP` (`ddm.py`); no se hardcodea
+una clave inventada mientras OS 27 no esté publicado. Dependencia de readback
+honesta: sin UEM que lo reporte, el campo se queda en `None` y la plumbing
+engine/política sigue funcionando sin penalizar.
+
+### Tipo de enrolamiento (supervisión) como postura (OS 27)
+
+El mismo anuncio de WWDC 2026 añade el status item de **tipo de enrolamiento**.
+LucidFence ingiere su faceta booleana de mayor valor —**supervisión**— como
+postura correlacionable, con idéntica disciplina de readback honesto que
+Lockdown Mode:
+
+- El modelo lleva el campo booleano de readback `supervised`
+  (`LocationReport` → `DeviceState`), junto a `lockdown_mode`. **Solo se rellena
+  cuando la UEM lo reporta.**
+- `sig_device_posture` deriva `unsupervised`, que es `True` **únicamente** cuando
+  `supervised is False` (no supervisado de forma explícita). `None`/ausente —el
+  caso común hoy— **no penaliza**: nunca se inventa riesgo desde un desconocido.
+- Cuando contribuye, el motor suma riesgo con la razón textual
+  `"dispositivo sin supervisión (enrolamiento personal)"` (+10), junto al resto
+  de flags de postura.
+
+Un dispositivo **fuera de geocerca y no supervisado** (enrolamiento personal/BYOD,
+donde la mayoría del enforcement declarativo no aplica) puntúa más alto que uno
+supervisado o desconocido. Política de ejemplo:
+
+```json
+{
+  "id": "unsupervised-outside",
+  "name": "Fuera de geocerca sin supervisión",
+  "when": [
+    {"field": "fence_state", "op": "eq", "value": "outside"},
+    {"field": "supervised", "op": "eq", "value": false}
+  ],
+  "actions": [{"action": "notify", "params": {}}]
+}
+```
+
+`supervised` desconocido (`None`) **no** dispara la regla (desconocido ≠ no
+supervisado). Cuando Apple publique la clave del status item de enrolamiento, el
+único cambio es mapearla a `supervised` en `_STATUS_FIELD_MAP` (`ddm.py`); no se
+hardcodea una clave inventada mientras OS 27 no esté publicado.
+
 ## Fase 2 — canal de Jamf Pro (endpoints verificados)
 
 Verificado contra el OpenAPI oficial de la Jamf Pro API **v11.30**

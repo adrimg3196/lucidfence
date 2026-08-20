@@ -408,8 +408,44 @@ function updateSync(st, before){
   }
   $("#ratePill").textContent = (st&&st.cycle_period_s? Math.round(st.cycle_period_s/60)+" min" : "15 min");
   const mode = st&&st.mode? st.mode : (App.org && App.org.org ? "live":"simulation");
-  $("#modeText").textContent = (st&&st.mode==="simulation")?"demo":(mode||"live");
-  $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":"var(--green)";
+  // El chip de modo dice también en qué fase del rollout está el tenant:
+  // "live · observación" = todo dry-run (nada sale al UEM), "live · enforce"
+  // = las acciones de enforcement.live_actions se ejecutan de verdad.
+  const enfMode = st && st.enforcement && st.enforcement.mode;
+  let modeLabel = (st&&st.mode==="simulation")?"demo":(mode||"live");
+  if(st && st.mode !== "simulation" && enfMode) modeLabel += enfMode==="observe" ? " · observación" : " · enforce";
+  $("#modeText").textContent = modeLabel;
+  $("#modeText").style.color = (st&&st.mode==="simulation")?"var(--amber)":(enfMode==="observe"?"var(--amber)":"var(--green)");
+  // Control de fase de enforcement: editable solo por roles con engine:config
+  // (owner/admin). Cambia el modo vía el endpoint y refresca el estado. Los
+  // demás roles nunca ven el control (solo el chip de lectura de arriba).
+  const enfRow = document.getElementById("enfRow");
+  const enfSel = document.getElementById("enfSelect");
+  if(enfRow && enfSel){
+    const role = App.org && App.org.role;
+    const canEdit = (role==="owner" || role==="admin") && !!enfMode;
+    enfRow.style.display = canEdit ? "flex" : "none";
+    if(canEdit){
+      if(!enfSel._wired){
+        enfSel.addEventListener("change", async ()=>{
+          const mode = enfSel.value; enfSel.disabled = true;
+          try{
+            const r = await api("/api/settings/enforcement", {method:"POST",
+              headers:{"Content-Type":"application/json"}, body:JSON.stringify({mode})});
+            if(r && r.ok){ toast("Enforcement actualizado", mode==="enforce"?"enforce":"observación", "ok"); refresh(false); }
+            else { toast("Error", (r&&r.error)||"No se pudo cambiar el modo", "bad"); enfSel.value = enfMode; }
+          }catch(e){ toast("Error", e.message||"fallo de red", "bad"); enfSel.value = enfMode; }
+          finally{ enfSel.disabled = false; }
+        });
+        enfSel._wired = true;
+      }
+      if(document.activeElement !== enfSel) enfSel.value = enfMode;
+    }
+  }
+  // Banda de datos demo (issue #110): visible solo mientras el backend declara
+  // modo simulación; con una organización real desaparecen banda y hueco.
+  const demoBanner = document.getElementById("demoBanner");
+  if(demoBanner) demoBanner.hidden = !(st && st.mode === "simulation");
 }
 
 /* ============================================================
@@ -933,11 +969,37 @@ async function openDeviceModal(id){
     const evs = (det.events||[]).slice(-8).reverse();
     $("#mEvents").innerHTML = "";
     renderEventList($("#mEvents"), evs.map(e=>({...e, kind:e.kind||"info", text:e.text||e.msg})));
+    // Doble llave del wipe: el operador ve ANTES de pulsar si el borrado es
+    // irreversible (LIVE), está bloqueado por la doble llave, o se simula.
+    // Datos ya serializados en st.enforcement (allow_wipe/wipe_allowlist_size);
+    // la fuente de verdad sigue siendo el servidor (engine bloquea igual).
+    const enf = (App.status && App.status.enforcement) || {};
+    const sim = App.status && App.status.mode === "simulation";
+    const wipeLive = !sim && enf.mode === "enforce" && enf.allow_wipe === true;
+    const wb = document.getElementById("cmdWipe"), wk = document.getElementById("wipeKey");
+    if(wb && wk){
+      wb.classList.toggle("danger", !!wipeLive);
+      if(wipeLive){
+        wk.textContent="LIVE"; wk.style.color="var(--red)";
+        wb.title="Wipe EN VIVO e irreversible · alcance: "+(enf.wipe_allowlist_size?("allowlist ("+enf.wipe_allowlist_size+")"):"toda la flota");
+      } else if(enf.mode==="enforce" && !enf.allow_wipe){
+        wk.textContent="doble llave"; wk.style.color="var(--amber)";
+        wb.title="Wipe con doble llave: enforcement.allow_wipe está desactivada (valor seguro por defecto). El servidor bloqueará el borrado hasta armarla en la config del tenant.";
+      } else {
+        wk.textContent="simulado"; wk.style.color="var(--muted)";
+        wb.title="Wipe se simula (dry-run) en fase observación: no toca el dispositivo.";
+      }
+    }
     // remote commands wiring
     $$("#mCmd [data-cmd]").forEach(btn=>{
       btn.onclick = async ()=>{
         const cmd = btn.dataset.cmd;
-        if(cmd==="wipe" && !confirm("¿Seguro que quieres BORRAR (wipe) este dispositivo?")) return;
+        if(cmd==="wipe"){
+          const msg = wipeLive
+            ? "BORRADO IRREVERSIBLE de "+id+". Sale EN VIVO al UEM y no se puede deshacer. ¿Continuar?"
+            : "Simular borrado (wipe) de "+id+"? En esta fase no toca el dispositivo real.";
+          if(!confirm(msg)) return;
+        }
         if(cmd==="message"){
           const txt = prompt("Mensaje para el dispositivo:");
           if(!txt) return;
@@ -1084,12 +1146,52 @@ async function loadSoar(st){
 
   const pbs = (soar.playbooks||[]).map(p=>{
     const fired = (soar.matched||[]).filter(m=>m.playbook_id===p.id).length;
-    const acts = (p.actions||[]).map(a=>`<span class="chip">${esc(a.action)}</span>`).join(" ");
+    const acts = (p.actions||[]).map(a=>{
+      const gate = (a.action==="lock"||a.action==="wipe"||a.action==="clear_passcode"||a.action==="reboot")
+        ? ` <span class="tag warn" title="Acción destructiva: pausada para aprobación manual (SOAR human-gate)">human-gate</span>` : "";
+      return `<span class="chip">${esc(a.action)}</span>${gate}`;
+    }).join(" ");
     return `<div class="soar-pb">
       <div class="soar-pb-h"><b>${esc(p.name)}</b> ${p.enabled?`<span class="tag ok">activo</span>`:`<span class="tag">inactivo</span>`} ${fired?`<span class="nav-badge">${fired}</span>`:""}</div>
       <div class="sub">${esc(p.description||"")}</div>
       <div class="soar-acts">${acts||"<span class='sub'>sin acciones</span>"}</div>
     </div>`;
+  }).join("");
+
+  // Playbooks del tenant (REQ §5: editables desde la UI, sin código).
+  const tpb = (soar.tenant_playbooks||[]).map(p=>{
+    const fired = (soar.matched||[]).filter(m=>m.playbook_id===p.id).length;
+    const acts = (p.actions||[]).map(a=>{
+      const gate = (a.action==="lock"||a.action==="wipe"||a.action==="clear_passcode"||a.action==="reboot")
+        ? ` <span class="tag warn">human-gate</span>` : "";
+      return `<span class="chip">${esc(a.action)}</span>${gate}`;
+    }).join(" ");
+    const cond = esc(JSON.stringify(p.condition||{}));
+    return `<div class="soar-pb" data-pb="${esc(p.id)}">
+      <div class="soar-pb-h"><b>${esc(p.name)}</b>
+        <button class="mini" onclick="soarToggle('${esc(p.id)}', ${p.enabled?false:true})">${p.enabled?"desactivar":"activar"}</button>
+        <button class="mini danger" onclick="soarDelete('${esc(p.id)}')">borrar</button>
+        ${fired?`<span class="nav-badge">${fired}</span>`:""}</div>
+      <div class="sub">condición: <code>${cond}</code></div>
+      <div class="soar-acts">${acts||"<span class='sub'>sin acciones</span>"}</div>
+    </div>`;
+  }).join("");
+
+  const errs = (soar.tenant_playbook_errors||[]);
+  const errBlock = errs.length
+    ? `<div class="warn" style="margin-top:8px">⚠ Playbooks con errores de validación (no se evalúan):<ul>${errs.map(e=>`<li>${esc(e)}</li>`).join("")}</ul></div>` : "";
+
+  // Matriz de capacidades por UEM (diseño §3.1 / REQ §3).
+  const cap = soar.capability_matrix||{};
+  const capRows = Object.keys(cap).sort().map(name=>{
+    const c = cap[name];
+    const dry = (c.dry_run_actions||[]).map(a=>`<span class="tag warn" title="Endpoint pendiente de validar: se construye como handoff dry-run, no se ejecuta">${esc(a)}*</span>`).join(" ");
+    const real = (c.actions||[]).map(a=>`<span class="chip">${esc(a)}</span>`).join(" ");
+    const inv = c.inventory?`<span class="tag ok">inventario</span>`:"";
+    const loc = c.location?`<span class="tag ok">ubicación</span>`:"";
+    const nf = c.native_geofences?`<span class="tag ok">geovallas</span>`:"";
+    return `<tr><td><b>${esc(name)}</b></td><td>${inv}${loc}${nf}</td>
+      <td>${real||"<span class='sub'>solo inventario</span>"}</td><td>${dry||"—"}</td></tr>`;
   }).join("");
 
   const hits = (soar.matched||[]).map(m=>{
@@ -1115,14 +1217,62 @@ async function loadSoar(st){
     <div class="soar-grid">
       <div class="card"><div class="hd"><h3>${I.sitemap} Playbooks SOAR</h3><div class="grow"></div>
         <span class="sub">${soar.devices_scanned||0} dispositivos evaluados</span></div>
-        <div class="soar-pbs">${pbs||"<div class='sub'>Sin playbooks</div>"}</div></div>
+        <div class="soar-pbs">${pbs||"<div class='sub'>Sin playbooks</div>"}</div>
+        <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
+          <h4>Playbooks del tenant</h4>
+          <div class="soar-pbs">${tpb||"<div class='sub'>Aún no has creado playbooks propios.</div>"}</div>
+          ${errBlock}
+          <button class="btn" onclick="soarNew()">+ Nuevo playbook</button>
+          <div id="soarNew" style="display:none;margin-top:10px"></div>
+        </div></div>
       <div class="card"><div class="hd"><h3>${I.bolt} Coincidencias activas</h3><div class="grow"></div>
         <span class="sub">${(soar.matched||[]).length} ejecuciones este ciclo</span></div>
         <div class="tl">${hits||emptyState("Sin coincidencias","Ningún playbook coincide con el estado actual de la flota.")}</div></div>
     </div>
+    <div class="card" style="margin-top:14px"><div class="hd"><h3>${I.shieldAlert} Matriz de capacidades por UEM</h3><div class="grow"></div>
+      <span class="sub">La consola solo ofrece acciones que el UEM soporta</span></div>
+      <div class="tbl"><table class="mini"><thead><tr><th>UEM</th><th>Capacidades</th><th>Acciones live</th><th>Dry-run (pendiente validar)</th></tr></thead>
+      <tbody>${capRows||"<tr><td colspan=4 class='sub'>sin matriz</td></tr>"}</tbody></table></div></div>
     <div class="card" style="margin-top:14px"><div class="hd"><h3>${I.shieldAlert} Inventario CVE por dispositivo</h3><div class="grow"></div>
       <span class="sub">${ (cve.devices||[]).filter(d=>(d.apps||[]).some(a=>a.cves)).length } dispositivos con apps vulnerables</span></div>
       <div class="soar-devs">${devRows||"<div class='sub'>Sin apps vulnerables detectadas</div>"}</div></div>`;
+}
+
+// ---- Editor de playbooks del tenant (REQ §5) --------------------------
+function soarNew(){
+  const n = $("#soarNew"); if(!n) return;
+  n.style.display = n.style.display==="none"?"block":"none";
+  if(n.style.display!=="block") return;
+  n.innerHTML = `<div class="card">
+    <div class="row"><input id="spId" class="inp" placeholder="id (p.ej. soar-cliente-x)"></div>
+    <div class="row"><input id="spName" class="inp" placeholder="nombre"></div>
+    <div class="row"><input id="spSev" class="inp" placeholder="severidad mínima (low/medium/high/critical)" value="high"></div>
+    <div class="row"><textarea id="spCond" class="inp" rows="4" placeholder='condición JSON: {"all":[{"field":"compliant","op":"eq","value":false},{"field":"fence_state","op":"eq","value":"outside"}]}'></textarea></div>
+    <div class="row"><input id="spActions" class="inp" placeholder='acciones JSON: [{"action":"notify","params":{"channel":"soc"}},{"action":"lock","params":{}}]'></div>
+    <div class="row"><button class="btn" onclick="soarCreate()">Guardar playbook</button> <span id="spMsg" class="sub"></span></div>
+  </div>`;
+}
+async function soarCreate(){
+  const id = $("#spId").value.trim(), name = $("#spName").value.trim();
+  const cond = $("#spCond").value.trim(), actions = $("#spActions").value.trim();
+  const sev = $("#spSev").value.trim()||"high";
+  const msg = $("#spMsg"); if(!msg) return;
+  if(!id||!name||!cond||!actions){ msg.textContent="completa id, nombre, condición y acciones"; return; }
+  let condObj, actsObj;
+  try{ condObj = JSON.parse(cond); actsObj = JSON.parse(actions); }
+  catch(e){ msg.textContent="JSON inválido: "+e.message; return; }
+  try{
+    const r = await api("/api/soar/playbooks", "POST", {id, name, severity_min:sev, condition:condObj, actions:actsObj});
+    if(r && r.ok){ msg.textContent="✓ creado"; loadSoar(); }
+    else msg.textContent = "error: " + ((r&&r.error)||"desconocido");
+  }catch(e){ msg.textContent = "error: "+e.message; }
+}
+async function soarToggle(id, enabled){
+  try{ await api(`/api/soar/playbook/${encodeURIComponent(id)}/enable`, "POST", {enabled}); loadSoar(); }catch(e){}
+}
+async function soarDelete(id){
+  if(!confirm("¿Borrar el playbook "+id+"?")) return;
+  try{ await api(`/api/soar/playbook/${encodeURIComponent(id)}`, "DELETE"); loadSoar(); }catch(e){}
 }
 function sevCls(sev){
   sev=(sev||"").toLowerCase();
@@ -1403,6 +1553,86 @@ async function renderSettings(){
   const aiPayload=()=>({enabled:$("#aiEnabled").classList.contains("on"),provider:$("#aiPreset").value,base_url:$("#aiBase").value,model:$("#aiModel").value,api_key:$("#aiKey").value});
   $("#aiSave").onclick=async()=>{const r=await api("/api/ai/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});if(r.ok){toast("AI guardada",r.enabled?r.model:"Desactivada","ok");renderSettings();}else toast("Error",r.error||"","bad");};
   $("#aiTest").onclick=async()=>{const r=await api("/api/ai/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(aiPayload())});const out=$("#aiResult");out.className="test-result "+(r.ok?"ok show":"bad show");out.textContent=r.ok?`Conexión correcta · ${(r.models||[]).slice(0,3).join(', ')||'endpoint activo'}`:(r.error||"Fallo de conexión");};
+
+  // Equipo / Roles: gestionar RBAC desde el dashboard. Solo lo ve el owner,
+  // que es el único rol con la capability user:role en el backend.
+  renderTeamCard();
+  // Registro de auditoría: hace visible el log encadenado (a prueba de
+  // manipulación) que ya se escribe en cada acción privilegiada. Da al rol
+  // auditor una pantalla y responde "quién cambió qué" sin abrir audit.jsonl.
+  renderAuditCard();
+}
+
+async function renderAuditCard(){
+  // Mismo círculo que autoriza el backend en GET /api/audit (403 en otro caso).
+  if(!(App.org && ["owner","admin","viewer","auditor"].includes(App.org.role))) return;
+  const card=document.createElement("div"); card.className="card"; card.style.marginTop="14px";
+  card.innerHTML='<div class="hd"><h3>Registro de auditoría</h3><div class="grow"></div>'+
+    '<span class="tag unk" id="auditIntegrity"><span class="d"></span>comprobando…</span></div>'+
+    '<div class="bd" id="auditBody"><div class="sk" style="height:200px"></div></div>';
+  $("#view-settings").appendChild(card);
+  let data;
+  try{ data = await api("/api/audit"); }
+  catch(e){ $("#auditBody").innerHTML=`<div class="help">No se pudo cargar la auditoría: ${esc(e.message||"")}</div>`; return; }
+  const integ = data.integrity||{};
+  const chip = $("#auditIntegrity");
+  if(integ.ok){ chip.className="tag in"; chip.innerHTML=`<span class="d"></span>cadena íntegra · ${integ.events||0} eventos`; }
+  else { chip.className="tag nocomp"; chip.innerHTML=`<span class="d"></span>cadena alterada${integ.error?": "+esc(integ.error):""}`; }
+  // Detalle compacto: solo campos relevantes de cada evento (whitelist).
+  const DETAIL_KEYS=["mode","role","key_id","goal_id","segment","provider","target"];
+  const detail=(e)=>DETAIL_KEYS.filter(k=>e[k]!=null&&e[k]!=="").map(k=>`${esc(k)}=${esc(e[k])}`).join(" · ");
+  const events=(data.events||[]).slice(-100).reverse();
+  const rows=events.map(e=>`<tr>
+      <td class="sub" style="white-space:nowrap">${esc(e.ts||"")}</td>
+      <td><b>${esc(e.event||"evento")}</b></td>
+      <td class="sub">${esc(e.actor||"—")}</td>
+      <td class="sub" style="font-family:monospace;font-size:11px">${detail(e)}</td>
+    </tr>`).join("");
+  $("#auditBody").innerHTML=
+    '<div class="help">Cada acción privilegiada (enforcement, roles, claves API, providers, exportaciones) queda registrada en un log <b>encadenado por hash</b>: si alguien altera una línea, la cadena se rompe y se marca arriba.</div>'+
+    (rows?`<table class="tbl" style="margin-top:10px;width:100%"><thead><tr><th>Cuándo</th><th>Evento</th><th>Actor</th><th>Detalle</th></tr></thead><tbody>${rows}</tbody></table>`
+        :'<div class="help" style="margin-top:10px">Aún no hay eventos de auditoría.</div>')+
+    `<details style="margin-top:12px"><summary>Exportar a SIEM (CEF)</summary>`+
+    `<textarea class="input" readonly rows="6" style="margin-top:6px;width:100%;font-family:monospace;font-size:11px" onclick="this.select()">${esc((data.cef||[]).join("\n"))}</textarea></details>`;
+}
+
+async function renderTeamCard(){
+  if(!(App.org && App.org.role === "owner")) return;
+  const card=document.createElement("div"); card.className="card"; card.style.marginTop="14px";
+  card.innerHTML='<div class="hd"><h3>Equipo · Roles</h3><div class="grow"></div>'+
+    '<span class="tag in"><span class="d"></span>solo propietario</span></div>'+
+    '<div class="bd" id="teamBody"><div class="sk" style="height:200px"></div></div>';
+  $("#view-settings").appendChild(card);
+  let data;
+  try{ data = await api("/api/members"); }
+  catch(e){ $("#teamBody").innerHTML=`<div class="help">No se pudo cargar el equipo: ${esc(e.message||"")}</div>`; return; }
+  const roles = data.roles||[];
+  const options = (sel)=>roles.map(r=>`<option value="${esc(r.id)}" ${r.id===sel?"selected":""}>${esc(r.label)}</option>`).join("");
+  const rows = (data.members||[]).map(m=>{
+    const self = m.is_self ? ' <span class="sub">(tú)</span>' : "";
+    return `<tr>
+      <td><div>${esc(m.name||m.email)}${self}</div><div class="sub">${esc(m.email)}</div></td>
+      <td><select class="input" data-uid="${esc(m.id)}" data-current="${esc(m.role)}" style="min-width:150px">${options(m.role)}</select></td>
+    </tr>`;
+  }).join("");
+  const legend = roles.map(r=>`<details style="margin-top:6px"><summary><b>${esc(r.label)}</b> <span class="sub">· ${r.caps.length} permisos</span></summary>`+
+    `<div class="sub" style="margin:6px 0 0 12px;font-family:monospace;font-size:11px;line-height:1.5">${r.caps.map(esc).join(" · ")}</div></details>`).join("");
+  $("#teamBody").innerHTML=
+    '<div class="help">Asigna a cada miembro el <b>mínimo privilegio</b> que necesite. La organización conserva siempre al menos un propietario.</div>'+
+    `<table class="tbl" style="margin-top:10px;width:100%"><thead><tr><th>Miembro</th><th>Rol</th></tr></thead><tbody>${rows}</tbody></table>`+
+    `<div style="margin-top:14px"><div class="lab">Qué puede cada rol</div>${legend}</div>`;
+  $$("#teamBody select[data-uid]").forEach(sel=>{
+    sel.addEventListener("change", async ()=>{
+      const uid=sel.dataset.uid, role=sel.value, prev=sel.dataset.current;
+      sel.disabled=true;
+      try{
+        const r=await api("/api/members/role",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid,role})});
+        if(r && r.ok){ toast("Rol actualizado", (r.member&&r.member.email)+" → "+(r.member&&r.member.role_label), "ok"); renderSettings(); }
+        else { toast("Error",(r&&r.error)||"No se pudo cambiar el rol","bad"); sel.value=prev; }
+      }catch(e){ toast("Error", e.message||"fallo de red","bad"); sel.value=prev; }
+      finally{ sel.disabled=false; }
+    });
+  });
 }
 function toggleShow(id, btn){ const i=$("#"+id); if(i.type==="password"){i.type="text";btn.textContent="Ocultar";} else {i.type="password";btn.textContent="Ver";} }
 
@@ -2100,7 +2330,7 @@ async function loadConnectors(){
     }
     list.innerHTML = `<ul class="alist">` + ps.map(p=>`
       <li>
-        <span>${esc(p.label||p.name)} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
+        <span>${esc(p.label||p.name)}${p.segment?' <span class="pill">'+esc(p.segment)+'</span>':''} ${p.configured?'<b style="color:var(--ok)">· conectado</b>':'<b style="color:var(--warn)">· sin credenciales</b>'}</span>
         <span class="row gap">
           <button class="btn sm ghost" onclick="removeConn('${esc(p.name)}')">Quitar</button>
         </span>
@@ -2139,27 +2369,31 @@ async function openConnWizard(){
     } else if(state.step===2){
       sub.textContent = "Paso 2 de 3 · credenciales"; av.textContent = state.meta?state.meta.label[0]:"·";
       const fields = state.meta?state.meta.fields:[];
-      body.innerHTML = fields.length ? fields.map(f=>`
+      const segOpts = ["","móviles","portátiles","mixta","servidores","otros"];
+      const segSel = `<label class="fld"><span>Segmento de flota <small style="opacity:.6">(qué cubre este UEM)</small></span>
+          <select id="cw_segment">${segOpts.map(o=>`<option value="${o}"${o===(state.segment||"")?" selected":""}>${o||"— sin etiqueta —"}</option>`).join("")}</select></label>`;
+      body.innerHTML = (fields.length ? fields.map(f=>`
         <label class="fld"><span>${fieldLabel(f)}</span>
           <input id="cw_${f}" type="${f==='api_key'?'password':'text'}" autocomplete="off" placeholder="${fieldLabel(f)}"></label>`).join("")
-        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`;
+        : `<div class="empty"><div class="t">Este conector no requiere credenciales</div></div>`) + segSel;
       const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=1;render();};
       const next = el("button","btn primary"); next.textContent="Siguiente"; next.onclick=()=>{
         state.fields = {}; fields.forEach(f=>{ state.fields[f] = $(("#cw_"+f)).value.trim(); });
+        const seg = $("#cw_segment"); state.segment = seg ? seg.value : "";
         state.step=3; render();
       };
       foot.appendChild(back); foot.appendChild(next);
     } else {
       sub.textContent = "Paso 3 de 3 · guardar"; av.textContent = "✓";
-      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}</div>
-        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales cifradas en tu tenant)":""}.</div></div>`;
+      body.innerHTML = `<div class="empty"><div class="t">${esc(state.meta?state.meta.label:"")}${state.segment?' <span class="pill">'+esc(state.segment)+'</span>':''}</div>
+        <div class="s">Listo para guardar el conector${state.meta&&state.meta.fields.length?" (credenciales aisladas en tu tenant, 0600)":""}.</div></div>`;
       const back = el("button","btn ghost"); back.textContent="Atrás"; back.onclick=()=>{state.step=2;render();};
       const save = el("button","btn primary"); save.textContent="Guardar conector";
       save.onclick = async ()=>{
         save.disabled = true; save.textContent = "Guardando…";
         try{
           const r = await api("/api/providers",{method:"POST",headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({name:state.name, ...state.fields})});
+            body:JSON.stringify({name:state.name, segment:state.segment||"", ...state.fields})});
           if(r.ok){ toast("Conector guardado", state.meta?state.meta.label:"", "ok"); close(); await loadConnectors(); }
           else toast("Error", (r.error||"no se pudo guardar"), "bad");
         }catch(e){ toast("Error", e.message, "bad"); }

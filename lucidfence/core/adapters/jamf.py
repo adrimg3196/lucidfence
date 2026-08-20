@@ -24,6 +24,7 @@ import logging
 import os
 import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -208,6 +209,16 @@ class JamfAdapter(MDMAdapter):
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if action == "apply_ddm":
             return self._apply_ddm(device, params)
+        # Jamf no expone "forzar conformidad" por API: la conformidad la
+        # calculan smart groups + la integración compliance partner con
+        # Microsoft (Jamf Pro <-> Intune). Degrada igual en mock y en live
+        # para que la evaluación no prometa algo que producción negará.
+        if action == "set_compliance":
+            return self._err(
+                "jamf", device, action, "unsupported_action",
+                "Jamf compliance is driven by smart groups and the "
+                "Jamf<->Microsoft compliance partner integration; "
+                "set_compliance is not a Jamf API command")
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
         try:
@@ -359,7 +370,7 @@ class JamfAdapter(MDMAdapter):
                 f"action {action!r} not in {list(JAMF_VERB)}",
             )
         verb = JAMF_VERB[action]
-        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=device_id)}"
+        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=quote(str(device_id), safe=''))}"
         body: dict = {"commandData": {"commandType": verb}}
         if action == "message":
             body["clientData"] = []

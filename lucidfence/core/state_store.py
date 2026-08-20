@@ -48,6 +48,7 @@ class DeviceState:
     battery_state: Optional[str] = None       # charging|discharging|full|unknown
     storage_total_gb: Optional[float] = None  # total capacity
     storage_free_gb: Optional[float] = None   # free space
+    encryption_enabled: Optional[bool] = None # FileVault/LUKS/BitLocker posture
     carrier: Optional[str] = None             # cellular carrier / network
     assigned_user: Optional[str] = None       # user / owner of the device
     department: Optional[str] = None          # business unit
@@ -60,6 +61,15 @@ class DeviceState:
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
+    lockdown_mode: Optional[bool] = None       # security.lockdown-mode.enabled (Apple OS 27); None=unknown
+    supervised: Optional[bool] = None          # enrollment supervision (Apple OS 27); None=unknown
+    # --- integridad de ubicación (anti-spoofing, ver location_integrity.py) ---
+    location_integrity: Optional[dict] = None  # {"suspicious", "checks", "speed_kmh", ...}
+    # --- endpoint posture evidence (osquery) ---
+    posture_source: Optional[str] = None       # e.g. osquery
+    posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
+    osquery_version: Optional[str] = None
+    osquery_config_valid: Optional[bool] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -86,10 +96,17 @@ class StateStore:
         if self.states_path.exists():
             try:
                 raw = json.loads(self.states_path.read_text(encoding="utf-8"))
-                for d in raw:
-                    self._states[d["device_id"]] = DeviceState(**d)
             except Exception:
-                self._states = {}
+                return
+            # Isolate per-record failures: a single corrupt or
+            # schema-drifted row must be skipped, never wipe the whole fleet's
+            # persisted state. (ponytail: no logging infra here; skip silently
+            # but keep every good record — add logging if forensics matter.)
+            for d in raw:
+                try:
+                    self._states[d["device_id"]] = DeviceState(**d)
+                except Exception:
+                    continue
 
     def snapshot(self) -> dict[str, DeviceState]:
         with self.lock:

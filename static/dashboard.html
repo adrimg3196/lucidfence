@@ -153,6 +153,15 @@
   @media(max-width:1000px){.company-layout{grid-template-columns:1fr}.company-agents{grid-template-columns:repeat(2,1fr)}.company-form{grid-template-columns:1fr 1fr}}
   @media(max-width:620px){.company-agents,.company-form{grid-template-columns:1fr}}
 
+  /* ---------- Banda de datos demo (issue #110) ---------- */
+  /* Colores fijos (no tokens de tema): la banda debe mantener contraste
+     >=4.5:1 sobre sí misma en tema claro y oscuro. #241a00 sobre #ffd66b
+     da ~10:1. Sin botón de cierre: se retira sola con datos reales. */
+  .demo-banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:#ffd66b;color:#241a00;border:1px solid #b98a00;border-radius:var(--radius-lg);padding:10px 14px;margin:14px 16px 0;font-size:13px;line-height:1.4}
+  .demo-banner a{color:#241a00;font-weight:700;text-decoration:underline}
+  .demo-banner a:focus-visible{outline:3px solid #241a00;outline-offset:2px;border-radius:4px}
+  .demo-banner[hidden]{display:none}
+
   /* ---------- KPI (compactos) ---------- */
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -438,6 +447,11 @@
         </div>
         <div class="row"><span>Ciclo</span><b id="ratePill">15 min</b></div>
         <div class="row" style="margin-top:6px"><span>Estado</span><b id="modeText" style="color:var(--green)">live</b></div>
+        <div class="row" id="enfRow" style="margin-top:6px;display:none"><span>Enforcement</span>
+          <select id="enfSelect" title="Fase de enforcement" style="width:auto;padding:2px 6px;font-size:11px;background:var(--card-2,#151a24);color:var(--fg);border:1px solid var(--line,#2a3140);border-radius:6px">
+            <option value="observe">observación</option>
+            <option value="enforce">enforce</option>
+          </select></div>
       </div>
     </aside>
 
@@ -452,6 +466,14 @@
         <button class="btn" id="refreshBtn"><span data-reicon="refresh" data-size="15"></span>Refrescar</button>
         <button class="btn primary" id="cycleBtn"><span data-reicon="bolt" data-size="15"></span>Forzar ciclo</button>
       </header>
+
+      <!-- Banda de datos demo (issue #110): persistente y no descartable
+           mientras se muestren datos de ejemplo; app.js la retira cuando la
+           organización es real (st.mode !== "simulation"). -->
+      <div class="demo-banner" id="demoBanner" role="status" hidden>
+        <strong>Estás viendo datos de ejemplo; no pertenecen a tu organización.</strong>
+        <a href="#connectors">Conecta tu UEM</a>
+      </div>
 
       <!-- VIEWS -->
       <div class="view" id="view-overview"></div>
@@ -496,7 +518,7 @@
     <div class="mhd">
       <div class="mav" id="mAv">?</div>
       <div style="flex:1;min-width:0">
-        <h2 id="mName">—</h2><div class="msub" id="mId"></div>
+        <h2 id="mName">-</h2><div class="msub" id="mId"></div>
       </div>
       <div id="mTag"></div>
       <button class="xbtn" id="mClose" aria-label="Cerrar detalle de dispositivo"><span data-reicon="x-square" data-size="16"></span></button>
@@ -508,7 +530,7 @@
         <div style="font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:8px">Comandos remotos (MDM/UEM)</div>
         <div class="row gap wrap" id="mCmd">
           <button class="btn sm" data-cmd="lock"><span data-reicon="lock" data-size="14"></span>Bloquear</button>
-          <button class="btn sm" data-cmd="wipe"><span data-reicon="trash-2" data-size="14"></span>Borrar</button>
+          <button class="btn sm" id="cmdWipe" data-cmd="wipe"><span data-reicon="trash-2" data-size="14"></span>Borrar<span id="wipeKey" class="tag" style="margin-left:6px;font-size:9px"></span></button>
           <button class="btn sm" data-cmd="locate"><span data-reicon="map-pin" data-size="14"></span>Localizar</button>
           <button class="btn sm" data-cmd="reboot"><span data-reicon="rotate-cw" data-size="14"></span>Reiniciar</button>
           <button class="btn sm" data-cmd="clear_passcode"><span data-reicon="key-round" data-size="14"></span>Reset PIN</button>

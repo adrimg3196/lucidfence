@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
@@ -75,6 +76,15 @@ class FleetAdapter(MDMAdapter):
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         device_id = self._dev_id_str(device)
+        # En Fleet la conformidad la calculan sus propias policies (osquery),
+        # no un tercero: no hay API para forzarla. El camino equivalente para
+        # Conditional Access es la integración nativa Fleet <-> Microsoft
+        # Entra; el mensaje se lo dice al admin en vez de un genérico.
+        if action == "set_compliance":
+            return self._err(action, "unsupported_action",
+                             "Fleet computes compliance from its own policies; "
+                             "use Fleet's Microsoft Entra conditional access "
+                             "integration instead of set_compliance")
         # Contract: unknown actions return unsupported_action (never raise).
         if action not in _ALL_VALID_ACTIONS:
             return self._err(action, "unsupported_action",
@@ -111,7 +121,7 @@ class FleetAdapter(MDMAdapter):
 
     def _build_request(self, device_id: str, action: str, params: dict):
         fleet_verb = _FLEET_ACTION.get(action, action)
-        url = f"{self.endpoint_template}/api/v1/fleet/device/{device_id}/{fleet_verb}"
+        url = f"{self.endpoint_template}/api/v1/fleet/device/{quote(str(device_id), safe='')}/{fleet_verb}"
         body: dict = {}
         if action == "message":
             body = {"message": params.get("message", "")}

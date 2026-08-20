@@ -8,7 +8,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION=$(date +%Y%m%d)
+# Para releases versionadas (workflow release.yml): LUCIDFENCE_BUILD_VERSION=1.5.0
+VERSION=${LUCIDFENCE_BUILD_VERSION:-$(date +%Y%m%d)}
 OUT_DIR="dist"
 NAME="lucidfence-$VERSION"
 STAGE="$OUT_DIR/$NAME"
@@ -18,9 +19,16 @@ mkdir -p "$STAGE"
 # --- copiar código fuente (excluye datos de tenant y caches) ---
 # `.git` iba dentro del tarball del cliente: historia completa, ramas y todo lo
 # que alguna vez se commiteó. `dist` se copiaba a sí mismo en cada build.
+# El entregable es el producto, no el repo: fuera assets de marketing (brand/
+# llegó a meter 81MB en el tarball), config interna de agentes/CI y datos
+# operativos del pipeline de la vitrina.
 rsync -a --exclude='data/tenants' --exclude='__pycache__' --exclude='.pytest_cache' \
       --exclude='*.pyc' --exclude='.env' --exclude='data/*.tmp' \
       --exclude='.git' --exclude='dist' --exclude='graphify-out' \
+      --exclude='brand' --exclude='.agents' --exclude='.claude' \
+      --exclude='.claude-plugin' --exclude='.gemini' --exclude='.superpowers' \
+      --exclude='.github' --exclude='data/reports' --exclude='data/cloud_tenants' \
+      --exclude='loop_improve.py' --exclude='ZERO-BACKLOG.md' \
       ./ "$STAGE/"
 
 # --- SBOM del entregable ---
