@@ -2,7 +2,8 @@
 
 > Manual del usuario con capturas reales del producto (tenant demo).
 > Versión interactiva paso a paso: **`/static/manual.html`** en tu instalación
-> local, o `manual.html` en la web pública del proyecto.
+> local (selector ES/EN en la cabecera), o `manual.html` en la web pública del
+> proyecto. **English version:** [`USER_GUIDE.md`](USER_GUIDE.md).
 > Para instalar, ver [`GETTING_STARTED.md`](../GETTING_STARTED.md).
 
 LucidFence es el **complemento de geofencing y postura sobre el UEM que ya

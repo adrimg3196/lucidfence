@@ -28,6 +28,10 @@ python3 tests/run_tests.py
 el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
 tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
 
+> 📖 **Manual de uso** (con capturas): [español](docs/manual/MANUAL_DE_USO.md) ·
+> [English](docs/manual/USER_GUIDE.md) · interactivo en `/static/manual.html`
+> de tu instalación (selector ES/EN).
+>
 > ¿Primera vez? Empieza por **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**:
 > qué necesitas, cómo instalar, cómo comprobar que funciona, FAQ y cómo reportar
 > un bug. (Este README es la vista técnica del proyecto.)
