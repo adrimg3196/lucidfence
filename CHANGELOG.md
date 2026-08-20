@@ -146,7 +146,7 @@ All notable changes to LucidFence are documented here.
 - docs: add docs/operations/RUNBOOK.md operator playbook (Bounty #19, WS5)
 - docs(roadmap): enlaza milestones GitHub v1.3.0-v2.1.0 (roadmap ejecutable)
 - docs: roadmap anual 2026-2027 (Q3'26→Q2'27) + social preview asset
-- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf live
+- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf as live-capable (live when client token connected, mock/simulation otherwise)
 - docs: link desktop preview download
 - docs(vitrina): documenta tap Homebrew (brew install adrimg3196/lucidfence resuelve)
 
