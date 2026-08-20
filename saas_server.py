@@ -1042,7 +1042,7 @@ def _send_html(handler, html_text: str):
     handler.send_header("Cache-Control", "no-store")
     handler.send_header(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
     handler.send_header("X-Request-ID", _request_id(handler))
     handler.end_headers()

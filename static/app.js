@@ -655,11 +655,49 @@ function renderOverview(){
           <button class="btn primary" style="width:100%;margin-top:14px;justify-content:center" onclick="openAiFromOverview()">${I.bolt} Pregunta a la IA sobre tu flota</button>
         </div>
       </div>
+    </div>
+    <div class="card" id="ovCoverage" style="margin-top:14px;display:none">
+      <div class="hd"><h3>Puntos ciegos</h3><div class="grow"></div><span class="sub">lo que la config actual NO cubre</span></div>
+      <div class="bd" id="ovCoverageBody"></div>
     </div>`;
   renderDonut($("#compDonut"), compPct, total-noncomp, total);
   renderComplianceChart(st);
   renderEventList($("#ovEvents"), events.slice(0,8));
   initMap(devs, "overviewMap");
+  renderCoverageCard();
+}
+
+// Tarjeta "Puntos ciegos" (GET /api/coverage): el negativo de la cobertura.
+// Si la petición falla (p.ej. rol sin permiso device:read) la tarjeta se queda
+// oculta en silencio — el Resumen nunca se rompe por este extra.
+async function renderCoverageCard(){
+  let cov;
+  try{ cov = await api("/api/coverage"); }catch(e){ return; }
+  const card = $("#ovCoverage"), body = $("#ovCoverageBody");
+  if(!card || !body || App.view!=="overview") return;
+  const r = cov.resumen||{};
+  const sinSenal = cov.devices_sin_senal||[];
+  const sinReportar = cov.devices_sin_reportar||[];
+  const vacias = cov.fences_vacias||[];
+  const pct = r.coverage_percent!=null? r.coverage_percent : 100;
+  const counters = `
+    <span class="tag ${sinSenal.length?'warn':'in'}"><span class="d"></span>${sinSenal.length} sin señal</span>
+    <span class="tag ${sinReportar.length?'warn':'in'}"><span class="d"></span>${sinReportar.length} sin reportar</span>
+    <span class="tag ${vacias.length?'warn':'in'}"><span class="d"></span>${vacias.length} cercas vacías</span>`;
+  const entries = [
+    ...sinSenal.map(d=>({icon:I.dev, nm:d.name||d.device_id, ds:d.reason||"sin señal"})),
+    ...sinReportar.map(d=>({icon:I.dev, nm:d.name||d.device_id, ds:d.reason||"sin reportar"})),
+    ...vacias.map(f=>({icon:I.shield, nm:f.name||f.fence_id, ds:"geocerca sin ningún dispositivo dentro"})),
+  ].slice(0,5);
+  const list = entries.length
+    ? `<div class="alist" style="margin-top:12px">${entries.map(e=>`<div class="aitem"><div class="ic">${e.icon}</div><div class="grow"><div class="nm">${esc(e.nm)}</div><div class="ds">${esc(e.ds)}</div></div></div>`).join("")}</div>`
+    : `<div style="margin-top:12px"><span class="tag in"><span class="d"></span>Cobertura completa: sin puntos ciegos</span></div>`;
+  body.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div><span style="font-size:26px;font-weight:600;letter-spacing:-.03em">${esc(pct)}%</span> <span class="sub">de la flota evaluable contra geocercas</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${counters}</div>
+    </div>${list}`;
+  card.style.display="";
 }
 function openAiFromOverview(){ goView("ai"); }
 
@@ -936,6 +974,26 @@ function renderDeviceRows(){
 }
 
 /* ---------- device modal ---------- */
+// Postura DDM (readback honesto): true → positivo; false explícito → atención;
+// null/ausente → neutro "el UEM no lo reporta" — lo desconocido nunca alarma,
+// tampoco visualmente (clase .sub muted, jamás un tag de alerta).
+function postureBadge(v, onText, offText){
+  if(v===true)  return `<span class="tag in"><span class="d"></span>${esc(onText)}</span>`;
+  if(v===false) return `<span class="tag warn"><span class="d"></span>${esc(offText)}</span>`;
+  return `<span class="sub">— (el UEM no lo reporta)</span>`;
+}
+// Misma semántica que policies._hardware_degraded_components: False o
+// "degraded"/"failed"/"error" = degradado explícito; cualquier otro valor es
+// desconocido y no cuenta como degradación.
+function hardwareHealthBadge(hh){
+  if(!hh || typeof hh!=="object" || Array.isArray(hh)) return `<span class="sub">— (el UEM no lo reporta)</span>`;
+  const bad = Object.keys(hh).filter(k=>{
+    const v = hh[k];
+    return v===false || (typeof v==="string" && ["degraded","failed","error"].includes(v.trim().toLowerCase()));
+  });
+  if(!bad.length) return `<span class="tag in"><span class="d"></span>Todos los componentes OK</span>`;
+  return bad.map(k=>`<span class="tag warn"><span class="d"></span>${esc(k)}: degradado</span>`).join(" ");
+}
 async function openDeviceModal(id){
   App._modalReturnFocus = document.activeElement;
   const d = (App.status.devices||[]).find(x=>x.device_id===id);
@@ -953,8 +1011,14 @@ async function openDeviceModal(id){
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
     ["Visto", fmt.date(d.last_seen)],
+    // Postura DDM (Apple OS 27) + cifrado: campos reales de DeviceState.to_dict().
+    ["Lockdown Mode", postureBadge(d.lockdown_mode, "Activado", "Desactivado"), true],
+    ["Supervisión", postureBadge(d.supervised, "Supervisado (corporativo)", "No supervisado (personal)"), true],
+    ["Salud de hardware", hardwareHealthBadge(d.hardware_health), true],
+    ["Cifrado", postureBadge(d.encryption_enabled, "Activado", "Desactivado"), true],
   ];
-  $("#mKv").innerHTML = rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${esc(r[1])}</div>`).join("");
+  // r[2] === true → r[1] ya es HTML seguro (construido con esc() dentro).
+  $("#mKv").innerHTML = rows.map(r=>`<div class="k">${esc(r[0])}</div><div class="v">${r[2]?r[1]:esc(r[1])}</div>`).join("");
   // ---- G2a: Risk Engine explicable (reasons + verified) ----
   const mRisk = $("#mRisk");
   if(mRisk){
