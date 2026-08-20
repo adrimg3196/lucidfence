@@ -817,7 +817,7 @@ def _send_json(handler, obj, code=200):
     # CSP: only same-origin resources; blocks injected third-party scripts (XSS)
     handler.send_header(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     )
     for c in getattr(handler, "_set_cookies", []) or []:
@@ -853,10 +853,10 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("X-Request-ID", _request_id(handler))
-    csp = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    csp = ("default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self' 'unsafe-inline'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
            "frame-ancestors 'none'") if path.name in ("cloud.html", "index.html") else (
-           "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+           "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
     handler.send_header("Content-Security-Policy", csp)
     handler.end_headers()

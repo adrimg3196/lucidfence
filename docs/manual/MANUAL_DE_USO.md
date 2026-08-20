@@ -31,7 +31,11 @@ conformidad (exportable a PDF).
 ![Mapa de flota a pantalla completa](../../static/manual/02-mapa.png)
 
 **Mapa**: cada punto es un dispositivo, coloreado por estado (dentro / fuera /
-desconocido). Los portátiles sin GPS también se posicionan si configuras
+desconocido). El botón **"Mapa detallado"** (abajo a la derecha) cambia a un
+fondo real de OpenStreetMap, estilo Google Maps — es *opt-in* con aviso: las
+teselas se descargan de openstreetmap.org, que ve la zona del visor; tus
+dispositivos y posiciones jamás se envían, y el defecto sigue siendo el mapa
+local sin ninguna petición externa. Los portátiles sin GPS también se posicionan si configuras
 red-fencing (la oficina se declara por CIDR/SSID — ver
 [`NETWORK_LOCATION.md`](../integrations/NETWORK_LOCATION.md)).
 

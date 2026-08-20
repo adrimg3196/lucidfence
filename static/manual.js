@@ -15,6 +15,11 @@ const S = [
   al conectar tu UEM.</div>`},
  {t:"Mapa de flota", img:"manual/02-mapa.png", h:`
   <p>Cada punto es un dispositivo, coloreado por estado: dentro, fuera o desconocido.</p>
+  <div class="tip">¿Prefieres un fondo real estilo Google Maps? Pulsa <strong>Mapa
+  detallado</strong> (abajo a la derecha del mapa): carga calles y ciudades de
+  OpenStreetMap. Es opt-in con aviso: las teselas se descargan de un tercero, que
+  ve la zona del visor — tus dispositivos y datos jamás se envían. El defecto
+  sigue siendo el mapa local con cero peticiones.</div>
   <div class="tip">¿Portátiles sin GPS? Declara tu red (CIDR de salida, SSID de la
   oficina) y LucidFence los posiciona de forma gruesa y honesta — red-fencing sin
   hardware nuevo.</div>`},

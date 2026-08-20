@@ -753,6 +753,49 @@ function renderMapView(){
 function recenterMap(){ if(App.map) App.map.setView([40.42,-3.70], 6); }
 
 /* ---------- MAP engine (Leaflet) ---------- */
+// Estilo de mapa: "local" (SVG vendorizado, cero red — el DEFECTO, Constitución I)
+// u "osm" (teselas reales de openstreetmap.org, SOLO opt-in explícito del admin:
+// cada tesela pedida revela al proveedor la zona del visor, aunque jamás se
+// envían posiciones ni inventario). La elección vive en localStorage.
+function mapStyleIsOSM(){ try{ return localStorage.getItem("lf_map_style")==="osm"; }catch(_e){ return false; } }
+function basemapLayer(){
+  return mapStyleIsOSM()
+    ? L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'})
+    : L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false});
+}
+function toggleMapStyle(){
+  if(!mapStyleIsOSM()){
+    const msg = "Mapa detallado (OpenStreetMap)\n\n" +
+      "El fondo del mapa se descargará de openstreetmap.org. Cada movimiento del visor " +
+      "revela a ese servicio la zona del mapa que estás mirando (aprox. el área de tu flota). " +
+      "Tus dispositivos, posiciones e inventario NUNCA se envían: solo se piden las imágenes del fondo.\n\n" +
+      "¿Activar el mapa detallado?";
+    if(!confirm(msg)) return;
+    try{ localStorage.setItem("lf_map_style","osm"); }catch(_e){}
+  } else {
+    try{ localStorage.setItem("lf_map_style","local"); }catch(_e){}
+  }
+  if(App.map){
+    const nodeId = App.map.getContainer().id;
+    App.map.remove(); App.map=null; App.mapMarkers={}; App.trailLayer=null;
+    initMap((App.status&&App.status.devices)||[], nodeId);
+  }
+}
+const MapStyleControl = L.Control ? L.Control.extend({
+  options:{position:"bottomright"},
+  onAdd(){
+    const b=L.DomUtil.create("button","map-style-btn");
+    b.type="button";
+    b.textContent = mapStyleIsOSM() ? "Mapa local" : "Mapa detallado";
+    b.title = mapStyleIsOSM()
+      ? "Volver al mapa local (cero peticiones de red)"
+      : "Fondo real de OpenStreetMap (opt-in: pide teselas a un tercero)";
+    b.style.cssText="background:var(--panel,#141924);color:var(--fg,#e6e9f0);border:1px solid var(--line,#232a3a);border-radius:6px;padding:5px 10px;font:12px system-ui;cursor:pointer";
+    L.DomEvent.on(b,"click",(e)=>{ L.DomEvent.stop(e); toggleMapStyle(); });
+    return b;
+  }
+}) : null;
 function initMap(devs, targetId){
   if(typeof L === "undefined") return;
   const node=document.getElementById(targetId); if(!node) return;
@@ -763,9 +806,11 @@ function initMap(devs, targetId){
     App.map=null; App.mapMarkers={}; App.trailLayer=null;
   }
   if(!App.map){
-    App.map = L.map(node, {zoomControl:true, attributionControl:false}).setView([40.42,-3.70], 6);
-    // Single vendored vector basemap: no tile provider, tracking or network.
-    L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(App.map);
+    App.map = L.map(node, {zoomControl:true, attributionControl:mapStyleIsOSM()}).setView([40.42,-3.70], 6);
+    // Basemap por defecto: vector vendorizado, sin proveedor de teselas ni red.
+    // El fondo OSM real existe SOLO como opt-in explícito (ver basemapLayer).
+    basemapLayer().addTo(App.map);
+    if(MapStyleControl) new MapStyleControl().addTo(App.map);
     App.trailLayer = L.layerGroup().addTo(App.map);
     const settleMap = (attempt=0)=>{
       if(!App.map || App.map.getContainer()!==node) return;
@@ -961,7 +1006,7 @@ async function openDeviceModal(id){
     const tr = (det.trail||[]).slice(-40);
     if(tr.length>1 && typeof L!=="undefined"){
       const tm = L.map(trailNode, {zoomControl:false, attributionControl:false}).setView([tr[0].lat,tr[0].lng], 9);
-      L.imageOverlay("/static/vendor/offline-map.svg", [[-85.05112878,-180],[85.05112878,180]], {opacity:1, interactive:false}).addTo(tm);
+      basemapLayer().addTo(tm);
       L.polyline(tr.map(p=>[p.lat,p.lng]).filter(p=>p[0]!=null&&p[1]!=null), {color:"#5e6ad5",weight:2}).addTo(tm);
       tr.forEach(p=>{ if(p.lat!=null&&p.lng!=null) L.circleMarker([p.lat,p.lng],{radius:3,color:"#5e6ad5",fillOpacity:.7}).addTo(tm); });
       setTimeout(()=>tm.invalidateSize(),40);
