@@ -11,6 +11,11 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`GETTING_STARTED.md`](GETTING_STARTED.md) | Guía de arranque para quien usa LucidFence por primera vez |
 | [`demo-walkthrough.md`](demo-walkthrough.md) | Demo guiada desde el navegador, sin instalar nada |
 | [`manual/MANUAL_DE_USO.md`](manual/MANUAL_DE_USO.md) | Manual de uso con capturas reales (versión interactiva: `/static/manual.html`) |
+| [`manual/USER_GUIDE.md`](manual/USER_GUIDE.md) | User guide (English) with real screenshots |
+| [`reference/POLICY_DSL.md`](reference/POLICY_DSL.md) | Policy DSL reference: operators, fields, signals, actions |
+| [`operations/PRODUCTION.md`](operations/PRODUCTION.md) | Running in production: tested limits, data model, backup, crash/idempotency |
+| [`contributing/DEVELOPMENT.md`](contributing/DEVELOPMENT.md) | How development works here (honest runner, runtime battery, ruff gate) |
+| [`adr/README.md`](adr/README.md) | Architecture Decision Records (why stdlib, why no pytest, frozen base.py…) |
 | [`product/CLIENTE.md`](product/CLIENTE.md) | Guía de entrega al cliente |
 | [`product/README_CLIENTE.md`](product/README_CLIENTE.md) | Manual de la instalación de cliente |
 | [`product/README_SAAS.md`](product/README_SAAS.md) | Manual del modo SaaS multi-tenant |

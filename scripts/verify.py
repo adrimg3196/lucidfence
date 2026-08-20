@@ -10,9 +10,9 @@ Corre, en orden, las cuatro comprobaciones que forman el gate QA del repo:
   1. Coherencia de versión   cli.VERSION == pyproject == .release-version
   2. Enlaces de docs          links relativos de *.md resuelven (docs/ + raíz)
   3. Batería runtime          scripts/runtime_validation.py debe dar N/N
-  4. Suite honesta            tests/run_tests.py; tolera SOLO la baseline
-                              conocida de test_oidc_sso.py (cryptography del
-                              sistema roto en algunos contenedores; verde en CI)
+  4. Suite honesta            tests/run_tests.py; 0 failed obligatorio. Los
+                              tests que no pueden correr aquí (cryptography
+                              fijada ausente) SALTAN con motivo, no fallan.
 
 Uso:
     python3 scripts/verify.py             # todo; exit 0 solo si todo pasa
@@ -31,10 +31,6 @@ import sys
 import tomllib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# La única baseline de fallos tolerada: OIDC necesita un `cryptography` sano y
-# algunos contenedores lo traen roto. En CI (cryptography bueno) estos pasan.
-OIDC_BASELINE = "test_oidc_sso.py"
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
@@ -104,22 +100,18 @@ def check_runtime_battery() -> tuple[bool, str]:
 
 def check_test_suite() -> tuple[bool, str]:
     rc, out = _run([sys.executable, "tests/run_tests.py"])
-    m = re.search(r"===\s*(\d+)\s*passed,\s*(\d+)\s*failed\s*===", out)
+    m = re.search(r"===\s*(\d+)\s*passed,\s*(\d+)\s*skipped,\s*(\d+)\s*failed\s*===", out)
     if not m:
         tail = out.strip().splitlines()[-1] if out.strip() else "sin salida"
         return False, f"no se pudo leer el tally ({tail})"
-    passed, failed = int(m.group(1)), int(m.group(2))
+    passed, skipped, failed = int(m.group(1)), int(m.group(2)), int(m.group(3))
     if failed == 0:
-        return True, f"{passed} passed, 0 failed"
-    # Falla — ¿son todos la baseline conocida de OIDC?
+        return True, f"{passed} passed, {skipped} skipped, 0 failed"
+    # El runner honesto ahora SALTA (no falla) la baseline OIDC del contenedor,
+    # con motivo declarado. Cualquier `failed` aquí es un fallo real y bloquea.
     fail_lines = re.findall(r"^\s*-\s+(\S+::\S+)", out, re.MULTILINE)
-    non_baseline = [f for f in fail_lines if not f.startswith(OIDC_BASELINE)]
-    if fail_lines and not non_baseline:
-        return True, (f"{passed} passed, {failed} failed "
-                      f"(todos {OIDC_BASELINE} — baseline conocida del contenedor; "
-                      f"verde en CI)")
-    shown = non_baseline or [f"{failed} fallos no parseables"]
-    return False, f"{passed} passed, {failed} failed — reales: " + "; ".join(shown[:5])
+    shown = fail_lines or [f"{failed} fallos no parseables"]
+    return False, f"{passed} passed, {skipped} skipped, {failed} failed — reales: " + "; ".join(shown[:5])
 
 
 # (nombre, función, is_runtime, is_deterministic-doc-check)
