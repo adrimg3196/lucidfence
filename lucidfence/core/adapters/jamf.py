@@ -27,6 +27,7 @@ from urllib.parse import quote
 import requests
 
 from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.multiuem import NormalizedDevice
 
 
 # Acción UEM -> comando Jamf (verb del endpoint de commands).
@@ -457,8 +458,6 @@ class JamfAdapter(MDMAdapter):
         return "company"
 
     def _normalize_fetch_device(self, raw: dict) -> NormalizedDevice:
-        from lucidfence.core.multiuem import NormalizedDevice
-
         general = raw.get("general") or {}
         device_id = str(raw.get("id") or general.get("id") or "")
         return NormalizedDevice(
