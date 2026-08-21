@@ -31,7 +31,7 @@ jobs:
 
       - name: Run test suite
         env:
-          LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
+          LUCIDFENCE_PERF_TICK_S: "0.5"  # guard de regresión: mediana del mejor bloque (ver test_perf_engine)
         run: python3 tests/run_tests.py
 
   verify-docs:

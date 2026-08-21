@@ -27,7 +27,11 @@ tests verdes y rotas en uso real; existes para que no vuelva a pasar.
 - La suite no tolera flakes silenciados: un test que a veces falla es un bug.
 - Un umbral de rendimiento es un **guard de regresión, no un SLA**: se calibra
   para no flakear en el runner compartido de CI (lección monitor-hourly
-  2026-08-18: límite 0.05s → 0.5s, tunable por `LUCIDFENCE_PERF_P95_S`).
+  2026-08-18: límite 0.05s → 0.5s). Y la MÉTRICA importa más que el umbral:
+  medir el peor tick de N mide la peor pausa del planificador, no el código —
+  usa mediana + mejor bloque de varios intentos (el ruido de contención solo
+  ralentiza, así que el mejor bloque es el más limpio y una regresión real
+  sale lenta en todos). Tunable por `LUCIDFENCE_PERF_TICK_S`.
 
 ## 📋 Entregables
 - Veredicto `VEREDICTO QA: APTO` / no-apto con el check que falla y por qué.
