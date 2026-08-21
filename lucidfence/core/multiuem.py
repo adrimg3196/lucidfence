@@ -17,7 +17,6 @@ from typing import Callable
 
 # Issue #89: declarative-vs-imperative routing gate (shared with the engine).
 from lucidfence.core.declarative import (  # noqa: E402
-    declarative_path_for,
     resolve_declarative_subaction,
 )
 
