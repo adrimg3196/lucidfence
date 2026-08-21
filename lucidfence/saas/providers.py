@@ -68,6 +68,10 @@ def _tenant_runtime(tdir: Path) -> dict:
 #   placeholder -> ejemplo del formato esperado ("" si no aplica)
 #   help        -> dónde encontrarlo en la consola real de ese UEM
 #   optional    -> True si el adapter tiene default razonable sin él
+#
+# La capacidad de gestión declarativa (DDM/DSC) NO se escribe aquí: `catalog()`
+# la deriva del adapter real en cada lectura (`declarative_support`), para que
+# no exista una copia que pueda divergir de lo que el adapter soporta.
 PROVIDER_CATALOG: dict[str, dict] = {
     "applivery": {
         "label": "Applivery",
@@ -166,12 +170,34 @@ PROVIDER_CATALOG: dict[str, dict] = {
 }
 
 
+def declarative_support(name: str) -> dict:
+    """Capacidad de gestión declarativa de un UEM, DERIVADA de su adapter real.
+
+    Nunca una lista escrita a mano (derivaría con el tiempo): se lee del adapter
+    registrado en ese momento — `supports_ddm` (Apple Declarative Device
+    Management) y `supports_dsc` (Windows DSC v3). Cambiar la flag de un adapter
+    cambia el catálogo en el mismo commit. Mismo principio que el test-verdad de
+    los fields del wizard (tests/test_provider_catalog.py).
+
+    Un UEM sin adapter registrado devuelve todo False: no se promete capacidad
+    que nadie implementa.
+    """
+    from lucidfence.core.adapters import ADAPTER_REGISTRY
+
+    cls = ADAPTER_REGISTRY.get(name)
+    ddm = bool(getattr(cls, "supports_ddm", False))
+    dsc = bool(getattr(cls, "supports_dsc", False))
+    return {"supported": ddm or dsc, "ddm": ddm, "dsc": dsc}
+
+
 def catalog() -> list[dict]:
     """Return the list of UEM connectors an admin can connect.
 
-    Each entry: {name, label, min_permission, fields, field_keys}. `fields` is
-    the rich per-UEM schema (see PROVIDER_CATALOG); `field_keys` is the flat
-    list of key names for consumers that only need the wire keys.
+    Each entry: {name, label, min_permission, fields, field_keys, declarative}.
+    `fields` is the rich per-UEM schema (see PROVIDER_CATALOG); `field_keys` is
+    the flat list of key names for consumers that only need the wire keys;
+    `declarative` is derived live from the adapter (see `declarative_support`),
+    so the catalog can never promise a declarative path the adapter lacks.
     """
     return [
         {
@@ -180,6 +206,7 @@ def catalog() -> list[dict]:
             "min_permission": meta.get("min_permission", ""),
             "fields": meta["fields"],
             "field_keys": [f["key"] for f in meta["fields"]],
+            "declarative": declarative_support(name),
         }
         for name, meta in PROVIDER_CATALOG.items()
     ]
