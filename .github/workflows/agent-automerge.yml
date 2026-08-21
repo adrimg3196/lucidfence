@@ -1,0 +1,65 @@
+# Raíl de entrega de la flota (2/2): mergear en verde.
+#
+# Cuando la CI de una PR de la flota termina en success, este workflow aplica
+# la política del propietario (2026-08-16, "auto-merge total en verde",
+# docs/internal/LOOP.md §Coordinación regla 6): squash-merge automático.
+#
+# Guardarraíles (innegociables):
+#   - solo ramas claude/** del PROPIO repo (jamás forks/terceros);
+#   - ni drafts (autonomía total 2026-08-18: outreach y release también
+#     auto-mergean en verde; no queda gate humano);
+#   - todos los checks del head completados y en verde; se ignora únicamente
+#     el helper `train` (merge-train informativo, ajeno al gate QA, con
+#     fallos transitorios conocidos por 503 de la API).
+#
+# Usa el Actions Secret AGENTS_GITHUB_PAT; sin él, no-op con aviso en el log.
+name: Agent automerge
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  merge:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Squash-merge de la PR de flota si todo verde
+        uses: actions/github-script@v7
+        env:
+          HAVE_PAT: ${{ secrets.AGENTS_GITHUB_PAT != '' }}
+        with:
+          github-token: ${{ secrets.AGENTS_GITHUB_PAT || github.token }}
+          script: |
+            if (process.env.HAVE_PAT !== 'true') {
+              core.notice('AGENTS_GITHUB_PAT no configurado; raíl de entrega inactivo.');
+              return;
+            }
+            const {owner, repo} = context.repo;
+            const run = context.payload.workflow_run;
+            const branch = run.head_branch || '';
+            if (!branch.startsWith('claude/')) { core.info(`rama fuera de la flota: ${branch}`); return; }
+            if (run.head_repository && run.head_repository.full_name !== `${owner}/${repo}`) {
+              core.info('head en fork: jamás auto-merge de terceros'); return;
+            }
+            const {data: prs} = await github.rest.pulls.list({owner, repo, state: 'open', head: `${owner}:${branch}`});
+            if (!prs.length) { core.info('sin PR abierta para la rama'); return; }
+            const pr = prs[0];
+            if (pr.draft) { core.info(`#${pr.number} es draft`); return; }
+            // Autonomía total (propietario 2026-08-18: "todo lo decide la IA,
+            // nada los humanos"): sin gate humano. Se auto-mergea todo lo verde,
+            // incluido outreach: y release. Guardarraíles que quedan (NO son
+            // aprobación humana, son anti-daño): solo ramas claude/** del propio
+            // repo, jamás forks/terceros ni drafts.
+            const IGNORED = new Set(['train']);
+            const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: pr.head.sha, per_page: 100});
+            const relevant = checks.check_runs.filter(c => !IGNORED.has(c.name));
+            const pending = relevant.filter(c => c.status !== 'completed');
+            const red = relevant.filter(c => c.status === 'completed'
+              && !['success', 'neutral', 'skipped'].includes(c.conclusion));
+            if (pending.length) { core.info(`checks pendientes: ${pending.map(c => c.name).join(', ')}`); return; }
+            if (red.length) { core.notice(`checks rojos (${red.map(c => c.name).join(', ')}): no se mergea`); return; }
+            await github.rest.pulls.merge({owner, repo, pull_number: pr.number, merge_method: 'squash'});
+            core.notice(`mergeada #${pr.number} (${pr.title}) — gate QA verde`);

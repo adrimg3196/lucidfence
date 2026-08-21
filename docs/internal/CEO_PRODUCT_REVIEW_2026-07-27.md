@@ -8,7 +8,7 @@ Fecha: 2026-07-27 · Base: repo real (260 tests verdes, commit a6526ee)
   (Applivery, Intune, Jamf, Workspace ONE, ChromeOS, iOS geofence,
   Windows conformidad, simulación). 260 tests, runner honesto.
 - Distribución triple: local :8765, Docker, vitrina serverless en Pages.
-- Monetización definida en papel (open-core: Community / Enterprise / MSP)
+- Monetización definida en papel (open-core: Community / on-prem / MSP)
   pero SIN mecanismo de captura implementado: no hay licencia, no hay
   telemetría opt-in, no hay conteo de dispositivos facturable.
 - Onboarding: demo seed automático (ciso@acme.test) — bien. Pero el paso
@@ -22,7 +22,7 @@ prueban "Probar conexión" y fallan. Sin funnel, no hay negocio.
     expuesto en /api/product; cero telemetría externa (local-first).
 
 GAP 2 — El value metric (dispositivos gestionados) no se materializa.
-Enterprise/MSP se factura por dispositivo, pero el producto no genera
+El despliegue on-prem/MSP entrega valor por dispositivo, pero el producto no genera
 ningún artefacto que un comercial pueda usar ("estás gestionando 340
 dispositivos, 12 fuera de zona, 10 CVE críticos → esto vale X€/año").
   → Acción: "Fleet Value Report" exportable (PDF/JSON ya hay export core)

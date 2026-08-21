@@ -28,6 +28,7 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/devices/<id>
   GET  /api/fences           -> fence IDs only (geometry comes from /api/status.st.fences)
   GET  /api/risk
+  GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -51,12 +52,11 @@ import os
 import sys
 import threading
 import time
-import http.client  # bypass del proxy de entorno (GET a 127.0.0.1 pasa, pero usamos esto por robustez)
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-from typing import Optional
+from typing import Any, Optional
 
 # make sure the 'lucidfence' package and its siblings are importable
 ROOT = Path(__file__).resolve().parent
@@ -66,6 +66,7 @@ from lucidfence.core import config_loader
 from lucidfence.core import cloud_publisher
 from lucidfence.saas.tenant import TenantStore, FREE_PLAN
 from lucidfence.saas.auth import AuthStore, ROLE_LABELS, ROLE_CAPS
+from lucidfence.saas import routing
 from lucidfence.core.oidc import (OIDCClient, OIDCError, OIDCFlowStore, OIDCProvider,
                        PinnedHTTPSTransport, oidc_dependencies_available)
 from lucidfence.core.engine import Engine
@@ -80,6 +81,7 @@ from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
 from lucidfence.core.compliance_controls import map_controls
 from lucidfence.core.cluster import ClusterLease
 from lucidfence.core.autonomous_company import CompanyControlPlane
+from lucidfence.core.poi import POIService
 
 STATIC = ROOT / "static"
 TEMPLATE_DATA = ROOT / "data"
@@ -100,6 +102,16 @@ MAX_REQUEST_BODY = 1024 * 1024
 # Cellar nor in the source checkout unless LUCIDFENCE_DATA_DIR explicitly says so.
 _tenants = TenantStore(DATA_ROOT)
 _auth = AuthStore(DATA_ROOT)
+
+# POIs: seed público read-only (data/pois.json), opcional. Fail-soft si falta
+# o está corrupto — el resto del servidor no depende de él.
+_poi_service = POIService()
+try:
+    _pois_seed = TEMPLATE_DATA / "pois.json"
+    if _pois_seed.exists():
+        _poi_service.load_from_json(_pois_seed)
+except Exception:
+    pass
 def _load_oidc_providers() -> dict[str, OIDCProvider]:
     """Load deployment-only OIDC configuration; never values from requests."""
     providers: dict[str, OIDCProvider] = {}
@@ -187,9 +199,25 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
         mode = "simulation"
     cfg["mode"] = mode
     cfg["dry_run"] = bool(runtime.get("dry_run", cfg.get("dry_run", True)))
+    # Fase de enforcement (observe|enforce): editable por un admin desde el
+    # dashboard y persistida por tenant aquí. Sobreescribe `mode` dentro del
+    # bloque enforcement, que el Engine usa para fijar dry_run; live_actions,
+    # allow_wipe y wipe_allowlist siguen viniendo de config.json (la doble
+    # llave del wipe nunca se amplía desde la UI).
+    enf_mode = runtime.get("enforcement_mode")
+    if enf_mode in ("observe", "enforce"):
+        base_enf = dict(cfg.get("enforcement") or {})
+        base_enf["mode"] = enf_mode
+        cfg["enforcement"] = base_enf
     cfg["_applivery_api_key"] = key
     cfg.setdefault("applivery", {})["org_id"] = workspace_id
     cfg["incident_webhook_url"] = (runtime.get("incident_webhook_url") or "").strip()
+    # Per-tenant outbound webhook egress policy (t_f33e2f23). Opt-in `strict`
+    # mode adds an allow-list on top of the admission guard; default is
+    # `permissive` (current behaviour — never breaks existing deployments).
+    _egress = runtime.get("egress_policy")
+    if isinstance(_egress, dict) and _egress:
+        cfg["egress_policy"] = _egress
     # Atomic Mail Agentic: real email for the SaaS (opt-in per tenant).
     am = runtime.get("atomicmail") or {}
     if isinstance(am, dict) and am:
@@ -199,13 +227,28 @@ def _apply_tenant_integration(cfg: dict, tdir: Path) -> dict:
     wl = runtime.get("whitelabel") or {}
     if isinstance(wl, dict) and wl.get("domain"):
         cfg["whitelabel"] = {k: v for k, v in wl.items() if v not in (None, "")}
+    # Multi-UEM: build the provider list from tenant-isolated integration.json.
+    # The secret stays on disk (0600) and is passed straight to the adapter; it
+    # is never echoed back by GET /api/providers (see _masked_provider).
+    providers = []
+    for p in runtime.get("providers", []) or []:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        providers.append({
+            "name": p["name"],
+            "org_id": p.get("org_id", ""),
+            "endpoint": p.get("endpoint", ""),
+            "api_key": p.get("secret", "") or p.get("api_key", ""),
+        })
+    cfg["providers"] = providers
     return cfg
 
 
 def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
                              incident_webhook_url: str = "",
                              atomicmail: dict | None = None,
-                             whitelabel: dict | None = None) -> None:
+                             whitelabel: dict | None = None,
+                             egress_policy: dict | None = None) -> None:
     path = tdir / "integration.json"
     runtime = {}
     try:
@@ -236,6 +279,15 @@ def _save_tenant_integration(tdir: Path, mode: str, dry_run: bool,
             runtime["whitelabel"] = cleaned
         else:
             runtime.pop("whitelabel", None)
+    if egress_policy is not None:
+        # Persist the validated per-tenant egress policy (t_f33e2f23). Validation
+        # happens at the API layer (_validate_egress_policy); here we only store
+        # a well-formed dict. An empty/invalid value clears the policy (back to
+        # permissive default).
+        if isinstance(egress_policy, dict) and egress_policy:
+            runtime["egress_policy"] = egress_policy
+        else:
+            runtime.pop("egress_policy", None)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
     os.chmod(tmp, 0o600)
@@ -249,6 +301,41 @@ def _tenant_runtime(tdir: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
+# --- Multi-UEM provider registry (per tenant, isolated dir) ----------------
+# Logic lives in lucidfence.saas.providers so it's unit-testable without the
+# server process. The provider *list* (names + non-secret config + secret)
+# lives in integration.json (tenant-isolated, chmod 0600); masked on GET.
+from lucidfence.saas.providers import list_providers as _list_providers
+from lucidfence.saas.providers import save_providers as _save_providers
+
+# Todas las claves que pueden portar un secreto de conexión. Ninguna sale nunca
+# en un GET (ni en el audit log): las credenciales viven en integration.json
+# (0600) y jamás se re-emiten al cliente.
+_PROVIDER_SECRET_KEYS = ("secret", "api_key", "api_token", "client_secret",
+                         "refresh_token", "password", "token")
+
+
+def _provider_health(eng: "Engine | None") -> dict:
+    if eng is None or getattr(eng, "orchestrator", None) is None:
+        return {}
+    try:
+        return {n: h.status for n, h in eng.orchestrator.health().items()}
+    except Exception:
+        return {}
+
+
+def _masked_provider(p: dict) -> dict:
+    # Elimina TODA clave que porte un secreto (no solo "secret": Intune/Jamf/
+    # ChromeOS guardan client_secret/refresh_token). `segment` (la etiqueta de
+    # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
+    out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
+    out["configured"] = bool(p.get("secret") or p.get("api_key")
+                             or p.get("api_token") or p.get("password")
+                             or p.get("client_secret") or p.get("refresh_token")
+                             or p.get("endpoint") or p.get("tenant_id"))
+    return out
 
 
 def _masked_secret(secret: str) -> str:
@@ -308,42 +395,6 @@ def _verify_soar_webhook_hmac(raw_body: bytes, headers, secret: str,
     if not hmac.compare_digest(expected, signature):
         return False, "invalid signature"
     return True, "ok"
-
-
-# ---------------------------------------------------------------------------
-# MoA bridge: llamadas directas a 127.0.0.1:8085 vía http.client (bypasea el
-# proxy de entorno que intercepta POST a localhost). No lanza nunca.
-# ---------------------------------------------------------------------------
-def _ai_get(url: str):
-    try:
-        p = urlparse(url)
-        c = http.client.HTTPConnection(p.hostname, p.port, timeout=5)
-        c.request("GET", p.path)
-        r = c.getresponse()
-        data = r.read().decode("utf-8", "replace")
-        c.close()
-        if r.status == 200:
-            return json.loads(data)
-    except Exception:
-        return None
-    return None
-
-
-def _ai_post(url: str, payload: dict):
-    try:
-        p = urlparse(url)
-        body = json.dumps(payload).encode("utf-8")
-        c = http.client.HTTPConnection(p.hostname, p.port, timeout=120)
-        c.request("POST", p.path, body=body,
-                  headers={"Content-Type": "application/json"})
-        r = c.getresponse()
-        data = r.read().decode("utf-8", "replace")
-        c.close()
-        if r.status == 200:
-            return json.loads(data)
-    except Exception:
-        return None
-    return None
 
 
 _REQUIRED_TENANT_SEEDS = ("routes.json", "policies.json", "fleet_seed.json", "fences.json")
@@ -594,11 +645,27 @@ def _client_ip(handler) -> str:
 
 
 def _rate_limit_key(handler) -> str:
-    """Prefer session identity; fall back to source IP before authentication."""
+    """Bucketing for the rate limiter.
+
+    A raw ``gf_session`` cookie is ONLY trusted as a bucket key when it
+    corresponds to a live session in AuthStore. An unauthenticated client can
+    mint a different cookie per request; using the raw cookie value would give
+    every request a fresh bucket and fully bypass the limiter. So we validate
+    the token against AuthStore first, and fall back to the source IP (which
+    the limiter already keys on) when there is no valid session.
+
+    This is a security fix (SOC audit 2026-08-20, H-1): the previous code
+    derived the bucket from the *raw* cookie value before any authentication,
+    so rotating the cookie bypassed the only anti-DoS / anti-enumeration guard.
+    """
     token = _cookie(handler, COOKIE_SESSION) or ""
     if token:
-        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
-        return f"sess:{digest}"
+        sess = _auth.get_session(token)
+        if sess:
+            digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+            return f"sess:{digest}"
+    # No valid session: bucket by source IP. Authenticated-but-token-invalid
+    # requests also land here, which is correct — the IP limit still applies.
     return f"ip:{_client_ip(handler)}"
 
 
@@ -705,9 +772,42 @@ def _redact_access_path(path: str) -> str:
     return path
 
 
+# SSRF guard: only https, never loopback/link-local/metadata targets, on an
+# explicit outbound port allowlist. Residual after the 2026-08-18 numeric-IP
+# fix: a public DNS name that resolves to an internal IP still passed, and there
+# was no port restriction. This version resolves the hostname to ALL addresses
+# and rejects if ANY resolves to loopback / link-local (incl. cloud metadata
+# 169.254.0.0/16) / reserved, which closes the metadata-exfil and
+# loopback-DNS-rebinding PoCs. See the allowlist note below for the RFC1918
+# trade-off.
+_WEBHOOK_ALLOWED_PORTS = {443, 8443}
+
+
 def _safe_webhook_url(url: str):
-    """SSRF guard: only https, never private/link-local/loopback targets.
-    Returns the normalized URL or '' if unsafe/unusable."""
+    """SSRF guard: only https, never loopback/link-local/metadata targets.
+
+    Returns the normalized URL or '' if unsafe/unusable.
+
+    Defense layers (combined across the 2026-08-18 and 2026-08-20 audits):
+      1. scheme must be https
+      2. numeric IP encodings (2130706433 / 0x7f000001 / 127.1 ...) are
+         canonicalized via getaddrinfo(AI_NUMERICHOST) so they hit the same
+         loopback/link-local/reserved filter as canonical IPs
+      3. a public hostname is resolved with a real DNS lookup and EVERY
+         returned address is validated; loopback/link-local/metadata/reversed
+         addresses are rejected (closes "public name -> 169.254.169.254")
+      4. the port must be on the explicit outbound allowlist (443 / 8443)
+
+    Trade-off (documented, not a bug): an unresolvable hostname (e.g. a LAN
+    name like fleet.acme.test that only resolves inside the customer's network)
+    is ALLOWED, and RFC1918 private ranges are intentionally NOT blocked on
+    resolution. LucidFence is a local-first UEM appliance whose own endpoints
+    (Intune/Jamf/Workspace ONE/Applivery) are routinely on private IPs or
+    internal hostnames the operator legitimately configures. The real SSRF
+    pivot targets (loopback, cloud metadata, link-local) are blocked. A stricter
+    "block all private resolution + pin DNS + 443-only" variant is a follow-up
+    that needs product sign-off because it would break on-prem UEM.
+    """
     from urllib.parse import urlparse
     if not url:
         return ""
@@ -720,16 +820,111 @@ def _safe_webhook_url(url: str):
     host = (p.hostname or "").lower()
     if not host:
         return ""
+    port = p.port if p.port is not None else 443
+    if port not in _WEBHOOK_ALLOWED_PORTS:
+        return ""
     import ipaddress
+    import socket
+    # Canonicaliza encodings numéricos de IP (decimal/hex/octal/dotless, p.ej.
+    # 2130706433 / 0x7f000001 / 017700000001 / 127.1 == 127.0.0.1; 2852039166 ==
+    # 169.254.169.254) que glibc getaddrinfo acepta pero ipaddress rechaza. Sin
+    # esto, un destino interno escrito en forma no canónica se colaba por la rama
+    # `except ValueError` como "hostname externo". AI_NUMERICHOST NO hace lookup
+    # DNS: un hostname real lanza gaierror y se deja intacto (fleet.acme.test no
+    # se rompe). Hallazgo del Centinela 2026-08-18 (SSRF bypass).
+    try:
+        host = socket.getaddrinfo(host, None, flags=socket.AI_NUMERICHOST)[0][4][0].lower()
+    except socket.gaierror:
+        pass
     try:
         ip = ipaddress.ip_address(host)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
             return ""
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped and (mapped.is_private or mapped.is_loopback
+                       or mapped.is_link_local or mapped.is_reserved):
+            return ""
+        return url
     except ValueError:
-        # hostname (not IP): block obvious internal suffixes
+        # Hostname (not IP). Block obvious internal suffixes even if they are
+        # publicly resolvable — `.internal`/`.lan`/`.home` are real public-suffix
+        # TLDs an attacker can register, and `localhost` is always loopback. This
+        # closes the "evil.attacker.internal" pivot on top of the resolution
+        # check below. (SOC audit 2026-08-20, H-3.)
         if host.endswith((".local", ".internal", ".lan", ".home")) or host == "localhost":
             return ""
-    return url
+        # resolve it for real and validate EVERY address.
+        # Reject only loopback / link-local (incl. cloud metadata) / reserved /
+        # multicast — the genuine SSRF pivot targets. Unresolvable LAN names and
+        # RFC1918 results are allowed (see trade-off note above).
+        try:
+            infos = socket.getaddrinfo(host, None)
+        except socket.gaierror:
+            # Unresolvable here (e.g. an internal LAN name) — allow; the operator
+            # configured it and it is not a loopback/metadata pivot.
+            return url
+        except (UnicodeError, OSError):
+            return ""
+        if not infos:
+            return ""
+        for info in infos:
+            addr = str(info[4][0]).lower()
+            # IPv6 scoped/zone handling: strip zone id.
+            addr = addr.split("%", 1)[0]
+            try:
+                ip = ipaddress.ip_address(addr)
+            except ValueError:
+                return ""
+            if (ip.is_loopback or ip.is_link_local or ip.is_reserved
+                    or ip.is_multicast):
+                return ""
+            mapped = getattr(ip, "ipv4_mapped", None)
+            if mapped and (mapped.is_loopback or mapped.is_link_local
+                           or mapped.is_reserved):
+                return ""
+        return url
+
+
+def _validate_egress_policy(raw: Any) -> tuple[bool, str, dict]:
+    """Validate a tenant egress policy payload sent from the dashboard.
+
+    Returns (ok, error_message, normalized_policy). An empty/absent policy is
+    valid and means "permissive" (current behaviour). A `*`` wildcard entry is
+    rejected because it would be an allow-all that nullifies the policy.
+
+    Format (see DECISION_EGRESS_ALLOWLIST.md / t_316b8ec5):
+        {"mode": "permissive"|"strict",
+         "allow": ["hooks.slack.com", ".slack.com", "10.20.30.40"],
+         "allow_private": false}
+    """
+    if raw is None:
+        return True, "", {}
+    if not isinstance(raw, dict):
+        return False, "egress_policy debe ser un objeto", {}
+    mode = str(raw.get("mode", "permissive")).strip().lower()
+    if mode not in ("permissive", "strict"):
+        return False, "egress_policy.mode debe ser 'permissive' o 'strict'", {}
+    allow = raw.get("allow", [])
+    normalized_allow: list[str] = []
+    if allow is not None:
+        if not isinstance(allow, list):
+            return False, "egress_policy.allow debe ser una lista", {}
+        for entry in allow:
+            if not isinstance(entry, str):
+                return False, "cada entrada de allow debe ser texto (host, sufijo .dominio o IP)", {}
+            e = entry.strip().lower()
+            if not e:
+                continue
+            if e == "*":
+                return False, "el comodín '*' no está permitido en allow (sería allow-all)", {}
+            normalized_allow.append(e)
+    ap_raw = raw.get("allow_private", False)
+    allow_private = bool(ap_raw)
+    policy = {"mode": mode}
+    if mode == "strict":
+        policy["allow"] = normalized_allow
+        policy["allow_private"] = allow_private
+    return True, "", policy
 
 
 def _request_id(handler) -> str:
@@ -768,7 +963,7 @@ def _send_json(handler, obj, code=200):
     # CSP: only same-origin resources; blocks injected third-party scripts (XSS)
     handler.send_header(
         "Content-Security-Policy",
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     )
     for c in getattr(handler, "_set_cookies", []) or []:
@@ -804,10 +999,10 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("X-Request-ID", _request_id(handler))
-    csp = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+    csp = ("default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self' 'unsafe-inline'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
            "frame-ancestors 'none'") if path.name in ("cloud.html", "index.html") else (
-           "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+           "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
     handler.send_header("Content-Security-Policy", csp)
     handler.end_headers()
@@ -820,6 +1015,9 @@ def _send_csv(handler, filename: str, csv_text: str):
     handler.send_header("Content-Type", "text/csv; charset=utf-8")
     handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -830,6 +1028,8 @@ def _send_pdf(handler, filename: str, pdf_bytes: bytes):
     handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
     handler.send_header("Content-Length", str(len(pdf_bytes)))
     handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(pdf_bytes)
 
@@ -839,6 +1039,14 @@ def _send_html(handler, html_text: str):
     handler.send_response(200)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("Cache-Control", "no-store")
+    handler.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+    handler.send_header("X-Request-ID", _request_id(handler))
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -971,6 +1179,96 @@ def _product_bundle(eng: Engine) -> dict:
     st = eng.status()
     st["stats_history"] = eng.store.stats_history(120)
     return build_product(st, eng)
+
+
+# ---- rutas declarativas (SD-1 paso 1) -----------------------------------
+# Rutas GET de solo lectura con el ritual estándar (sesión + org + engine +
+# capability + JSON) viven en lucidfence/saas/routing.py: el handler declara
+# QUÉ devuelve y QUÉ capability exige; el ritual completo queda detrás del
+# seam. Las rutas con gating especial (auth, escrituras, doble llave) siguen
+# en la cadena `if` de _route() hasta futuros incrementos.
+# El registro es de ESTE módulo (no un global de routing): re-ejecutar
+# saas_server.py (tests que lo cargan por path) parte de una tabla limpia.
+_api_routes = routing.RouteRegistry()
+api_route = _api_routes.route
+
+@api_route("GET", "/api/coverage", cap="device:read")
+def _api_coverage(ctx: routing.Ctx):
+    """Informe de puntos ciegos (coverage gap): el negativo de la cobertura
+    del tenant — solo lectura sobre estado ya existente, estrictamente
+    local (ver core/coverage.py). Mismo gating que /api/cve."""
+    from lucidfence.core.coverage import coverage_report
+    # ?stale_after_s=N ajusta el umbral de "lost sheep" por llamada
+    # (acotado 60s..30 días; fuera de rango o no numérico -> 400, no
+    # silencio: un umbral ignorado daría un informe que miente).
+    stale_after_s = 86400
+    raw = (ctx.qs.get("stale_after_s") or [None])[0]
+    if raw is not None:
+        try:
+            stale_after_s = int(raw)
+        except ValueError:
+            return {"error": "stale_after_s debe ser entero (segundos)"}, 400
+        if not (60 <= stale_after_s <= 2592000):
+            return {"error": "stale_after_s fuera de rango (60..2592000)"}, 400
+    devices = [s.to_dict() for s in ctx.eng.store.snapshot().values()]
+    return coverage_report(devices, ctx.eng.fences, stale_after_s=stale_after_s)
+
+
+@api_route("GET", "/api/risk", cap="device:read")
+def _api_risk(ctx: routing.Ctx):
+    product = _product_bundle(ctx.eng)
+    return {"risk": product.get("risk", []),
+            "summary": product.get("summary", {})}
+
+
+@api_route("GET", "/api/cve", cap="device:read")
+def _api_cve(ctx: routing.Ctx):
+    devices = [
+        {"device_id": s.device_id, "name": s.name, "apps": s.apps}
+        for s in ctx.eng.store.snapshot().values()
+    ]
+    summary = ctx.eng._cve_summary()
+    if not (summary.get("vulnerable_apps") or 0):
+        # No real signal (local dev / offline / empty fleet): broadcast
+        # demo fallback aligned with cloud publisher behavior.
+        summary = dict(summary)
+        summary.update(cloud_publisher._demo_cve_summary(summary, total=len(devices)))
+    else:
+        summary = dict(summary)
+        try:
+            from lucidfence.core import cve as _cve
+            nvd_keys = [k for k, v in _cve._FEED.items() if v]
+            summary["demo"] = False
+            summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
+        except Exception:
+            summary["source"] = "local-db"
+    return {"cve_summary": summary, "devices": devices}
+
+
+@api_route("GET", "/api/pois", cap="device:read")
+def _api_pois(ctx: routing.Ctx):
+    lat = ctx.qs.get("lat", [None])[0]
+    lng = ctx.qs.get("lng", [None])[0]
+    if lat is not None and lng is not None:
+        try:
+            lat_f, lng_f = float(lat), float(lng)
+            radius_m = float(ctx.qs.get("radius_m", ["1000"])[0])
+            limit = min(int(ctx.qs.get("limit", ["5"])[0]), 100)
+        except (TypeError, ValueError):
+            return {"error": "lat/lng/radius_m/limit inválidos"}, 400
+        nearby = _poi_service.search_nearby(lat_f, lng_f, radius_m, limit=limit)
+        return [dict(p.to_dict(), distance_m=round(d, 1)) for p, d in nearby]
+    return [p.to_dict() for p in _poi_service.all()]
+
+
+@api_route("GET", "/api/incidents/analytics", cap="incident:read")
+def _api_incidents_analytics(ctx: routing.Ctx):
+    return {"analytics": ctx.eng.incidents.analytics()}
+
+
+@api_route("GET", "/api/fences", cap="fence:read")
+def _api_fences_list(ctx: routing.Ctx):
+    return {"fences": ctx.eng.status().get("fences", [])}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1156,6 +1454,15 @@ class Handler(BaseHTTPRequestHandler):
                                      "leader": bool(_cluster_lease and _cluster_lease.acquired) if os.environ.get("LUCIDFENCE_CLUSTER_MODE") == "active-passive" else True,
                                      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
 
+        # Validate the location_source mapping against the live UEM/MDM API.
+        # Works for any vendor configured via the generic HTTP source.
+        if route == "/api/config/validate" and method == "GET":
+            try:
+                from lucidfence.core.config_validator import validate_config
+                return _send_json(self, validate_config(str(CONFIG_FILE)))
+            except Exception as e:  # noqa: BLE001 — surface as JSON, never 500 hygiene
+                return _send_json(self, {"ok": False, "error": f"{type(e).__name__}: {e}"}, 200)
+
 
         # ---- Incoming SOAR webhook (headless automation, HMAC-authenticated) ----
         # External SOAR tools cannot hold a browser session cookie. This endpoint
@@ -1284,6 +1591,42 @@ class Handler(BaseHTTPRequestHandler):
         # engine is per-org; build/lookup it once for the whole request
         eng = engine_for(org)
 
+        # Patrón nuevo (SD-1 paso 1): las rutas GET de solo lectura con el
+        # ritual estándar viven en el registro declarativo de
+        # lucidfence/saas/routing.py, no en esta cadena `if`.
+        ctx = routing.Ctx(http=self, user=user, org=org, eng=eng, qs=qs)
+        if _api_routes.dispatch(method, route, ctx,
+                                send=lambda obj, code=200: _send_json(self, obj, code)):
+            return
+
+        if route == "/api/evidence/export" and method == "GET":
+            # Informe de evidencia con cadena de hashes verificable offline
+            # (ver core/evidence_export.py). Mismo círculo de visibilidad que
+            # /api/audit: el rol auditor existe precisamente para esto.
+            if role not in ("owner", "admin", "viewer", "auditor"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            from lucidfence.core.evidence_export import build_evidence_report
+            devices = [s.to_dict() for s in eng.store.snapshot().values()]
+            apps_total = sum(len(d.get("apps") or []) for d in devices)
+            report = build_evidence_report(
+                org=org,
+                devices=devices,
+                events=eng.store.recent_events(limit=2000),
+                actions=eng.store.recent_actions(limit=2000),
+                cve_summary={"apps_total": apps_total},
+                audit_integrity=verify_audit(_tenants.data_dir(org)),
+                since=qs.get("from", [None])[0],
+                until=qs.get("to", [None])[0],
+            )
+            append_audit(_tenants.data_dir(org), {
+                "event": "evidence.exported", "actor": user.get("id"),
+                "period": report["period"], "records": len(report["records"]),
+                "chain_head": report["chain_head"],
+            })
+            return _send_json(self, report)
+
+        # GET /api/coverage migrado al registro declarativo (_api_routes, patrón SD-1).
+
         # Governed autonomous-company control plane. State is tenant-local and
         # no route here executes a device command: approved operational work is
         # handed back to the existing audited UEM action flow.
@@ -1338,10 +1681,7 @@ class Handler(BaseHTTPRequestHandler):
             append_audit(_tenants.data_dir(org), {"event": f"company.task.{action}d", "actor": user["id"], "task_id": task_id, "risk": task.get("risk")})
             return _send_json(self, task)
 
-        if route == "/api/fences" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "fence:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            return _send_json(self, {"fences": eng.status().get("fences", [])})
+        # GET /api/fences migrado al registro declarativo (_api_routes, patrón SD-1).
         if route == "/api/fences" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "fence:write"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -1391,6 +1731,33 @@ class Handler(BaseHTTPRequestHandler):
                 "actions": WF.action_options(),
                 "active": eng.active_workflows(),
             })
+        if route == "/api/policies/replay" and method == "POST":
+            # Simulador what-if: evalúa una policy CANDIDATA contra el trail
+            # histórico del tenant. Solo lectura — jamás ejecuta acciones —
+            # así que basta la capability de lectura de workflows.
+            if not AuthStore.can(user["org_roles"].get(org), "workflow:read"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            candidate = body.get("policy") if isinstance(body, dict) else None
+            if not isinstance(candidate, dict) or not candidate.get("when"):
+                return _send_json(self, {"error": "policy con 'when' es obligatoria"}, 400)
+            from lucidfence.core.policy_replay import load_trail_points, replay_policy
+            try:
+                limit = min(int(body.get("limit", 5000)), 20000)
+            except (TypeError, ValueError):
+                limit = 5000
+            points = load_trail_points(eng.store.trails_path, limit=limit)
+            states = {d_id: s.to_dict() for d_id, s in eng.store.snapshot().items()}
+            result = replay_policy(
+                candidate, points,
+                fences=eng.fences if body.get("recompute_fences") else None,
+                device_states=states,
+                risk_engine=eng.risk,
+                risk_ctx={"shift_zones": eng._ctx_shift_zones(),
+                          "zone_risk": eng._ctx_zone_risk()},
+            )
+            return _send_json(self, result)
+
         if route == "/api/workflows/apply" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "workflow:write"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -1428,6 +1795,13 @@ class Handler(BaseHTTPRequestHandler):
                 states = [s for s in states if s.fence_state == st]
             return _send_json(self, [s.to_dict() for s in states])
 
+        # GET /api/pois (exacto) migrado al registro declarativo (_api_routes, patrón SD-1).
+        if route.startswith("/api/pois/") and method == "GET":
+            poi = _poi_service.get_poi(route[len("/api/pois/"):])
+            if poi is None:
+                return _send_json(self, {"error": "POI no encontrado"}, 404)
+            return _send_json(self, poi.to_dict())
+
         if route == "/api/org" and method == "GET":
             o = _tenants.get(org)
             return _send_json(self, {"org": o.to_dict(), "plan": FREE_PLAN,
@@ -1451,7 +1825,6 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/status" and method == "GET":
             raw = eng.status()
             st = raw.get("stats", {}) or {}
-            fences = raw.get("fences", [])
             # Derive live device counts from the actual state store so the
             # dashboard reflects devices even before the first auto-cycle.
             snap = list(eng.store.snapshot().values())
@@ -1527,11 +1900,59 @@ class Handler(BaseHTTPRequestHandler):
                 return _send_json(self, {"error": str(exc)}, 400)
             return _send_json(self, {"ok": True, "incident": incident})
 
-        # product intelligence
-        if route in ("/api/risk", "/api/incidents", "/api/incidents/export", "/api/incidents/analytics",
+        # product intelligence bundle (read-only, local) — alimenta la vista ROI
+        if route == "/api/product" and method == "GET":
+            return _send_json(self, _product_bundle(eng))
+
+        # product intelligence (/api/risk, /api/cve y /api/incidents/analytics
+        # migrados al registro declarativo _api_routes, patrón SD-1)
+        if route in ("/api/incidents", "/api/incidents/export",
                      "/api/policies", "/api/analytics", "/api/activation",
-                     "/api/compliance", "/api/report", "/api/cve", "/api/soar"):
+                     "/api/compliance", "/api/report", "/api/soar"):
             return self._product(route, eng, user, org, method, qs)
+
+        # --- Playbooks SOAR del tenant (REQ §5): editor desde UI, sin código) ---
+        if route in ("/api/soar/playbooks", "/api/soar/playbook") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            store = getattr(eng, "soar_store", None)
+            if store is None:
+                return _send_json(self, {"error": "engine sin playbook store"}, 500)
+            try:
+                pb = store.upsert(body)
+            except ValueError as exc:
+                return _send_json(self, {"ok": False, "error": f"validacion: {exc}"}, 400)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.created", "actor": user.get("id"), "playbook": pb.id})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook": {"id": pb.id, "name": pb.name, "enabled": pb.enabled, "severity_min": pb.severity_min, "condition": pb.condition, "actions": pb.actions}})
+        if route.startswith("/api/soar/playbook/") and route.endswith("/enable") and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):-len("/enable")].strip("/")
+            body = _read_body(self)
+            enabled = bool((body or {}).get("enabled", True))
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.set_enabled(pid, enabled):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.enabled", "actor": user.get("id"), "playbook": pid, "enabled": enabled})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid, "enabled": enabled})
+        if route.startswith("/api/soar/playbook/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            pid = route[len("/api/soar/playbook/"):].split("/")[0].strip("/")
+            store = getattr(eng, "soar_store", None)
+            if store is None or not store.delete(pid):
+                return _send_json(self, {"ok": False, "error": "playbook no encontrado"}, 404)
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "soar.playbook.deleted", "actor": user.get("id"), "playbook": pid})
+            reload_engine(org)
+            return _send_json(self, {"ok": True, "playbook_id": pid})
+
+        # users
 
         # users
         if route == "/api/users" and method == "GET":
@@ -1567,6 +1988,55 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, KeyError) as e:
                 return _send_json(self, {"error": str(e)}, 400)
 
+        # members / RBAC surface (strictly tenant-local: only THIS org)
+        if route == "/api/members" and method == "GET":
+            if not AuthStore.can(user["org_roles"].get(org), "user:invite"):
+                return _send_json(self, {"error": "sin permiso", "capability": "user:invite"}, 403)
+            members = []
+            for u in _auth.org_members(org):
+                r = u.org_roles.get(org)
+                members.append({
+                    "id": u.id, "email": u.email, "name": u.name,
+                    "role": r, "role_label": ROLE_LABELS.get(r, r),
+                    "active": u.active, "created_at": u.created_at,
+                    "is_self": u.id == user.get("id"),
+                })
+            members.sort(key=lambda m: (m["role"] != "owner", m["email"]))
+            roles = [{"id": rid, "label": ROLE_LABELS.get(rid, rid),
+                      "caps": sorted(ROLE_CAPS[rid])} for rid in ROLE_CAPS]
+            return _send_json(self, {"members": members, "roles": roles,
+                                     "self_id": user.get("id"),
+                                     "owners": _auth.count_org_owners(org)})
+        if route == "/api/members/role" and method == "POST":
+            # Cambiar el rol de un miembro es sensible: exige la capability de
+            # gestión de roles (user:role, solo owner). Un admin con user:invite
+            # puede crear usuarios pero no reasignar roles existentes.
+            if not AuthStore.can(user["org_roles"].get(org), "user:role") \
+                    or user.get("auth_type") == "api_key":
+                return _send_json(self, {"error": "solo un propietario con sesión puede gestionar roles",
+                                         "capability": "user:role"}, 403)
+            body = _read_body(self)
+            new_role = (body.get("role") or "").strip()
+            if new_role not in ROLE_CAPS:
+                return _send_json(self, {"error": "rol inválido"}, 400)
+            target_id = (body.get("user_id") or "").strip()
+            target = _auth.get(target_id) if target_id else None
+            if target is None:
+                email = (body.get("email") or "").strip()
+                target = _auth.get_by_email(email) if email else None
+            if target is None or org not in target.org_roles:
+                return _send_json(self, {"error": "el usuario no pertenece a la organización"}, 404)
+            try:
+                updated = _auth.set_org_role(target.id, org, new_role)
+            except ValueError as e:
+                return _send_json(self, {"error": str(e)}, 400)
+            append_audit(_tenants.data_dir(org), {
+                "event": "member.role.changed", "actor": user.get("id"),
+                "target": updated.id, "target_email": updated.email, "role": new_role})
+            return _send_json(self, {"ok": True, "member": {
+                "id": updated.id, "email": updated.email, "name": updated.name,
+                "role": new_role, "role_label": ROLE_LABELS.get(new_role, new_role)}})
+
 
         # settings / credentials (strictly tenant-local)
         if route == "/api/settings/status" and method == "GET":
@@ -1574,12 +2044,178 @@ class Handler(BaseHTTPRequestHandler):
             st = core_secrets.status(tdir)
             st["mode"] = eng.config.get("mode")
             st["dry_run"] = eng.config.get("dry_run")
+            st["enforcement"] = eng.enforcement_status()
             st["masked_key"] = core_secrets.mask_key(tdir)
             runtime = _tenant_runtime(tdir)
             st["soar_webhook_hmac_configured"] = bool(runtime.get("soar_webhook_secret")
                                                       or os.environ.get("LUCIDFENCE_SOAR_WEBHOOK_SECRET"))
             st["soar_webhook_secret_masked"] = _masked_secret(runtime.get("soar_webhook_secret", ""))
+            # Per-tenant outbound webhook egress policy (t_f33e2f23). Returned
+            # for the dashboard wizard; default permissive when absent.
+            _eg = runtime.get("egress_policy")
+            if not isinstance(_eg, dict) or not _eg:
+                st["egress_policy"] = {"mode": "permissive"}
+            else:
+                st["egress_policy"] = {
+                    "mode": str(_eg.get("mode", "permissive")).lower(),
+                    "allow": _eg.get("allow", []) if _eg.get("mode") == "strict" else [],
+                    "allow_private": bool(_eg.get("allow_private", False)),
+                }
+            # Last outgoing-webhook delivery outcome (incl. egress denials) so
+            # the dashboard can show `denied_by_egress_policy` explicitly.
+            try:
+                st["webhook_delivery"] = eng._webhook_delivery_status()
+            except Exception:
+                st["webhook_delivery"] = None
             return _send_json(self, st)
+        if route == "/api/settings/enforcement" and method == "POST":
+            # Editar la fase de enforcement (observe|enforce) desde el dashboard.
+            # observe = todo dry-run; enforce = las live_actions salen en vivo.
+            # Cambiar el modo no ejecuta ninguna acción por sí mismo.
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            new_mode = (_read_body(self).get("mode") or "").strip().lower()
+            if new_mode not in ("observe", "enforce"):
+                return _send_json(self, {"error": "modo inválido (observe|enforce)"}, 400)
+            tdir = _tenants.data_dir(org)
+            runtime = _tenant_runtime(tdir)
+            runtime["enforcement_mode"] = new_mode
+            tmp = tdir / "integration.json.tmp"
+            tmp.write_text(json.dumps(runtime, indent=2), encoding="utf-8")
+            os.chmod(tmp, 0o600)
+            tmp.replace(tdir / "integration.json")
+            os.chmod(tdir / "integration.json", 0o600)
+            try:
+                eng = reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "mode": new_mode,
+                                         "warning": f"guardado pero el engine no se recargó: {exc}"})
+            append_audit(tdir, {"event": "enforcement.mode.changed",
+                                "actor": user.get("id"), "mode": new_mode})
+            return _send_json(self, {"ok": True, "enforcement": eng.enforcement_status()})
+        # ---- Multi-UEM provider registry (tenant-local, isolated) ----------
+        if route == "/api/providers/catalog" and method == "GET":
+            from lucidfence.saas.providers import catalog
+            return _send_json(self, {"catalog": catalog()})
+        if route == "/api/providers/test" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            name = (body.get("name") or "").strip().lower()
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
+            if name not in ADAPTER_REGISTRY:
+                return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF: un endpoint/base_url de proveedor debe ser un host
+            # externo https, jamás loopback/privado/link-local (misma política
+            # que el webhook de incidentes). Vacío = el adapter usa su default
+            # empaquetado. Sin esto, el asistente de conector permitía escanear
+            # infra interna y reflejar la respuesta del host interno al llamante.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
+            cls = ADAPTER_REGISTRY[name]
+            # Build the adapter with every credential field the wizard sent.
+            # Map "endpoint" -> endpoint_template; pass OAuth fields as-is.
+            creds = {k: v for k, v in body.items()
+                     if k not in ("name",) and isinstance(v, str)}
+            creds.pop("endpoint", None)
+            try:
+                adapter = cls(
+                    org_id=body.get("org_id", ""),
+                    endpoint_template=body.get("endpoint", "") or "",
+                    api_key=(body.get("api_key") or "").strip(),
+                    **{k: v for k, v in creds.items()
+                       if k in ("tenant_id", "client_id", "client_secret",
+                                "refresh_token", "base_url", "username", "password",
+                                "api_token", "tenant_code", "customer_id")},
+                )
+            except Exception as exc:
+                return _send_json(self, {"ok": False, "error_type": "init",
+                                         "error": f"no se pudo construir el conector: {exc}"}, 400)
+            # SimulationAdapter (and others that ignore kwargs) still need the
+            # key for test_connection's format check; set it explicitly.
+            if not getattr(adapter, "api_key", None) and body.get("api_key"):
+                try:
+                    adapter.api_key = (body.get("api_key") or "").strip()
+                except Exception:
+                    pass
+            result = adapter.test_connection()
+            result["provider"] = name
+            return _send_json(self, result)
+        if route == "/api/providers" and method == "GET":
+            tdir = _tenants.data_dir(org)
+            return _send_json(self, {
+                "providers": [_masked_provider(p) for p in _list_providers(tdir)],
+                "health": _provider_health(eng),
+            })
+        if route == "/api/providers" and method == "POST":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            body = _read_body(self)
+            name = (body.get("name") or "").strip().lower()
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
+            if name not in ADAPTER_REGISTRY:
+                return _send_json(self, {"ok": False, "error": "proveedor no soportado"}, 400)
+            # Guard SSRF (igual que /api/providers/test): un endpoint/base_url
+            # persistido se usa en cada ciclo del engine; debe ser https externo.
+            for _uf in ("endpoint", "base_url"):
+                _u = (body.get(_uf) or "").strip()
+                if _u and not _safe_webhook_url(_u):
+                    return _send_json(self, {"ok": False, "error": "URL de proveedor no permitida (solo https, sin rangos privados/loopback/link-local)"}, 400)
+            tdir = _tenants.data_dir(org)
+            providers = _list_providers(tdir)
+            providers = [p for p in providers
+                         if not (p.get("name") == name and p.get("org_id") == body.get("org_id", ""))]
+            # segment: etiqueta de flota (móviles/portátiles/…). No es secreto
+            # y es lo que hace útil el multi-UEM: qué UEM cubre qué clase de
+            # dispositivo (p.ej. Applivery=móviles + Fleet=portátiles).
+            segment = (body.get("segment") or "").strip()[:40]
+            # ponytail: secret stored in tenant-isolated integration.json (0600),
+            # same trust boundary as core_secrets' .env; masked on GET.
+            provider = {
+                "name": name,
+                "org_id": body.get("org_id", ""),
+                "endpoint": (body.get("endpoint") or "").strip(),
+                "secret": (body.get("api_key") or "").strip(),
+            }
+            if segment:
+                provider["segment"] = segment
+            # Persist any extra OAuth/connection fields (tenant_id, client_id,
+            # client_secret, refresh_token) so the connector is functional.
+            for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
+                          "username", "password", "base_url",
+                          "api_token", "tenant_code", "customer_id"):
+                if body.get(extra):
+                    provider[extra] = body[extra].strip()
+            providers.append(provider)
+            _save_providers(tdir, providers)
+            # Rastro auditable: quién conectó qué UEM y para qué segmento. Nunca
+            # el secreto (solo el nombre del proveedor y la etiqueta de flota).
+            append_audit(tdir, {"event": "provider.registered",
+                                "actor": user.get("id"), "provider": name,
+                                "segment": segment})
+            try:
+                reload_engine(org)
+            except Exception as exc:
+                return _send_json(self, {"ok": True, "registered": name,
+                                        "warning": f"engine reload falló: {exc}"}, 200)
+            return _send_json(self, {"ok": True, "registered": name, "segment": segment})
+        if route.startswith("/api/providers/") and method == "DELETE":
+            if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
+                return _send_json(self, {"error": "sin permiso"}, 403)
+            name = route[len("/api/providers/"):].split("/")[0]
+            tdir = _tenants.data_dir(org)
+            providers = [p for p in _list_providers(tdir)
+                         if not (p.get("name") == name)]
+            _save_providers(tdir, providers)
+            append_audit(tdir, {"event": "provider.removed",
+                                "actor": user.get("id"), "provider": name})
+            try:
+                reload_engine(org)
+            except Exception:
+                pass
+            return _send_json(self, {"ok": True, "removed": name})
         if route == "/api/settings" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -1631,16 +2267,22 @@ class Handler(BaseHTTPRequestHandler):
             url = _safe_webhook_url(url)
             if (body.get("url") or "").strip() and not url:
                 return _send_json(self, {"ok": False, "error": "URL no permitida (solo https, sin rangos privados)"}, 400)
+            # Per-tenant egress policy (t_f33e2f23): validate before persisting.
+            ok_eg, err_eg, policy_eg = _validate_egress_policy(body.get("egress_policy"))
+            if not ok_eg:
+                return _send_json(self, {"ok": False, "error": f"egress_policy inválido: {err_eg}"}, 400)
             tdir = _tenants.data_dir(org)
             _save_tenant_integration(tdir, eng.config.get("mode", "simulation"),
                                      eng.config.get("dry_run", True),
-                                     incident_webhook_url=url)
-            # rebuild engine so the notifier picks up the new webhook
+                                     incident_webhook_url=url,
+                                     egress_policy=policy_eg)
+            # rebuild engine so the notifier picks up the new webhook + policy
             try:
                 reload_engine(org)
             except Exception:
                 pass
-            return _send_json(self, {"ok": True, "configured": bool(url)})
+            return _send_json(self, {"ok": True, "configured": bool(url),
+                                     "egress_policy": policy_eg})
         if route == "/api/settings/soar-webhook-secret" and method == "POST":
             if not AuthStore.can(user["org_roles"].get(org), "engine:config"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
@@ -2110,9 +2752,6 @@ class Handler(BaseHTTPRequestHandler):
     # ---- product intelligence ------------------------------------------
     def _product(self, route: str, eng: Engine, user: dict, org: str, method: str, qs: dict):
         product = _product_bundle(eng)
-        if route == "/api/risk":
-            return _send_json(self, {"risk": product.get("risk", []),
-                                     "summary": product.get("summary", {})})
         if route == "/api/incidents":
             return _send_json(self, {"incidents": product.get("incidents", []),
                                      "summary": product.get("summary", {})})
@@ -2135,43 +2774,20 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(payload)
                 return
             return _send_json(self, {"incidents": rows, "summary": product.get("summary", {})})
-        if route == "/api/incidents/analytics" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "incident:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            return _send_json(self, {"analytics": eng.incidents.analytics()})
-        if route == "/api/cve" and method == "GET":
-            if not AuthStore.can(user["org_roles"].get(org), "device:read"):
-                return _send_json(self, {"error": "sin permiso"}, 403)
-            devices = [
-                {"device_id": s.device_id, "name": s.name, "apps": s.apps}
-                for s in eng.store.snapshot().values()
-            ]
-            summary = eng._cve_summary()
-            if not (summary.get("vulnerable_apps") or 0):
-                # No real signal (local dev / offline / empty fleet): broadcast
-                # demo fallback aligned with cloud publisher behavior.
-                summary = dict(summary)
-                summary.update(cloud_publisher._demo_cve_summary(summary, total=len(devices)))
-            else:
-                summary = dict(summary)
-                try:
-                    from lucidfence.core import cve as _cve
-                    nvd_keys = [k for k, v in _cve._FEED.items() if v]
-                    summary["demo"] = False
-                    summary["source"] = "engine-cve-feed" if nvd_keys else "local-db"
-                except Exception:
-                    summary["source"] = "local-db"
-            return _send_json(self, {"cve_summary": summary, "devices": devices})
         if route == "/api/soar" and method == "GET":
             if not AuthStore.can(user["org_roles"].get(org), "device:read"):
                 return _send_json(self, {"error": "sin permiso"}, 403)
             from lucidfence.core.soar import DEFAULT_PLAYBOOKS, evaluate_soar
+            from lucidfence.core.adapters.capabilities import capability_for
+            from lucidfence.core.adapters import ADAPTER_REGISTRY
             devs = list(eng.store.snapshot().values())
+            # Evalúa builtin + tenant (REQ §5) para el "matched" en vivo.
+            playbooks = eng.soar_store.all_playbooks() if getattr(eng, "soar_store", None) else DEFAULT_PLAYBOOKS
             soar_ctx = {"cycle": getattr(eng, "cycle_count", 0), "on_error": None}
             recent = []
             for d in devs:
                 try:
-                    execs = evaluate_soar(d.to_dict(), DEFAULT_PLAYBOOKS, soar_ctx)
+                    execs = evaluate_soar(d.to_dict(), playbooks, soar_ctx)
                 except Exception:
                     execs = []
                 for ex in execs:
@@ -2183,12 +2799,38 @@ class Handler(BaseHTTPRequestHandler):
                         "severity": ex.get("severity"),
                         "actions": ex.get("actions"),
                     })
+            # Matriz de capacidades por UEM (diseño §3.1 / REQ §3): la UI ofrece
+            # solo lo que el UEM soporta y marca las acciones en dry-run pendientes
+            # de validar (decisión §10.2).
+            capability_matrix = {}
+            for name in ADAPTER_REGISTRY:
+                cap = capability_for(name)
+                if cap is not None:
+                    capability_matrix[name] = {
+                        "inventory": cap.inventory,
+                        "location": cap.location,
+                        "native_geofences": cap.native_geofences,
+                        "actions": sorted(cap.actions),
+                        "dry_run_actions": sorted(cap.dry_run_actions),
+                    }
+            tenant_pbs = []
+            errors = []
+            if getattr(eng, "soar_store", None) is not None:
+                tenant_pbs = [{
+                    "id": pb.id, "name": pb.name, "description": pb.description,
+                    "enabled": pb.enabled, "severity_min": pb.severity_min,
+                    "condition": pb.condition, "actions": pb.actions,
+                } for pb in eng.soar_store.load()]
+                errors = eng.soar_store.errors()
             return _send_json(self, {
                 "playbooks": [{
                     "id": pb.id, "name": pb.name, "description": pb.description,
                     "enabled": pb.enabled, "severity_min": pb.severity_min,
-                    "actions": pb.actions,
+                    "actions": pb.actions, "builtin": True,
                 } for pb in DEFAULT_PLAYBOOKS],
+                "tenant_playbooks": tenant_pbs,
+                "tenant_playbook_errors": errors,
+                "capability_matrix": capability_matrix,
                 "matched": recent,
                 "devices_scanned": len(devs),
             })

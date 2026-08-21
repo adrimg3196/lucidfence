@@ -18,8 +18,8 @@ from __future__ import annotations
 import json
 import os
 import time
-import uuid
-from typing import Any, Optional
+from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -45,6 +45,9 @@ class AppliveryAdapter(MDMAdapter):
             "/organizations/{org_id}/mdm/devices/{device_id}/commands"
         self.timeout = timeout
         self.webhook_url = webhook_url or os.environ.get("REMEDIATION_WEBHOOK_URL", "")
+        # Test endpoint (wizard "Probar"): list devices with the live key.
+        self._api_base = "https://api.applivery.io/v1"
+        self._test_path = f"/organizations/{self.org_id}/mdm/devices?limit=1"
 
     def _headers(self) -> dict:
         key = self.api_key or os.environ.get("APPLIVERY_API_KEY") or os.environ.get("applivery_api_key")
@@ -110,7 +113,9 @@ class AppliveryAdapter(MDMAdapter):
                 "action": action,
                 "error": "APPLIVERY_API_KEY not set",
             }
-        path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
+        path = self.endpoint_template.format(
+            org_id=self.org_id, device_id=quote(str(device_id), safe="")
+        )
         base = os.environ.get("APPLIVERY_API_BASE", "https://api.applivery.io/v1").rstrip("/")
         url = f"{base}{path}"
         body = {"command": action, "params": params or {}}

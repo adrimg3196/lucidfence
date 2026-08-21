@@ -12,10 +12,8 @@ Design goals (security first, 100% local):
 """
 from __future__ import annotations
 
-import json
 import os
 import ssl
-import stat
 from pathlib import Path
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -182,7 +180,7 @@ def test_applivery_token(api_key: str) -> dict:
             return classify(int(resp.getcode()))
     except HTTPError as e:
         return classify(int(getattr(e, "code", 0) or 0))
-    except (URLError, TimeoutError, ConnectionError) as e:
+    except (URLError, TimeoutError, ConnectionError):
         return {"ok": False, "valid": None, "http_status": 0, "category": "connection_failed",
                 "message": "No se pudo conectar con la API de Applivery (red, DNS o timeout)."}
     except Exception as e:  # noqa: BLE001 - report class only, never secret

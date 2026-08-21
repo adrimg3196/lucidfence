@@ -37,14 +37,38 @@ render a graceful integration_error instead of a 500.
 """
 
 import json
-import math
 import os
-import random
 import time
 import urllib.request
 import urllib.error
+from urllib.parse import quote, urlsplit
 from dataclasses import dataclass, field
 from typing import Optional
+
+
+def _same_origin(candidate: str, base: str) -> bool:
+    """True only if `candidate` has the same scheme/host/port as `base`.
+
+    Guards SSRF/token-theft: pagination must never send the Bearer token to a
+    host the remote MDM response chose via a Link header (finding: A10 SSRF).
+    """
+    try:
+        c = urlsplit(candidate)
+        b = urlsplit(base)
+    except ValueError:
+        return False
+
+    def _port(p):
+        if p.port:
+            return p.port
+        return {"https": 443, "http": 80}.get(p.scheme)
+
+    return (
+        bool(c.scheme)
+        and c.scheme == b.scheme
+        and (c.hostname or "").lower() == (b.hostname or "").lower()
+        and _port(c) == _port(b)
+    )
 
 
 @dataclass
@@ -74,6 +98,20 @@ class LocationReport:
     battery_state: Optional[str] = None
     storage_total_gb: Optional[float] = None
     storage_free_gb: Optional[float] = None
+    encryption_enabled: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 Lockdown Mode status item, WWDC 2026): only
+    # set where a UEM actually reports it. None = unknown (the common case),
+    # never inferred. See docs/operations/apple_ddm.md.
+    lockdown_mode: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 enrollment-type status item, WWDC 2026):
+    # True/False = UEM reported supervision explicitly; None = unknown (the
+    # common case), never inferred. See docs/operations/apple_ddm.md.
+    supervised: Optional[bool] = None
+    # DDM/UEM readback (Apple OS 27 hardware-health status items, WWDC 2026:
+    # baseband, camera, biometrics, nfc, uwb...): dict of component -> bool
+    # (True=healthy, False=degraded) or status string. None = not reported (the
+    # common case), never inferred. See docs/operations/apple_ddm.md.
+    hardware_health: Optional[dict] = None
     carrier: Optional[str] = None
     assigned_user: Optional[str] = None
     department: Optional[str] = None
@@ -81,6 +119,12 @@ class LocationReport:
     enrolled_at: Optional[str] = None
     device_tag: Optional[str] = None
     geofence_compliance: Optional[dict] = None
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Carried verbatim from the UEM/EMM response via NormalizedDevice. None
+    # = the adapter did not report it (never inferred). Feed the declarative
+    # gate (core.declarative) via the engine's action routing.
+    management_mode: Optional[str] = None
+    ownership: Optional[str] = None
 
 
 class LiveLocationSource:
@@ -171,25 +215,37 @@ class LiveLocationSource:
             # Pagination: data.nextCursor first, then Link header.
             nxt = payload.get("nextCursor")
             if nxt:
-                sep = "&" if "?" in url else "?"
+                # El separador se decide sobre `path` (lo que se reconstruye),
+                # no sobre `url`: tras el primer cursor `url` ya lleva
+                # `?cursor=...`, así que mirar `url` daba `&` y producía una URL
+                # malformada `.../devices&cursor=...` desde la página 3 —
+                # perdiendo silenciosamente todo dispositivo de esa página en
+                # adelante. `path` nunca lleva `?`, así que siempre es `?`.
+                sep = "&" if "?" in path else "?"
                 url = f"{self._api_base}{path}{sep}cursor={nxt}"
                 seen += 1
                 if seen > 100:
                     break
                 continue
-            url = self._next_from_link(link)
+            url = self._next_from_link(link, self._api_base)
             if not url:
                 break
         return results
 
     @staticmethod
-    def _next_from_link(link_header: Optional[str]) -> Optional[str]:
+    def _next_from_link(link_header: Optional[str], base: str) -> Optional[str]:
         if not link_header:
             return None
         for part in link_header.split(","):
             seg = part.split(";")
             if len(seg) >= 2 and 'rel="next"' in seg[1]:
-                return seg[0].strip().strip("<>")
+                candidate = seg[0].strip().strip("<>")
+                # SSRF guard: only follow pagination on the SAME origin as the
+                # API base. Never re-send the Bearer token to a host the MDM
+                # response picked via the Link header.
+                if _same_origin(candidate, base):
+                    return candidate
+                return None
         return None
 
     # --------------------------------------------------------------- helpers
@@ -207,14 +263,19 @@ class LiveLocationSource:
         except (TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _coalesce(a, b):
+        # ponytail: `or` treats 0.0 as falsy; equator/Greenwich coords must survive
+        return a if a is not None else b
+
     # --------------------------------------------------------------- parsing
     @staticmethod
     def _extract_last_location(dev: dict):
         ll = dev.get("lastLocation") or dev.get("last_location") or {}
         # Real shape: lastLocation.agent.{latitude,longitude,date,address}
         agent = ll.get("agent") or ll.get("location") or {}
-        lat = agent.get("latitude") or ll.get("latitude")
-        lng = agent.get("longitude") or ll.get("longitude")
+        lat = LiveLocationSource._coalesce(agent.get("latitude"), ll.get("latitude"))
+        lng = LiveLocationSource._coalesce(agent.get("longitude"), ll.get("longitude"))
         ts = agent.get("date") or ll.get("date") or agent.get("lastReportDate")
         addr = agent.get("address") or ll.get("address")
         if addr and isinstance(addr, dict):
@@ -226,9 +287,9 @@ class LiveLocationSource:
         # still yields a usable position instead of a None (and an "unknown"
         # device that never enters any geofence).
         if lat is None:
-            lat = ll.get("latitude") or ll.get("lat")
+            lat = LiveLocationSource._coalesce(ll.get("latitude"), ll.get("lat"))
         if lng is None:
-            lng = ll.get("longitude") or ll.get("lng")
+            lng = LiveLocationSource._coalesce(ll.get("longitude"), ll.get("lng"))
         if lat is None or lng is None:
             return None
         return {
@@ -289,6 +350,18 @@ class LiveLocationSource:
             battery_state=summary.get("batteryState") or summary.get("battery_state"),
             storage_total_gb=self._to_float(summary.get("storageTotalGb") or summary.get("storage_total_gb")),
             storage_free_gb=self._to_float(summary.get("storageFreeGb") or summary.get("storage_free_gb")),
+            # Applivery's verified device schema (2026-07-09) exposes NO Lockdown
+            # Mode field: leave it unknown rather than invent one. It arrives via
+            # the DDM status channel (device_state readback) when the UEM reports
+            # it — Apple OS 27, WWDC 2026 — not from this list endpoint.
+            lockdown_mode=None,
+            # Same verified schema exposes NO enrollment-supervision field:
+            # leave it unknown. It arrives via the DDM status channel
+            # (device_state readback), not from this list endpoint.
+            supervised=None,
+            # Same verified schema exposes NO hardware-health fields either:
+            # leave it unknown (arrives via the DDM status channel on OS 27).
+            hardware_health=None,
             carrier=summary.get("carrier") or summary.get("networkOperator"),
             assigned_user=summary.get("userName") or summary.get("assignedUser"),
             department=summary.get("department"),
@@ -305,7 +378,9 @@ class LiveLocationSource:
 
     def fetch_one(self, device_id: str) -> Optional[LocationReport]:
         self.last_error = None
-        path = self.endpoint_template.format(org_id=self.org_id, device_id=device_id)
+        path = self.endpoint_template.format(
+            org_id=self.org_id, device_id=quote(str(device_id), safe="")
+        )
         url = f"{self._api_base}{path}"
         req = urllib.request.Request(url, headers=self._headers())
         try:
@@ -405,6 +480,18 @@ class SimulationLocationSource:
                 battery_state=dev.get("battery_state") or "full",
                 storage_total_gb=dev.get("storage_total_gb") or 128.0,
                 storage_free_gb=dev.get("storage_free_gb") if dev.get("storage_free_gb") is not None else 64.0,
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits Lockdown Mode.
+                lockdown_mode=dev.get("lockdown_mode"),
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits enrollment supervision.
+                supervised=dev.get("supervised"),
+                # Readback field: only the seed can declare it. Absent => None
+                # (unknown), never defaulted — the risk engine must not penalize
+                # a device just because a legacy seed omits hardware health.
+                hardware_health=dev.get("hardware_health"),
                 carrier=dev.get("carrier") or "Movistar",
                 assigned_user=dev.get("assigned_user") or dev.get("name"),
                 department=dev.get("department") or "Operaciones",
@@ -422,15 +509,98 @@ class SimulationLocationSource:
         return None
 
 
+# ---------------------------------------------- network (geofencing lógico) enrich
+
+
+def _enrich_report_with_network(report: "LocationReport", resolver) -> "LocationReport":
+    """Fill a coordinate-less report from operator-declared network sites.
+
+    Windows/laptops sin GPS (Intune/Fleet/osquery) llegan sin lat/lng. Si el
+    report NO tiene un fix usable y las señales de red (IP de salida, SSID,
+    BSSID) casan con un sitio declarado, rellenamos una ubicación GRUESA y
+    honesta: `accuracy_m == radius del sitio` y `location_source="network"`.
+
+    Nunca sobreescribe un fix GPS real. Nunca inventa: si el resolver no casa,
+    el report se devuelve intacto (y el dispositivo se queda `unknown`).
+    """
+    if report is None or resolver is None:
+        return report
+    # ¿Ya tiene coordenadas usables? Entonces es un fix real: no se toca.
+    if report.lat is not None and report.lng is not None:
+        return report
+    raw = report.raw if isinstance(report.raw, dict) else {}
+    signals = {
+        "ip": report.ip,
+        "ssid": raw.get("ssid") or raw.get("wifi_ssid") or raw.get("SSID"),
+        "bssid": raw.get("bssid") or raw.get("wifi_bssid") or raw.get("BSSID"),
+    }
+    try:
+        match = resolver.resolve(signals)
+    except Exception:
+        match = None
+    if not match:
+        return report
+    report.lat = match["lat"]
+    report.lng = match["lng"]
+    report.accuracy_m = match["accuracy_m"]
+    report.location_source = "network"
+    return report
+
+
+class _NetworkEnrichedSource:
+    """Decorates a location source, enriching coordinate-less reports.
+
+    Delegación transparente: cualquier atributo/método que el engine espere del
+    source original (last_error, fetch_one, etc.) se reenvía. Solo `fetch` y
+    `fetch_one` interceptan la salida para pasar cada report por el resolver.
+
+    Se instancia SOLO cuando hay `network_sites` válidos configurados; en su
+    ausencia `build_location_source` devuelve la fuente sin envolver, de modo que
+    el comportamiento es byte-idéntico cuando la función no está en uso.
+    """
+
+    def __init__(self, inner, resolver):
+        self._inner = inner
+        self._resolver = resolver
+
+    def fetch(self) -> list:
+        return [_enrich_report_with_network(r, self._resolver) for r in self._inner.fetch()]
+
+    def fetch_one(self, device_id: str):
+        return _enrich_report_with_network(self._inner.fetch_one(device_id), self._resolver)
+
+    def __getattr__(self, name):
+        # last_error y cualquier otro atributo viven en la fuente envuelta.
+        return getattr(self._inner, name)
+
+
 # ----------------------------------------------------------------------- factory
 def build_location_source(mode: str, org_id: str, sim_seed_path: str = "data/fleet_seed.json",
-                          api_key: str = ""):
+                          api_key: str = "", location_cfg: dict = None, network_cfg: dict = None):
     """Return a location source for the given mode.
 
     mode == "live"       -> LiveLocationSource(org_id)  (reads APPLIVERY_API_KEY)
+    mode == "generic"    -> GenericHTTPLocationSource(location_cfg)
     mode == "simulation" -> SimulationLocationSource(sim_seed_path)
-    """
-    if mode == "live":
-        return LiveLocationSource(org_id=org_id, api_key=api_key)
-    return SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
 
+    If `location_cfg` carries a `url` and mode is not simulation, the generic
+    source wins (bring-your-own UEM API), regardless of the mode label.
+
+    Si `network_cfg` trae `network_sites` válidos (geofencing lógico por red),
+    la fuente resultante se envuelve para enriquecer reports sin coordenadas.
+    Sin `network_sites`, la fuente se devuelve TAL CUAL (inerte por defecto).
+    """
+    if location_cfg and location_cfg.get("url") and mode != "simulation":
+        from lucidfence.core.generic_http_source import GenericHTTPLocationSource
+        source = GenericHTTPLocationSource(location_cfg)
+    elif mode == "live":
+        source = LiveLocationSource(org_id=org_id, api_key=api_key)
+    else:
+        source = SimulationLocationSource(sim_seed_path=sim_seed_path, org_id=org_id)
+
+    if network_cfg:
+        from lucidfence.core.network_location import NetworkLocationResolver
+        resolver = NetworkLocationResolver(network_cfg)
+        if resolver.configured:
+            return _NetworkEnrichedSource(source, resolver)
+    return source

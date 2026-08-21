@@ -17,8 +17,6 @@ Errors are mapped to AuthError / TransportError so the dashboard never
 
 from __future__ import annotations
 
-import json
-import logging
 import os
 import time
 from typing import Any, Optional
@@ -180,6 +178,18 @@ class IntuneAdapter(MDMAdapter):
 
     # --- public API per MDMAdapter ---
 
+    def test_connection(self) -> dict:
+        # The OAuth client_credentials grant against Azure AD validates the
+        # tenant_id / client_id / client_secret directly — a successful token
+        # fetch IS a live connection check.
+        try:
+            self._fetch_token()
+        except AuthError as exc:
+            return {"ok": False, "error_type": "auth", "error": f"credenciales rechazadas: {exc}"}
+        except TransportError as exc:
+            return {"ok": False, "error_type": "unreachable", "error": f"no se pudo conectar: {exc}"}
+        return {"ok": True, "verified": "live", "note": "token OAuth obtenido"}
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
@@ -200,6 +210,9 @@ class IntuneAdapter(MDMAdapter):
         device_id = self._dev_id_str(device)
         if not device_id:
             return self._err("intune", device, action, "missing_device_id", "device_id is required")
+
+        if action == "set_compliance":
+            return self._set_compliance_live(device, device_id, params, dry_run)
 
         if action not in GRAPH_ACTION:
             return self._err(
@@ -252,6 +265,78 @@ class IntuneAdapter(MDMAdapter):
             "mode":      "live",
             "graph_status": resp.status_code,
             "graph_response_keys": list(data.keys())[:8],
+        }
+
+    def _set_compliance_live(self, device: Any, device_id: str, params: dict, dry_run: bool) -> dict:
+        """Marca el dispositivo (no) conforme en Entra vía Graph.
+
+        Camino: managedDevice -> azureADDeviceId -> objeto /devices ->
+        PATCH isCompliant. Requiere Device.ReadWrite.All ADEMÁS del scope
+        de Intune, y Microsoft solo lo acepta desde apps MDM aprobadas /
+        integraciones de compliance partner (en Windows de forma general;
+        en Apple puede rechazarlo). Por eso el error de Graph se devuelve
+        VERBATIM: el admin tiene que ver el motivo real, no un genérico.
+        """
+        compliant = bool((params or {}).get("compliant", False))
+
+        r1 = requests.get(
+            f"{self.endpoint_template}/deviceManagement/managedDevices/{device_id}"
+            "?$select=id,azureADDeviceId",
+            headers=self._auth_headers(), timeout=self.timeout,
+        )
+        if r1.status_code in (401, 403):
+            self._token = None
+            raise AuthError(f"Graph rejected managedDevice lookup ({r1.status_code}): {r1.text[:200]}")
+        if r1.status_code == 404:
+            return self._err("intune", device, "set_compliance", "device_not_found",
+                             f"managed device {device_id} not found in tenant {self.tenant_id}")
+        if r1.status_code >= 400:
+            raise TransportError(f"Graph API {r1.status_code}: {r1.text[:200]}")
+        aad_id = (r1.json() or {}).get("azureADDeviceId") or ""
+        if not aad_id or aad_id == "00000000-0000-0000-0000-000000000000":
+            return self._err("intune", device, "set_compliance", "no_azuread_device",
+                             "managed device has no Entra (Azure AD) device object; "
+                             "compliance/Conditional Access does not apply to it")
+
+        r2 = requests.get(
+            f"{self.endpoint_template}/devices?$filter=deviceId eq '{aad_id}'&$select=id",
+            headers=self._auth_headers(), timeout=self.timeout,
+        )
+        if r2.status_code in (401, 403):
+            self._token = None
+            raise AuthError(
+                f"Graph rejected /devices lookup ({r2.status_code}): {r2.text[:200]} "
+                "(hint: la app registration necesita Device.ReadWrite.All)")
+        if r2.status_code >= 400:
+            raise TransportError(f"Graph API {r2.status_code}: {r2.text[:200]}")
+        values = (r2.json() or {}).get("value") or []
+        if not values:
+            return self._err("intune", device, "set_compliance", "no_azuread_device",
+                             f"no /devices object found for deviceId {aad_id}")
+        object_id = values[0].get("id")
+
+        url = f"{self.endpoint_template}/devices/{object_id}"
+        body = {"isCompliant": compliant}
+        if dry_run:
+            return {
+                "adapter": "intune", "ok": True, "device_id": device_id,
+                "action": "set_compliance", "mode": "dry_run", "compliant": compliant,
+                "would_send": {"method": "PATCH", "url": url, "json": body},
+            }
+        r3 = requests.patch(url, headers=self._auth_headers(), json=body, timeout=self.timeout)
+        if r3.status_code in (401, 403):
+            self._token = None
+            raise AuthError(
+                f"Graph rejected isCompliant PATCH ({r3.status_code}): {r3.text[:200]} "
+                "(hint: solo apps MDM aprobadas / compliance partners pueden "
+                "escribir isCompliant; requiere Device.ReadWrite.All)")
+        if r3.status_code >= 400:
+            return self._err("intune", device, "set_compliance", "graph_rejected",
+                             f"Graph {r3.status_code}: {r3.text[:200]}")
+        return {
+            "adapter": "intune", "ok": True, "device_id": device_id,
+            "action": "set_compliance", "mode": "live", "compliant": compliant,
+            "azuread_object_id": object_id, "graph_status": r3.status_code,
         }
 
     def _list_devices_live(self) -> dict:

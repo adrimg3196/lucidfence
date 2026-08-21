@@ -16,6 +16,13 @@ Uso:
     python3 -m lucidfence.core.cloud_publisher [--cycles N] [--tenant TENANT_ID]
 """
 from __future__ import annotations
+# Contrato publico del snapshot: las claves que TODO consumidor (vitrina,
+# health-checks, monitor) puede exigir. Cambiar el esquema del publisher
+# obliga a cambiar esta lista — y scripts/check_vitrina.py la importa, asi
+# que los checks de los workflows siguen al publisher automaticamente.
+PUBLISHED_REQUIRED_KEYS = ("service", "generated_at", "mode", "totals",
+                           "tenants", "devices", "fences")
+
 
 import argparse
 import json
@@ -30,7 +37,6 @@ sys.path.insert(0, str(ROOT))
 
 from lucidfence.saas.tenant import TenantStore  # noqa: E402
 from lucidfence.core.engine import Engine  # noqa: E402
-from lucidfence.core.location_source import SimulationLocationSource, LocationReport  # noqa: E402
 from lucidfence.core.adapters import ios_geofence_compliance  # noqa: E402
 
 

@@ -1,94 +1,128 @@
-# docs/architecture/SPEC.md — LucidFence (replanteado con agent-skills)
+# SPEC.md — LucidFence as-built
 
-> Spec-driven development. Este documento es la fuente de verdad del proyecto.
-> Vive en version control mientras el trabajo está en curso.
+> Spec-driven development (estilo [github/spec-kit](https://github.com/github/spec-kit)):
+> este documento describe el sistema **tal como está construido** y es la fuente
+> de verdad técnica del repo. Está subordinado a la
+> [Constitución](CONSTITUTION.md) (suprema): ante conflicto, gana ella. Un
+> cambio que deje esta spec desactualizada no está terminado. Las features
+> nuevas nacen de una mini-spec
+> ([plantilla](../internal/product/spec-template.md)) con claim runtime
+> verificable.
 
-## 1. Objective
+## 1. Objetivo
 
-LucidFence es geofencing UEM/MDM **100% local y soberano**: monitoriza flotas de
-dispositivos, evalúa conformidad por geocerca, calcula riesgo por dispositivo,
-escanea CVE en apps de la flota y ejecuta playbooks SOAR de remediación — con IA
-local (MoA), email soberano (Atomic Mail) y dominio propio (FreeDomain). $0, sin
-telemetría, sin proveedor de pago.
+LucidFence es el **complemento neutral del UEM que el admin ya tiene** — nunca
+un UEM (Constitución §II): no enrola dispositivos, no empuja perfiles, no
+gestiona apps ni parches. Lee la flota del UEM existente (Applivery, Intune,
+Jamf, Fleet, Workspace ONE, ChromeOS…), la correlaciona con señales propias
+(geocercas, red, osquery, CVE), **explica** el riesgo y actúa solo a través
+del UEM cuando el admin decide.
 
-**Modelo de negocio (decisión del 2026-07-14):** el producto comercial es una
-*app local que se instalan los clientes* en su propia infra (soberano, $0 para
-el proveedor). La vitrina SaaS serverless en GitHub Pages es la captación
-comercial siempre-on ($0, fuera de nuestra máquina).
+Producto 100% free open-source (Apache-2.0), local-first y soberano: el dato
+del tenant vive en su máquina, cero telemetría, la ubicación no sale del
+equipo. Runtime Python stdlib, sin frameworks. La IA es opcional y BYO
+(endpoint OpenAI-compatible del propio tenant), nunca un requisito.
 
-## 2. Commands (cómo trabajar en este repo)
+Frontera de autonomía (Constitución §VI, inviolable): el desarrollo es
+autónomo; el enforcement sobre dispositivos reales lo decide siempre el admin
+— `dry_run` por defecto, `enforce` opt-in por tenant, `wipe` con doble llave.
+
+## 2. Comandos de trabajo (verificados en vivo)
 
 | Comando | Qué hace |
 |---|---|
-| `python3 tests/run_tests.py` | Corre TODOS los `test_*.py` (runner honesto, tally real). 105 pass = verde. |
-| `python3 -m lucidfence.core.cloud_publisher --cycles 2` | Genera `data/cloud_state.json` (vitrina cloud). |
-| `python3 saas_server.py` | Levanta el SaaS local en `:8765` (dashboard + API + engine). |
-| `./install.sh` | Instala LucidFence en la máquina del cliente (Docker o Python). |
-| `docker compose up -d` | Levanta el stack siempre-on del cliente. |
-| `gh workflow run engine-cron.yml` | Fuerza un ciclo del backend serverless en la nube. |
+| `python3 scripts/verify.py` | La definición de "hecho": versión coherente + enlaces de docs + batería runtime N/N + suite honesta → `VERIFY: APTO (4/4)`. Variantes `--fast`, `--docs-only`, `--quiet`. |
+| `python3 tests/run_tests.py` | Corre todos los `test_*.py` con tally honesto (el verde es el tally real que imprime el runner, no un número fijado aquí; única baseline tolerada: `test_oidc_sso.py` en contenedores con `cryptography` roto — verde en CI). |
+| `python3 scripts/runtime_validation.py` | Batería runtime: arranca saas_server real, webhook real y MCP por stdio, ejercita cada claim anunciado → `RUNTIME: N/N claims`. |
+| `python3 saas_server.py` | Servidor local en `:8765` (dashboard + API + engine loop). `GET /api/health` responde `{"status": "ok"}`. |
+| `python3 -m lucidfence.cli <cmd>` | CLI: `serve/start/stop/restart/status/open`, `doctor` (preflight), `quickstart` (onboarding autoverificado), `apply` (config-as-code: valida, diff, what-if), `validate-config`, `adapter new`, `mcp` (stdio read-only), `shell`. |
+| `python3 -m lucidfence.core.cloud_publisher --cycles N` | Genera el snapshot demo `data/cloud_state.json` para la vitrina de Pages (engine en simulación; jamás datos reales de tenant). |
+| `./install.sh` / `docker compose up -d` | Instalación en la máquina del cliente (Python o Docker). |
 
-## 3. Project Structure
+## 3. Mapa de módulos as-built (`lucidfence/core/`)
 
-```
-lucidfence/
-├── saas_server.py                # SaaS + API HTTP + engine loop
-├── lucidfence/core/                         # engine, policies, state_store, adapters, cve_feed, location_source
-│   ├── cloud_publisher.py        # backend serverless: engine → cloud_state.json
-│   ├── config_loader.py          # carga de config y .env
-│   └── roadmap_tooling.py        # motor del roadmap (GET /api/roadmap)
-├── static/                       # dashboard.html (SPA local), cloud.html (vitrina), app.js, vendor/
-├── data/
-│   ├── cloud_state.json          # estado publicado para la vitrina (lo sirve Pages vía raw)
-│   ├── cloud_tenants/            # tenants de la nube creados vía saas-api (multi-tenant real)
-│   └── reports/                  # salida de scripts/reports.py
-├── tests/                        # test_*.py descubiertos por run_tests.py
-├── scripts/                      # build, arranque, despliegue, QA y ops
-│   ├── saas_api_op.py            # operaciones serverless (create_tenant/add_fence/remove_tenant)
-│   └── reports.py                # reporte de compliance offline
-├── docker-compose.yml            # stack always-on para clientes
-├── install.sh                    # installer de un comando para clientes
-├── .github/workflows/            # engine-cron, deploy-pages, saas-api, deploy-fly, ci
-├── .claude/ .gemini/ .agents/    # comandos y agents del marco agent-skills
-├── docs/                         # documentación (índice en docs/README.md)
-│   ├── architecture/SPEC.md      # esta especificación
-│   ├── internal/plan.md          # planning
-│   ├── references/               # definition-of-done, testing-patterns, security-checklist
-│   └── agents/                   # code-reviewer, security-auditor, test-engineer
-└── CLAUDE.md  AGENTS.md          # reglas de proyecto (context-engineering)
-```
+**Motor y señales**
 
-## 4. Code Style
+- `engine.py` — ciclo del geofencing: flota → evaluación → riesgo → acciones.
+- `policies.py` — Risk & Policy Engine geoespacial (el moat).
+- `fences.py` / `geo.py` — modelo de geocercas y geometría (distancia, polígonos).
+- `state_store.py` — persistencia: estados de dispositivo, transiciones, log de acciones.
+- `incidents.py` — ciclo de vida persistente de incidentes.
+- `cve.py` / `cve_feed_nvd.py` — base CVE local (offline) + sync opcional desde NVD.
+- `soar.py` — playbooks SOAR de remediación (siempre vía UEM, dry_run primero).
+- `alerts.py` / `notifier.py` — alertas por umbral y salidas Slack/Teams/webhook firmado/ntfy/email.
+- `predictive.py` / `poi.py` / `routes.py` — forecasting local explicable, POIs, adherencia a ruta.
+- `coverage.py` — informe de puntos ciegos: qué NO cubre la config actual (`docs/operations/coverage.md`).
+- `compliance_controls.py` — mapeo CIS/ISO basado en evidencia, no certificación.
+- `policy_replay.py` — simulador what-if de políticas ("terraform plan" del geofencing).
+- `evidence_export.py` / `export.py` — evidencia con cadena de hashes verificable offline; export/audit masivo.
+- `workflows.py` / `actions.py` — plantillas de workflows y façade de acciones UEM.
 
-- Python 3.11, stdlib-first. Sin frameworks web (HTTP propio en `saas_server.py`).
-- Nombres en español para dominio (geocerca, conformidad, dispositivo); inglés para API.
-- Funciones pequeñas, una responsabilidad. Sin comentarios que expliquen el *qué*.
-- Commits atómicos (~100 líneas), mensaje tipo `feat(scope): ...`.
-- Sin secretos en el repo; `.env.example` solo placeholders.
+**Ubicación**
 
-## 5. Testing Strategy
+- `location_source.py` — fuente live Applivery (REST).
+- `generic_http_source.py` — bring-your-own UEM: cualquier API JSON por mapeo declarativo.
+- `network_location.py` — geofencing lógico por señal de red (portátiles sin GPS).
+- `location_integrity.py` — heurísticas anti-spoofing 100% locales.
+- `osquery_posture.py` — evidencia de postura por osquery (readback honesto: señal ausente jamás penaliza).
+- `geocode.py` — geocoding Nominatim/OSM sin API key.
+- `multiuem.py` — modelos normalizados compartidos por los providers multi-UEM.
 
-- `tests/run_tests.py`: descubre todos los `test_*.py`, corre cada `test_*`,
-  captura `SystemExit` (tests que corren su propia suite al importar) y reporta
-  tally honesto. NO oculta fallos.
-- Cada feature nueva: test que falla sin el cambio y pasa con él.
-- Tests de integración arrancan el server en `:8765` de forma hermética.
-- Cobertura donde hay cambio planeado; no global forzado en legacy.
-- E2E de la vitrina: verificar en navegador que cloud.html renderiza KPIs/mapa/flota.
+**Adapters** (`core/adapters/`)
 
-## 6. Boundaries (qué siempre hacer / preguntar / nunca hacer)
+- `base.py` — interfaz `MDMAdapter` **congelada** (ver §4).
+- Implementaciones: `applivery`, `intune`, `jamf`, `fleet`, `workspace_one`, `chromeos`, `windows_conformidad`, `ios_geofence`, `simulation` (+ `_template_adapter`). Todas conservan camino mock offline.
+- `adapter_marketplace.py` / `adapter_scaffold.py` — verificación sha256 del marketplace local y scaffolding `lucidfence adapter new`.
 
-**Siempre:**
-- Verificar en runtime (correr el server / abrir la vitrina), no solo "compila".
-- Mantener el runner de tests honesto (tally real, exit code correcto).
-- Coste $0: solo free tiers; nada que facture.
-- Soberanía: los datos de tenant viven en la máquina del cliente, no en la nuestra.
+**Seguridad y configuración**
 
-**Preguntar primero:**
-- Cualquier dependencia de pago o cuenta con secreto del proveedor.
-- Exponer un backend always-on que requiera token nuestro (Fly/HF) — delegar al cliente.
+- `oidc.py` — OIDC Authorization Code + PKCE endurecido (SSO de equipo).
+- `api_keys.py` / `secrets.py` — API keys por tenant con audit log tamper-evident; credenciales UEM locales 0600.
+- `config_loader.py` / `config_validator.py` — carga de `config.json` + `.env`; validación del mapeo contra la API real.
+- `config_apply.py` — lógica de `lucidfence apply`: políticas y geocercas como código (valida, diff, what-if, aplica).
+- `doctor.py` / `app_paths.py` / `cluster.py` — preflight operacional, rutas portables, HA activo/pasivo por lease.
 
-**Nunca:**
-- Hardcodear secretos / tokens en el repo.
-- Exponer un token en el cliente de Pages (inaceptable para producto comercial).
-- Usar `flyctl auth login` headless (falla silenciosamente) — lo hace el cliente.
-- Dejar procesos zombi colgando entre sesiones.
+**SaaS y producto** (servidos por `saas_server.py`, HTTP stdlib propio)
+
+- `product.py` — capa de inteligencia de producto del dashboard.
+- `ai_provider.py` — IA BYO por tenant (endpoint OpenAI-compatible, key en `.env` 0600); `ai.py` es el bridge legacy loopback (solo `/api/ai/support`).
+- `ddm.py` / `dsc.py` — enforcement declarativo: Apple DDM y Windows PowerShell DSC (siempre entregado por el UEM del admin).
+- `atomicmail_client.py` / `freedomain.py` / `storage.py` — email soberano, dominio propio, blob storage free.
+
+**Publicación y loop**
+
+- `cloud_publisher.py` — backend serverless (Actions `engine-cron`): engine en simulación → `data/cloud_state.json` para la vitrina.
+- `roadmap_tooling.py` / `autonomous_company.py` / `loop_governance.py` / `provider_plugins.py` — motor del roadmap, control plane autónomo por tenant y salvaguardas de los loops.
+
+## 4. Contratos
+
+- **`core/adapters/base.py` (congelado):** `MDMAdapter` expone `name` y
+  `execute(device, action, params, dry_run) -> dict`; jamás lanza excepción
+  (`{"ok": False, "error": ...}`). Cambiarlo exige bump de versión MAYOR +
+  mock offline (denylist si no). API actual: `MDMAdapter/v1`.
+- **`data/cloud_state.json` (publisher):** snapshot plano con claves
+  `service, generated_at, mode, totals, tenants, devices, fences,
+  cve_summary, soar`. Demo-only por constitución: jamás datos reales.
+- **`docs/architecture/openapi.json`:** esquema OpenAPI 3.1 de la API local,
+  servido en vivo por `GET /api/openapi.json`. Se mantiene con cada cambio de
+  rutas.
+- **Marketplace de adapters:** `lucidfence/plugins/adapters/index.json`
+  (schema `lucidfence-adapter-index/v1`) verifica cada adapter por `sha256`;
+  una edición legítima regenera el índice en la misma PR
+  (`scripts/build_adapter_index.py`).
+- **Lint write-time:** `.ruff.toml` selecciona solo clases de error reales
+  (`F`, `E9`); el hook PostToolUse `.claude/hooks/quality_gate.sh` devuelve
+  los hallazgos al agente en el momento de escribir. El estilo compacto de la
+  casa es deliberado y no se lintea.
+
+## 5. Gates de calidad y entrega
+
+1. **Local:** `python3 scripts/verify.py` → `VERIFY: APTO (4/4)`. Un claim
+   que no arranca en vivo (batería runtime) bloquea el merge aunque la suite
+   esté verde (Constitución §IV).
+2. **CI** (`.github/workflows/ci.yml`): suite completa + `verify.py
+   --docs-only` + tests del worker + pip-audit + SBOM.
+3. **Raíl de entrega:** push a `claude/**` → `agent-pr.yml` abre la PR →
+   `agent-automerge.yml` mergea en verde. Sin gate humano en el desarrollo;
+   PRs de forks/terceros jamás se auto-mergean.
+4. **Denylist absoluta** (ni con gate verde): ver Constitución §Restricciones.

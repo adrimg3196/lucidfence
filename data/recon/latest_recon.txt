@@ -1,0 +1,77 @@
+--- recon repos 2026-08-21T18:39:57Z ---
+=== RECON REPOS (GitHub) — inspiracion video LucidFence ===
+
+1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
+   MDM - Blackberry Dynamics SDK integration with mobile application
+   https://github.com/malam84/UemDeviceManagement
+
+2. api-evangelist/mobileiron  ★0  [] #uem_mdm
+   MobileIron was a pioneer in mobile device management (MDM) and enterprise mobility management (EMM), later unified endpoint management (UEM), securing mobile devices, applications, and content for enterprises with capabilities such as Zero Sign-On, Mobile Threat Defense, and secure connectivity.
+   https://github.com/api-evangelist/mobileiron
+
+3. kaushik-shridhar/LakshmanRekha  ★0  [CSS] #geofence
+   IoT based geofencing system to help monitor COVID-19 patients and ensure compliance with quarantine boundaries. Pairs a web dashboard with a wearable device powered by ESP12 to track movement and detect geofence breaches. Built during the peak of pandemic, it aimed to protect frontline workers by enabling real-time alerts for boundary violations.
+   https://github.com/kaushik-shridhar/LakshmanRekha
+
+4. mochunab/contents-maker  ★4  [TypeScript] #video
+   AI-powered content production studio — 7 generators (trend tracker, card news, short-form video, meme ad, ad copy, ad creative, thumbnail) + browser-side video rendering engine (Canvas + WebCodecs + Remotion 4)
+   https://github.com/mochunab/contents-maker
+
+5. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/Divyalakshmiyarram/video-script-generator
+
+6. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/StephenStepDude/video-script-generator
+
+Total referencias traidas: 7 (minimo 3)
+
+=== PULSO SOCIAL (agent-reach: X + Reddit) ===
+>>> UEM MDM mobile device management
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> geofencing device compliance
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> video marketing generator react
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> remotion video template
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+
+--- recon social 2026-08-21T18:39:58Z ---
+=== RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
+
+>>> YouTube: Applivery UEM
+   (yt err: [Errno 2] No such file or directory: '/home/runner/.agent-reach-venv/bin/python')
+>>> YouTube: Jamf Pro
+   (yt err: [Errno 2] No such file or directory: '/home/runner/.agent-reach-venv/bin/python')
+
+>>> Web (Jina): referencia agent-reach
+Title: GitHub - Panniantong/Agent-Reach: Give your AI agent eyes to see the entire internet. Read & search Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu — one CLI, zero API fees.
+URL Source: https://github.com/Panniantong/agent-reach
+Markdo
+
+>>> X (twitter-cli + cookies):
+(no cookies X)
+
+>>> Reddit (opencli reddit):
+Traceback (most recent call last):
+  File "/home/runner/work/lucidfence/lucidfence/scripts/recon_social.py", line 85, in <module>
+    main()
+  File "/home/runner/work/lucidfence/lucidfence/scripts/recon_social.py", line 80, in main
+    print(reddit_search("UEM MDM")[:300])
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/lucidfence/lucidfence/scripts/recon_social.py", line 60, in reddit_search
+    r = subprocess.run(["opencli", "reddit", "search", q, "-f", "json"],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: 'opencli'

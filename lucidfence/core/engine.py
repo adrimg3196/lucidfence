@@ -11,11 +11,10 @@ Runs locally, forever, on the configured interval (default 15 min).
 """
 from __future__ import annotations
 
-import json
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,16 +22,43 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
+from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
-from lucidfence.core.routes import load_routes, route_for_device, save_routes
+from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
+from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
+from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
+from lucidfence.core.osquery_posture import OsqueryPostureProvider
+from lucidfence.core.location_integrity import assess as assess_location_integrity
+
+
+def _tag_route(res: Any, action: str, declarative: Optional[str],
+               effective_dry: bool) -> Any:
+    """Marca en el resultado la vía por la que salió la orden (auditable).
+
+    `enforcement` es "declarative" o "imperative" en TODO resultado despachado;
+    en el declarativo se conserva además la acción de política pedida
+    (`requested_action`), porque el adapter devuelve la declarativa.
+    """
+    if not isinstance(res, dict):
+        return res
+    res["enforcement"] = "declarative" if declarative else "imperative"
+    if declarative:
+        res["requested_action"] = action
+        # `apply_ddm` es offline (construye las declarations, no las sube) y no
+        # marca `dry_run`. Sin esto, un lock declarativo en observe quedaría
+        # registrado como ejecutado. La marca viene del gate del engine, que es
+        # quien sabe que la orden no debía salir, no del adapter.
+        if effective_dry:
+            res.setdefault("dry_run", True)
+    return res
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -57,23 +83,49 @@ class Engine:
         self.mode = config.get("mode", "simulation")  # simulation | live
         self.interval = int(config.get("interval_seconds", 900))
         self.dry_run = bool(config.get("dry_run", True))
+        # --- Enforcement (piloto seguro) ---
+        # Rollout progresivo pensado para admins reales: observe (todo dry-run,
+        # solo incidentes) -> enforce con live_actions acotadas (p.ej. message
+        # y lock) -> wipe solo con opt-in doble. `mode` manda sobre el legacy
+        # `dry_run` si ambos están en config.
+        enf = config.get("enforcement") or {}
+        _mode = str(enf.get("mode") or "").strip().lower()
+        if _mode == "observe":
+            self.dry_run = True
+        elif _mode == "enforce":
+            self.dry_run = False
+        _la = enf.get("live_actions")
+        # None = sin lista: en enforce salen en vivo todas las acciones (legacy).
+        self.live_actions = {str(a) for a in _la} if isinstance(_la, (list, tuple, set)) else None
+        # wipe es la única acción irreversible: nunca sale en vivo sin
+        # allow_wipe explícito, y wipe_allowlist puede acotarla a device_ids.
+        self.allow_wipe = bool(enf.get("allow_wipe", False))
+        self.wipe_allowlist = {str(x) for x in (enf.get("wipe_allowlist") or [])}
         # Cooldown (s) for destructive actions (wipe/lock/clear_passcode/reboot)
         # so a standing violation can't re-issue them every cycle/restart.
         self.action_cooldown_seconds = int(config.get("action_cooldown_seconds", 3600))
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
-        # Wire the incident lifecycle notifiers (Slack/Teams and/or Atomic Mail)
-        # if configured. Both are tenant-local and never raise.
-        webhook_url = config.get("incident_webhook_url", "") or ""
-        if webhook_url:
-            from lucidfence.core.notifier import IncidentNotifier
-            self.incidents.notifier = IncidentNotifier(webhook_url=webhook_url)
+        # Playbooks SOAR del tenant (REQ §5): builtin del producto + los del
+        # tenant persistidos en <data_dir>/soar_playbooks.json. El engine los
+        # fusiona en cada ciclo; un playbook roto se salta (auditado).
+        from lucidfence.core.soar_playbook_store import TenantPlaybookStore
+        self.soar_store = TenantPlaybookStore(data_dir=self.data_dir, builtin=DEFAULT_PLAYBOOKS)
+        # Wire the incident lifecycle notifiers if configured: Slack/Teams
+        # (incident_webhook_url, legacy) plus the multi-channel list
+        # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
+        # tenant-local and never raise; Atomic Mail joins the fan-out below.
+        from lucidfence.core.notifier import IncidentFanoutNotifier, build_incident_notifiers
+        _channels = build_incident_notifiers(config)
+        if len(_channels) == 1:
+            self.incidents.notifier = _channels[0]
+        elif _channels:
+            self.incidents.notifier = IncidentFanoutNotifier(_channels)
         # Atomic Mail Agentic: real email for the SaaS (alerts + incidents +
         # digest). Opt-in per tenant: requires atomicmail config in integration.
         self.mailbox = None
         self._wire_atomicmail(config)
-        _data_dir = config.get("data_dir", "data")
         _default_fences = config.get("fences_path")
         if _default_fences is None:
             _seed = config.get("sim_seed_path")
@@ -88,6 +140,10 @@ class Engine:
         self.source = build_location_source(
             self.mode, self.org_id, config.get("sim_seed_path", "data/fleet_seed.json"),
             api_key=config.get("_applivery_api_key", ""),
+            location_cfg=config.get("location_source"),
+            # Geofencing lógico por red (portátiles sin GPS): inerte salvo que el
+            # tenant declare `network_sites`. El resolver solo lee esa clave.
+            network_cfg=config,
         )
         self.adapter = build_adapter(
             self.mode if not self.dry_run else "simulation",  # never call live in dry_run
@@ -98,14 +154,30 @@ class Engine:
             webhook_url=config.get("uem", {}).get("remediation_webhook_url", ""),
             api_key=config.get("_applivery_api_key", ""),
         )
+        # Multi-UEM: if the tenant registered more than one provider, route
+        # remediation actions to the right adapter by device provider_refs.
+        # The orchestrator reuses the community MDMAdapter contract; when there
+        # is only one (or zero) provider it stays inert and engine falls back
+        # to the single self.adapter below.
+        self.orchestrator = None
+        providers = config.get("providers") or []
+        if len(providers) > 1 or (len(providers) == 1 and providers[0].get("name") != "simulation"):
+            try:
+                from lucidfence.core.multiuem import MultiUEMOrchestrator
+                self.orchestrator = MultiUEMOrchestrator(build_bindings(providers))
+            except Exception:
+                self.orchestrator = None
         # --- MOAT: Geospatial Risk & Policy Engine ---
         self.risk = RiskEngine(config.get("risk_signals_path"))
+        # Optional endpoint posture evidence. osquery observes; LucidFence
+        # correlates the evidence with geofences and UEM policy.
+        self.osquery = OsqueryPostureProvider(config.get("osquery"))
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
         # arranque si la red/cache falla. Por defecto solo carga el cache local;
         # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
         # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
         try:
-            from lucidfence.core.cve_feed_nvd import DEFAULT_OUT, load_nvd_feed_into_cve, sync_nvd_feed
+            from lucidfence.core.cve_feed_nvd import load_nvd_feed_into_cve, sync_nvd_feed
             cve_feed_path = config.get("cve_feed_path")
             if not cve_feed_path:
                 cve_feed_path = os.path.join(
@@ -207,7 +279,6 @@ class Engine:
         if self.mailbox is None:
             return False
         try:
-            stats = self.last_stats or {}
             devices = [s.to_dict() for s in self.store.snapshot().values()]
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
@@ -291,6 +362,9 @@ class Engine:
             }
             return self.last_stats
         states_prev = self.store.snapshot()
+        # Refresh once per cycle. A missing/stale log or binary never blocks
+        # geofencing; provider health is exposed in cycle stats.
+        self.osquery.refresh()
         states_cur: dict[str, DeviceState] = {}
         events: list[dict] = []
         # Per-cycle action dedupe + accumulator: reset every cycle so a single
@@ -326,6 +400,23 @@ class Engine:
                     route_state = "off_route" if dev > assigned_route.corridor_m else "on_route"
 
                 prev = states_prev.get(rep.device_id)
+                # Anti-spoofing: verosimilitud del report contra el último
+                # estado persistido (velocidad imposible, flip de país sin
+                # movimiento, accuracy anómala). No descarta el report: deja
+                # evidencia explicable y alimenta el Risk Engine.
+                integrity = assess_location_integrity(
+                    {"lat": rep.lat, "lng": rep.lng, "accuracy_m": rep.accuracy_m,
+                     "country": rep.country, "location_source": rep.location_source,
+                     "last_seen": rep.last_seen},
+                    prev.to_dict() if prev else None,
+                )
+                posture = self.osquery.posture_for(
+                    rep.device_id,
+                    aliases=(
+                        rep.serial_number or "",
+                        str((rep.raw or {}).get("hostname") or ""),
+                    ),
+                )
                 prev_key = (
                     f"{prev.inside_fence}:{prev.fence_state}" if prev else "none:unknown"
                 )
@@ -354,15 +445,20 @@ class Engine:
                     route_deviation_m=route_dev_m,
                     apps=enrich_apps(rep.apps or []),
                     # --- IT inventory fields propagated from the location source ---
-                    os_version=rep.os_version,
-                    model=rep.model,
-                    manufacturer=rep.manufacturer,
-                    serial_number=rep.serial_number,
+                    os_version=posture.get("os_version") or rep.os_version,
+                    model=posture.get("model") or rep.model,
+                    manufacturer=posture.get("manufacturer") or rep.manufacturer,
+                    serial_number=posture.get("serial_number") or rep.serial_number,
                     imei=rep.imei,
-                    battery_level=rep.battery_level,
-                    battery_state=rep.battery_state,
-                    storage_total_gb=rep.storage_total_gb,
-                    storage_free_gb=rep.storage_free_gb,
+                    battery_level=posture.get("battery_level", rep.battery_level),
+                    battery_state=posture.get("battery_state") or rep.battery_state,
+                    storage_total_gb=posture.get("storage_total_gb", rep.storage_total_gb),
+                    storage_free_gb=posture.get("storage_free_gb", rep.storage_free_gb),
+                    encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
+                    # DDM/UEM readback: carry None as None (unknown never fabricated).
+                    lockdown_mode=rep.lockdown_mode,
+                    supervised=rep.supervised,
+                    hardware_health=rep.hardware_health,
                     carrier=rep.carrier,
                     assigned_user=rep.assigned_user,
                     department=rep.department,
@@ -370,6 +466,14 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    management_mode=rep.management_mode,
+                    ownership=rep.ownership,
+                    location_integrity=integrity,
+                    provider_refs=dict(rep.raw.get("provider_refs") or {}),
+                    posture_source=posture.get("posture_source"),
+                    posture_collected_at=posture.get("posture_collected_at"),
+                    osquery_version=posture.get("osquery_version"),
+                    osquery_config_valid=posture.get("osquery_config_valid"),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
@@ -391,6 +495,8 @@ class Engine:
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
                 })
+                risk_device.update(posture)
+                risk_device["location_integrity"] = integrity
                 risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 ds.risk_score = risk["risk_score"]
                 ds.risk_severity = risk["severity"]
@@ -457,14 +563,18 @@ class Engine:
                 continue
         self.last_run = now_iso()
 
-        # ---- SOAR: evaluate orchestration playbooks per device --------------
-        # Each matched playbook yields UEM actions executed via the same adapter
-        # (and cooldown/dry_run machinery) used for geofence actions.
+        # ---- SOAR: evaluate orchestration playbooks per device --------------\n        # Combina los playbooks builtin del producto con los del tenant (REQ §5).
+        # Cada playbook matcheado produce acciones UEM. Las acciones destructivas
+        # (lock/wipe/clear_passcode/reboot) son SIEMPRE human-gated: en lugar de
+        # ejecutarlas, se emiten como handoff (diseño §5) y quedan registradas
+        # para aprobación manual en la consola; nunca se ejecutan de forma
+        # autónoma (REQ §5, design §2.3 / §5).
         soar_ctx = {"cycle": self.cycle_count, "on_error": None}
+        playbooks = self.soar_store.all_playbooks()
         for ds in states_cur.values():
             dev_dict = ds.to_dict()
             try:
-                execs = evaluate_soar(dev_dict, DEFAULT_PLAYBOOKS, soar_ctx)
+                execs = evaluate_soar(dev_dict, playbooks, soar_ctx)
             except Exception:
                 execs = []
             for ex in execs:
@@ -480,6 +590,25 @@ class Engine:
                             "playbook_id": ex.get("playbook_id"),
                             "note": act.get("params", {}).get("reason", ""),
                         })
+                        continue
+                    if aname in self.DESTRUCTIVE_ACTIONS:
+                        # Human-gate: handoff, no ejecución autónoma.
+                        self.store.log_event({
+                            "ts": now_iso(), "kind": "soar_handoff",
+                            "device_id": ds.device_id,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "action": aname,
+                            "severity": ex.get("severity", "high"),
+                            "matched_fields": ex.get("matched_fields", []),
+                            "params": act.get("params", {}) or {},
+                            "human_gate": True,
+                            "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
+                        })
+                        if self._cycle_actions:
+                            self._cycle_actions[-1]["soar"] = True
+                            self._cycle_actions[-1]["soar_handoff"] = True
+                            self._cycle_actions[-1]["playbook_id"] = ex.get("playbook_id")
                         continue
                     if self._dedupe_action(
                         ds, aname, "soar", ex.get("playbook_id", "soar"),
@@ -519,6 +648,145 @@ class Engine:
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
 
+    def _declarative_route(self, dev: Any, action: str, params: dict, *, dry_run: bool = False) -> Optional[dict]:
+        """Issue #89 (single-provider): route an eligible action through the
+        declarative channel before the blind imperative command.
+
+        Consults the adapter's ``supports_ddm``/``supports_dsc``/
+        ``supports_amapi_policy`` flags together with the device's reported
+        ``management_mode``/``ownership`` via the shared gate, and ALSO the
+        DDM-capability gate (#205). When either says declarative we build the
+        declaration through the adapter's builder (``_apply_ddm`` / ``_apply_dsc``
+        / ``_apply_amapi``) and tag the result with ``enforcement="declarative"``,
+        ``declarative_subaction`` and ``original_action``. The imperative
+        command (lock/wipe/...) is NOT issued.
+
+        Returns the declarative result, or ``None`` when the device is not
+        eligible so the caller keeps its imperative fallback. Never raises.
+        """
+        adapter = self.adapter
+        if adapter is None:
+            return None
+        supports = (
+            bool(getattr(adapter, "supports_ddm", False)),
+            bool(getattr(adapter, "supports_dsc", False)),
+            bool(getattr(adapter, "supports_amapi_policy", False)),
+        )
+        if not any(supports):
+            return None
+        sub = resolve_declarative_subaction(
+            dev, action, params or {},
+            supports_ddm=supports[0], supports_dsc=supports[1],
+            supports_amapi_policy=supports[2], adapter=adapter,
+        )
+        if sub is None:
+            return None
+        decl_params = dict(params or {})
+        if "profile_url" not in decl_params:
+            decl_params.setdefault("profile_url", getattr(adapter, "ddm_profile_url", "") or "")
+        res = adapter.execute(dev, sub, decl_params, dry_run=dry_run)
+        if isinstance(res, dict):
+            res["enforcement"] = "declarative"
+            res["declarative_path"] = "declarative"
+            res["declarative_subaction"] = sub
+            res["original_action"] = action
+            res["requested_action"] = action
+        return res
+
+    def _execute_action(self, dev: Any, action: str, params: dict) -> dict:
+        """Route a remediation command to the right UEM provider.
+
+        Multi-UEM: when an orchestrator is wired and the device carries
+        provider_refs (set by MultiUEMOrchestrator.fetch), dispatch to the
+        provider that supports the action. Falls back to the single
+        self.adapter (legacy single-provider path) otherwise. Never raises.
+        """
+        dev_id = getattr(dev, "device_id", "") or (
+            dev.get("device_id", "") if isinstance(dev, dict) else "")
+        # Guardarraíl de wipe: en vivo solo con allow_wipe, y si hay
+        # allowlist, solo para esos device_ids. El resultado bloqueado queda
+        # en el action log (auditable) y, al no ser ok/dry_run/delegated,
+        # no arma el cooldown: habilitar la llave permite reintentar ya.
+        if action == "wipe" and not self.dry_run:
+            if not self.allow_wipe:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev_id, "action": action,
+                    "error": "wipe bloqueado por guardarrail: requiere "
+                             "enforcement.allow_wipe: true en la config del tenant",
+                }
+            if self.wipe_allowlist and dev_id not in self.wipe_allowlist:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev_id, "action": action,
+                    "error": f"wipe bloqueado: {dev_id!r} no está en "
+                             "enforcement.wipe_allowlist",
+                }
+        # Gating por acción: en enforce con live_actions, lo no listado se
+        # ejecuta como dry-run (se registra qué HABRÍA pasado, no pasa).
+        effective_dry = self.dry_run
+        if not effective_dry and self.live_actions is not None and action not in self.live_actions:
+            effective_dry = True
+        refs = getattr(dev, "provider_refs", None)
+        multi = self.orchestrator is not None and isinstance(refs, dict) and bool(refs)
+        # Multi-UEM: el orquestador ejecuta el transporte, pero la DECISIÓN de
+        # ruta declarativa vs imperativa la toma el engine (issue #89) sobre el
+        # dispositivo rico, usando el adapter de la ref (route_adapter) y sus
+        # flags supports_*. El orquestador recibe wire_action = (subacción
+        # declarativa) o action, y el engine etiqueta el resultado con
+        # enforcement vía _tag_route. Se delega el resto del gating (wipe,
+        # observe/enforce, allow-list, cooldown, audit) al orquestador.
+        if multi:
+            first_provider, first_id = next(iter(refs.items()))
+            route_adapter = self.orchestrator._bindings.get(first_provider)
+            route_cls = None
+            if route_adapter is not None:
+                from lucidfence.core.adapters import ADAPTER_REGISTRY
+                route_cls = ADAPTER_REGISTRY.get(route_adapter.name)
+            supports = (
+                bool(getattr(route_cls, "supports_ddm", False)) if route_cls else False,
+                bool(getattr(route_cls, "supports_dsc", False)) if route_cls else False,
+                bool(getattr(route_cls, "supports_amapi_policy", False)) if route_cls else False,
+            )
+            declarative = resolve_declarative_subaction(
+                dev, action, params or {},
+                supports_ddm=supports[0], supports_dsc=supports[1],
+                supports_amapi_policy=supports[2], adapter=route_cls,
+            )
+            wire_action = declarative or action
+            # The orchestrator expects a NormalizedDevice-shaped input
+            # (provider + provider_device_id + provider_refs); DeviceState only
+            # keeps provider_refs, so bridge the first ref into those fields.
+            bridge = {
+                "provider": first_provider,
+                "provider_device_id": first_id,
+                "provider_refs": refs,
+                "platform": getattr(dev, "platform", None),
+                "os_version": getattr(dev, "os_version", None),
+                "management_mode": getattr(dev, "management_mode", None),
+                "ownership": getattr(dev, "ownership", None),
+            }
+            res = self.orchestrator.execute(bridge, wire_action, params or {}, dry_run=effective_dry)
+            if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
+                return _tag_route(res, action, declarative, effective_dry)
+        # Single-provider (issue #89): ruta declarativa antes de la imperativa.
+        # El gate (core.declarative) consulta management_mode/ownership del
+        # dispositivo y los flags supports_* del adapter. Si dice "declarative"
+        # construye la declaration (DDM/DSC/AMAPI) y etiqueta el resultado; el
+        # comando imperativo de bloqueo no se emite. "unknown"/"imperative" ->
+        # cae al camino de siempre.
+        if self.adapter is not None:
+            decl = self._declarative_route(dev, action, params or {}, dry_run=effective_dry)
+            if decl is not None:
+                return decl
+            return _tag_route(
+                self.adapter.execute(dev, action, params or {}, dry_run=effective_dry),
+                action, None, effective_dry)
+        return {"ok": True, "dry_run": True, "simulated": True, "enforcement": "imperative",
+                "action": action, "device_id": getattr(dev, "device_id", "")}
+
     def _dedupe_action(self, ds: DeviceState, action: str, fence_id, trigger: str,
                        policy_name: str, severity: str, params: dict = None) -> bool:
         """Fire an action once per (device, action) per cycle across all sources.
@@ -545,14 +813,7 @@ class Engine:
             if last and (now - last) < self.action_cooldown_seconds:
                 return False
         bucket.add(key)
-        if self.adapter is not None:
-            res = self.adapter.execute(ds, action, params or {}, dry_run=self.dry_run)
-        else:
-            # Modo simulation/dry-run sin adapter UEM real: la acción se registra
-            # igual (es lo que promete el fallback de route_exit) sin ejecutar
-            # nada externo.
-            res = {"ok": True, "dry_run": True, "simulated": True,
-                   "action": action, "device_id": ds.device_id}
+        res = self._execute_action(ds, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = fence_id
         res["trigger"] = trigger
@@ -598,7 +859,7 @@ class Engine:
                     "remaining_seconds": remaining,
                     "error": f"comando {action} en cooldown; reintenta en {remaining}s",
                 }
-        res = self.adapter.execute(dev, action, params or {}, dry_run=self.dry_run)
+        res = self._execute_action(dev, action, params)
         res["ts"] = now_iso()
         res["fence_id"] = dev.inside_fence
         res["trigger"] = "operator"
@@ -730,7 +991,6 @@ class Engine:
     # ---- routes ---------------------------------------------------------
     def add_route(self, data: dict):
         """Create a route from API payload and persist it."""
-        from lucidfence.core.routes import Route, save_routes
         if not data.get("name"):
             raise ValueError("name es obligatorio")
         waypoint_data = list(data.get("waypoints") or [])
@@ -759,21 +1019,18 @@ class Engine:
         save_routes(self.routes_path, self.routes)
 
     def delete_route(self, route_id: str):
-        from lucidfence.core.routes import save_routes
         self.routes = [r for r in self.routes if r.id != route_id]
         save_routes(self.routes_path, self.routes)
 
     # ---- policies / workflows (persisted to the tenant's policies.json) ----
     def add_policy(self, policy_dict: dict):
         """Persist a new policy (from a workflow template or custom builder)."""
-        from lucidfence.core.policies import save_policies
         # drop any existing policy with the same id (idempotent apply)
         self.policies = [p for p in self.policies if p.id != policy_dict.get("id")]
         self.policies.append(Policy(**_policy_kwargs(policy_dict)))
         save_policies(self.policies_path, self.policies)
 
     def delete_policy(self, policy_id: str):
-        from lucidfence.core.policies import save_policies
         self.policies = [p for p in self.policies if p.id != policy_id]
         save_policies(self.policies_path, self.policies)
 
@@ -841,7 +1098,67 @@ class Engine:
             "ios_geofence_total": ios_geo_total,
             "ios_geofence_compliant": ios_geo_ok,
             "ios_geofence_noncompliant": max(ios_geo_total - ios_geo_ok, 0),
+            "osquery_posture": self.osquery.status(),
+            "enforcement": self.enforcement_status(),
         }
+
+    def enforcement_status(self) -> dict:
+        """Estado del rollout de enforcement, para status API y dashboard."""
+        return {
+            "mode": "observe" if self.dry_run else "enforce",
+            "live_actions": sorted(self.live_actions) if self.live_actions is not None else "all",
+            "allow_wipe": self.allow_wipe,
+            "wipe_allowlist_size": len(self.wipe_allowlist),
+        }
+
+    def _egress_status(self) -> dict:
+        """Summarize the tenant's outbound webhook egress policy for the UI.
+
+        Reads the policy straight from the engine config (which is overlaid from
+        integration.json by _apply_tenant_integration). Defaults to `permissive`
+        so existing deployments are never reported as broken.
+        """
+        raw = (self.config or {}).get("egress_policy") or {}
+        mode = str(raw.get("mode", "permissive")).strip().lower()
+        if mode != "strict":
+            return {"mode": "permissive", "allow": [], "allow_private": False}
+        allow = raw.get("allow") or []
+        if not isinstance(allow, list):
+            allow = []
+        return {
+            "mode": "strict",
+            "allow": [str(a) for a in allow if isinstance(a, str)],
+            "allow_private": bool(raw.get("allow_private", False)),
+        }
+
+    def _webhook_delivery_status(self) -> dict:
+        """Latest outgoing-webhook delivery outcome, including egress denials.
+
+        Surfaces the most recent notifier result so the dashboard can show a
+        `denied_by_egress_policy` outcome explicitly (never silent — criterion
+        #3 of the product decision t_316b8ec5). Best-effort: never raises.
+        """
+        notifier = getattr(self.incidents, "notifier", None)
+        if notifier is None:
+            return {"configured": False, "last_result": None}
+        last = getattr(notifier, "last_result", None)
+        if isinstance(notifier, IncidentFanoutNotifier):
+            # Fan-out: report the most recent per-channel snapshot.
+            results = (last or {}).get("results") if isinstance(last, dict) else None
+            return {
+                "configured": True,
+                "fanout": True,
+                "last_result": last,
+                "channels": [
+                    {
+                        "channel": (r.get("channel") if isinstance(r, dict) else None),
+                        "ok": (r.get("ok") if isinstance(r, dict) else None),
+                        "result": (r.get("last_result") if isinstance(r, dict) else None),
+                    }
+                    for r in (results or [])
+                ],
+            }
+        return {"configured": True, "fanout": False, "last_result": last}
 
     # ---- loop ------------------------------------------------------------
     def start(self) -> None:
@@ -864,7 +1181,6 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
-        from datetime import datetime
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:
@@ -879,6 +1195,9 @@ class Engine:
             "mode": self.mode,
             "interval_seconds": self.interval,
             "dry_run": self.dry_run,
+            "enforcement": self.enforcement_status(),
+            "egress_policy": self._egress_status(),
+            "webhook_delivery": self._webhook_delivery_status(),
             "stats": self.last_stats,
             "fences": [
                 {

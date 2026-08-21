@@ -1,9 +1,35 @@
 # Roadmap Q3 2026 — LucidFence
 
+> **ARCHIVADO — snapshot histórico.** El roadmap de producto vivo y canónico es [`docs/roadmap/PRODUCT_ROADMAP.md`](PRODUCT_ROADMAP.md), mantenido por el loop Roadmap. Este fichero se conserva como contexto, no como plan.
+
 > PM: priorización del backlog del board `lucidfence`.
 > Principios que rigen el orden (de `docs/architecture/SPEC.md`): **local-first & soberano**, **$0**
 > (solo free tiers), **datos del tenant en máquina del cliente**, y **verificar en
 > runtime, no solo "compila"**.
+
+## Estado operativo revalidado — 2026-08-14
+
+Esta actualización **prevalece sobre la secuencia histórica de sprints que
+sigue** hasta que se complete el drenaje. La prioridad inmediata no es ampliar
+la conversión ni añadir prueba social: es recuperar una vitrina pública
+verificable y un flujo de merge confiable.
+
+1. **P0 #110 — integridad pública y confianza de demo.** Retirar testimonios
+   ficticios y métricas de tracción no verificadas; identificar inequívocamente
+   los datos demo y mantener la descarga accesible en el primer viewport. No
+   hay comunicación externa hasta que el cambio esté en `main`, GitHub Pages
+   esté verificado y el CEO autorice vía COO.
+2. **P0 #108 — señal de seguridad reproducible.** Alinear el pin declarado de
+   `cryptography` con la lock y auditar ambos manifiestos para que CI detecte
+   divergencias futuras.
+3. **Drenaje con gate QA.** No se mergea un PR sin CI verde, estado mergeable y
+   `VEREDICTO QA: APTO`; los PRs obsoletos, duplicados o ya contenidos en
+   `main` se cierran con evidencia. El WIP de merge es uno salvo decisión
+   explícita de Dirección.
+
+**Línea base de flujo:** al 2026-08-14 hay 22 PRs abiertos, el más antiguo es
+#37 (2026-07-28), y 1 PR se ha mergeado desde 2026-08-10. El estado detallado
+vive en `STATUS.md` del equipo; esta hoja solo define el orden de producto.
 
 ## Resumen ejecutivo
 

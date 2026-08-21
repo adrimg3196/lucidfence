@@ -14,7 +14,7 @@ Todo offline: la flota frontline no puede depender de un feed NVD en vivo.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Optional
 
 # severity -> base risk contribution (0-100). Multiple CVEs stack (capped at 100).
 _SEV_BASE = {

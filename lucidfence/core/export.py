@@ -9,17 +9,30 @@ Everything is local; no network, no third-party libraries.
 """
 from __future__ import annotations
 
-import csv
+import html
 import io
 import time
 from typing import Any
+
+
+# Formula / DDE injection prefixes that spreadsheet apps (Excel, LibreOffice,
+# Google Sheets) interpret as a command when the cell value starts with them.
+# A leading single quote neutralizes the prefix while keeping the visible text
+# identical. Spreadsheet control chars (TAB/CR) also count as a formula trigger.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _csv_escape(value: Any) -> str:
     if value is None:
         return ""
     s = str(value)
-    if any(ch in s for ch in (",", '"', "\n", "\r")):
+    # Neutralize formula injection BEFORE RFC-4180 quoting. A device field
+    # controlled by an end user (name, assigned_user, city, ...) must never
+    # reach an admin's spreadsheet as a live =cmd|... formula. (SOC audit
+    # 2026-08-20, H-2.)
+    if s[:1] in _CSV_FORMULA_PREFIXES:
+        s = "'" + s
+    if any(ch in s for ch in (",", '"', "\n", "\r", "\t")):
         return '"' + s.replace('"', '""') + '"'
     return s
 
@@ -197,7 +210,10 @@ def _h(v) -> str:
     if v is None:
         return ""
     s = str(v)
-    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    # quote=True also escapes " and ' so the result is safe inside attribute
+    # values (e.g. title="{_h(x)}") and not just element text. (SOC audit
+    # 2026-08-20, L-2.)
+    return html.escape(s, quote=True)
 
 
 def _pdf_text(value: Any, max_len: int | None = None) -> str:

@@ -19,15 +19,15 @@ Errors are mapped to AuthError / TransportError so the dashboard never
 
 from __future__ import annotations
 
-import json
-import logging
 import os
 import time
 from typing import Any, Optional
+from urllib.parse import quote
 
 import requests
 
 from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.multiuem import NormalizedDevice
 
 
 # Acción UEM -> comando Jamf (verb del endpoint de commands).
@@ -195,9 +195,29 @@ class JamfAdapter(MDMAdapter):
 
     # --- public API per MDMAdapter ---
 
+    def test_connection(self) -> dict:
+        # Jamf's Basic auth -> bearer grant validates client_id/secret + base_url.
+        try:
+            self._fetch_token()
+        except AuthError as exc:
+            return {"ok": False, "error_type": "auth", "error": f"credenciales rechazadas: {exc}"}
+        except TransportError as exc:
+            return {"ok": False, "error_type": "unreachable", "error": f"no se pudo conectar: {exc}"}
+        return {"ok": True, "verified": "live", "note": "token Jamf obtenido"}
+
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         if action == "apply_ddm":
             return self._apply_ddm(device, params)
+        # Jamf no expone "forzar conformidad" por API: la conformidad la
+        # calculan smart groups + la integración compliance partner con
+        # Microsoft (Jamf Pro <-> Intune). Degrada igual en mock y en live
+        # para que la evaluación no prometa algo que producción negará.
+        if action == "set_compliance":
+            return self._err(
+                "jamf", device, action, "unsupported_action",
+                "Jamf compliance is driven by smart groups and the "
+                "Jamf<->Microsoft compliance partner integration; "
+                "set_compliance is not a Jamf API command")
         if not self.live:
             return self._execute_mock(device, action, params, dry_run)
         try:
@@ -349,7 +369,7 @@ class JamfAdapter(MDMAdapter):
                 f"action {action!r} not in {list(JAMF_VERB)}",
             )
         verb = JAMF_VERB[action]
-        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=device_id)}"
+        url = f"{self.base_url}{JAMF_COMMANDS_PATH.format(id=quote(str(device_id), safe=''))}"
         body: dict = {"commandData": {"commandType": verb}}
         if action == "message":
             body["clientData"] = []
@@ -413,6 +433,78 @@ class JamfAdapter(MDMAdapter):
             "devices": items,
             "count": len(items),
         }
+
+    # --- inventory (Issue #88: declarative-eligibility signals) ---
+    # Jamf Pro exposes the management mode derivable from the GENERAL section of
+    # each mobile device. There is no literal "managementMode" string in the
+    # Jamf API; we derive it from the real booleans the response carries
+    # (managed / supervised), never from guesses. This feeds the declarative
+    # gate (core.declarative) so DDM stops falling through to imperative for
+    # every device.
+    #
+    # Mapping (Jamf Pro API v1/v2, mobile-devices?section=GENERAL):
+    #   managed=False                       -> None (unmanaged: no DDM)
+    #   managed=True  & supervised=True     -> "fully_managed" (ADE/DEP, DDM ok)
+    #   managed=True  & supervised=False    -> "mdm"           (standard MDM)
+    #   ownership: a managed Jamf device    -> "company" (corporate asset)
+    def _derive_management_mode(self, general: dict) -> str | None:
+        if not general.get("managed"):
+            return None
+        return "fully_managed" if general.get("supervised") else "mdm"
+
+    def _derive_ownership(self, general: dict) -> str | None:
+        if not general.get("managed"):
+            return None
+        return "company"
+
+    def _normalize_fetch_device(self, raw: dict) -> NormalizedDevice:
+        general = raw.get("general") or {}
+        device_id = str(raw.get("id") or general.get("id") or "")
+        return NormalizedDevice(
+            canonical_id=device_id,
+            provider="jamf",
+            provider_device_id=device_id,
+            name=general.get("name") or raw.get("name") or device_id,
+            platform=(general.get("platform") or "").lower() or "unknown",
+            serial_number=general.get("serialNumber"),
+            compliant=None,  # Jamf mobile-devices doesn't expose compliance directly
+            status=("managed" if general.get("managed") else "unmanaged"),
+            management_mode=self._derive_management_mode(general),
+            ownership=self._derive_ownership(general),
+            inventory={
+                "jamf_management_id": general.get("managementId"),
+                "model": general.get("model"),
+                "os_version": general.get("osVersion"),
+                "username": general.get("username"),
+            },
+        )
+
+    def fetch_devices(self) -> list:
+        """Inventory (multi-UEM): list devices from Jamf Pro.
+
+        In ``live`` mode it calls GET /api/v1/mobile-devices?section=GENERAL
+        and normalizes each device, including ``management_mode``/``ownership``
+        derived from the real response. In mock mode it returns ``[]`` (no
+        simulated fleet) so we don't fabricate declarative signals.
+        """
+        if not self.live:
+            return []
+
+        url = f"{self.base_url}{JAMF_DEVICES_PATH}"
+        try:
+            resp = requests.get(
+                url,
+                headers=self._auth_headers(),
+                params={"page-size": 200, "section": "GENERAL"},
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            raise TransportError(f"Jamf list unreachable: {exc!r}") from exc
+        err = self._resp_error(resp, {"device_id": "", "name": ""}, "fetch_devices", "mobile-devices list")
+        if err:
+            return []
+        results = (resp.json() or {}).get("results", [])
+        return [self._normalize_fetch_device(x) for x in results]
 
     # --- mock fallback (unchanged contract behaviour) ---
 

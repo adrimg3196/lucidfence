@@ -1,0 +1,45 @@
+name: merge-train
+
+# Cola compartida del equipo de agentes (Zero / Jules / Hermes).
+#
+# Existe porque el cuello de botella del repo es el merge, no la producción:
+# el 2026-08-13 había 19 PRs abiertos, ninguno mergeable, el más antiguo de
+# 16 días y 0 merges en 6 días. Los agentes trabajaban en paralelo sin cola
+# compartida (gap declarado en AGENTS.md) y sus PRs se pudrían en conflicto.
+#
+# Este job NO mergea ni cierra nada. Publica el orden de entrada en una issue
+# fija y etiqueta lo podrido. Decidir sigue siendo del coordinador; hacer
+# visible lo roto es de la máquina.
+#
+# Reglas: docs/references/agent-team-charter.md
+
+on:
+  schedule:
+    - cron: "17 7,15 * * *"        # 2 veces al día, fuera de la hora en punto
+  workflow_dispatch:
+  pull_request_target:
+    types: [opened, closed, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: merge-train
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Publicar cola y etiquetar PRs podridos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/merge_train.py --publish --enforce

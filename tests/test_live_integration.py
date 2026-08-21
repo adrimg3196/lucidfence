@@ -111,6 +111,9 @@ class MockHandler(BaseHTTPRequestHandler):
 
 
 def _start_mock():
+    # allow_reuse_address tolerates TIME_WAIT leftovers if a prior run didn't
+    # shut down cleanly (e.g. the runner interrupted mid-test).
+    HTTPServer.allow_reuse_address = True
     srv = HTTPServer(("127.0.0.1", 8799), MockHandler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
@@ -196,6 +199,55 @@ def test_live_command_body_shape():
     print("  [ok] command body shape:", body)
 
 
+def test_live_pagination_follows_cursor_beyond_page_two():
+    """El cursor debe seguirse más allá de la página 2 sin perder dispositivos.
+
+    Regresión: el separador de la URL de paginación se calculaba sobre `url`
+    (que ya llevaba `?cursor=...` tras el primer salto) en vez de sobre `path`,
+    produciendo `.../devices&cursor=...` (malformada) desde la página 3 —
+    perdiendo en silencio todo dispositivo de esa página en adelante.
+    """
+    import urllib.request
+    from urllib.parse import urlsplit, parse_qs
+    from lucidfence.core import location_source as ls
+
+    pages = {
+        None: {"status": True, "data": {"items": [
+            {"id": "d1", "lastLocation": {"agent": {"latitude": 1.0, "longitude": 2.0}}}],
+            "nextCursor": "C2"}},
+        "C2": {"status": True, "data": {"items": [
+            {"id": "d2", "lastLocation": {"agent": {"latitude": 3.0, "longitude": 4.0}}}],
+            "nextCursor": "C3"}},
+        "C3": {"status": True, "data": {"items": [
+            {"id": "d3", "lastLocation": {"agent": {"latitude": 5.0, "longitude": 6.0}}}],
+            "nextCursor": None}},
+    }
+
+    class _Resp:
+        def __init__(self, body): self._b = body.encode("utf-8"); self.headers = {}
+        def read(self): return self._b
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def _fake_urlopen(req, timeout=None):
+        cur = parse_qs(urlsplit(req.full_url).query).get("cursor", [None])[0]
+        # cursor perdido (la URL malformada del bug) -> página vacía, sin d3
+        page = pages.get(cur, {"status": True, "data": {"items": [], "nextCursor": None}})
+        return _Resp(json.dumps(page))
+
+    real = urllib.request.urlopen
+    urllib.request.urlopen = _fake_urlopen
+    try:
+        src = ls.LiveLocationSource(org_id="org1", api_key="k")
+        src._api_base = "https://api.example.test/v1"
+        ids = {r.device_id for r in src.fetch()}
+    finally:
+        urllib.request.urlopen = real
+
+    assert ids == {"d1", "d2", "d3"}, f"dispositivo de la página 3 perdido por la paginación: {sorted(ids)}"
+    print("  [ok] pagination follows cursor across 3 pages:", sorted(ids))
+
+
 if __name__ == "__main__":
     _ensure_mock()
     try:
@@ -203,6 +255,7 @@ if __name__ == "__main__":
         test_live_success_uses_organizations_route()
         test_live_missing_org_id_is_captured()
         test_live_command_body_shape()
+        test_live_pagination_follows_cursor_beyond_page_two()
         print("\nALL LIVE INTEGRATION TESTS PASSED")
     finally:
         if _MOCK:

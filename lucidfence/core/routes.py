@@ -21,9 +21,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-from lucidfence.core.geo import Point, distance_to_segment_m, haversine_m
+from lucidfence.core.geo import Point, distance_to_segment_m, haversine_m, point_from
 
 
 @dataclass
@@ -72,7 +72,14 @@ def load_routes(path: Path) -> list[Route]:
         return []
     out: list[Route] = []
     for r in raw:
-        wps = [Point(lat=float(w["lat"]), lng=float(w["lng"])) for w in r.get("waypoints", [])]
+        try:
+            wps = [point_from(w) for w in r.get("waypoints", [])]
+        except (ValueError, KeyError, TypeError):
+            # A malformed waypoint (non-numeric, NaN/inf, out of range, missing
+            # lat/lng) corrupts the corridor geometry. Skip the whole route
+            # rather than load one with a bad polyline — and never let it abort
+            # loading every other route.
+            continue
         if not wps:
             # Skip routes with no waypoints: an empty polyline would make
             # distance_to() return inf (every device "off_route") while

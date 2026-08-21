@@ -1,5 +1,7 @@
 # Roadmap Q3 2026 — LucidFence
 
+> **ARCHIVADO — snapshot histórico.** El roadmap de producto vivo y canónico es [`docs/roadmap/PRODUCT_ROADMAP.md`](PRODUCT_ROADMAP.md), mantenido por el loop Roadmap. Este fichero se conserva como contexto, no como plan.
+
 > Priorizado por PM (task `t_e98013c5`). Backlog fuente: board `uem-ops`.
 > Estado producto: vitrina demo viva (GitHub Pages + `saas_server.py` local :8765),
 > self-service multi-tenant ya funciona vía GitHub Issues (sin token del usuario),
@@ -24,14 +26,14 @@ prospect → tenant → vitrina → cierre, con credibilidad de seguridad real
 |---|------|----|-------------|
 |100| Seguridad M1/M2 | `t_337c12e1` | TLS + verificación de deps en `install.sh`. **GATE para Fly.** |
 | 95| Self-service E2E | `t_33fdd4f8` | Validar issue→tenant→vitrina con tenant real; SLA ≤15 min documentado. |
-| 90| Landing conversión | `t_ec2b704e` | Testimonios + pricing tiers + FAQ instalación; alimenta el self-service. |
+| 90| Landing conversión | `t_ec2b704e` | Testimonios + FAQ instalación; alimenta el self-service. |
 
 ### Wave 2 — Credibilidad comercial (Semanas 3-4)
 | P | Task | ID | Qué entrega |
 |---|------|----|-------------|
 | 80| CVE feed real NVD | `t_1ec8c6e6` | Quita el badge "(datos demo)"; fallback demo si no hay red. |
 | 75| Competitive intel | `t_1fea954e` | Battlecard LucidFence vs Jamf/Intune/Applivery. |
-| 70| Installer systemd | `t_5b7f6139` | Always-on para clientes self-host (entrega del modelo soberano de pago). |
+| 70| Installer systemd | `t_5b7f6139` | Always-on para clientes self-host (entrega del modelo soberano local). |
 | 65| Seguridad M3/M4 | `t_2bcaf6bf` | Rate-limit login + errores 500 genéricos (hardening post-public). Depende de M1/M2. |
 
 ### Wave 3 — Vitrina & cobertura (Semanas 5-6)

@@ -19,6 +19,39 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 sys.path.insert(0, HERE)  # so `from helpers import ...` resolves inside tests/
 
+# Run as `python3 tests/run_tests.py`, this module is `__main__`. A test doing
+# `from run_tests import SkipTest` would otherwise re-execute this file as a
+# SECOND module object with its OWN SkipTest class — a different object than the
+# one `main()` catches below, so raised skips would fall through to `except
+# Exception` and be miscounted as failures. Aliasing `run_tests` to this very
+# module makes the import return THIS SkipTest (same class object we catch).
+# Guarded to __main__: when this file is imported/exec'd under another name
+# (e.g. the audit regression loads it as `honest_runner`) it is already in
+# sys.modules under its own name and needs no alias.
+if __name__ == "__main__":
+    sys.modules.setdefault("run_tests", sys.modules["__main__"])
+
+
+_MIN_PY = (3, 11)
+if sys.version_info < _MIN_PY:
+    sys.stderr.write(
+        f"ERROR: LucidFence tests need Python >={'%d.%d' % _MIN_PY}, "
+        f"got {sys.version.split()[0]}. Use a venv: python3.11 -m venv .venv && . .venv/bin/activate\n"
+    )
+    sys.exit(2)
+
+
+class SkipTest(Exception):
+    """Raised by a test_* function when the environment cannot run it.
+
+    A skipped test is neither passed nor failed: it is a test that *could not
+    run here* for a declared, honest reason (a pinned dependency absent in this
+    container, say), and would run normally where the environment supports it.
+    This is NOT a way to silence a real failure — a test that raises anything
+    other than SkipTest still counts as failed. See test_oidc_sso.py for the
+    canonical use (cryptography pinned version absent → JWK.algorithm_name unset).
+    """
+
 
 def _load_module(path):
     name = os.path.splitext(os.path.basename(path))[0]
@@ -37,8 +70,10 @@ def _system_exit_code(exc: SystemExit) -> int:
 
 def main():
     passed = 0
+    skipped = 0
     failed = 0
     failures = []
+    skips = []
     # Arranca el server local en :8765 para los tests de integración que lo
     # requieren (test_it_admin_features.py, test_qa_e2e.py Part A, endpoints
     # SOAR/CVE, etc.). Se mata al terminar. Hermético en CI.
@@ -146,6 +181,14 @@ def main():
                     t()
                     passed += 1
                     print(f"  PASS  {fn}::{t.__name__}")
+                except SkipTest as exc:
+                    # Not a pass and not a failure: the environment cannot run
+                    # this test for a declared reason. It runs normally where
+                    # the environment supports it (e.g. CI with pinned deps).
+                    skipped += 1
+                    reason = str(exc)
+                    skips.append((f"{fn}::{t.__name__}", reason))
+                    print(f"  SKIP  {fn}::{t.__name__}: {reason}")
                 except SystemExit as exc:
                     failed += 1
                     code = _system_exit_code(exc)
@@ -169,7 +212,11 @@ def main():
         else:
             os.environ["LUCIDFENCE_DATA_DIR"] = previous_data_dir
         qa_data.cleanup()
-    print(f"\n=== {passed} passed, {failed} failed ===")
+    if skips:
+        print("\nSKIPPED:")
+        for name, msg in skips:
+            print(f"  - {name}: {msg}")
+    print(f"\n=== {passed} passed, {skipped} skipped, {failed} failed ===")
     if failed:
         print("\nFAILURES:")
         for name, msg in failures:

@@ -21,7 +21,6 @@ import hashlib
 import hmac
 import json
 import os
-import secrets
 import threading
 import time
 import uuid
@@ -351,6 +350,40 @@ class AuthStore:
         u.org_roles[org_id] = role
         self._save_users()
         return True
+
+    def org_members(self, org_id: str) -> list[User]:
+        """Snapshot of the users that belong to org_id (one org only)."""
+        with self._lock:
+            return [u for u in self._users.values() if org_id in u.org_roles]
+
+    def count_org_owners(self, org_id: str) -> int:
+        with self._lock:
+            return sum(1 for u in self._users.values()
+                       if u.org_roles.get(org_id) == "owner")
+
+    def set_org_role(self, user_id: str, org_id: str, role: str) -> User:
+        """Change a member's role within one org.
+
+        Refuses to demote the last remaining owner so an org is never left
+        without one (locks out billing/user management for everyone). Raises
+        ValueError on an unknown role, a non-member target, or that last-owner
+        guardrail.
+        """
+        if role not in ROLE_CAPS:
+            raise ValueError(f"Rol inválido: {role}")
+        with self._lock:
+            u = self._users.get(user_id)
+            if not u or org_id not in u.org_roles:
+                raise ValueError("El usuario no pertenece a la organización")
+            current = u.org_roles.get(org_id)
+            if current == "owner" and role != "owner":
+                owners = sum(1 for x in self._users.values()
+                             if x.org_roles.get(org_id) == "owner")
+                if owners <= 1:
+                    raise ValueError("La organización debe conservar al menos un propietario")
+            u.org_roles[org_id] = role
+            self._save_users()
+            return u
 
     # ---- sessions -------------------------------------------------------
     def lockout_stats(self) -> dict:

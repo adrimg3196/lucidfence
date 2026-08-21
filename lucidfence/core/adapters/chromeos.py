@@ -10,7 +10,6 @@ Implementa MDMAdapter (read-only contract: action='report').
 
 from __future__ import annotations
 
-import json
 import os
 import time
 import uuid
@@ -111,6 +110,21 @@ class ChromeOSAdapter(MDMAdapter):
         }
 
     # --- public API ---
+
+    def test_connection(self) -> dict:
+        # Google's refresh_token grant validates client_id/secret/refresh_token.
+        try:
+            self._fetch_access_token()
+        except RuntimeError as exc:
+            msg = str(exc)
+            # Heuristic: extract an HTTP status if present; 4xx = auth, 5xx = unreachable.
+            import re
+            m = re.search(r"(\d{3})", msg)
+            code = m.group(1) if m else ""
+            if code.startswith("5") or "unreachable" in msg.lower() or "timeout" in msg.lower():
+                return {"ok": False, "error_type": "unreachable", "error": f"no se pudo conectar: {msg}"}
+            return {"ok": False, "error_type": "auth", "error": f"credenciales rechazadas: {msg}"}
+        return {"ok": True, "verified": "live", "note": "token Google obtenido"}
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         device_id = self._dev_id_str(device)

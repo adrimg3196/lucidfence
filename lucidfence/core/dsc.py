@@ -8,7 +8,7 @@ Allows idempotent re-application of geofence policies via Test/Set mapping.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Any, Dict
 
 
 def generate_dsc_v3_manifest(policy: Any) -> Dict[str, Any]:
@@ -38,8 +38,8 @@ def generate_classic_dsc_ps1(policy: Any) -> str:
     """Generates a classic PowerShell DSC (.ps1) script fallback."""
     policy_dict = policy.to_dict() if hasattr(policy, "to_dict") else policy
     policy_id = policy_dict.get("id", "policy")
-    name = policy_dict.get("name", "")
-    description = policy_dict.get("description", "")
+    name = policy_dict.get("name", "").replace('"', '`"')
+    description = policy_dict.get("description", "").replace('"', '`"')
     severity = policy_dict.get("severity", "medium")
     enabled = "$true" if policy_dict.get("enabled", True) else "$false"
 
@@ -66,8 +66,8 @@ def generate_classic_dsc_mof(policy: Any) -> str:
     """Generates a classic DSC MOF document fallback."""
     policy_dict = policy.to_dict() if hasattr(policy, "to_dict") else policy
     policy_id = policy_dict.get("id", "policy")
-    name = policy_dict.get("name", "")
-    description = policy_dict.get("description", "")
+    name = policy_dict.get("name", "").replace('"', '\\"')
+    description = policy_dict.get("description", "").replace('"', '\\"')
     severity = policy_dict.get("severity", "medium")
     enabled = "true" if policy_dict.get("enabled", True) else "false"
 

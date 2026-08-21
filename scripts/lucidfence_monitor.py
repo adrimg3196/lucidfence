@@ -23,6 +23,7 @@ Variables útiles:
 from __future__ import annotations
 
 import argparse
+import datetime
 import os
 import re
 import shlex
@@ -107,7 +108,7 @@ def tests_check(root: Path, command: str, min_tests: int, timeout: float) -> Che
     output = f"{completed.stdout}\n{completed.stderr}"
     # Algunos módulos imprimen subtallies propios durante la importación; el
     # resumen fiable es el último `X passed, Y failed` que emite el runner.
-    matches = re.findall(r"(\d+)\s+passed,\s+(\d+)\s+failed", output)
+    matches = re.findall(r"(\d+)\s+passed,.*?(\d+)\s+failed", output)
     tail = "\n".join(output.strip().splitlines()[-12:])
     if not matches:
         return CheckResult(
@@ -157,7 +158,16 @@ def create_kanban_card(board: str, incident: Incident, root: Path, dry_run: bool
     return False
 
 
-def build_incidents(test_result: CheckResult, http_result: CheckResult, vitrina_url: str, min_tests: int) -> list[Incident]:
+def build_incidents(
+    test_result: CheckResult,
+    http_result: CheckResult,
+    vitrina_url: str,
+    min_tests: int,
+    today: str = datetime.date.today().isoformat(),
+) -> list[Incident]:
+    # ponytail: key por día, no estática. La key estática reusaba tarjetas ya
+    # `done` de incidentes distintos. Granularidad diaria: un incidente abierto
+    # por día; añadir hash de (passed,failed) si se quiere separar subtallas.
     incidents: list[Incident] = []
 
     if not test_result.ok:
@@ -170,7 +180,7 @@ def build_incidents(test_result: CheckResult, http_result: CheckResult, vitrina_
                     f"pasados y 0 fallos. Detalle: {test_result.detail}. "
                     "Reparar la suite o ajustar el gate si el alcance cambió intencionadamente."
                 ),
-                key="lucidfence-monitor-tests-gate",
+                key=f"lucidfence-monitor-tests-gate-{today}",
             )
         )
 
@@ -183,7 +193,7 @@ def build_incidents(test_result: CheckResult, http_result: CheckResult, vitrina_
                     f"El monitor LucidFence no recibió respuesta HTTP 2xx/3xx de la vitrina {vitrina_url}. "
                     f"Detalle: {http_result.detail}. Revisar static/cloud.html, GitHub Pages/deploy y publicar de nuevo."
                 ),
-                key="lucidfence-monitor-vitrina-down",
+                key=f"lucidfence-monitor-vitrina-down-{today}",
             )
         )
 

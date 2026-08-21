@@ -10,7 +10,7 @@ import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 
 @dataclass
@@ -48,16 +48,37 @@ class DeviceState:
     battery_state: Optional[str] = None       # charging|discharging|full|unknown
     storage_total_gb: Optional[float] = None  # total capacity
     storage_free_gb: Optional[float] = None   # free space
+    encryption_enabled: Optional[bool] = None # FileVault/LUKS/BitLocker posture
     carrier: Optional[str] = None             # cellular carrier / network
     assigned_user: Optional[str] = None       # user / owner of the device
     department: Optional[str] = None          # business unit
     last_checkin: Optional[str] = None        # last successful MDM check-in (ISO)
     enrolled_at: Optional[str] = None         # enrollment date (ISO)
     device_tag: Optional[str] = None          # free-text asset tag / label
-    geofence_compliance: Optional[dict] = None  # simulated/live iOS geofence posture
+    geofence_compliance: Optional[dict] = None    # simulated/live iOS geofence posture
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Populated by the adapter from the real UEM/EMM response and carried
+    # through NormalizedDevice -> LocationReport -> DeviceState. None = the
+    # adapter did not report it (never inferred). Feed the declarative gate
+    # (core.declarative) so it no longer falls through to imperative for
+    # every device in production.
+    management_mode: Optional[str] = None        # e.g. device_owner|profile_owner|fully_managed|mdm|configurator
+    ownership: Optional[str] = None              # company|employee_owned|unknown
+    # --- multi-UEM: which UEM provider(s) own this device, for action routing ---
+    provider_refs: dict = field(default_factory=dict)  # {"applivery": "dev123", ...}
     # --- declarative readback (DDM status report / DSC compliance) ---
     passcode_compliant: Optional[bool] = None  # passcode.is-compliant
     filevault_enabled: Optional[bool] = None   # diskmanagement.filevault.enabled
+    lockdown_mode: Optional[bool] = None       # security.lockdown-mode.enabled (Apple OS 27); None=unknown
+    supervised: Optional[bool] = None          # enrollment supervision (Apple OS 27); None=unknown
+    hardware_health: Optional[dict] = None     # hardware-health status items (Apple OS 27); None=unknown
+    # --- integridad de ubicación (anti-spoofing, ver location_integrity.py) ---
+    location_integrity: Optional[dict] = None  # {"suspicious", "checks", "speed_kmh", ...}
+    # --- endpoint posture evidence (osquery) ---
+    posture_source: Optional[str] = None       # e.g. osquery
+    posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
+    osquery_version: Optional[str] = None
+    osquery_config_valid: Optional[bool] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -84,10 +105,17 @@ class StateStore:
         if self.states_path.exists():
             try:
                 raw = json.loads(self.states_path.read_text(encoding="utf-8"))
-                for d in raw:
-                    self._states[d["device_id"]] = DeviceState(**d)
             except Exception:
-                self._states = {}
+                return
+            # Isolate per-record failures: a single corrupt or
+            # schema-drifted row must be skipped, never wipe the whole fleet's
+            # persisted state. (ponytail: no logging infra here; skip silently
+            # but keep every good record — add logging if forensics matter.)
+            for d in raw:
+                try:
+                    self._states[d["device_id"]] = DeviceState(**d)
+                except Exception:
+                    continue
 
     def snapshot(self) -> dict[str, DeviceState]:
         with self.lock:
