@@ -1,7 +1,7 @@
 # DESIGN.md — el mundo visual de LucidFence
 
 Decisiones visuales duraderas. Lo que aquí está escrito manda sobre el gusto de
-quien toque el código después. Los tokens viven en `static/design.css` (fuente
+quien toque el código después. Los tokens viven en `../static/design.css` (fuente
 única) y `tests/test_design_system_single_source.py` impide que esto vuelva a
 divergir.
 
