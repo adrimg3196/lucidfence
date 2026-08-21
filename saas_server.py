@@ -1406,6 +1406,27 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_error(404)
             return
+        # Los assets del sistema de diseño se referencian RELATIVOS en el HTML
+        # (`href="design.css"`), porque cloud.html tiene que funcionar también
+        # abierto como fichero — el usuario se descarga el tarball y lo abre.
+        # Con ruta absoluta a raíz, `file:///static/design.css` no existe.
+        # A cambio, las páginas que servimos FUERA de /static/ (`/`, `/app/`,
+        # `/dashboard`, `/cloud`, `/about`...) resuelven el asset contra su
+        # propia ruta, así que aquí lo atendemos venga de donde venga.
+        if method == "GET":
+            tail = route.rsplit("/", 1)[-1]
+            asset = None
+            if tail == "design.css":
+                asset = STATIC / "design.css"
+            elif tail.endswith(".woff2") and "/fonts/" in route:
+                asset = (STATIC / "fonts" / tail).resolve()
+                if not asset.is_relative_to((STATIC / "fonts").resolve()):
+                    asset = None
+            if asset is not None and asset.is_file():
+                ct = mimetypes.guess_type(str(asset))[0] or "application/octet-stream"
+                _send_file(self, asset, ct)
+                return
+
         if route == "/favicon.ico" and method == "GET":
             self.send_response(204)
             self.send_header("Cache-Control", "public, max-age=86400")

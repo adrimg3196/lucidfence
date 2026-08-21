@@ -50,9 +50,45 @@ def _css() -> str:
 def test_every_surface_links_the_design_system():
     for name in SURFACES:
         html = _read(name)
-        assert '/static/design.css' in html, (
+        assert 'href="design.css"' in html, (
             f"{name} no enlaza el sistema de diseño: se pintará con lo que "
             f"tenga a mano y volverá a divergir")
+
+
+def test_assets_are_referenced_relative_so_the_pages_work_as_files():
+    """cloud.html se abre como FICHERO (el usuario descarga el tarball y lo
+    abre): tres tests de navegador lo cargan con file://. Con `/static/...`
+    absoluto el navegador pide `file:///static/design.css`, que no existe, y la
+    página se queda sin estilos. Pasó de verdad: rompió CI en la PR #221.
+
+    Las rutas relativas resuelven bien en los tres casos —file://, /static/x.html
+    y las rutas alternativas (`/`, `/app/`, `/cloud`)— porque el servidor sirve
+    los assets del sistema venga la petición de donde venga."""
+    for name in SURFACES:
+        html = _read(name)
+        for m in re.finditer(r'<link[^>]+rel=["\']stylesheet["\'][^>]*>', html):
+            tag = m.group(0)
+            if "design.css" not in tag:
+                continue
+            assert 'href="/static/' not in tag, (
+                f"{name} enlaza el sistema con ruta absoluta a raíz; abierto "
+                f"como fichero pediría file:///static/design.css y se quedaría "
+                f"sin estilos")
+    # Y la hoja pide sus fuentes relativa a sí misma, por el mismo motivo.
+    for url in re.findall(r"url\(['\"]?([^'\")]+)", _css()):
+        assert not url.startswith("/"), \
+            f"design.css pide {url} con ruta absoluta: rompe el modo fichero"
+
+
+def test_server_serves_design_assets_from_any_route():
+    """Las páginas también se sirven FUERA de /static/ (`/`, `/app/`,
+    `/dashboard`, `/cloud`, `/about`). Ahí el href relativo resuelve contra esa
+    ruta, así que el servidor tiene que atender el asset venga de donde venga."""
+    server = (ROOT / "saas_server.py").read_text(encoding="utf-8")
+    assert 'tail == "design.css"' in server, \
+        "saas_server ya no sirve design.css fuera de /static/: las rutas /, /app y /cloud se quedarían sin estilos"
+    assert '.woff2' in server and '"/fonts/" in route' in server, \
+        "saas_server ya no sirve las fuentes fuera de /static/"
 
 
 def test_no_surface_redeclares_the_palette():
@@ -80,10 +116,12 @@ def test_design_system_is_the_only_place_that_defines_the_palette():
 def test_typeface_is_self_hosted_and_never_a_cdn():
     css = _css()
     assert "@font-face" in css and "IBM Plex Sans" in css
+    # Rutas RELATIVAS a design.css (que vive en static/), para que las páginas
+    # abiertas como fichero también encuentren la tipografía.
     for url in re.findall(r"url\(['\"]?([^'\")]+)", css):
-        assert url.startswith("/static/fonts/"), \
+        assert url.startswith("fonts/"), \
             f"la tipografía sale del origen propio: {url}"
-        assert (ROOT / url.lstrip("/")).exists(), f"falta el binario {url}"
+        assert (STATIC / url).exists(), f"falta el binario {url}"
     # Y ninguna superficie se cuela por su cuenta a un CDN de fuentes.
     for name in SURFACES + ["design.css"]:
         text = _read(name)
