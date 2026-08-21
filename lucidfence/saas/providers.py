@@ -106,6 +106,9 @@ PROVIDER_CATALOG: dict[str, dict] = {
             {"key": "client_secret", "label": "Client secret", "type": "secret", "placeholder": "",
              "help": "Se muestra una sola vez al crear el client"},
         ],
+        # Issue #89: declarative capability matrix (single source of truth is
+        # the adapter's supports_* flags; this mirrors them for the UI/catalog).
+        "declarative": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False},
     },
     "fleet": {
         "label": "FleetDM",
@@ -161,6 +164,8 @@ PROVIDER_CATALOG: dict[str, dict] = {
             {"key": "client_secret", "label": "Client secret", "type": "secret", "placeholder": "",
              "help": "Entra ID → App registrations → tu app → Certificates & secrets → New client secret (cópialo al crearlo: no vuelve a mostrarse)"},
         ],
+        # Issue #89: declarative capability matrix (Windows → DSC).
+        "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False},
     },
     "simulation": {
         "label": "Simulación (demo)",

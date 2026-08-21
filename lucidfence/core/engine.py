@@ -23,13 +23,13 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
 from lucidfence.core.adapters import ADAPTER_REGISTRY, build_bindings
-from lucidfence.core.ddm import declarative_path_for
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
+from lucidfence.core.declarative import declarative_path_for, resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
@@ -648,6 +648,51 @@ class Engine:
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
 
+    def _declarative_route(self, dev: Any, action: str, params: dict, *, dry_run: bool = False) -> Optional[dict]:
+        """Issue #89 (single-provider): route an eligible action through the
+        declarative channel before the blind imperative command.
+
+        Consults the adapter's ``supports_ddm``/``supports_dsc``/
+        ``supports_amapi_policy`` flags together with the device's reported
+        ``management_mode``/``ownership`` via the shared gate, and ALSO the
+        DDM-capability gate (#205). When either says declarative we build the
+        declaration through the adapter's builder (``_apply_ddm`` / ``_apply_dsc``
+        / ``_apply_amapi``) and tag the result with ``enforcement="declarative"``,
+        ``declarative_subaction`` and ``original_action``. The imperative
+        command (lock/wipe/...) is NOT issued.
+
+        Returns the declarative result, or ``None`` when the device is not
+        eligible so the caller keeps its imperative fallback. Never raises.
+        """
+        adapter = self.adapter
+        if adapter is None:
+            return None
+        supports = (
+            bool(getattr(adapter, "supports_ddm", False)),
+            bool(getattr(adapter, "supports_dsc", False)),
+            bool(getattr(adapter, "supports_amapi_policy", False)),
+        )
+        if not any(supports):
+            return None
+        sub = resolve_declarative_subaction(
+            dev, action, params or {},
+            supports_ddm=supports[0], supports_dsc=supports[1],
+            supports_amapi_policy=supports[2], adapter=adapter,
+        )
+        if sub is None:
+            return None
+        decl_params = dict(params or {})
+        if "profile_url" not in decl_params:
+            decl_params.setdefault("profile_url", getattr(adapter, "ddm_profile_url", "") or "")
+        res = adapter.execute(dev, sub, decl_params, dry_run=dry_run)
+        if isinstance(res, dict):
+            res["enforcement"] = "declarative"
+            res["declarative_path"] = "declarative"
+            res["declarative_subaction"] = sub
+            res["original_action"] = action
+            res["requested_action"] = action
+        return res
+
     def _execute_action(self, dev: Any, action: str, params: dict) -> dict:
         """Route a remediation command to the right UEM provider.
 
@@ -686,38 +731,59 @@ class Engine:
             effective_dry = True
         refs = getattr(dev, "provider_refs", None)
         multi = self.orchestrator is not None and isinstance(refs, dict) and bool(refs)
-        # Vía de transporte (issue #205): MISMO veredicto para las dos rutas de
-        # dispatch, de modo que el mismo dispositivo Apple no reciba un comando
-        # distinto según el camino interno de código. Se decide DESPUÉS de todo
-        # el gating y sobre la acción ORIGINAL (`action`), nunca sobre la
-        # declarativa: el guardarraíl de wipe, la fase observe/enforce, la
-        # allow-list `live_actions`, el cooldown y el audit siguen aplicándose
-        # exactamente igual. Solo cambia POR DÓNDE viaja la orden.
-        route_adapter = self.adapter
+        # Multi-UEM: el orquestador ejecuta el transporte, pero la DECISIÓN de
+        # ruta declarativa vs imperativa la toma el engine (issue #89) sobre el
+        # dispositivo rico, usando el adapter de la ref (route_adapter) y sus
+        # flags supports_*. El orquestador recibe wire_action = (subacción
+        # declarativa) o action, y el engine etiqueta el resultado con
+        # enforcement vía _tag_route. Se delega el resto del gating (wipe,
+        # observe/enforce, allow-list, cooldown, audit) al orquestador.
         if multi:
-            # El adapter que recibirá la llamada en la ruta multi-UEM: el del
-            # ref con el que ya se puentea al orquestador (clase del registro,
-            # sin instanciar — `supports_ddm` es atributo de clase).
-            route_adapter = ADAPTER_REGISTRY.get(next(iter(refs)), self.adapter)
-        declarative = declarative_path_for(dev, action, route_adapter, params)
-        wire_action = declarative or action
-        if multi:
+            first_provider, first_id = next(iter(refs.items()))
+            route_adapter = self.orchestrator._bindings.get(first_provider)
+            route_cls = None
+            if route_adapter is not None:
+                from lucidfence.core.adapters import ADAPTER_REGISTRY
+                route_cls = ADAPTER_REGISTRY.get(route_adapter.name)
+            supports = (
+                bool(getattr(route_cls, "supports_ddm", False)) if route_cls else False,
+                bool(getattr(route_cls, "supports_dsc", False)) if route_cls else False,
+                bool(getattr(route_cls, "supports_amapi_policy", False)) if route_cls else False,
+            )
+            declarative = resolve_declarative_subaction(
+                dev, action, params or {},
+                supports_ddm=supports[0], supports_dsc=supports[1],
+                supports_amapi_policy=supports[2], adapter=route_cls,
+            )
+            wire_action = declarative or action
             # The orchestrator expects a NormalizedDevice-shaped input
             # (provider + provider_device_id + provider_refs); DeviceState only
             # keeps provider_refs, so bridge the first ref into those fields.
-            first_provider, first_id = next(iter(refs.items()))
             bridge = {
                 "provider": first_provider,
                 "provider_device_id": first_id,
                 "provider_refs": refs,
+                "platform": getattr(dev, "platform", None),
+                "os_version": getattr(dev, "os_version", None),
+                "management_mode": getattr(dev, "management_mode", None),
+                "ownership": getattr(dev, "ownership", None),
             }
             res = self.orchestrator.execute(bridge, wire_action, params or {}, dry_run=effective_dry)
             if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
                 return _tag_route(res, action, declarative, effective_dry)
+        # Single-provider (issue #89): ruta declarativa antes de la imperativa.
+        # El gate (core.declarative) consulta management_mode/ownership del
+        # dispositivo y los flags supports_* del adapter. Si dice "declarative"
+        # construye la declaration (DDM/DSC/AMAPI) y etiqueta el resultado; el
+        # comando imperativo de bloqueo no se emite. "unknown"/"imperative" ->
+        # cae al camino de siempre.
         if self.adapter is not None:
+            decl = self._declarative_route(dev, action, params or {}, dry_run=effective_dry)
+            if decl is not None:
+                return decl
             return _tag_route(
-                self.adapter.execute(dev, wire_action, params or {}, dry_run=effective_dry),
-                action, declarative, effective_dry)
+                self.adapter.execute(dev, action, params or {}, dry_run=effective_dry),
+                action, None, effective_dry)
         return {"ok": True, "dry_run": True, "simulated": True, "enforcement": "imperative",
                 "action": action, "device_id": getattr(dev, "device_id", "")}
 

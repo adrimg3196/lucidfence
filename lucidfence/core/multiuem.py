@@ -15,6 +15,12 @@ except ImportError:
     TypeGuard = bool  # type: ignore
 from typing import Callable
 
+# Issue #89: declarative-vs-imperative routing gate (shared with the engine).
+from lucidfence.core.declarative import (  # noqa: E402
+    declarative_path_for,
+    resolve_declarative_subaction,
+)
+
 
 _UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_]*")
@@ -585,6 +591,69 @@ class MultiUEMOrchestrator:
             )
         return reports
 
+    def _declarative_route(self, device, action: str, params: dict, *, binding, dry_run: bool = False):
+        """Issue #89: route an eligible action declaratively before the
+        imperative ``binding.execute_action`` call.
+
+        Derives the adapter's ``supports_ddm``/``supports_dsc``/
+        ``supports_amapi_policy`` from the binding's registry class and consults
+        the shared gate (management_mode/ownership + DDM-capability) together
+        with the device's reported ``management_mode``/``ownership``. When either
+        gate applies, build the declaration through the adapter's builder and
+        tag the result with ``enforcement="declarative"``.
+
+        Returns the declarative result, or ``None`` when the device is not
+        eligible so the caller keeps its imperative fallback. Never raises.
+        """
+        from lucidfence.core.adapters import ADAPTER_REGISTRY
+
+        cls = ADAPTER_REGISTRY.get(binding.name) if getattr(binding, "name", None) else None
+        if cls is None:
+            return None
+        supports = (
+            bool(getattr(cls, "supports_ddm", False)),
+            bool(getattr(cls, "supports_dsc", False)),
+            bool(getattr(cls, "supports_amapi_policy", False)),
+        )
+        if not any(supports):
+            return None
+        sub = resolve_declarative_subaction(
+            device, action, params or {},
+            supports_ddm=supports[0], supports_dsc=supports[1],
+            supports_amapi_policy=supports[2], adapter=cls,
+        )
+        if sub is None:
+            return None
+        remote_id = None
+        if isinstance(device, dict):
+            remote_id = device.get("provider_device_id") or next(
+                iter(device.get("provider_refs", {}).values()), None)
+        else:
+            _refs = getattr(device, "provider_refs", None) or {}
+            remote_id = getattr(device, "provider_device_id", None) or next(
+                iter(_refs.values()), None)
+        if not remote_id:
+            return None
+        decl_params = dict(params or {})
+        _pid = getattr(device, "policy_id", None)
+        if "policy" not in decl_params and isinstance(_pid, str):
+            decl_params["policy"] = {"id": _pid}
+        if "profile_url" not in decl_params:
+            decl_params.setdefault("profile_url", getattr(cls, "ddm_profile_url", "") or "")
+        # Issue #89: dispatch the declarative sub-action through the same
+        # binding callback the imperative path uses, but pass the RICH device
+        # (not just the provider remote id) as the first argument so the
+        # adapter's builder can read platform/os_version/management_mode. The
+        # non-declarative path (below) keeps the (remote_id, action, ...) contract.
+        res = binding.execute_action(device, sub, decl_params, dry_run)
+        if isinstance(res, dict):
+            res["enforcement"] = "declarative"
+            res["declarative_path"] = "declarative"
+            res["declarative_subaction"] = sub
+            res["original_action"] = action
+            res["requested_action"] = action
+        return res
+
     def execute(
         self,
         device: NormalizedDevice | dict,
@@ -639,6 +708,13 @@ class MultiUEMOrchestrator:
         binding = self._bindings.get(provider)
         if binding is None:
             return {"ok": False, "error_type": "unknown_provider", "adapter": provider}
+        # Issue #89: declarative-first. If the provider's adapter exposes a
+        # declarative channel and the device is eligible (management_mode/
+        # ownership + supports_* via the shared gate), build the declaration
+        # instead of issuing the blind imperative command.
+        decl = self._declarative_route(device, action, params or {}, binding=binding, dry_run=dry_run)
+        if decl is not None:
+            return decl
         # dry_run_actions: el UEM expone la acción pero su endpoint no está
         # certificado, así que el orquestador la construye y la registra como
         # handoff (dry-run), sin mutar nunca el dispositivo. Cubre la decisión
