@@ -22,24 +22,24 @@ Borradores generados hoy, construidos SOBRE consultas CTO/PM **ya cerradas** en 
 | `2026-08-20-linkedin-diferente.md` | LinkedIn (CISO/MSP) | Soberanía + riesgo explicable + multi-UEM(matiz) + SOAR | owner gate |
 | `2026-08-20-x-thread.md` | X/Twitter (thread) | "Tu MDM te cobra el geofencing con tu ubicación" | owner gate |
 | `2026-08-20-quien-es.md` | X/LinkedIn (corto) | Verticales: logística, retail, field service, sanidad, banca, defensa, gob, MSP | owner gate |
-| `2026-08-21-declarative-enforcement.md` | LinkedIn/X (técnico) | Matriz declarativa VERIFICADA + asimetría DDM build-only vs DSC end-to-end + matiz lock-only + historia #205/#206 | ⛔ **EN HOLD** — disputa fáctica sobre "DSC end-to-end" (ver §HOLD abajo) |
-| `2026-08-21-blast-radius-uem.md` | X (thread) + LinkedIn | Radio de explosión del UEM: destructivas human-gated + cooldown persistido + evidencia HMAC al SIEM propio + local-first + $0 | CTO co-firma pendiente + owner gate |
-| `2026-08-21-no-goals.md` | LinkedIn/Reddit + X (corto) | "Lo que LucidFence NO hace": 6 no-goals publicados (incl. cero declarativo en Android #42, sin edición de pago) | PM alineación pendiente + CTO (solo puntos 4-5) + owner gate |
+| `2026-08-21-declarative-enforcement.md` | LinkedIn/X (técnico) | Matriz declarativa VERIFICADA + asimetría real DDM **y** DSC ambos build-only (no end-to-end Graph) + matiz lock-only + historia #205/#206 | ✅ **Gate 0: CO-FIRMADO CTO** (`t_1a407df5`) — claim "DSC end-to-end" corregido; owner gate |
+| `2026-08-21-blast-radius-uem.md` | X (thread) + LinkedIn | Radio de explosión del UEM: destructivas human-gated + cooldown persistido + evidencia HMAC al SIEM propio + local-first + $0 | ⛔ **Gate 0: CO-FIRMA CTO PENDIENTE** (`t_3ed8dedf`) + owner gate |
+| `2026-08-21-no-goals.md` | LinkedIn/Reddit + X (corto) | "Lo que LucidFence NO hace": 6 no-goals publicados (incl. cero declarativo en Android #42, sin edición de pago) | PM alineado (1-3,6) + ✅ **Gate 0: CO-FIRMADO CTO pts 4-5** (`t_7b575db8`, arbitraje `t_2c00a8f2` decisión A) + owner gate |
 
-## ⛔ HOLD 2026-08-21 — `2026-08-21-declarative-enforcement.md` (Marketing)
-La pieza está co-firmada pero **no es publicable**: el claim "Windows DSC = end-to-end
-real vía Microsoft Graph" no se sostiene en `origin/main`.
-Verificación de Marketing (hoy, contra `origin/main`):
+## ✅ RESUELTO 2026-08-21 — `2026-08-21-declarative-enforcement.md` (Marketing + CTO)
+El claim "Windows DSC = end-to-end real vía Microsoft Graph" **no se sostenía** y fue
+eliminado del copy por el CTO (co-firma `t_1a407df5`, decisión A de la disputa
+`t_2c00a8f2`). Verificado contra `origin/main`:
 - `windows_conformidad._apply_dsc` **solo genera** manifests (`dsc_v3`,
-  `dsc_classic_ps1`, `dsc_classic_mof`) y devuelve `applied: True` — cero POST.
-- El único `POST` del adapter (`windows_conformidad.py:91`) es la obtención de **token
-  OAuth**; `_report_live` es un **GET** a `deviceManagement/managedDevices` para la
-  acción `report` (read-back de conformidad, no entrega del manifest).
-- La cita a `core/declarative.py` que el CTO marcó como falsa **es correcta hoy**:
-  `engine.py:32` importa `declarative_path_for` desde `lucidfence.core.declarative`.
-  Hay además una segunda definición en `ddm.py:123` (duplicidad real en código).
-=> Hasta que el CTO resuelva, **ninguna pieza nueva usa el ángulo declarativo** y las
-líneas afectadas del post de no-goals van marcadas `[⛔ CTO]`.
+  `dsc_classic_ps1`, `dsc_classic_mof`) y devuelve `applied: True` — cero POST del manifest.
+- El único `POST` del adapter es la obtención de **token OAuth**; `_report_live` es un
+  **GET** a `deviceManagement/managedDevices` para la acción `report` (read-back de
+  conformidad, no entrega del manifest).
+- `core/declarative.py` **existe** en `origin/main` (feat #89) y `engine.py:32` lo
+  importa — el aviso previo de "módulo inexistente" era falso positivo sobre ref obsoleto.
+  La duplicidad `declarative_path_for` quedó consolidada en main (merge #88 / `86730bb`).
+=> El copy ahora afirma la verdad: **DDM y DSC son ambos build-only**; CTO co-firma la
+pieza corregida. Pende solo el owner gate de Marketing para publicar.
 
 ## RED LINE (del CTO, #110) — no negociable en ningún borrador
 NO decir "Intune/Jamf live" incondicionalmente. Claim honesto obligatorio:
@@ -70,6 +70,11 @@ wording de marketing ahora refleja el hardening real (firma por tenant, no egres
   override. Riesgo de integridad #110 cerrado para estos docs.
 
 ## Sign-off de messaging (CTO · kanban t_1def7405 — GAP de proceso cerrado)
+**⚠️ Gate 0 (nuevo, t_c120cc9b):** cualquier pieza técnica **NUEVA** (blast-radius
+UEM, no-goals, declarative, SOAR) requiere **co-firma obligatoria del CTO**
+(`empresa-cto`, vía kanban) antes del owner gate. Proceso + matriz #188 canónica:
+`docs/gtm/CTO_CO_SIGN.md`. El linter no sustituye esta co-firma.
+
 Antes de aprobar cualquier `outbox/` item, corre el **Gate 2 de posicionamiento**
 (cierra la reincidencia del claim de negocio descartado, no solo el matiz técnico #188):
 ```bash

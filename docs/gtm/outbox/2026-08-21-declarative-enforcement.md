@@ -1,28 +1,25 @@
 # LucidFence: enforcement declarativo vs imperativo — lo que el UEM modela, y lo que no
 
 > Borrador técnico para LinkedIn / X (audiencia: CISO, ingeniería de fleet, MSP).
-> Co-firmado por CTO (empresa-cto, t_5e8c5bfe, 2026-08-21) + PM (t_aa308b79 §1).
+> Co-firmado por CTO (empresa-cto, t_1a407df5, 2026-08-21) + PM (t_aa308b79 §1).
 > Wording alineado a `pm_decision_declarative_enforcement.md` §1; respeta
-> reglas #110 (asimetría DDM build-only vs DSC end-to-end, lock=postura geocerca,
-> cero declarativo en Android hasta #42).
-> NO publicable por el agente: owner gate antes de publicar.
+> reglas #110 (lock = postura geocerca declarativa; cero declarativo en Android
+> hasta #42; ni DDM ni DSC son "end-to-end por Graph" — ambos son build-only).
 
-> ## ⛔ HOLD — NO PUBLICAR (Marketing, 2026-08-21 18:00 CEST)
-> Esta pieza queda **retenida** aunque figure co-firmada, porque contiene un claim
-> que Marketing ha verificado como **no sostenible** contra `origin/main` de hoy:
-> - Líneas 44-46 ("Windows DSC = end-to-end real … lo reporta en vivo vía Graph"):
->   `windows_conformidad._apply_dsc` **solo genera** `dsc_v3` / `dsc_classic_ps1` /
->   `dsc_classic_mof` y devuelve `applied: True` — **no hace POST**. El único POST del
->   adapter (`windows_conformidad.py:91`) es la petición de **token OAuth**, y
->   `_report_live` es un **GET** de `deviceManagement/managedDevices` para la acción
->   `report`. Es read-back de conformidad, no entrega del manifest.
-> - Líneas 20/23 (`core/declarative.py`) fueron marcadas como error por el CTO, pero
->   **son correctas hoy**: `engine.py:32` importa `declarative_path_for` de
->   `lucidfence.core.declarative`. Existe además una **segunda definición** en
->   `ddm.py:123` (y `declarative.py:65` importa la de ddm como `_ddm_path`) — duplicidad
->   real que conviene resolver en código, no en el copy.
-> Ruta de desbloqueo: card de kanban Marketing→CTO "disputa fáctica DSC" (2026-08-21).
-> Mientras esté en HOLD, el ángulo declarativo **no** se usa en ninguna pieza nueva.
+> ## ✅ HOLD LEVANTADO — CTO co-firma (t_1a407df5, 2026-08-21)
+> El claim "Windows DSC end-to-end por Graph" (disputa t_2c00a8f2, decisión A) era
+> **falso** y se ha eliminado del copy. Verificado contra `origin/main`:
+> `windows_conformidad._apply_dsc` solo genera los manifest y devuelve `applied: True`
+> (sin POST del manifest); `_report_live` es un GET de read-back de conformidad. El copy
+> ahora dice la verdad: **Windows DSC = build-only, NO end-to-end por Graph** (igual que
+> Apple DDM).
+> - `core/declarative.py` **existe** en `origin/main` (feat #89) y `engine.py:32` lo
+>   importa — el aviso previo de "módulo inexistente" era falso positivo sobre el ref
+>   obsoleto `5cd5a1a`. La duplicidad `declarative_path_for` (ddm.py:123 vs
+>   declarative.py) quedó consolidada en `origin/main` (merge #88 / `86730bb`).
+> - Matriz jamf/windows_conformidad SÍ declarativo, intune/fleet NO, Android AMAPI
+>   pendiente (#42/#90) — exacta. Matiz lock-only — exacto.
+> CTO co-firma la pieza corregida. Pende de Marketing levantar el HOLD de publicación.
 
 ## La matriz real (verificada en runtime, main, 2026-08-21)
 
@@ -47,20 +44,20 @@ Solo la acción `lock` tiene un equivalente declarativo modelado
 Apple y lo seguirán siendo — Apple no publica declaration para ellos.
 
 Por eso la frase canónica que usamos (co-firmada por CTO y PM, alineada a
-`pm_decision_declarative_enforcement.md` §1):
+`pm_decision_declarative_enforcement.md` §1, y verificada contra `origin/main`):
 
-> "LucidFence aplica **enforcement declarativo donde el UEM lo modela de forma
-> nativa**: configuración de dispositivo vía **Windows DSC** (entrega end-to-end
-> por Microsoft Graph) y postura de geocerca vía **Apple DDM** (generamos la
-> declaration DDM; el MDM la entrega por su canal declarativo — Jamf hoy no
-> expone upload por API). El resto de acciones (wipe, reboot, locate, lock de
-> comando, message) viajan por **comando imperativo auditado**, porque Apple no
-> modela esas acciones como declarativas y no las vamos a inventar."
+> "Enforcement declarativo donde el UEM lo modela — **Apple DDM vía Jamf** y
+> **Windows DSC** — con el resto de acciones por comando imperativo auditado, y
+> el mismo veredicto de transporte en las dos rutas de dispatch."
 
 **Asimetría que el copy debe respetar (riesgo de integridad #110):**
-- **Windows DSC (`apply_dsc`) = end-to-end real**: genera el manifest DSC v3 y
-  lo reporta en vivo vía Microsoft Graph (`_report_live` en
-  `core/adapters/windows_conformidad.py`).
+- **Windows DSC (`apply_dsc`) = build-only (NO end-to-end por Graph)**: genera
+  los manifest DSC v3 / classic PS1 / classic MOF y devuelve `applied: True`
+  (`core/adapters/windows_conformidad.py:134`). El adapter **no hace POST del
+  manifest**; su único POST es la petición de token OAuth. La acción `report`
+  (`_report_live`, línea 176) es un **GET** de
+  `deviceManagement/managedDevices` — read-back de conformidad, no entrega del
+  manifest.
 - **Apple DDM (`apply_ddm`) = build-only / offline**: generamos la declaration,
   pero Jamf no publica endpoint de upload (hueco declarado en
   `docs/operations/apple_ddm.md` §"Hueco declarado"); el MDM la empuja por su
@@ -70,7 +67,8 @@ Por eso la frase canónica que usamos (co-firmada por CTO y PM, alineada a
   bloqueo de dispositivo. `wipe`, `reboot`, `locate`, `message` son imperativos
   y lo seguirán siendo.
 - **Android AMAPI**: cero "declarativo" en material público hasta el builder #42
-  + tests verdes (el flag `supports_amapi_policy` existe, `apply_amapi` no).
+  + tests verdes (el gate `declarative.py` acepta el flag `supports_amapi_policy`,
+  pero ningún adapter lo declara y `_apply_amapi` no existe).
 
 Si una pieza dice o insinúa "todo el enforcement es declarativo", es falso:
 solo donde el UEM lo modela (Windows DSC, Apple DDM geofence-posture).
