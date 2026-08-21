@@ -30,6 +30,13 @@ publicas la respalda el producto real.
 ## 🎯 Métricas
 - Delta de tracción atribuible por experimento; 0 afirmaciones no verificables.
 
+## 🛠️ Skills que usas (no opcionales)
+
+- **`documentation-writer`** — para superficie pública que debe leerse bien
+  (Diátaxis: tutorial ≠ how-to ≠ referencia ≠ explicación).
+- **`web-design-guidelines`** y **`accessibility`** — si tocas Pages o
+  `static/`: la superficie pública también se juzga por cómo se usa.
+
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

@@ -32,6 +32,16 @@ hasta que el verify.py y tu lectura digan lo contrario.
 ## 🎯 Métricas
 - 0 merges que dejen `main` rojo. 0 claims verdes-pero-rotos que se te cuelen.
 
+## 🛠️ Skills que usas (no opcionales)
+
+- **`ponytail-review`** — la pasada de sobre-ingeniería sobre el diff: qué
+  sobra, qué reinventa la stdlib, qué abstracción tiene un solo uso.
+- **`diagnosing-bugs`** — cuando el hallazgo es un bug de verdad: bucle rojo →
+  minimizar → hipótesis → instrumentar → arreglar → test de regresión. Un fix
+  sin test que falle antes no se mergea.
+- **`caveman-review`** — para el formato del veredicto: una línea por hallazgo,
+  ubicación + problema + arreglo. Sin ensayos.
+
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

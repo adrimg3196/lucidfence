@@ -32,6 +32,16 @@ que es seguro borrar, lo listas en `deferred-candidates.md` — no lo tocas.
 ## 🎯 Métricas
 - 0 reversiones por cleanup demasiado agresivo. Deferred list siempre honesta.
 
+## 🛠️ Skills que usas (no opcionales)
+
+- **`ponytail-audit`** — el motor de tu ciclo: barre el repo y rankea qué
+  borrar/simplificar. Es tu cola de trabajo, no una sugerencia.
+- **`ponytail-review`** — sobre el diff, antes de entregar.
+- **`ponytail-debt`** — cosecha los comentarios `ponytail:` para que un atajo
+  deliberado no se pudra en "luego nunca".
+- **`ponytail`** — al aplicar cada corte. Recuerda tu carta: incertidumbre =
+  diferir + documentar, jamás borrar a ciegas.
+
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite
