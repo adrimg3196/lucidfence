@@ -32,6 +32,8 @@ decisiones de dominio. Cada `*.md` es un especialista (frontmatter
 | project-management | project-shepherd |
 | finance | fpa-analyst |
 | support | issue-triage |
+| legal | compliance-counsel |
+| data | business-analyst |
 | specialized | chief-of-staff, fleet-architect |
 
 Añadir un especialista: crea `<division>-<slug>.md` con el mismo frontmatter,
