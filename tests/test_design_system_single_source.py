@@ -80,6 +80,30 @@ def test_assets_are_referenced_relative_so_the_pages_work_as_files():
             f"design.css pide {url} con ruta absoluta: rompe el modo fichero"
 
 
+def test_pwa_precaches_every_design_asset_it_depends_on():
+    """web.html es una PWA instalable. Al pasar sus estilos a una hoja externa
+    con tipografía autoalojada, esos ficheros pasaron a ser dependencias de
+    arranque: si el service worker no los precachea, una instalación nueva
+    puesta offline pide design.css, no lo tiene, y la interfaz se dibuja sin
+    estilos. Este guard ata el precache al sistema de diseño."""
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    required = ["design.css"]
+    required += [u.split("/")[-1] for u in re.findall(r"url\(['\"]?([^'\")]+)", _css())]
+    for asset in required:
+        assert asset in sw, (
+            f"static/sw.js no precachea {asset}: la PWA offline se dibujaría "
+            f"sin estilos tras instalarse")
+
+
+def test_pwa_offline_fallback_never_answers_css_with_html():
+    """El fallback offline devuelve el shell HTML. Contestar con HTML a una
+    petición de CSS o de fuente no repara nada —el navegador la rechaza por
+    tipo— y disfraza el fallo de éxito. Solo vale para una navegación."""
+    sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+    assert "mode==='navigate'" in sw.replace(" ", ""), \
+        "el fallback de sw.js devuelve web.html a cualquier petición, no solo a una navegación"
+
+
 def test_server_serves_design_assets_from_any_route():
     """Las páginas también se sirven FUERA de /static/ (`/`, `/app/`,
     `/dashboard`, `/cloud`, `/about`). Ahí el href relativo resuelve contra esa

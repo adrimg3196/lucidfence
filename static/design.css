@@ -5,6 +5,7 @@
    Todas las superficies (dashboard, cloud, index, manual, web, whitelabel)
    enlazan ESTE fichero y NO redeclaran :root. El guard
    tests/test_design_system_single_source.py lo verifica en cada PR.
+   Las decisiones y su porqué: docs/DESIGN.md
 
    Por qué existe: antes cada HTML llevaba su propio :root y tres familias
    distintas (Geist, Inter, Roboto). Seis superficies parecían seis productos.

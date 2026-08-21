@@ -25,6 +25,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | Documento | Contenido |
 | --- | --- |
 | [`architecture/CONSTITUTION.md`](architecture/CONSTITUTION.md) | Constitución: principios no negociables del proyecto (suprema) |
+| [`DESIGN.md`](DESIGN.md) | Sistema de diseño: identidad, tipografía, contraste y lo que no entra en la UI |
 | [`architecture/SPEC.md`](architecture/SPEC.md) | Especificación as-built del repositorio y sus contratos |
 | [`architecture/PRODUCT_SPEC.md`](architecture/PRODUCT_SPEC.md) | Spec histórica de 1.1 (config local, AI opcional, MCP) |
 | [`architecture/AI_AND_MCP.md`](architecture/AI_AND_MCP.md) | Proveedor AI opcional y servidor MCP |
