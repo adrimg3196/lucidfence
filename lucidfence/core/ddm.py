@@ -120,10 +120,10 @@ def _declaration_inputs_ready(params: Any) -> bool:
     return str(params.get("profile_url", "") or "").startswith("https://")
 
 
-def declarative_path_for(
+def ddm_declarative_subaction(
     device: Any, action: Any, adapter: Any, params: Any = None
 ) -> Optional[str]:
-    """Acción declarativa a usar para `action`, o None si va por vía imperativa.
+    """[Renombrado en #205/#88] Acción declarativa a usar para `action`, o None.
 
     Función pura: no toca red, estado ni configuración. Decide SOLO el
     transporte — el gating (dry_run, fase observe/enforce, allow-list de
@@ -150,6 +150,14 @@ def declarative_path_for(
     if not _declaration_inputs_ready(params):
         return None
     return declarative
+
+
+# Backward-compatibility alias. The bare name ``declarative_path_for`` now
+# collides with the management_mode/ownership gate in
+# ``lucidfence.core.declarative`` (the #88/#89 single source of truth for
+# routing). This module-level alias keeps legacy import paths working but is
+# DEPRECATED: new code must call ``ddm_declarative_subaction`` directly.
+declarative_path_for = ddm_declarative_subaction
 
 
 def _server_token(payload: dict) -> str:
@@ -291,7 +299,8 @@ __all__ = [
     "DEFAULT_STATUS_ITEMS",
     "DECLARATIVE_EQUIVALENTS",
     "supports_ddm",
-    "declarative_path_for",
+    "ddm_declarative_subaction",
+    "declarative_path_for",  # deprecated alias of ddm_declarative_subaction
     "build_declarations",
     "build_status_subscriptions",
     "parse_status_report",
