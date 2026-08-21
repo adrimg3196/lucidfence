@@ -163,6 +163,19 @@ auto-merges **only** on a green gate. So the gate is the reviewer of record —
 `verify.py` being APTO is what makes the change mergeable. Get it green locally
 first.
 
+### Linting the workflows
+
+```bash
+bash scripts/lint_workflows.sh   # exactly what CI runs
+```
+
+It pins `actionlint` + `shellcheck`, installs them if missing, and **aborts
+rather than reporting success** when it cannot get either — `actionlint` only
+runs shellcheck when it finds it on `PATH`, so a machine without shellcheck
+silently skips every shell check and prints a green that CI will not honour.
+That false green is what shipped 9 real findings straight into the gate on
+2026-08-21. Never lint the workflows by calling `actionlint` directly.
+
 ### MCP servers wired into this repo
 
 `.mcp.json` (project-scoped, so it travels with the checkout) declares the

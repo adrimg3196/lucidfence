@@ -170,10 +170,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: actionlint (pinned)
-        run: |
-          set -euo pipefail
-          curl -fsSL -o /tmp/al.tar.gz \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz
-          tar -C /tmp -xzf /tmp/al.tar.gz actionlint
-          /tmp/actionlint -color
+      - name: Lint de workflows (script único, mismo que en local)
+        # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
+        # falta alguno: sin copias inline y sin falsos verdes por herramienta
+        # ausente (la causa del run 32455895540).
+        run: bash scripts/lint_workflows.sh
