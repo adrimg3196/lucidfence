@@ -32,6 +32,10 @@ tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta
 > [English](docs/manual/USER_GUIDE.md) · interactivo en `/static/manual.html`
 > de tu instalación (selector ES/EN).
 >
+> ¿Comparando con tu UEM actual? Lee las comparativas capability-by-capability,
+> cada celda cita la doc interna:
+> [LucidFence vs Intune](docs/comparisons/lucidfence-vs-intune.md) ·
+> [LucidFence vs Jamf](docs/comparisons/lucidfence-vs-jamf.md).
 > ¿Primera vez? Empieza por **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**:
 > qué necesitas, cómo instalar, cómo comprobar que funciona, FAQ y cómo reportar
 > un bug. (Este README es la vista técnica del proyecto.)

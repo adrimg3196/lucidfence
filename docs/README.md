@@ -53,6 +53,16 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/apple_ddm.md`](operations/apple_ddm.md) | Apple DDM: enforcement declarativo de geocercas |
 | [`operations/windows_dsc.md`](operations/windows_dsc.md) | Windows PowerShell DSC: matriz de soporte y despliegue |
 
+## Comparativas (SEO / entrada no-marca)
+
+Páginas capability-by-capability, citando doc interna, para quien busca
+"alternativa a Intune/Jamf" o "geofencing open source":
+
+| Documento | Contenido |
+| --- | --- |
+| [`comparisons/lucidfence-vs-intune.md`](comparisons/lucidfence-vs-intune.md) | LucidFence vs Microsoft Intune (capacidad por capacidad, claims co-firmados CTO) |
+| [`comparisons/lucidfence-vs-jamf.md`](comparisons/lucidfence-vs-jamf.md) | LucidFence vs Jamf Pro (capacidad por capacidad, claims co-firmados CTO) |
+
 ## Integraciones
 
 | Documento | Contenido |
