@@ -486,6 +486,19 @@ class MultiUEMOrchestrator:
         )
         return device
 
+    def _merge_declarative(self, members: list[NormalizedDevice], merged: NormalizedDevice):
+        """Carry management_mode/ownership across consolidated members.
+
+        Same "first non-null wins" rule as inventory: a device reported by two
+        UEMs keeps the first declarative signal it saw. None is never inferred,
+        so if no provider contributed a mode the field stays None.
+        """
+        for item in members:
+            if merged.management_mode is None and item.management_mode is not None:
+                merged.management_mode = item.management_mode
+            if merged.ownership is None and item.ownership is not None:
+                merged.ownership = item.ownership
+
     def _merge(self, members: list[NormalizedDevice], now: datetime) -> NormalizedDevice:
         members = sorted(members, key=lambda item: (item.provider, item.provider_device_id))
         merged = deepcopy(members[0])
@@ -745,6 +758,16 @@ class MultiUEMOrchestrator:
             "action": action,
             "dry_run": effective_dry,
         }
+        # Issue #89: declarative-first. If the provider's adapter exposes a
+        # declarative channel and the device is eligible, build the declaration
+        # instead of issuing the blind imperative command. The binding's
+        # execute_action is the adapter's ``execute``; route through its
+        # declarative builder when the shared gate allows it.
+        decl = self._declarative_route(
+            device, action, params or {}, binding=binding, dry_run=dry_run,
+        )
+        if decl is not None:
+            return decl
         try:
             response = binding.execute_action(remote_id, action, deepcopy(params), effective_dry)
         except Exception:

@@ -16,7 +16,7 @@ automated actions — **MDM-agnostic** via adapters.
   CDNs in the dashboard (100% local).
 - 🧠 **Explainable Risk Engine**: every device gets a 0–100 score **with the reason**
   — never a magic number.
-- 🔌 **Multi-MDM**: Applivery (live) + Intune/Jamf (mocks included) + community adds the rest.
+- 🔌 **Multi-MDM**: Applivery (live) + Intune/Jamf (**live** adapters — real Graph/Jamf API calls when credentials are set, mock fallback only when no token) + community adds the rest.
 - 📊 **Dashboard**: geofences, IT inventory, remote commands, alerts, CVE/SOAR.
 - ✅ **Evidence gate**: a risk finding only counts if backed by real signals (anti-overclaim).
 
