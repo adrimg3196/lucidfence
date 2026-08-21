@@ -163,6 +163,36 @@ auto-merges **only** on a green gate. So the gate is the reviewer of record —
 `verify.py` being APTO is what makes the change mergeable. Get it green locally
 first.
 
+### MCP servers wired into this repo
+
+`.mcp.json` (project-scoped, so it travels with the checkout) declares the
+servers the fleet uses:
+
+| Server | Purpose | Auth |
+|---|---|---|
+| `github` | PRs, issues, CI status | `${GITHUB_PERSONAL_ACCESS_TOKEN}` from your env — never committed |
+| `exa` | Web search and page fetch (`web_search_exa`, `web_fetch_exa`) for the Trends / Growth / Radar loops | none |
+
+The Exa entry is deliberately **credential-free**. Those two tools answer
+without any auth (verified live against `https://mcp.exa.ai/mcp`), which is what
+lets the *unattended* night crons research the sector — an OAuth browser flow is
+impossible there. Exa's advanced tools (`web_search_advanced_exa`, `agent_run`)
+DO require auth: the server answers
+`-32000 Authentication required. Use OAuth or provide an API key.` To opt into
+them locally, add the key as a header and the tools to the URL:
+
+```jsonc
+"exa": {
+  "type": "http",
+  "url": "https://mcp.exa.ai/mcp?tools=web_search_exa,web_fetch_exa,web_search_advanced_exa,agent_run",
+  "headers": { "x-api-key": "${EXA_API_KEY}" }
+}
+```
+
+Keep the key in your environment (`export EXA_API_KEY=...`), never in the file —
+same rule as the GitHub token. Restart the MCP client after editing `.mcp.json`;
+servers are loaded at startup.
+
 ### Where to go next
 
 - Writing a new UEM adapter → [new-adapter-guide.md](new-adapter-guide.md).
