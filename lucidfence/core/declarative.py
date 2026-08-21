@@ -61,13 +61,14 @@ def resolve_declarative_subaction(
             if supports_amapi_policy and hasattr(adapter, "_apply_amapi"):
                 return "apply_amapi"
     if supports_ddm:
-        try:
-            from lucidfence.core.ddm import declarative_path_for as _ddm_path
-            sub = _ddm_path(device, action, adapter, params or {})
-            if sub:
-                return sub
-        except Exception:
-            return None
+        # Legacy #205 DDM transport-selection fallback (Apple-only "lock" ->
+        # "apply_ddm"). Kept lazy to avoid any cross-import surprise. No broad
+        # ``except Exception``: a real error must surface instead of being
+        # swallowed into a silent imperative fallback (regression guard).
+        from lucidfence.core.ddm import ddm_declarative_subaction as _ddm_path
+        sub = _ddm_path(device, action, adapter, params or {})
+        if sub:
+            return sub
     return None
 
 # management_mode values an EMM/UEM actually reports. Mirrors the Android

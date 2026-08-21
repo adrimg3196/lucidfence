@@ -252,7 +252,7 @@ geolocaliza.
 
 ### Enrutado de la vía (issue #205)
 
-`Engine._execute_action` elige transporte con `ddm.declarative_path_for(device,
+`Engine._execute_action` elige transporte con `ddm.ddm_declarative_subaction(device,
 action, adapter, params)`, y da el **mismo veredicto** por la ruta
 single-provider y por la del orquestador multi-UEM (antes solo la segunda
 enrutaba, así que el mismo dispositivo Apple podía recibir comandos distintos

@@ -6,7 +6,7 @@ multi-UEM despachaba por su propio criterio. El MISMO dispositivo Apple recibía
 un comando distinto según el camino interno de código.
 
 Lo que se ancla aquí:
-  (a) la vía la decide `ddm.declarative_path_for` — capacidad del adapter +
+  (a) la vía la decide `ddm.ddm_declarative_subaction` — capacidad del adapter +
       capacidad del dispositivo + equivalente declarativo modelado + perfil
       aportado; dato desconocido => imperativo (el comportamiento de hoy);
   (b) las DOS rutas dan el mismo veredicto para el mismo caso;
@@ -117,19 +117,19 @@ def _engine_multiuem(adapter, enforcement=None, provider="jamf"):
 def test_declarative_path_needs_the_four_conditions():
     jamf = JamfAdapter()
     dev = _apple_ddm_device()
-    assert ddm.declarative_path_for(dev, "lock", jamf, DDM_PARAMS) == "apply_ddm"
+    assert ddm.ddm_declarative_subaction(dev, "lock", jamf, DDM_PARAMS) == "apply_ddm"
     # 1. adapter sin capacidad DDM declarada -> imperativo
-    assert ddm.declarative_path_for(dev, "lock", _RecordingAdapter(), DDM_PARAMS) is None
+    assert ddm.ddm_declarative_subaction(dev, "lock", _RecordingAdapter(), DDM_PARAMS) is None
     # 2. acción sin equivalente declarativo modelado (Apple no lo publica)
     for action in ("wipe", "reboot", "clear_passcode", "locate", "message"):
-        assert ddm.declarative_path_for(dev, action, jamf, DDM_PARAMS) is None, action
+        assert ddm.ddm_declarative_subaction(dev, action, jamf, DDM_PARAMS) is None, action
     # 3. dispositivo por debajo del mínimo de OS
-    assert ddm.declarative_path_for(_legacy_device(), "lock", jamf, DDM_PARAMS) is None
+    assert ddm.ddm_declarative_subaction(_legacy_device(), "lock", jamf, DDM_PARAMS) is None
     # 4. sin el perfil que las declarations transportan
-    assert ddm.declarative_path_for(dev, "lock", jamf, {}) is None
-    assert ddm.declarative_path_for(dev, "lock", jamf, {"policy": {"id": "p"}}) is None
+    assert ddm.ddm_declarative_subaction(dev, "lock", jamf, {}) is None
+    assert ddm.ddm_declarative_subaction(dev, "lock", jamf, {"policy": {"id": "p"}}) is None
     # profile_url no https: `com.apple.configuration.legacy` lo prohíbe
-    assert ddm.declarative_path_for(
+    assert ddm.ddm_declarative_subaction(
         dev, "lock", jamf, {"policy": {"id": "p"}, "profile_url": "http://x/p"}) is None
     print("  PASS declarative_path_for exige las 4 condiciones")
 
@@ -137,8 +137,8 @@ def test_declarative_path_needs_the_four_conditions():
 def test_unknown_data_stays_imperative():
     """Readback-honesto: sin `os_version` no se adivina; se mantiene el hoy."""
     jamf = JamfAdapter()
-    assert ddm.declarative_path_for(_unknown_os_device(), "lock", jamf, DDM_PARAMS) is None
-    assert ddm.declarative_path_for(None, "lock", jamf, DDM_PARAMS) is None
+    assert ddm.ddm_declarative_subaction(_unknown_os_device(), "lock", jamf, DDM_PARAMS) is None
+    assert ddm.ddm_declarative_subaction(None, "lock", jamf, DDM_PARAMS) is None
     print("  PASS dato desconocido => vía imperativa")
 
 
