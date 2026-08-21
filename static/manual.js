@@ -153,7 +153,7 @@ function go(k){i=Math.max(0,Math.min(S().length-1,k));const s=S()[i];const u=UI[
   cont.innerHTML=`<div class="step-n">${u.step} ${i+1} ${u.of} ${S().length}</div><h2>${s.t}</h2>`+
     (s.img?`<img src="${s.img}" alt="${s.t}" onclick="this.classList.toggle('zoom')">`:"")+s.h;
   [...nav.children].forEach((b,k2)=>b.classList.toggle("on",k2===i));
-  pos.textContent=(i+1)+" / "+S().length;fill.style.width=((i+1)/S().length*100)+"%";
+  pos.textContent=(i+1)+" / "+S().length;fill.style.transform="scaleX("+((i+1)/S().length)+")";
   prev.disabled=i===0;next.disabled=i===S().length-1;
   location.hash=i;cont.scrollTop=0;}
 langBtn.onclick=()=>{ lang = lang==="es" ? "en" : "es";

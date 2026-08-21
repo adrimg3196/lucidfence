@@ -1,0 +1,207 @@
+/* ==========================================================================
+   LucidFence — sistema de diseño "perímetro sereno"
+   --------------------------------------------------------------------------
+   FUENTE ÚNICA DE VERDAD para tokens, tipografía y superficies del navegador.
+   Todas las superficies (dashboard, cloud, index, manual, web, whitelabel)
+   enlazan ESTE fichero y NO redeclaran :root. El guard
+   tests/test_design_system_single_source.py lo verifica en cada PR.
+
+   Por qué existe: antes cada HTML llevaba su propio :root y tres familias
+   distintas (Geist, Inter, Roboto). Seis superficies parecían seis productos.
+
+   Invariantes que este fichero respeta:
+     - 100% local: la tipografía se sirve desde /static/fonts, jamás un CDN
+       (la CSP es default-src 'self'; un @import externo no cargaría).
+     - Contraste AA real: cada color de texto pasa 4.5:1 sobre TODAS las
+       superficies en las que se dibuja, en claro y en oscuro. Verificado en
+       tests/test_design_system_single_source.py, no a ojo.
+     - Un solo acento (verde valla). El color semántico solo informa de estado.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. TIPOGRAFÍA — IBM Plex Sans, autoalojada (SIL OFL 1.1)
+   --------------------------------------------------------------------------
+   Subconjunto Latin1: cubre castellano e inglés completos (U+00A0-00FF trae
+   ñ á é í ó ú ü ¿ ¡ ·, y U+2013/2014/2018-201E/2022/2026 la puntuación
+   tipográfica). 4 pesos × ~21 KB = 86 KB para todo el producto.
+   Licencia junto a los binarios: static/fonts/IBMPLEX-LICENSE.txt
+
+   Por qué Plex y no la sans de turno: es una cara de infraestructura, dibujada
+   para paneles densos, con cifras tabulares de verdad. Inter/Geist/Roboto son
+   exactamente las tres que delatan una UI generada.
+   -------------------------------------------------------------------------- */
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;
+  src:url('fonts/IBMPlexSans-Regular-Latin1.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;
+  src:url('fonts/IBMPlexSans-Medium-Latin1.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;
+  src:url('fonts/IBMPlexSans-SemiBold-Latin1.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:700;font-display:swap;
+  src:url('fonts/IBMPlexSans-Bold-Latin1.woff2') format('woff2');
+}
+
+:root{
+  color-scheme:light;
+
+  /* ---- Superficies (papel cálido) ---------------------------------------- */
+  --bg:#FAFAF8; --bg-2:#F4F3F0; --panel:#FFFFFF; --panel-2:#F9F9F7; --panel-3:#F1F0EC;
+  --border:#E8E7E2; --border-strong:#D9D8D2;
+
+  /* ---- Texto -------------------------------------------------------------
+     --muted 5.4:1 y --muted-2 4.7:1 sobre --panel-3, la superficie clara más
+     oscura sobre la que se dibujan. Antes eran 4.2:1 y 3.3:1: fallaban AA. */
+  --fg:#20241F; --fg-2:#3C403B; --muted:#5E635C; --muted-2:#686D65;
+
+  /* ---- Acento único (verde valla) ---------------------------------------- */
+  --accent:#3E7A5E; --accent-h:#346951;
+  --accent-soft:rgba(62,122,94,.10); --accent-soft-2:rgba(62,122,94,.18);
+  --accent-fg:#FFFFFF;
+
+  /* ---- Estado (solo informa; nunca decora) ------------------------------- */
+  --green:#346538; --green-soft:#EDF3EC;
+  --blue:#1F6C9F; --blue-soft:#E1F3FE;
+  --amber:#956400; --amber-soft:#FBF3DB;
+  --red:#9F2F2D; --red-soft:#FDEBEC;
+  --violet:#6C5A9F; --violet-soft:#EFEAF9;
+
+  /* ---- Rampa tipográfica -------------------------------------------------
+     Fija en px (Operate: el admin mira a DPI constante; un h1 fluido que
+     encoge dentro de un panel se ve peor, no mejor).
+     11px es el SUELO: por debajo, el texto funcional deja de leerse en
+     pantallas densas. Antes había valores de 9px y 9.5px. */
+  --t-2xs:11px;   /* micro-etiquetas en versal, cabeceras de tabla */
+  --t-xs:12px;    /* metadatos, pies, texto secundario             */
+  --t-sm:13px;    /* DEFECTO de la interfaz: nav, botones, celdas  */
+  --t-md:15px;    /* cuerpo enfatizado, títulos de tarjeta         */
+  --t-lg:18px;    /* encabezado de sección                         */
+  --t-xl:24px;    /* título de vista (h1)                          */
+  --t-2xl:30px;   /* cifra de KPI                                  */
+
+  --lh-tight:1.3; --lh:1.45; --lh-prose:1.6;
+
+  /* ---- Forma -------------------------------------------------------------- */
+  --radius:6px; --radius-lg:10px; --radius-sm:4px;
+
+  /* ---- Elevación ---------------------------------------------------------
+     REGLA: cada superficie declara su elevación UNA vez.
+       - en reposo (tarjetas, filas, paneles) -> borde 1px, SIN sombra;
+       - elevada (modal, paleta, toast, menú)  -> sombra, SIN borde.
+     Un borde fino bajo una sombra ancha es el "ghost card" que delata una
+     UI generada. Todas las sombras llevan desplazamiento Y + desenfoque:
+     un halo de color a offset cero es decoración, no profundidad. */
+  --sh-pop:0 8px 16px -4px rgba(31,35,31,.12), 0 2px 4px -1px rgba(31,35,31,.07);
+  --sh-modal:0 20px 40px -12px rgba(31,35,31,.22), 0 4px 8px -2px rgba(31,35,31,.08);
+  --shadow:none; /* compat: las tarjetas en reposo ya no llevan sombra */
+
+  /* ---- Familias ----------------------------------------------------------
+     Una sola cara para toda la interfaz. --font-display es un alias de --font
+     a propósito: en un panel de operación, emparejar display + body añade
+     ruido, no jerarquía; la jerarquía la dan tamaño y peso.
+     --mono queda reservada a CÓDIGO, identificadores y hashes. Usarla como
+     disfraz de "técnico" en etiquetas o datos es exactamente el tic que
+     delata una UI generada; las cifras se alinean con tabular-nums. */
+  --font:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-display:var(--font);
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+
+  /* ---- Movimiento --------------------------------------------------------
+     150-250 ms: el admin está dentro de una tarea, no viendo una coreografía. */
+  --dur:180ms; --dur-slow:240ms; --ease:cubic-bezier(.2,.7,.3,1);
+
+  /* ---- Métricas del armazón ---------------------------------------------- */
+  --header-h:48px; --side-w:228px;
+}
+
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#161715; --bg-2:#1B1C19; --panel:#1E1F1C; --panel-2:#242522; --panel-3:#2A2B27;
+  --border:#31322D; --border-strong:#41423C;
+  /* 6.0:1 y 5.4:1 sobre --panel-3. Antes --muted-2 caía a 3.5:1. */
+  --fg:#F2F2EE; --fg-2:#CFCFC8; --muted:#A2A49C; --muted-2:#9DA096;
+  --accent:#6FAF8F; --accent-h:#82BD9F;
+  --accent-soft:rgba(111,175,143,.12); --accent-soft-2:rgba(111,175,143,.24);
+  --accent-fg:#141613;
+  --green:#7FC79A; --green-soft:rgba(76,195,138,.14);
+  --blue:#6FB3E8; --blue-soft:rgba(111,179,232,.14);
+  --amber:#D9B45B; --amber-soft:rgba(217,180,91,.14);
+  --red:#E88B87; --red-soft:rgba(232,139,135,.14);
+  --violet:#A99BD1; --violet-soft:rgba(169,155,209,.14);
+  --sh-pop:0 8px 16px -4px rgba(0,0,0,.5), 0 2px 4px -1px rgba(0,0,0,.35);
+  --sh-modal:0 20px 40px -12px rgba(0,0,0,.65), 0 4px 8px -2px rgba(0,0,0,.4);
+}
+
+/* --------------------------------------------------------------------------
+   2. BASE
+   -------------------------------------------------------------------------- */
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--fg);
+  font-size:var(--t-sm);
+  line-height:var(--lh);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  letter-spacing:-.006em;      /* Plex ya viene ajustada; -.011em la apretaba */
+  font-variant-numeric:tabular-nums;
+}
+h1,h2,h3,h4,h5,h6{text-wrap:balance;letter-spacing:-.018em;line-height:var(--lh-tight)}
+p{text-wrap:pretty}
+button,input,select,textarea{font-family:inherit;font-size:inherit;letter-spacing:inherit}
+svg{display:block}
+a{color:var(--accent)}
+
+/* --------------------------------------------------------------------------
+   3. SUPERFICIES DEL NAVEGADOR
+   --------------------------------------------------------------------------
+   Lo que no dibujamos también es diseño. Selección, cursor de texto, barra de
+   scroll y anillo de foco vienen por defecto de un sistema de diseño que no es
+   el nuestro; aquí se tiñen de la paleta. Es la señal más barata de que una
+   página se construyó en vez de ensamblarse.
+   -------------------------------------------------------------------------- */
+::selection{background:var(--accent-soft-2);color:var(--fg)}
+:root{caret-color:var(--accent);accent-color:var(--accent)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{
+  background:var(--border-strong);border-radius:99px;
+  border:2px solid transparent;background-clip:content-box;
+}
+::-webkit-scrollbar-thumb:hover{background:var(--muted-2);background-clip:content-box}
+*{scrollbar-color:var(--border-strong) transparent;scrollbar-width:thin}
+::placeholder{color:var(--muted-2);opacity:1}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+/* --------------------------------------------------------------------------
+   4. UTILIDADES COMPARTIDAS
+   -------------------------------------------------------------------------- */
+.hidden{display:none !important}
+.sr-only{
+  position:absolute!important;width:1px!important;height:1px!important;padding:0!important;
+  margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;border:0!important;
+}
+.skip-link{
+  position:absolute;left:8px;top:-48px;z-index:3000;background:var(--panel);color:var(--fg);
+  border:1px solid var(--border-strong);border-radius:var(--radius);padding:8px 12px;
+  font-size:var(--t-xs);font-weight:600;text-decoration:none;transition:top var(--dur) var(--ease);
+}
+.skip-link:focus{top:8px}
+
+/* Código e identificadores: el ÚNICO sitio donde entra la monoespaciada. */
+code,kbd,samp,pre,.code{font-family:var(--mono);font-size:.94em}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important;scroll-behavior:auto!important;
+  }
+}

@@ -2065,8 +2065,8 @@ async function renderCompany(){
     const taskHtml=tasks.length?tasks.slice(0,10).map(t=>`<div class="company-task"><div class="row gap wrap"><b style="font-size:12px;flex:1">${esc(t.title)}</b><span class="tag ${riskClass(t.risk)}"><span class="d"></span>${esc(t.risk)}</span><span class="tag ${statusClass(t.status)}"><span class="d"></span>${esc(t.status)}</span></div><div class="sub" style="margin-top:5px">${esc(t.agent_id)} · ${esc(t.action)} · evidencia ${(t.evidence||[]).length}</div>${t.status==="proposed"&&t.requires_approvals>0?`<button class="btn sm companyApprove" data-task="${esc(t.id)}" style="margin-top:8px">Revisar y aprobar handoff</button>`:""}</div>`).join(""):`<div class="sub">El primer ciclo convertirá telemetría real en tareas verificables.</div>`;
     node.innerHTML=`
       <section class="company-hero" aria-labelledby="companyTitle">
-        <div class="company-eyebrow">Control plane · tenant scoped · ${data.paused?"PAUSED":"ACTIVE"}</div>
         <h1 id="companyTitle">Compañía autónoma de geofencing</h1>
+        <div class="company-state"><span class="tag ${data.paused?"unk":"in"}"><span class="d"></span>${data.paused?"En pausa":"Activa"}</span><span>Plano de control · ámbito del tenant</span></div>
         <div class="sub" style="max-width:760px">Un equipo digital que observa la flota, forma el squad adecuado y entrega simulaciones o recomendaciones con evidencia. Nunca ejecuta wipe, factory reset ni comandos UEM desde este plano.</div>
         <div class="row gap wrap" style="margin-top:15px"><button class="btn primary" id="companyNewGoal">Nuevo objetivo medible</button><button class="btn" id="companyRun" ${activeGoals.length&&!data.paused?"":"disabled"}>Ejecutar ciclo seguro</button><button class="btn" id="companyPause">${data.paused?"Reanudar compañía":"Pausar compañía"}</button></div>
         <form id="companyGoalForm" class="company-form hidden">
