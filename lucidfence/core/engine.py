@@ -22,7 +22,8 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
-from lucidfence.core.adapters import build_bindings
+from lucidfence.core.adapters import ADAPTER_REGISTRY, build_bindings
+from lucidfence.core.ddm import declarative_path_for
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
@@ -36,6 +37,28 @@ from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 from lucidfence.core.osquery_posture import OsqueryPostureProvider
 from lucidfence.core.location_integrity import assess as assess_location_integrity
+
+
+def _tag_route(res: Any, action: str, declarative: Optional[str],
+               effective_dry: bool) -> Any:
+    """Marca en el resultado la vía por la que salió la orden (auditable).
+
+    `enforcement` es "declarative" o "imperative" en TODO resultado despachado;
+    en el declarativo se conserva además la acción de política pedida
+    (`requested_action`), porque el adapter devuelve la declarativa.
+    """
+    if not isinstance(res, dict):
+        return res
+    res["enforcement"] = "declarative" if declarative else "imperative"
+    if declarative:
+        res["requested_action"] = action
+        # `apply_ddm` es offline (construye las declarations, no las sube) y no
+        # marca `dry_run`. Sin esto, un lock declarativo en observe quedaría
+        # registrado como ejecutado. La marca viene del gate del engine, que es
+        # quien sabe que la orden no debía salir, no del adapter.
+        if effective_dry:
+            res.setdefault("dry_run", True)
+    return res
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -660,7 +683,23 @@ class Engine:
         if not effective_dry and self.live_actions is not None and action not in self.live_actions:
             effective_dry = True
         refs = getattr(dev, "provider_refs", None)
-        if self.orchestrator is not None and isinstance(refs, dict) and refs:
+        multi = self.orchestrator is not None and isinstance(refs, dict) and bool(refs)
+        # Vía de transporte (issue #205): MISMO veredicto para las dos rutas de
+        # dispatch, de modo que el mismo dispositivo Apple no reciba un comando
+        # distinto según el camino interno de código. Se decide DESPUÉS de todo
+        # el gating y sobre la acción ORIGINAL (`action`), nunca sobre la
+        # declarativa: el guardarraíl de wipe, la fase observe/enforce, la
+        # allow-list `live_actions`, el cooldown y el audit siguen aplicándose
+        # exactamente igual. Solo cambia POR DÓNDE viaja la orden.
+        route_adapter = self.adapter
+        if multi:
+            # El adapter que recibirá la llamada en la ruta multi-UEM: el del
+            # ref con el que ya se puentea al orquestador (clase del registro,
+            # sin instanciar — `supports_ddm` es atributo de clase).
+            route_adapter = ADAPTER_REGISTRY.get(next(iter(refs)), self.adapter)
+        declarative = declarative_path_for(dev, action, route_adapter, params)
+        wire_action = declarative or action
+        if multi:
             # The orchestrator expects a NormalizedDevice-shaped input
             # (provider + provider_device_id + provider_refs); DeviceState only
             # keeps provider_refs, so bridge the first ref into those fields.
@@ -670,12 +709,14 @@ class Engine:
                 "provider_device_id": first_id,
                 "provider_refs": refs,
             }
-            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=effective_dry)
+            res = self.orchestrator.execute(bridge, wire_action, params or {}, dry_run=effective_dry)
             if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
-                return res
+                return _tag_route(res, action, declarative, effective_dry)
         if self.adapter is not None:
-            return self.adapter.execute(dev, action, params or {}, dry_run=effective_dry)
-        return {"ok": True, "dry_run": True, "simulated": True,
+            return _tag_route(
+                self.adapter.execute(dev, wire_action, params or {}, dry_run=effective_dry),
+                action, declarative, effective_dry)
+        return {"ok": True, "dry_run": True, "simulated": True, "enforcement": "imperative",
                 "action": action, "device_id": getattr(dev, "device_id", "")}
 
     def _dedupe_action(self, ds: DeviceState, action: str, fence_id, trigger: str,
