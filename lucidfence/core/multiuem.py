@@ -139,6 +139,14 @@ class NormalizedDevice:
     provider_refs: dict[str, str] = field(default_factory=dict)
     provenance: dict[str, str] = field(default_factory=dict)
     identity_conflict: bool = False
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Populated by the adapter from the real UEM/EMM response (e.g. Jamf's
+    # `managementId`/supervision, Intune's managedDeviceOwnerType, AMAPI's
+    # ownership). None = the adapter did not report it (never inferred). These
+    # feed the declarative-vs-imperative gate (core.declarative) so it no
+    # longer falls through to imperative for every device.
+    management_mode: str | None = None
+    ownership: str | None = None
 
 
 @dataclass(frozen=True)
@@ -314,6 +322,8 @@ class MultiUEMOrchestrator:
                 or type(item.provider_refs) is not dict
                 or type(item.provenance) is not dict
                 or type(item.identity_conflict) is not bool
+                or not cls._valid_optional_text(item.management_mode)
+                or not cls._valid_optional_text(item.ownership)
                 or not cls._valid_location(provider, item.location)
             ):
                 return False
@@ -350,6 +360,14 @@ class MultiUEMOrchestrator:
         return value is None or (
             type(value) is str
             and len(value) <= _MAX_REMOTE_ID_LENGTH
+            and value.isprintable()
+        )
+
+    @classmethod
+    def _valid_optional_text(cls, value: object) -> bool:
+        return value is None or (
+            type(value) is str
+            and 0 < len(value) <= _MAX_REMOTE_ID_LENGTH
             and value.isprintable()
         )
 
@@ -493,7 +511,21 @@ class MultiUEMOrchestrator:
         ]
         choices = accepted or locations
         merged.location = min(choices, key=self._location_key) if choices else None
+        self._merge_declarative(members, merged)
         return merged
+
+    def _merge_declarative(self, members: list[NormalizedDevice], merged: NormalizedDevice):
+        """Carry management_mode/ownership across consolidated members.
+
+        Same "first non-null wins" rule as inventory: a device reported by two
+        UEMs keeps the first declarative signal it saw. None is never inferred,
+        so if no provider contributed a mode the field stays None.
+        """
+        for item in members:
+            if merged.management_mode is None and item.management_mode is not None:
+                merged.management_mode = item.management_mode
+            if merged.ownership is None and item.ownership is not None:
+                merged.ownership = item.ownership
 
     @staticmethod
     def _location_key(location: LocationEvidence) -> tuple[float, float, str]:
@@ -536,6 +568,8 @@ class MultiUEMOrchestrator:
                     location_source=location.source if location else device.provider,
                     serial_number=device.serial_number,
                     imei=device.imei,
+                    management_mode=device.management_mode,
+                    ownership=device.ownership,
                     raw={
                         "provider": device.provider,
                         "provider_device_id": device.provider_device_id,
@@ -544,6 +578,8 @@ class MultiUEMOrchestrator:
                         "identity_conflict": device.identity_conflict,
                         "location_quality": "accepted" if accepted else "rejected",
                         "location_rejection_reason": None if accepted else reason,
+                        "management_mode": device.management_mode,
+                        "ownership": device.ownership,
                     },
                 )
             )

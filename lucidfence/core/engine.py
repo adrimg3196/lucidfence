@@ -466,6 +466,8 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
+                    management_mode=rep.management_mode,
+                    ownership=rep.ownership,
                     location_integrity=integrity,
                     provider_refs=dict(rep.raw.get("provider_refs") or {}),
                     posture_source=posture.get("posture_source"),
