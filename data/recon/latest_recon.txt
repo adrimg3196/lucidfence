@@ -1,4 +1,4 @@
---- recon repos 2026-08-20T18:42:36Z ---
+--- recon repos 2026-08-21T01:24:59Z ---
 === RECON REPOS (GitHub) — inspiracion video LucidFence ===
 
 1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
@@ -17,13 +17,13 @@
    AI-powered content production studio — 7 generators (trend tracker, card news, short-form video, meme ad, ad copy, ad creative, thumbnail) + browser-side video rendering engine (Canvas + WebCodecs + Remotion 4)
    https://github.com/mochunab/contents-maker
 
-5. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
-   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
-   https://github.com/Divyalakshmiyarram/video-script-generator
-
-6. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
+5. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
    A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
    https://github.com/StephenStepDude/video-script-generator
+
+6. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/Divyalakshmiyarram/video-script-generator
 
 Total referencias traidas: 7 (minimo 3)
 
@@ -41,7 +41,7 @@ Total referencias traidas: 7 (minimo 3)
   X: (no cookies X)
   Reddit: (no cookie Reddit)
 
---- recon social 2026-08-20T18:42:36Z ---
+--- recon social 2026-08-21T01:25:00Z ---
 === RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
 
 >>> YouTube: Applivery UEM
@@ -50,7 +50,9 @@ Total referencias traidas: 7 (minimo 3)
    (yt err: [Errno 2] No such file or directory: '/home/runner/.agent-reach-venv/bin/python')
 
 >>> Web (Jina): referencia agent-reach
-{"data":null,"code":403,"name":"AbuseAlleviationError","status":40305,"message":"Anonymous access to domain github.com blocked until Thu Aug 20 2026 19:39:09 GMT+0000 (Coordinated Universal Time) due to previous abuse found on https://github.com/dieg
+Title: GitHub - Panniantong/Agent-Reach: Give your AI agent eyes to see the entire internet. Read & search Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu — one CLI, zero API fees.
+URL Source: https://github.com/Panniantong/agent-reach
+Markdo
 
 >>> X (twitter-cli + cookies):
 (no cookies X)
