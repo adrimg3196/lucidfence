@@ -16,6 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lucidfence.core.cve import enrich_apps, app_cve_risk_score, CVE_DB  # noqa: E402
 from lucidfence.core.soar import evaluate_soar, SOARPlaybook, DEFAULT_PLAYBOOKS  # noqa: E402
+from lucidfence.core.engine import Engine  # noqa: E402
+from lucidfence.core.location_source import LocationReport  # noqa: E402
+from helpers import make_temp_engine  # noqa: E402
 
 
 def test_cve_enrich_flags_vulnerable_app():
@@ -116,3 +119,79 @@ def test_soar_executes_action_in_run_once():
     # the matching logic still tags actions as SOAR-originated in the engine log
     soar_actions = [a for a in eng._cycle_actions if a.get("soar")]
     assert soar_actions, "ninguna acción marcada como SOAR"
+
+    # CONTRATO human-gate (issue #208): el handoff destructivo debe ser su
+    # PROPIA entrada en la superficie por ciclo del SOC, con la acción REAL
+    # pendiente, y NO mutar la acción previa (locate/notify) poniéndole
+    # soar_handoff. Un handoff NO cuenta como ejecutado (executed/ok=False).
+    lock_handoff_records = [
+        a for a in eng._cycle_actions
+        if a.get("action") == "lock" and a.get("soar_handoff")
+    ]
+    assert lock_handoff_records, \
+        "el lock destructivo debe aparecer como su propio registro en _cycle_actions"
+    for r in lock_handoff_records:
+        assert r.get("executed") is False, f"handoff no debe contar como ejecutado: {r}"
+        assert r.get("ok") is False, f"handoff no debe contar como ok: {r}"
+        assert r.get("human_gate") is True, f"handoff debe llevar human_gate: {r}"
+    # Ninguna acción NO destructiva debe quedar etiquetada como el handoff.
+    mislabeled = [
+        a.get("action") for a in eng._cycle_actions
+        if a.get("soar_handoff") and a.get("action") not in eng.DESTRUCTIVE_ACTIONS
+    ]
+    assert not mislabeled, \
+        f"acciones no destructivas etiquetadas como handoff (bug #208): {mislabeled}"
+
+
+def test_soar_destructive_handoff_as_first_cycle_action():
+    """Regresión (issue #208, segundo defecto): si la acción destructiva es la
+    PRIMERA (y única) del ciclo — el caso más grave: CVE crítico + fuera de
+    perímetro sin notify/locate previo — el human-gate NO debe perderse en
+    silencio. Antes del fix, la guarda `if self._cycle_actions:` descartaba el
+    marcado cuando _cycle_actions estaba vacío, dejando cero rastro del handoff
+    en la superficie por ciclo del SOC.
+    """
+    import types
+    eng = make_temp_engine()
+    eng.adapter = types.SimpleNamespace(
+        execute=lambda dev, action, params, dry_run=False: {
+            "ok": True, "action": action, "dry_run": dry_run,
+        }
+    )
+    eng.routes = []
+
+    # Playbook que dispara DIRECTO a lock, sin acciones no destructivas previas.
+    lock_only_pb = SOARPlaybook(
+        id="soar-lock-only", name="lock-only",
+        condition={"field": "compliant", "op": "eq", "value": False},
+        actions=[{"action": "lock", "params": {"reason": "noncompliant"}}],
+    )
+
+    class _LockOnlyStore:
+        def all_playbooks(self):
+            return [lock_only_pb]
+
+    eng.soar_store = _LockOnlyStore()
+    rep = LocationReport(
+        device_id="d2", name="R2", platform="android",
+        lat=40.0, lng=-3.0, status="active", compliant=False,
+        apps=[], location_source="simulation",
+    )
+    eng.source = type("S", (), {"fetch": lambda self: [rep]})()
+    eng.run_once()
+
+    # El handoff debe aparecer como entrada propia en _cycle_actions, aunque sea
+    # la única acción del ciclo (antes del fix quedaba _cycle_actions vacío).
+    assert eng._cycle_actions, "el handoff destructivo no debe perderse del ciclo"
+    lock_handoff = [
+        a for a in eng._cycle_actions
+        if a.get("action") == "lock" and a.get("soar_handoff")
+    ]
+    assert lock_handoff, \
+        "lock (primera acción del ciclo) debe registrarse como handoff propio"
+    assert lock_handoff[0].get("executed") is False, "handoff no ejecutado"
+    assert lock_handoff[0].get("human_gate") is True, "handoff lleva human_gate"
+    # Y el evento de auditoría también está presente (no se pierde el trail).
+    audit = [e for e in eng.store.recent_events() if e.get("kind") == "soar_handoff"]
+    assert audit and audit[0].get("action") == "lock", \
+        "el evento soar_handoff de auditoría debe existir para el lock"
