@@ -617,14 +617,15 @@ def main() -> int:
         # ============ 9. Scaffolding CLI end-to-end =========================
         print("\n== P1.5 lucidfence adapter new (CLI real + pytest del generado) ==")
         fake = tmp / "fake-checkout"
-        (fake / "lucidfence" / "core").mkdir(parents=True)
-        shutil.copytree(REPO / "lucidfence" / "core" / "adapters", fake / "lucidfence" / "core" / "adapters",
+        # Copia el paquete `core` completo (no solo `adapters`): el adapter
+        # generado importa `lucidfence.core.adapters.base`, y el paquete
+        # `adapters` (su __init__) tira de `jamf`/`multiuem`/etc. El árbol
+        # falso debe contener esa clausura de imports o el test del adapter
+        # falla con ModuleNotFoundError en CI (reproducido tras #88/#89).
+        (fake / "lucidfence").mkdir(parents=True)
+        shutil.copytree(REPO / "lucidfence" / "core", fake / "lucidfence" / "core",
                         ignore=shutil.ignore_patterns("__pycache__"))
-        # __init__ vacíos: el árbol falso no incluye todo el paquete, y los
-        # __init__ reales importan módulos que aquí no existen (bug del arnés
-        # detectado en la primera pasada, no del producto).
-        for init in ("lucidfence/__init__.py", "lucidfence/core/__init__.py"):
-            (fake / init).write_text("", encoding="utf-8")
+        shutil.copy(REPO / "lucidfence" / "__init__.py", fake / "lucidfence" / "__init__.py")
         (fake / "tests").mkdir()
         shutil.copy(REPO / "tests" / "test_sdk_contract.py", fake / "tests" / "test_sdk_contract.py")
         cli = subprocess.run([sys.executable, str(REPO / "lucidfence" / "cli.py"), "adapter", "new", "validaqa"],
