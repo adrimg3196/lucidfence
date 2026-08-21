@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-08-21T04:50:54Z",
+  "generated_at": "2026-08-21T05:21:07Z",
   "mode": "simulation",
   "totals": {
     "devices": 18,
@@ -24,7 +24,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-08-21T04:50:53Z",
+      "generated_at": "2026-08-21T05:21:07Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -170,7 +170,7 @@
       "incidents": [],
       "cve_summary": {
         "apps_total": 12,
-        "vulnerable_apps": 9,
+        "vulnerable_apps": 11,
         "critical_cve_apps": 2,
         "high_cve_apps": 5,
         "demo": false,
@@ -179,30 +179,30 @@
           {
             "app": "google chrome",
             "version": "120.0.0",
-            "cve": "CVE-2024-0519",
-            "source": "local",
-            "severity": "high"
-          },
-          {
-            "app": "slack",
-            "version": "4.37.0",
-            "cve": "CVE-2023-24051",
-            "source": "local",
+            "cve": "CVE-2007-0045",
+            "source": "NVD",
             "severity": "medium"
           },
           {
-            "app": "zoom",
-            "version": "5.17.0",
-            "cve": "CVE-2024-31449",
-            "source": "local",
-            "severity": "high"
+            "app": "google chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2007-0048",
+            "source": "NVD",
+            "severity": "medium"
           },
           {
-            "app": "whatsapp",
-            "version": "2.24.1",
-            "cve": "CVE-2022-36934",
+            "app": "google chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2008-4340",
+            "source": "NVD",
+            "severity": "medium"
+          },
+          {
+            "app": "google chrome",
+            "version": "120.0.0",
+            "cve": "CVE-2024-0519",
             "source": "local",
-            "severity": "critical"
+            "severity": "high"
           }
         ]
       },
@@ -233,7 +233,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-08-21T04:50:53Z",
+      "generated_at": "2026-08-21T05:21:07Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -392,16 +392,16 @@
           {
             "app": "Slack",
             "version": "4.30",
-            "cve": "CVE-2023-24051",
-            "source": "local",
+            "cve": "CVE-1999-1186",
+            "source": "NVD",
             "severity": "medium"
           },
           {
-            "app": "Adobe Reader",
-            "version": "1.2.3",
-            "cve": "CVE-2023-26369",
-            "source": "local",
-            "severity": "critical"
+            "app": "Slack",
+            "version": "4.30",
+            "cve": "CVE-1999-0298",
+            "source": "NVD",
+            "severity": "medium"
           }
         ]
       },
@@ -433,7 +433,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-08-21T04:50:54Z",
+      "generated_at": "2026-08-21T05:21:07Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
@@ -592,16 +592,16 @@
           {
             "app": "Slack",
             "version": "4.30",
-            "cve": "CVE-2023-24051",
-            "source": "local",
+            "cve": "CVE-1999-1186",
+            "source": "NVD",
             "severity": "medium"
           },
           {
-            "app": "Adobe Reader",
-            "version": "1.2.3",
-            "cve": "CVE-2023-26369",
-            "source": "local",
-            "severity": "critical"
+            "app": "Slack",
+            "version": "4.30",
+            "cve": "CVE-1999-0298",
+            "source": "NVD",
+            "severity": "medium"
           }
         ]
       },
@@ -949,7 +949,7 @@
   ],
   "cve_summary": {
     "apps_total": 12,
-    "vulnerable_apps": 9,
+    "vulnerable_apps": 11,
     "critical_cve_apps": 2,
     "high_cve_apps": 5,
     "demo": false,
@@ -958,30 +958,30 @@
       {
         "app": "google chrome",
         "version": "120.0.0",
-        "cve": "CVE-2024-0519",
-        "source": "local",
-        "severity": "high"
-      },
-      {
-        "app": "slack",
-        "version": "4.37.0",
-        "cve": "CVE-2023-24051",
-        "source": "local",
+        "cve": "CVE-2007-0045",
+        "source": "NVD",
         "severity": "medium"
       },
       {
-        "app": "zoom",
-        "version": "5.17.0",
-        "cve": "CVE-2024-31449",
-        "source": "local",
-        "severity": "high"
+        "app": "google chrome",
+        "version": "120.0.0",
+        "cve": "CVE-2007-0048",
+        "source": "NVD",
+        "severity": "medium"
       },
       {
-        "app": "whatsapp",
-        "version": "2.24.1",
-        "cve": "CVE-2022-36934",
+        "app": "google chrome",
+        "version": "120.0.0",
+        "cve": "CVE-2008-4340",
+        "source": "NVD",
+        "severity": "medium"
+      },
+      {
+        "app": "google chrome",
+        "version": "120.0.0",
+        "cve": "CVE-2024-0519",
         "source": "local",
-        "severity": "critical"
+        "severity": "high"
       }
     ]
   },
