@@ -42,6 +42,16 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
 | [`operations/config_as_code.md`](operations/config_as_code.md) | Políticas y geocercas como código: `lucidfence apply` (valida, diff, what-if) |
 
+## Comparativas (SEO / entrada no-marca)
+
+Páginas capability-by-capability, citando doc interna, para quien busca
+"alternativa a Intune/Jamf" o "geofencing open source":
+
+| Documento | Contenido |
+| --- | --- |
+| [`comparisons/lucidfence-vs-intune.md`](comparisons/lucidfence-vs-intune.md) | LucidFence vs Microsoft Intune (capacidad por capacidad, claims co-firmados CTO) |
+| [`comparisons/lucidfence-vs-jamf.md`](comparisons/lucidfence-vs-jamf.md) | LucidFence vs Jamf Pro (capacidad por capacidad, claims co-firmados CTO) |
+
 ## Integraciones
 
 | Documento | Contenido |
