@@ -6,15 +6,17 @@ Cada vez más CISOs y MSPs nos hacen la misma pregunta: "¿Cómo geofenceo mi fl
 
 Los MDM nativos resuelven el geofencing enviando la ubicación a su propia nube. Para un CISO eso es un problema de cumplimiento, no una feature.
 
-Hoy abrimos LucidFence (Apache-2.0): geofencing multi-MDM open-source con un Risk Engine explicable.
+Hoy abrimos LucidFence (Apache-2.0): geofencing multi-UEM open-source con un Risk Engine explicable.
 
-Tres cosas lo diferencian:
+Cuatro cosas lo diferencian:
 
 1. Soberanía local-first. 100% on-prem, 0 exfiltración de datos de ubicación. Tus coordenadas no abandonan tu perímetro.
 
 2. Riesgo que se explica. Cada dispositivo recibe un score 0-100 acompañado de la razón exacta. Nuestro "evidence gate" impide que un hallazgo cuente sin una señal real que lo respalde: sin prueba, sin score.
 
-3. Agnóstico por diseño. Conectas Applivery, Intune o Jamf vía adapters (MDMAdapter) sin reemplazar tu stack actual.
+3. Multi-UEM real, con la matriz honesta (crítico para no incumplir #110). Multi-UEM simultáneo por tenant: Applivery live por defecto; Intune/Jamf en modo live al conectar tu token (simulación sin token). Cero exfiltración. No somos "el MDM nº 15": somos el plano de control neutral que se sienta SOBRE el UEM que ya tienes, vía adapters (MDMAdapter).
+
+4. SOAR declarativo, ya verificado en runtime. 4 playbooks frontline — CVE crítico, CVE + fuera de perímetro, no-conforme + fuera, EPSS alto — con auditoría por dispositivo (matched_fields). Y salida hacia tu Splunk/Cortex XSOAR vía webhook BYO, firmado HMAC-SHA256 por tenant (X-LucidFence-Signature), dirigido al SIEM que ya uses.
 
 El core es OSS; la capa Enterprise (SOAR, SSO, escala) es on-prem cerrada. El OSS genera inbound; el servicio gestionado es la captura.
 

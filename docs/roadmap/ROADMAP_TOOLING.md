@@ -9,8 +9,8 @@ PDF olvidado: es la fuente de verdad de `roadmap.json`, se auto-reporta con
 dashboard lo sirve) y se mejora en bucle con `python3 loop_improve.py` (el
 `/loop` de Mixture-of-Agents).
 
-> Estado base (20-jul-2026): LucidFence v1.2.0 — adapters Applivery/Intune/Jamf
-> vivos, engine con risk explicable + CVE (NVD) + SOAR + incidents + workflows,
+> Estado base (20-jul-2026): LucidFence v1.2.0 — adapters Applivery (live por defecto) + Intune/Jamf
+> (live al conectar token del cliente, simulación sin token), engine con risk explicable + CVE (NVD) + SOAR + incidents + workflows,
 > loop de mejora en fase temprana (L1, report-only).
 >
 > **Completado 21-jul-2026:** 18/18 features cerradas con evidencia en

@@ -38,6 +38,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install build twine
 
+      # Gate de regresión (t_69acb514): las 4 invariantes mecánicas de release
+      # deben cumplirse antes de `twine upload`. El secreto (PYPI_TOKEN) es WARN.
+      - name: Publish preflight gate (mecánicas de release; debe exit 0)
+        run: python3 scripts/release_preflight.py --repo "$GITHUB_WORKSPACE" --json
+
       - name: Build package
         run: python -m build
 

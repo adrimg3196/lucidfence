@@ -17,11 +17,14 @@ El riesgo de un dispositivo no debería ser una caja negra. LucidFence da un sco
 **Tuit 4 — Moat 1b: evidence gate (anti-overclaim)**
 Regla de oro de LucidFence: un hallazgo solo cuenta si lo respalda una señal real. Sin señal, no hay score. Evidence gate: anti-overclaim por diseño, no por promesa.
 
-**Tuit 5 — Moat 2: multi-MDM agnóstico**
-Applivery, Intune, Jamf… cada MDM encierra tus datos. LucidFence es agnóstico vía adapters (MDMAdapter). Conectas el que tengas hoy sin reventar tu stack.
+**Tuit 5 — Moat 2: multi-UEM, con la matriz honesta (sin reincidir en #110)**
+Applivery live por defecto; Intune/Jamf en modo live al conectar tu token (simulación sin token). Cero exfiltración. Agnóstico vía adapters (MDMAdapter): conectas el UEM que ya tienes sin reventar tu stack.
 
-**Tuit 6 — Modelo open-core + a quién va**
+**Tuit 6 — Moat 3: SOAR declarativo ya en runtime**
+Y no solo alerta: SOAR declarativo ya en runtime. 4 playbooks frontline (CVE crítico, CVE+fuera de perímetro, no-conforme+fuera, EPSS alto) + auditoría por dispositivo (matched_fields). Webhook BYO a tu Splunk/Cortex XSOAR, firmado HMAC-SHA256 por tenant (X-LucidFence-Signature).
+
+**Tuit 7 — Modelo open-core + a quién va**
 Open-core Apache-2.0: el core de geofencing + Risk Engine es OSS. La capa Enterprise (SOAR/SSO/escala) es on-prem cerrada. Hecho para MSPs y CISOs que quieren soberanía.
 
-**Tuit 7 — Anti-persona + CTA contributors**
+**Tuit 8 — Anti-persona + CTA contributors**
 No es para pentesters: eso es T3MP3ST. LucidFence es para quien opera flotas MDM y necesita geofencing explicable y local. Abrimos el repo buscando MSPs y devs MDM 🔗 github.com/adrimg3196/lucidfence
