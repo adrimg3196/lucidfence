@@ -3,6 +3,21 @@
 This file is the living state of the improvement loop. It is updated by the
 maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots.
 
+## MODO DRENAJE (decisión CEO, tarea kanban t_df367332 — 2026-08-21)
+
+- **Mandato:** throttle de la producción de PRs hasta que la cola abierta baje de 6.
+- **Estado:** ACTIVO. Las Routines productoras (Admin-value, Product Manager, Housekeeper,
+  Tendencias, Growth, Roadmap, Deps, Lanzamiento, Centinela) NO deben abrir nuevas PRs
+  mientras `gh pr list --state open` > 6. El Guardián (dueño del merge-train #118) es el
+  único que drena; el resto queda en pausa de apertura.
+- **Resultado del drenaje (2026-08-21):** 19 PRs abiertas → **5 abiertas**
+  (≤6 ✅). Mergeada #209 (cierra #118, verde). Cerradas 13 zombies Jules/zero-nightly
+  (jul-ago, CONFLICTING 3+ semanas, ficheros ya eliminados de main). Quedan vivas:
+  #145 (draft verde, diseño night-shift), #175/#196/#203/#204 (recientes, CONFLICTING →
+  rebase a cargo del CTO/Guardián, NO otro loop).
+- **Regla de reanudación:** productor vuelve a abrir PRs solo cuando open ≤ 6 y las 4
+  recientes estén drenadas (merge/rebase o cierre con evidencia).
+
 ## Loop admin-value (patrón: `loop-admin-value.md`) — updated 2026-08-15
 
 - **Level:** L2 (asistido; 1 PR/run con gate QA; gates humanos intactos)
