@@ -4,6 +4,17 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
+  de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
+  `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta
+  conflictos crónicos del merge train (#118, tarea t_e207227e).
+- gitops/repo-higiene: `lucidfence/plugins/adapters/index.json` ya no genera
+  conflictos de merge manuales: se regenera desde los `.py` mergeados vía el
+  driver custom `regen-adapter-index` (ver CONTRIBUTING.md → "Setup del repo").
+  Antes producía conflictos y hashes obsoletos que rompían `test_adapter_marketplace_manifest_is_hash_verified`.
+- feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
+- feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
+
 ## [1.6.0] - 2026-08-18
 
 ### Added
@@ -143,7 +154,7 @@ All notable changes to LucidFence are documented here.
 - docs: add docs/operations/RUNBOOK.md operator playbook (Bounty #19, WS5)
 - docs(roadmap): enlaza milestones GitHub v1.3.0-v2.1.0 (roadmap ejecutable)
 - docs: roadmap anual 2026-2027 (Q3'26→Q2'27) + social preview asset
-- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf live
+- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf as live-capable (live when client token connected, mock/simulation otherwise)
 - docs: link desktop preview download
 - docs(vitrina): documenta tap Homebrew (brew install adrimg3196/lucidfence resuelve)
 

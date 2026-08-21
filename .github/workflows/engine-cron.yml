@@ -32,14 +32,32 @@ jobs:
           CLOUD_PUBLISH: "1"
         run: |
           python -m lucidfence.core.cloud_publisher --cycles "${{ github.event.inputs.cycles || '1' }}"
-      - name: Commitear estado al repo (lo sirve Pages)
+      - name: Publicar estado a la rama cloud-state (no a main)
+        # El snapshot vivo se publica en una rama dedicada, NO en main: así el
+        # historial de main queda limpio (era ~1 commit cada 15 min). La vitrina
+        # y los health-checks leen el raw de refs/heads/cloud-state. Rama efímera
+        # de datos, estilo gh-pages; su historial no se lee.
         run: |
           git config user.name "lucidfence-cloud[bot]"
           git config user.email "cloud@lucidfence.local"
-          git add data/cloud_state.json
+          cp data/cloud_state.json "$RUNNER_TEMP/cloud_state.json"
+          # El run del publisher deja sucios ficheros trackeados de data/ y el
+          # checkout de rama se niega con el arbol sucio. El runner es efimero
+          # y el snapshot ya esta copiado: descartar todo es seguro.
+          git checkout -- .
+          git fetch origin cloud-state --depth 1 || true
+          if git show-ref --verify --quiet refs/remotes/origin/cloud-state; then
+            git checkout -B cloud-state origin/cloud-state
+          else
+            git checkout --orphan cloud-state
+            git rm -rf --cached . >/dev/null 2>&1 || true
+          fi
+          mkdir -p data
+          cp "$RUNNER_TEMP/cloud_state.json" data/cloud_state.json
+          git add -f data/cloud_state.json
           if git diff --cached --quiet; then
             echo "Sin cambios en cloud_state.json"
           else
-            git commit -m "cloud: actualizar estado en vivo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
-            git push
+            git commit -m "cloud: estado en vivo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git push origin cloud-state
           fi

@@ -82,7 +82,7 @@ def main() -> int:
         # ============ 1. Webhooks multi-canal: entrega HTTP REAL + firma ====
         print("\n== P0.3 Webhooks (entrega HTTP real al receptor local) ==")
         from lucidfence.core.notifier import (IncidentFanoutNotifier, NtfyNotifier,
-                                              SignedWebhookNotifier, build_incident_notifiers)
+                                              SignedWebhookNotifier)
         incident = {"id": "inc-rt-1", "title": "Salida de geocerca (runtime QA)",
                     "severity": "high", "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq"}
         signed = SignedWebhookNotifier("http://127.0.0.1:9099/hook", secret="qa-secret")
@@ -136,7 +136,7 @@ def main() -> int:
 
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
-        r1 = eng.run_once()
+        eng.run_once()
         states = eng.store.snapshot()
         dev_id, st = next(iter(states.items()))
         has_field = isinstance(st.location_integrity, dict)
@@ -319,6 +319,87 @@ def main() -> int:
               s == 200 and cres.get("ok") is True and cres.get("action") == "set_compliance",
               f"http={s}, adapter={cres.get('adapter')}, ok={cres.get('ok')}")
 
+        # ---- Enrutado declarativo consistente (issue #205) -----------------
+        # El claim: el MISMO dispositivo Apple recibe el MISMO comando por las
+        # dos rutas de dispatch (single-provider y multi-UEM), y el enrutado
+        # cambia el transporte sin tocar un solo guardarraíl.
+        from lucidfence.core.multiuem import (MultiUEMOrchestrator, ProviderBinding,
+                                              ProviderCapabilities)
+        from lucidfence.core.state_store import DeviceState
+
+        ddm_calls: list[tuple] = []
+
+        class _RTAdapter:
+            name = "jamf"
+            supports_ddm = True
+
+            def execute(self, device, action, params, dry_run=False):
+                ddm_calls.append((action, dry_run))
+                return {"ok": True, "adapter": self.name, "action": action,
+                        "dry_run": dry_run,
+                        "device_id": getattr(device, "device_id", "")
+                        or (device.get("device_id", "") if isinstance(device, dict) else "")}
+
+        def _rt_engine(enf, multi=False):
+            e = Engine({"mode": "simulation", "data_dir": str(tmp / f"eng-ddm-{len(RESULTS)}-{multi}"),
+                        "autostart": False, "sim_seed_path": "data/fleet_seed.json",
+                        "action_cooldown_seconds": 0, "enforcement": enf})
+            e.adapter = _RTAdapter()
+            e.orchestrator = MultiUEMOrchestrator([ProviderBinding(
+                name="jamf",
+                capabilities=ProviderCapabilities(
+                    actions=frozenset({"lock", "wipe", "apply_ddm"})),
+                fetch_devices=lambda: [],
+                execute_action=lambda rid, a, p, d: e.adapter.execute(
+                    {"device_id": rid}, a, p, d),
+            )]) if multi else None
+            return e
+
+        rt_params = {"policy": {"id": "rt-geofence"},
+                     "profile_url": "https://mdm.example.com/p.mobileconfig"}
+        rt_enf = {"mode": "enforce", "live_actions": ["lock"]}
+        mac = DeviceState(device_id="rt-mac", name="Mac DDM", platform="macos",
+                          os_version="14.5", fence_state="outside")
+        mac_multi = DeviceState(device_id="rt-mac", name="Mac DDM", platform="macos",
+                                os_version="14.5", fence_state="outside",
+                                provider_refs={"jamf": "jamf-rt"})
+        r_single = _rt_engine(rt_enf).run_command(mac, "lock", rt_params)
+        r_multi = _rt_engine(rt_enf, multi=True).run_command(mac_multi, "lock", rt_params)
+        check("mismo dispositivo Apple, misma vía por las dos rutas de dispatch",
+              r_single.get("enforcement") == r_multi.get("enforcement") == "declarative"
+              and r_single.get("action") == r_multi.get("action") == "apply_ddm"
+              and r_single.get("requested_action") == "lock",
+              f"single={r_single.get('enforcement')}/{r_single.get('action')}, "
+              f"multi={r_multi.get('enforcement')}/{r_multi.get('action')}")
+
+        viejo = DeviceState(device_id="rt-old", name="iPhone viejo", platform="ios",
+                            os_version="12.4", fence_state="outside")
+        r_old = _rt_engine(rt_enf).run_command(viejo, "lock", rt_params)
+        r_sin_perfil = _rt_engine(rt_enf).run_command(mac, "lock", {})
+        check("sin soporte DDM o sin perfil aportado se mantiene imperativo",
+              r_old.get("enforcement") == "imperative" and r_old.get("action") == "lock"
+              and r_sin_perfil.get("enforcement") == "imperative",
+              f"os_bajo={r_old.get('action')}, sin_perfil={r_sin_perfil.get('action')}")
+
+        ddm_calls.clear()
+        r_obs = _rt_engine({"mode": "observe"}).run_command(mac, "lock", rt_params)
+        r_wipe = _rt_engine(rt_enf).run_command(mac, "wipe", rt_params)
+        check("el enrutado declarativo no relaja ni un guardarraíl "
+              "(observe en dry-run, wipe con doble llave)",
+              r_obs.get("dry_run") is True and ddm_calls[:1] == [("apply_ddm", True)]
+              and r_wipe.get("blocked") is True
+              and r_wipe.get("error_type") == "wipe_not_allowed",
+              f"observe={r_obs.get('dry_run')}/{ddm_calls[:1]}, "
+              f"wipe_blocked={r_wipe.get('blocked')}/{r_wipe.get('error_type')}")
+
+        from lucidfence.saas.providers import catalog as _uem_catalog
+        cat_decl = {e["name"]: e.get("declarative", {}) for e in _uem_catalog()}
+        check("el catálogo de UEMs deriva la capacidad declarativa del adapter real",
+              cat_decl.get("jamf", {}).get("ddm") is True
+              and cat_decl.get("windows_conformidad", {}).get("dsc") is True
+              and cat_decl.get("fleet", {}).get("supported") is False,
+              f"jamf={cat_decl.get('jamf')}, fleet={cat_decl.get('fleet')}")
+
         # ============ 3c. Multi-UEM: registrar un provider en vivo ===========
         # El flujo Admin-value de flota mixta: registrar un UEM (con su etiqueta
         # de segmento) con engine:config y verificar que el listado lo refleja.
@@ -462,6 +543,14 @@ def main() -> int:
         check("cerca sin dispositivos aparece en fences_vacias",
               s == 200 and "qa-vacia" in vacias, f"http={s}, fences_vacias={vacias}")
         http_req("DELETE", "/api/fences/qa-vacia", cookie=cookie)
+
+        # umbral de lost-sheep configurable por llamada, con rechazo honesto
+        s, covq, _ = http_req("GET", "/api/coverage?stale_after_s=60", cookie=cookie)
+        s2, err, _ = http_req("GET", "/api/coverage?stale_after_s=abc", cookie=cookie)
+        check("stale_after_s por query se aplica (60) y el invalido da 400",
+              s == 200 and ((covq or {}).get("resumen") or {}).get("stale_after_s") == 60
+              and s2 == 400,
+              f"http={s}, stale_after_s={((covq or {}).get('resumen') or {}).get('stale_after_s')}, invalido={s2}")
 
         # dispositivo ciego inyectado en el estado REAL del engine local: sin
         # coordenadas -> sin_senal; sin last_seen -> sin_reportar con motivo.

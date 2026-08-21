@@ -6,6 +6,9 @@ enseña el negativo de la configuración actual del tenant, calculado en local
 sobre estado ya existente (nada sale de la máquina). Requiere sesión con
 `device:read` y responde solo sobre la organización activa.
 
+**Parámetro:** `GET /api/coverage?stale_after_s=N` ajusta el umbral de
+"sin reportar" por llamada (segundos, 60..2592000; inválido → 400).
+
 ## Qué enseña
 
 | Lista | Punto ciego | Qué significa |

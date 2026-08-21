@@ -38,26 +38,8 @@ jobs:
       - name: Instalar deps
         run: python -m pip install -r requirements.txt
 
-      - name: Verificar vitrina pública
-        run: |
-          set -euo pipefail
-          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
-          TIMEOUT=30
-          echo "Checking vitrina: $URL"
-          if curl -fsS --max-time "$TIMEOUT" -o /dev/null "$URL"; then
-            echo "OK: vitrina reachable"
-          else
-            echo "::error::Vitrina NO reachable: $URL"
-            echo "vitrina_down=true" >> $GITHUB_ENV
-          fi
-
-      - name: Validar estructura de cloud_state.json
-        run: |
-          set -euo pipefail
-          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
-          TIMEOUT=30
-          curl -fsS --max-time "$TIMEOUT" "$URL" | python3 -c "import json, sys; data=json.load(sys.stdin); required=['devices','fences','tenants','service','generated_at']; missing=[k for k in required if k not in data]; assert not missing, f'Faltan: {missing}'"
-          echo "OK: estructura validada"
+      - name: Verificar vitrina (URL + esquema, fuente única)
+        run: python3 scripts/check_vitrina.py
 
       - name: Correr tests del repo (runner honesto)
         run: |

@@ -40,3 +40,15 @@ def test_release_version_file_matches_pyproject() -> None:
     # abortaría la publicación — mejor pararlo aquí, antes del merge.
     with open(os.path.join(ROOT, ".release-version"), encoding="utf-8") as fh:
         assert fh.read().strip() == _pyproject_version()
+
+
+def test_package_version_matches_pyproject() -> None:
+    # lucidfence.__version__ es lo que lee `import lucidfence; lucidfence.__version__`
+    # y lo que termina en el metadata del wheel. Antes decía 1.3.1 con el repo en
+    # 1.6.0 (3 minors por detrás) y ningún test lo atrapaba. Este test cierra el
+    # agujero: si __init__ diverge de pyproject, el CI lo bloquea.
+    from lucidfence import __version__ as pkg_version
+    assert pkg_version == _pyproject_version(), (
+        f"lucidfence.__version__={pkg_version!r} != pyproject {_pyproject_version()!r}: "
+        "alinear __init__.py antes de taggear una release"
+    )

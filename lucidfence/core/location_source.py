@@ -119,6 +119,12 @@ class LocationReport:
     enrolled_at: Optional[str] = None
     device_tag: Optional[str] = None
     geofence_compliance: Optional[dict] = None
+    # --- declarative-eligibility signals (Issue #88) ---
+    # Carried verbatim from the UEM/EMM response via NormalizedDevice. None
+    # = the adapter did not report it (never inferred). Feed the declarative
+    # gate (core.declarative) via the engine's action routing.
+    management_mode: Optional[str] = None
+    ownership: Optional[str] = None
 
 
 class LiveLocationSource:

@@ -19,8 +19,9 @@ lo demás.
 
 | Documento | Contenido |
 | --- | --- |
-| [`architecture/SPEC.md`](architecture/SPEC.md) | Especificación del repositorio y sus contratos |
-| [`architecture/PRODUCT_SPEC.md`](architecture/PRODUCT_SPEC.md) | Especificación de producto |
+| [`architecture/CONSTITUTION.md`](architecture/CONSTITUTION.md) | Constitución: principios no negociables del proyecto (suprema) |
+| [`architecture/SPEC.md`](architecture/SPEC.md) | Especificación as-built del repositorio y sus contratos |
+| [`architecture/PRODUCT_SPEC.md`](architecture/PRODUCT_SPEC.md) | Spec histórica de 1.1 (config local, AI opcional, MCP) |
 | [`architecture/AI_AND_MCP.md`](architecture/AI_AND_MCP.md) | Proveedor AI opcional y servidor MCP |
 | [`architecture/AUTONOMOUS_GEOFENCING_COMPANY.md`](architecture/AUTONOMOUS_GEOFENCING_COMPANY.md) | Modelo de compañía autónoma gobernada |
 | [`architecture/THREAT_MODEL.md`](architecture/THREAT_MODEL.md) | Modelo de amenazas |
@@ -44,6 +45,8 @@ lo demás.
 | [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
 | [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
 | [`operations/config_as_code.md`](operations/config_as_code.md) | Políticas y geocercas como código: `lucidfence apply` (valida, diff, what-if) |
+| [`operations/apple_ddm.md`](operations/apple_ddm.md) | Apple DDM: enforcement declarativo de geocercas |
+| [`operations/windows_dsc.md`](operations/windows_dsc.md) | Windows PowerShell DSC: matriz de soporte y despliegue |
 
 ## Integraciones
 
@@ -56,7 +59,16 @@ lo demás.
 | [`integrations/MULTI_UEM.md`](integrations/MULTI_UEM.md) | Registrar una flota mixta (Applivery móviles + Fleet portátiles) desde el dashboard |
 | [`integrations/IOS_ONDEVICE.md`](integrations/IOS_ONDEVICE.md) | Desplegar el agente iOS de geocercas on-device por MDM (config de despliegue, sin exfiltrar ubicación) |
 | [`integrations/LOCATION_MATRIX.md`](integrations/LOCATION_MATRIX.md) | Matriz honesta: qué ubicación da cada UEM de verdad |
+| [`integrations/NETWORK_LOCATION.md`](integrations/NETWORK_LOCATION.md) | Geofencing lógico por red para portátiles sin GPS |
 | [`integrations/OSQUERY.md`](integrations/OSQUERY.md) | Postura local y multiplataforma con osquery |
+
+## Adapters y contribución
+
+| Documento | Contenido |
+| --- | --- |
+| [`contributing/new-adapter-guide.md`](contributing/new-adapter-guide.md) | Guía para contribuir un adaptador UEM nuevo |
+| [`adapters/FLEET.md`](adapters/FLEET.md) | Referencia técnica del adapter Fleet |
+| [`adapters/GENERIC_HTTP.md`](adapters/GENERIC_HTTP.md) | Fuente HTTP genérica: bring-your-own UEM/MDM por mapeo declarativo |
 
 ## Roadmap
 
@@ -64,9 +76,11 @@ lo demás.
 
 ## Interno
 
-`internal/` (kanban, estado, loop, plan y revisiones) y `gtm/` (go-to-market)
-son material de trabajo del equipo: se excluyen del tarball de release vía
-`.gitattributes`.
+`internal/` (kanban, estado, loop, plan, revisiones y la plantilla de
+mini-spec SDD [`internal/product/spec-template.md`](internal/product/spec-template.md))
+y `gtm/` (go-to-market) son material de trabajo del equipo: se excluyen del
+tarball de release vía `.gitattributes`. `agent-upgrade/`, `web-reach/`,
+`analysis/` y `assets/` son tooling y material auxiliar del bench.
 
 ## Contratos para agentes
 

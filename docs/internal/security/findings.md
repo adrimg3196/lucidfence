@@ -4,6 +4,17 @@ Formato por entrada: fecha | severidad | clase (OWASP) | resumen | PoC (petició
 
 No se borra ninguna entrada: se cambia su estado y se enlaza el fix. La PoC es descriptiva (cómo reproducir contra el localhost propio), nunca un exploit armado contra producción.
 
+> **Proceso de divulgación (responsible disclosure).** Este fichero es PÚBLICO
+> en GitHub (`docs/internal/` no es privado). Por tanto: **las entradas en estado
+> `open` NO publican pasos de reproducción** — solo el qué (clase OWASP), el
+> dónde (ruta/función) y la severidad. Los pasos exactos de reproducción se
+> detallan **únicamente tras pasar la entrada a `fixed`** (con regresión que lo
+> cierra) o `accepted` (con justificación). Publicar el mapa de reproducción de
+> una vuln viva invertiría la divulgación responsable; redactar la receta hasta
+> el fix no es ocultar, es el orden correcto. Toda entrada con PoC descriptiva
+> abajo está `fixed`/`accepted`: su receta apunta a un control ya en su sitio y
+> respaldado por test.
+
 ## Sembrados desde la auditoría Strix previa (PR #45, 2026-07-28)
 
 Ocho hallazgos ya identificados con metodología Strix/OWASP sobre los trust
@@ -37,5 +48,42 @@ reconfirmar líneas actuales.
   riesgo (E TLS, el default ya valida). Ningún hallazgo crítico nuevo. Batería
   runtime 28/28; suite 485 pass. Regresiones en
   `tests/test_security_findings_strix.py` (8 tests, uno por finding vivo).
+
+- **2026-08-20 (Privacy Engineer, revisión de divulgación)** — segunda
+  verificación independiente de los 8 findings Strix contra el código HOY (no
+  contra el run-log): **8/8 confirmados como `fixed`/`accepted` en el código
+  vivo**, ninguno queda `open`. Evidencia contrastada línea a línea:
+  - **A** (settings/run-once authz+CSRF) → `fixed`: gate `require(self)` en
+    `saas_server.py:1268` cubre todo el bloque de settings; cada ruta exige
+    `AuthStore.can(..., "engine:config")` (p.ej. `:1924-1925`); cookie de sesión
+    `SameSite=Strict; HttpOnly` (`saas_server.py:701`).
+  - **B** (settings/test proxy de token) → `fixed`: `POST /api/settings/test`
+    exige `engine:config` (`saas_server.py:1957-1958`); no invocable sin sesión.
+  - **C** (Link header SSRF / robo de token) → `fixed`: `_next_from_link`
+    (`location_source.py:230`) solo sigue el `Link` si `_same_origin` (scheme+
+    host+port) contra `_api_base` (`location_source.py:49-70`, `:240`). Test
+    `test_link_pagination_refuses_foreign_host`.
+  - **D** (webhook SSRF) → `fixed (parcial, by-design)`: `_default_http_post`
+    (`notifier.py:48`) rechaza esquema ≠ http/https, host vacío y
+    credential-smuggling `user:pass@` (`:59`); HTTPS con
+    `ssl.create_default_context()` (`:76`). IPs internas NO se bloquean a
+    propósito (BYOI self-hosted: SIEM interno legítimo) — riesgo aceptado y
+    documentado en el propio código. Test `test_webhook_rejects_dangerous_url`.
+  - **E** (TLS explícito en `location_source`) → `accepted`: el default de
+    `urlopen` valida cadena+host (PEP 476); 0 desactivadores en el repo. Además
+    el POST HTTPS del notifier usa contexto por defecto explícito. Cosmético.
+  - **F** (device_id sin escapar) → `fixed`: `quote(str(device_id), safe="")` en
+    los 4 sitios: `location_source.py:376`, `applivery.py:117`, `jamf.py:371`,
+    `fleet.py:124`. Tests `test_location_source_quotes_device_id`,
+    `test_fleet_adapter_quotes_device_id`.
+  - **G** (lat/lng geocercas) → `fixed`: `geo.valid_coord` rechaza NaN/inf y
+    acota rango (`geo.py:16-33`); `fences.py` falla-cerrado vía `point_from`.
+    Tests `test_fence_rejects_out_of_range_and_nan`, `..._accepts_valid...`.
+  - **H** (waypoints de rutas) → `fixed`: `routes.load_routes` valida cada
+    waypoint con `point_from` y omite la ruta corrupta sin abortar el resto
+    (`routes.py:76-82`). Test `test_route_with_malformed_waypoint_is_skipped_others_load`.
+  Regresión `tests/test_security_findings_strix.py` 8/8 pass (ejecutada hoy).
+  Como las 8 están `fixed`/`accepted`, sus PoC descriptivas quedan publicadas
+  conforme al proceso de arriba; no hubo ninguna `open` que redactar.
 
 (el primer ciclo corre el jueves)

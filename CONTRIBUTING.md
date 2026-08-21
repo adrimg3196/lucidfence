@@ -27,6 +27,46 @@ python3 saas_server.py          # :8765
 
 Dashboard: `http://localhost:8765` → `static/dashboard.html`.
 
+## Setup del repo (merge de fricción-cero)
+
+El `.gitattributes` declara drivers de merge que eliminan conflictos crónicos
+del merge train (ver tarea t_e207227e / issue #118). Para que funcionen en tu
+máquina, registra el driver custom **una sola vez** tras clonar:
+
+```bash
+# Driver que regenera el índice de adapters desde los .py mergeados.
+# Evita conflictos en lucidfence/plugins/adapters/index.json (JSON con sha256
+# verificados por tests/test_annual_roadmap.py: regenerar, no unir a mano).
+git config --local merge.regen-adapter-index.name  "regenerate adapter index"
+git config --local merge.regen-adapter-index.driver \
+  'python3 scripts/build_adapter_index.py || true'
+```
+
+Los `merge=union` (logs append-only de los loops: `loop-run-log.md`,
+`release/history.md`, `trends/signals.md`, `security/findings.md`,
+`growth/experiments.md`, `growth/mentions.md`) son drivers **integrados** de git
+no necesitan registro. `data/*.jsonl` es append-only pero está gitignored, así
+que no entra en merges.
+
+> Nota: `STATE.md` es **reescrito** por los loops, no append → no lleva
+> `merge=union` a propósito (un union dejaría basura duplicada).
+
+### Alcance de los drivers (importante)
+
+- `merge=union` es un driver **integrado de git** y GitHub sí lo aplica en el
+  merge server-side → los 6 logs append-only no generan conflictos ni en local
+  ni en el merge train de GitHub (#118).
+- `merge=regen-adapter-index` es un driver **custom** (`cmd`): git lo ejecuta en
+  merge **local**, pero **GitHub NO lo corre en el merge server-side**. Por tanto,
+  en el merge train de GitHub el `index.json` puede seguir dando conflicto si dos
+  PRs lo tocan a la vez (igual que antes). El driver custom solo alivia merges
+  locales; no es la solución para el tren de GitHub.
+- **Solución duradera para el merge train (#118):** un job CI *post-merge* que
+  regenere `lucidfence/plugins/adapters/index.json` sobre `main` tras cada merge
+  (o que falle el merge si el índice quedó obsoleto). Así el hash verificado por
+  `tests/test_annual_roadmap.py` siempre coincide. Ver tarea de seguimiento
+  pendiente de crear.
+
 ## Adapter UEM nuevo
 
 TODO: completar la guía de plugin con el contrato de adapter (qué methodos/estructuras espera el engine, cómo se registra, qué data retorna, cómo se verifica). Mientras tanto, mira `lucidfence/core/adapters/` existentes como referencia.

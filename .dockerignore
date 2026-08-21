@@ -4,6 +4,7 @@
 
 .git
 .gitignore
+.worktrees   # worktrees locales: checkouts de otras ramas, nunca en la imagen
 .skills-refs
 .venv
 venv
