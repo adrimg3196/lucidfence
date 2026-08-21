@@ -5,9 +5,9 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config_loader  # noqa: E402
-from saas.tenant import TenantStore  # noqa: E402
-from core.engine import Engine  # noqa: E402
+from lucidfence.core import config_loader  # noqa: E402
+from lucidfence.saas.tenant import TenantStore  # noqa: E402
+from lucidfence.core.engine import Engine  # noqa: E402
 from helpers import make_temp_engine  # noqa: E402
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -46,7 +46,7 @@ def test_add_and_delete_route():
 class _GpslessSource:
     """Stub location source: one device that never reports GPS."""
     def fetch(self):
-        from core.location_source import LocationReport
+        from lucidfence.core.location_source import LocationReport
         return [LocationReport(device_id="dev-gpsless", name="No GPS",
                                 platform="android", status="active",
                                 compliant=True, lat=None, lng=None)]
@@ -72,7 +72,7 @@ class _RouteOnlySource:
     def __init__(self):
         self.on = True
     def fetch(self):
-        from core.location_source import LocationReport
+        from lucidfence.core.location_source import LocationReport
         # on-route point vs far-off-route point; both are 'outside' (no fences)
         if self.on:
             lat, lng = 40.4200, -3.7100   # on the route segment
@@ -89,10 +89,10 @@ def test_route_exit_fires_without_fence_change():
     on_route->off_route transition even when fence_state does NOT change."""
     eng = _engine()
     eng.source = _RouteOnlySource()
-    eng.routes = [__import__("core.routes", fromlist=["Route"]).Route(
+    eng.routes = [__import__("lucidfence.core.routes", fromlist=["Route"]).Route(
         id="rt1", name="R", waypoints=[
-            __import__("core.geo", fromlist=["Point"]).Point(40.4200, -3.7100),
-            __import__("core.geo", fromlist=["Point"]).Point(40.4201, -3.7101),
+            __import__("lucidfence.core.geo", fromlist=["Point"]).Point(40.4200, -3.7100),
+            __import__("lucidfence.core.geo", fromlist=["Point"]).Point(40.4201, -3.7101),
         ], corridor_m=300, device_ids=["dev-route"])]
     eng.fences = []  # guarantee no fence-state change
     eng.run_once()  # first cycle: on_route (prev None -> no transition)
@@ -109,7 +109,7 @@ def test_route_exit_fires_without_fence_change():
 
 
 def _always_policies(n=1):
-    from core.policies import Policy
+    from lucidfence.core.policies import Policy
     out = []
     for i in range(n):
         out.append(Policy(

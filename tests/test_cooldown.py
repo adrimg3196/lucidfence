@@ -11,11 +11,11 @@ import time as _time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config_loader  # noqa: E402
-from saas.tenant import TenantStore  # noqa: E402
-from core.engine import Engine  # noqa: E402
-from core.policies import Policy  # noqa: E402
-from core.location_source import LocationReport  # noqa: E402
+from lucidfence.core import config_loader  # noqa: E402
+from lucidfence.saas.tenant import TenantStore  # noqa: E402
+from lucidfence.core.engine import Engine  # noqa: E402
+from lucidfence.core.policies import Policy  # noqa: E402
+from lucidfence.core.location_source import LocationReport  # noqa: E402
 from helpers import make_temp_engine  # noqa: E402
 
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

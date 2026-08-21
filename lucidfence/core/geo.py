@@ -1,0 +1,93 @@
+"""Geospatial helpers: distance, point-in-polygon, segment distance."""
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+EARTH_RADIUS_M = 6_371_000.0
+
+
+@dataclass
+class Point:
+    lat: float
+    lng: float
+
+
+def valid_coord(value, lo: float, hi: float, label: str) -> float:
+    """Parse a coordinate, rejecting NaN/inf and out-of-range values.
+
+    Geofences and route corridors are security controls: a NaN/9999 latitude
+    must fail loudly here, never slip into haversine/point-in-polygon as
+    undefined behaviour and silently mis-evaluate a watched zone.
+    """
+    f = float(value)
+    if not math.isfinite(f) or not (lo <= f <= hi):
+        raise ValueError(f"{label} fuera de rango o no finito: {value!r}")
+    return f
+
+
+def point_from(raw: dict) -> "Point":
+    """Build a Point from a {lat, lng} dict with range/NaN validation."""
+    return Point(
+        lat=valid_coord(raw["lat"], -90.0, 90.0, "lat"),
+        lng=valid_coord(raw["lng"], -180.0, 180.0, "lng"),
+    )
+
+
+def haversine_m(a: Point, b: Point) -> float:
+    """Great-circle distance in meters between two points."""
+    d_lat = math.radians(b.lat - a.lat)
+    d_lng = math.radians(b.lng - a.lng)
+    x = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(a.lat))
+        * math.cos(math.radians(b.lat))
+        * math.sin(d_lng / 2) ** 2
+    )
+    return EARTH_RADIUS_M * 2 * math.asin(min(1.0, math.sqrt(x)))
+
+
+def point_in_polygon(p: Point, polygon: list[Point]) -> bool:
+    """Ray-casting point-in-polygon test."""
+    if len(polygon) < 3:
+        return False
+    inside = False
+    n = len(polygon)
+    j = n - 1
+    xs = [vp.lng for vp in polygon]
+    ys = [vp.lat for vp in polygon]
+    lat, lng = p.lat, p.lng
+    for i in range(n):
+        if ((ys[i] > lat) != (ys[j] > lat)) and (
+            lng
+            < (xs[j] - xs[i]) * (lat - ys[i]) / (ys[j] - ys[i] + 1e-12) + xs[i]
+        ):
+            inside = not inside
+        j = i
+    return inside
+
+
+def distance_to_segment_m(p: Point, a: Point, b: Point) -> float:
+    """Minimum great-circle distance (meters) from point p to segment a-b.
+
+    Projects p onto the great-circle segment in a local equirectangular
+    approximation (valid for short segments / city scale) and clamps to the
+    endpoints, so the result is the true distance to the nearest point on the
+    segment, not just to its vertices.
+    """
+    if a.lat == b.lat and a.lng == b.lng:
+        return haversine_m(p, a)
+    # local meters frame anchored at a
+    mx = (p.lng - a.lng) * 111_320 * math.cos(math.radians(a.lat))
+    my = (p.lat - a.lat) * 111_320
+    bx = (b.lng - a.lng) * 111_320 * math.cos(math.radians(a.lat))
+    by = (b.lat - a.lat) * 111_320
+    # project p onto segment
+    dot = mx * bx + my * by
+    len2 = bx * bx + by * by
+    t = max(0.0, min(1.0, dot / len2)) if len2 else 0.0
+    proj_x = bx * t
+    proj_y = by * t
+    dx = mx - proj_x
+    dy = my - proj_y
+    return math.hypot(dx, dy)

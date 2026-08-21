@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 sys.path.insert(0, ".")
 
-from core.adapters.intune import IntuneAdapter, AuthError, TransportError, GRAPH_BASE
+from lucidfence.core.adapters.intune import IntuneAdapter, AuthError, TransportError, GRAPH_BASE
 
 
 class _Resp:

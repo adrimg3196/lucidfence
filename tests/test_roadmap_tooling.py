@@ -32,7 +32,7 @@ def check(label, cond):
 
 def test_schema():
     print("[roadmap tooling / schema]")
-    import roadmap_tooling as rm
+    from lucidfence.core import roadmap_tooling as rm
     d = rm.load_roadmap()
     check("roadmap.json cargado", bool(d))
     errs = rm.validate_roadmap(d)
@@ -51,32 +51,30 @@ def test_schema():
 def test_cli():
     print("[roadmap tooling / CLI]")
     def run(args):
-        return subprocess.run([sys.executable, "roadmap_tooling.py"] + args,
+        return subprocess.run([sys.executable, "-m", "lucidfence.core.roadmap_tooling"] + args,
                               capture_output=True, text=True, cwd=ROOT, timeout=60)
     r = run(["--validate"])
-    check("roadmap_tooling.py --validate exit 0", r.returncode == 0 and "valido" in r.stdout)
+    check("lucidfence.core.roadmap_tooling --validate exit 0", r.returncode == 0 and "valido" in r.stdout)
     r = run([])
-    check("roadmap_tooling.py muestra plan", r.returncode == 0 and "ROADMAP" in r.stdout)
+    check("lucidfence.core.roadmap_tooling muestra plan", r.returncode == 0 and "ROADMAP" in r.stdout)
     r = run(["--export"])
     try:
         json.loads(r.stdout)
         ok = True
     except Exception:
         ok = False
-    check("roadmap_tooling.py --export es JSON valido", ok and r.returncode == 0)
+    check("lucidfence.core.roadmap_tooling --export es JSON valido", ok and r.returncode == 0)
     # --mark actualiza y persiste
-    import roadmap_tooling as rm
-    d0 = rm.load_roadmap()
-    original = next(f["status"] for f in rm.all_features(d0) if f["id"] == "F4.5")
+    from lucidfence.core import roadmap_tooling as rm
+    # Restore the exact bytes observed before the test. Round-tripping through
+    # update_feature() restores the status but leaves meta.updated stamped with
+    # today's date, so el fichero versionado quedaba sucio en cada ejecución.
+    before = rm._ROADMAP_JSON.read_text(encoding="utf-8")
     try:
         r = run(["--mark", "F4.5", "status", "blocked"])
-        check("roadmap_tooling.py --mark persiste", r.returncode == 0 and "F4.5" in r.stdout)
+        check("lucidfence.core.roadmap_tooling --mark persiste", r.returncode == 0 and "F4.5" in r.stdout)
     finally:
-        # Restore the exact state observed before the test. Never hard-code
-        # "planned": doing so silently regressed a completed roadmap to 94%.
-        restored = rm.load_roadmap()
-        rm.update_feature(restored, "F4.5", "status", original)
-        rm.save_roadmap(restored)
+        rm._ROADMAP_JSON.write_text(before, encoding="utf-8")
 
 
 def test_loop_local():

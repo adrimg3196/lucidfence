@@ -2,6 +2,84 @@
 
 All notable changes to LucidFence are documented here.
 
+## [Unreleased]
+
+- gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
+  de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
+  `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta
+  conflictos crónicos del merge train (#118, tarea t_e207227e).
+- gitops/repo-higiene: `lucidfence/plugins/adapters/index.json` ya no genera
+  conflictos de merge manuales: se regenera desde los `.py` mergeados vía el
+  driver custom `regen-adapter-index` (ver CONTRIBUTING.md → "Setup del repo").
+  Antes producía conflictos y hashes obsoletos que rompían `test_adapter_marketplace_manifest_is_hash_verified`.
+- feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
+- feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
+
+## [1.6.0] - 2026-08-18
+
+### Added
+
+- feat(enforcement): rollout seguro para pilotos reales — `enforcement.mode: observe|enforce`, `live_actions` (gating por acción) y doble llave para `wipe` (`allow_wipe` + `wipe_allowlist`); estado visible en `/api/status` y editable desde el dashboard con permiso + auditoría
+- feat(compliance): acción `set_compliance` — Intune la ejecuta vía Graph (managedDevice → objeto Entra → `PATCH isCompliant`) para que Conditional Access corte el acceso; Jamf y Fleet degradan con el mecanismo equivalente de su plataforma
+- feat(onboarding): `lucidfence quickstart` — del install a ver la flota en pasos autoverificados (entorno → app → dashboard → fuente de datos); baja el time-to-first-value del admin nuevo
+- feat(multi-uem): registro de proveedores con etiqueta de segmento de flota (móviles/portátiles) + guía `docs/integrations/MULTI_UEM.md`
+- feat(rbac): gestión de miembros y roles visible en el dashboard (`GET /api/members`, `POST /api/members/role`; owner-only, guardarraíl del último propietario, auditado)
+- feat(ios): exportador de config de despliegue on-device (managed app config + `.mobileconfig`, stdlib); solo geocercas de política, nunca coordenadas ni `device_id`
+- feat(location): geofencing lógico por red para Windows/portátiles sin GPS — mapeo declarado por el operador de IP-CIDR/SSID/BSSID → sitio con coordenadas; local-first, sin geoip de terceros, nunca inventa la posición
+- feat(audit): tarjeta "Registro de auditoría" en el dashboard — cadena de hashes con verdicto de integridad y export CEF a SIEM; da pantalla al rol `auditor`
+- feat(risk): Lockdown Mode (Apple DDM, OS 27 / WWDC 2026) como señal de postura del motor de riesgo — un dispositivo fuera de geocerca con Lockdown Mode desactivado sube de riesgo y es direccionable por política; readback honesto (`None`/desconocido nunca penaliza)
+- docs: guía de arranque externa `docs/GETTING_STARTED.md` (npm-style: qué necesitas, instalar, comprobar, FAQ, cómo reportar bugs)
+
+### Fixed
+
+- fix(security): SSRF en el asistente de proveedores — `endpoint`/`base_url` de `/api/providers[/test]` ahora validados (solo https externo, sin loopback/privado/link-local), con test de regresión (PoC)
+- fix(location): la paginación por cursor de la fuente live perdía todos los dispositivos desde la página 3 (separador de URL calculado sobre `url` en vez de `path`), lo que hacía descartar el ciclo entero; corregido con test de regresión
+
+## [1.5.0] - 2026-08-15
+
+### Added
+
+- feat(alertas): webhooks multi-canal de incidentes — genérico con firma HMAC-SHA256 verificable en el receptor y canal ntfy, con fan-out (#120)
+- feat(risk): detección de spoofing de ubicación con señales explicables — velocidad imposible, flip de país sin movimiento, accuracy anómala (#121, endurecido en #127)
+- feat(policies): simulador what-if — `POST /api/policies/replay` evalúa una policy candidata contra el histórico de trails sin ejecutar acciones (#122)
+- feat(sdk): `lucidfence adapter new <nombre>` genera un adapter MDM + contract test listos para contribuir (#123)
+- feat(compliance): `GET /api/evidence/export` — informe por periodo con cadena de hashes verificable offline y registro en la auditoría del tenant (#124)
+- feat(mcp): tool `lucidfence_explain_risk` — score, razones, señales y políticas de un dispositivo (#125, fix de parsing en #127)
+- feat(posture): integración osquery en el ciclo del engine + señales al Risk Engine (#116)
+- feat(poi): servicio de Points of Interest con API y tool MCP (#55)
+- feat(ci): gate `runtime-validation` — 25 claims ejecutados en vivo en cada PR (#129) y workflow `release.yml` para publicar releases con asset y smoke del artefacto
+- feat(pages): publicación continua de la superficie estática en GitHub Pages con guardarraíl de integridad (#128)
+
+### Changed
+
+- feat(ui): rediseño de landing/vitrina con pase de diseño anti-slop; accesibilidad (focus-visible, reduced-motion) y CTA de descarga en primer viewport (#126, #119)
+- fix(security): pin de `cryptography` alineado con la lock + guardarraíl anti-divergencia (#117); testimonios y métricas sin fuente retirados de la vitrina (#119)
+- fix(windows-dsc): escapado de comillas en documentos DSC (#114); state store robusto ante registros corruptos (#103); coordenadas 0.0 sobreviven (#100)
+- chore(sbom): `sbom.cdx.json` deja de versionarse; lo genera CI (#115)
+
+### Added (previo, sin release)
+
+- feat(ddm): enforcement declarativo Apple DDM para policies de geocerca (`lucidfence/core/ddm.py`, acción `apply_ddm` en el adapter Jamf) — issue #40
+- feat(ddm): canal DDM de Jamf Pro — `ddm_status` (readback de `GET /v1/ddm/{clientManagementId}/status-items`) y `ddm_sync` (`POST /v1/ddm/{clientManagementId}/sync`), endpoints verificados contra el OpenAPI oficial v11.30; subir declarations propias sigue siendo hueco declarado porque Jamf no publica endpoint — issue #52
+
+### Changed
+
+- feat(free)!: LucidFence es gratis para siempre — eliminados los planes Pro/Enterprise, `/api/plan`, `/api/plan/upgrade` y la capability `org:billing`; `FREE_PLAN` único con enlace de donaciones (`.github/FUNDING.yml`); tenants legacy migran a `free` al cargar
+- docs(revenue): `docs/gtm/revenue-model.md` reescrito como modelo gratis+donaciones; `docs/pricing-model.md` eliminado
+
+### Fixed
+
+- fix(ddm): las acciones DDM no estaban en `VALID_ACTIONS`, así que `Engine.run_command` y el endpoint de comandos las rechazaban con "accion no valida" — la capa declarativa era inalcanzable desde el producto
+- fix(ddm): los `StatusItem.value` de Jamf son string siempre; `passcode.is-compliant` llegaba como `"true"` a un campo que el modelo de estado espera `bool`
+- fix(server): el sanitizador de `log_message` convertía args numéricos a str y rompía `send_error(404)` (formato `%d`) — cualquier POST/DELETE a ruta desconocida devolvía 500 en vez de 404
+- fix(build)!: `sbom.cdx.json` deja de estar versionado (lo genera CI como artifact) y desaparece el `assert committed == sbom` — un artefacto que hashea todos los `.py` fijado por igualdad exacta hacía que main y toda rama tocaran las mismas dos líneas, conflicto garantizado en el 100% de los PRs — issue #74
+- fix(tests): `test_roadmap_tooling` restaura los bytes exactos de `roadmap.json` (el round-trip por `update_feature()` re-estampaba `meta.updated`) y `data/actions_log.jsonl` se destrackea — correr la suite dejaba el árbol sucio en dos ficheros versionados
+- ci(runtime-artifacts): un PR que modifique `data/cloud_state.json` falla en CI — ese snapshot lo republica `engine-cron` en main cada hora, así que toda rama que lo toque conflicta con main
+
+### Removed
+
+- chore(barrendero): `static/saas_views*.js` (4 ficheros, 530 líneas muertas: ningún HTML los cargaba) + SBOM regenerado
+
 ## [1.3.0] - 2026-07-21
 
 ### Added
@@ -72,11 +150,11 @@ All notable changes to LucidFence are documented here.
 
 ### Documentation
 
-- docs: add RUNBOOK.md operator playbook (BOUNTY #19, WS5) [MERGE]
-- docs: add RUNBOOK.md operator playbook (Bounty #19, WS5)
+- docs: add docs/operations/RUNBOOK.md operator playbook (BOUNTY #19, WS5) [MERGE]
+- docs: add docs/operations/RUNBOOK.md operator playbook (Bounty #19, WS5)
 - docs(roadmap): enlaza milestones GitHub v1.3.0-v2.1.0 (roadmap ejecutable)
 - docs: roadmap anual 2026-2027 (Q3'26→Q2'27) + social preview asset
-- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf live
+- docs: add Adapter Hall of Fame (Intune #13 credited) + anti-spam policy; mark Intune/Jamf as live-capable (live when client token connected, mock/simulation otherwise)
 - docs: link desktop preview download
 - docs(vitrina): documenta tap Homebrew (brew install adrimg3196/lucidfence resuelve)
 

@@ -10,11 +10,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from core.geo import Point, haversine_m, point_in_polygon
-from core.location_source import SimulationLocationSource
-from core.product import build_product
+from lucidfence.core.geo import Point, haversine_m, point_in_polygon
+from lucidfence.core.location_source import SimulationLocationSource
+from lucidfence.core.product import build_product
 
-__version__ = "1.3.1"
+__version__ = "1.6.0"
 
 
 class GeoFencer:

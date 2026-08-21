@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 
-from core.product import build_analytics, build_product
+from lucidfence.core.product import build_analytics, build_product
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -166,7 +166,7 @@ def test_intelligence_view_contract_is_accessible_and_responsive():
 
 
 def test_versioned_notebook_contains_no_local_telemetry_outputs():
-    notebook = json.loads((ROOT / "analysis/fleet_intelligence.ipynb").read_text(encoding="utf-8"))
+    notebook = json.loads((ROOT / "docs/analysis/fleet_intelligence.ipynb").read_text(encoding="utf-8"))
     for cell in notebook.get("cells", []):
         if cell.get("cell_type") == "code":
             assert cell.get("execution_count") is None

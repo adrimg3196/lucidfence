@@ -10,9 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import cloud_publisher  # noqa: E402
-from core import cve  # noqa: E402
-import core.cve_feed_nvd as cve_feed_nvd  # noqa: E402
+from lucidfence.core import cloud_publisher  # noqa: E402
+from lucidfence.core import cve  # noqa: E402
+import lucidfence.core.cve_feed_nvd as cve_feed_nvd  # noqa: E402
 
 
 def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
@@ -45,12 +45,12 @@ def test_cloud_demo_prefers_engine_cve_feed_when_sync_available():
         with tempfile.TemporaryDirectory(prefix="lucidfence-cloud-cve-") as tmp:
             feed_path = Path(tmp) / "cve_feed_nvd.json"
             # Aislar el feed para que el test no toque data/cve_feed_nvd.json del repo.
-            from saas.tenant import TenantStore
-            from core.engine import Engine
+            from lucidfence.saas.tenant import TenantStore
+            from lucidfence.core.engine import Engine
 
             workdir = Path(tmp) / "tenant"
             ts = TenantStore(workdir)
-            org = ts.create(name="test", owner_id="cloud", plan="pro")
+            org = ts.create(name="test", owner_id="cloud")
             tdir = ts.data_dir(org.id)
             (tdir / "fences.json").write_text(json.dumps({"fences": []}), encoding="utf-8")
             (tdir / "policies.json").write_text("[]", encoding="utf-8")

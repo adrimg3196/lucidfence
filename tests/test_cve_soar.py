@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.cve import enrich_apps, app_cve_risk_score, CVE_DB  # noqa: E402
-from core.soar import evaluate_soar, SOARPlaybook, DEFAULT_PLAYBOOKS  # noqa: E402
+from lucidfence.core.cve import enrich_apps, app_cve_risk_score, CVE_DB  # noqa: E402
+from lucidfence.core.soar import evaluate_soar, SOARPlaybook, DEFAULT_PLAYBOOKS  # noqa: E402
 
 
 def test_cve_enrich_flags_vulnerable_app():
@@ -71,9 +71,15 @@ def test_soar_does_not_fire_without_match():
 
 
 def test_soar_executes_action_in_run_once():
-    """A matched SOAR playbook must produce a real UEM action during the cycle."""
+    """A matched SOAR playbook drives live execution AND human-gating.
+
+    Non-destructive actions (notify/locate) are executed live against the UEM.
+    Destructive actions (lock) are NOT auto-executed: per the reviewed design
+    (diseño §5 / REQ §5) they are emitted as a `soar_handoff` event that waits
+    for manual approval in the console — never executed autonomously.
+    """
     import tempfile, types
-    from core.engine import Engine
+    from lucidfence.core.engine import Engine
     from helpers import make_temp_engine
     eng = make_temp_engine()
     # capture executed actions
@@ -85,7 +91,7 @@ def test_soar_executes_action_in_run_once():
         )[-1]
     )
     eng.routes = []
-    from core.location_source import LocationReport
+    from lucidfence.core.location_source import LocationReport
     rep = LocationReport(
         device_id="d1", name="Riesgo1", platform="android",
         lat=40.0, lng=-3.0, status="active", compliant=False,
@@ -95,10 +101,18 @@ def test_soar_executes_action_in_run_once():
     )
     eng.source = type("S", (), {"fetch": lambda self: [rep]})()
     eng.run_once()
-    # SOAR playbook soar-cve-critical should have flagged the app; and since the
-    # device is also non-compliant+outside, soar-rooted-outside should LOCK it.
+    # Non-destructive SOAR actions still execute live (soar-cve-critical notify,
+    # soar-cve-outside locate/notify, soar-rooted-outside notify).
     actions = [e["action"] for e in executed]
-    assert "lock" in actions, f"esperado lock por SOAR, ejecutadas={actions}"
-    # the lock action must be tagged as SOAR-originated in the engine log
+    assert "notify" in actions, f"esperado notify por SOAR, ejecutadas={actions}"
+    assert "locate" in actions, f"esperado locate por SOAR, ejecutadas={actions}"
+    # Destructive action (lock) is human-gated: it must NOT be auto-executed, but
+    # logged as a soar_handoff event awaiting manual approval.
+    assert "lock" not in actions, f"lock NO debe auto-ejecutarse (human-gate), ejecutadas={actions}"
+    handoffs = [e for e in eng.store.recent_events() if e.get("kind") == "soar_handoff"]
+    assert handoffs, "ningún soar_handoff registrado para la acción destructiva"
+    assert any(h.get("action") == "lock" and h.get("human_gate") for h in handoffs), \
+        "el lock destructivo debe quedar como handoff human-gate"
+    # the matching logic still tags actions as SOAR-originated in the engine log
     soar_actions = [a for a in eng._cycle_actions if a.get("soar")]
     assert soar_actions, "ninguna acción marcada como SOAR"

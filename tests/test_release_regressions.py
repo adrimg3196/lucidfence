@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _load_cli():
     name = "lucidfence_cli_regression_%s" % os.getpid()
-    return importlib.machinery.SourceFileLoader(name, str(ROOT / "bin" / "lucidfence")).load_module()
+    return importlib.machinery.SourceFileLoader(name, str(ROOT / "lucidfence" / "cli.py")).load_module()
 
 
 def test_stop_refuses_unrelated_reused_pid():
@@ -107,7 +107,7 @@ def test_demo_and_gateway_use_actual_bound_socket():
 
 
 def test_quick_runner_uses_supported_python_and_hash_locked_venv():
-    runner = (ROOT / "run.sh").read_text()
+    runner = (ROOT / "scripts/run.sh").read_text()
     assert "3, 11" in runner
     assert "-m venv" in runner
     assert "requirements.lock" in runner

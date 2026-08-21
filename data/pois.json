@@ -1,0 +1,51 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi_school_001",
+        "name": "Colegio Público",
+        "category": "school",
+        "tags": [
+          "education",
+          "children"
+        ],
+        "metadata": {
+          "phone": "+34 912 34 56 78",
+          "website": "https://example.com/school"
+        }
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.705,
+          40.418
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "poi_police_001",
+        "name": "Comisaría de Policía",
+        "category": "police",
+        "tags": [
+          "safety",
+          "law enforcement"
+        ],
+        "metadata": {
+          "phone": "+34 912 34 56 80",
+          "website": "https://example.com/police"
+        }
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -3.7,
+          40.415
+        ]
+      }
+    }
+  ]
+}

@@ -30,7 +30,7 @@ POOL = [
     ("Hardening: firma de webhooks SOAR entrantes", "windows-mdm-specialist",
      "Valida HMAC de los webhooks SOAR para evitar spoofing."),
     ("Doc: README de arquitectura serverless para clientes", "vault-curator",
-     "Explica en CLIENTE.md la arquitectura GitHub-only ($0) para que el cliente entienda."),
+     "Explica en docs/product/CLIENTE.md la arquitectura GitHub-only ($0) para que el cliente entienda."),
     ("Feature: soporte de geocercas poligonales (no solo círculos)", "apple-mdm-specialist",
      "Extiende el engine para geocercas de polígono y la vitrina SVG."),
     ("Competitive: one-pager 'por qué local-first' para clientes", "competitive-intel-specialist",

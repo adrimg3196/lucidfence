@@ -4,7 +4,7 @@
 # contenedor:
 #   1) MoA local  (IA, OpenAI-compatible, 127.0.0.1:8085)
 #   2) LucidFence SaaS + engine (127.0.0.1:8765)
-# El engine ya consume MoA via core/ai.py (http.client a 127.0.0.1:8085).
+# El engine ya consume MoA via lucidfence/core/ai.py (http.client a 127.0.0.1:8085).
 # El email sale por Atomic Mail Agentic (sin SMTP propio) y el dominio
 # del tenant es DigitalPlat FreeDomain (whitelabel). $0 en todos lados.
 #
@@ -43,8 +43,15 @@ COPY . /app
 VOLUME ["/app/data"]
 
 # Arranque unificado: MoA + SaaS.
-COPY docker_start.sh /app/docker_start.sh
+COPY scripts/docker_start.sh /app/docker_start.sh
 RUN chmod +x /app/docker_start.sh
 
 EXPOSE 8765
+
+# Healthcheck: /api/health ya existe y no requiere auth. Detecta un proceso
+# vivo-pero-colgado (modo de fallo "always-on" mintiendo) para que un orquestador
+# pueda reiniciar la máquina en lugar de dejarla servir 200s vacíos.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=5).status==200 else 1)"
+
 CMD ["/app/docker_start.sh"]

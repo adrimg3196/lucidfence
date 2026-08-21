@@ -232,6 +232,12 @@ echo "   Instalando dependencias verificadas (requirements.lock)…"
 python3 -m pip install -q --require-hashes -r requirements.lock
 
 mkdir -p data
+# Arma el pre-commit local (scripts/pre-commit.sh) como git hook nativo.
+# Best-effort: no falla la instalación si algo se tuerce.
+if [ -f "$SCRIPT_DIR/scripts/pre-commit.sh" ]; then
+  git config core.hooksPath scripts 2>/dev/null || true
+  echo "== Pre-commit hook activado (scripts/pre-commit.sh) =="
+fi
 echo "== Arrancando LucidFence en segundo plano (puerto $PORT) =="
 nohup python3 saas_server.py > lucidfence.log 2>&1 &
 echo $! > lucidfence.pid

@@ -1,0 +1,29 @@
+name: nightly-health-check
+
+# Verifica que la vitrina pública de LucidFence esté reach able cada día.
+# No requiere credenciales, servidor local, ni gh CLI.
+# Falla si la vitrina no responde en 30s — eso es suficiente para alertar.
+#
+# El check es contra el estado publicado (data/cloud_state.json vía
+# raw.githubusercontent.com), no contra el servidor local.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"            # 08:00 UTC cada día
+  workflow_dispatch:                # permitido forzar manualmente
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verificar vitrina (URL + esquema, fuente única)
+        # scripts/check_vitrina.py es EL verificador: URL canónica + esquema
+        # importado del publisher. Sin copias inline que puedan derivar.
+        run: python3 scripts/check_vitrina.py

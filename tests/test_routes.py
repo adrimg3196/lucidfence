@@ -4,8 +4,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.geo import Point  # noqa: E402
-from core.routes import Route, load_routes, route_for_device  # noqa: E402
+from lucidfence.core.geo import Point  # noqa: E402
+from lucidfence.core.routes import Route, load_routes, route_for_device  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 

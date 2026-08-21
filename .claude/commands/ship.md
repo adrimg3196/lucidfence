@@ -8,9 +8,9 @@ Invoke shipping-and-launch adapted to LucidFence. `/ship` is a fan-out orchestra
 Run three personas against the current change, then merge into go/no-go:
 
 1. **code-reviewer** — five-axis review (correctness, readability, architecture,
-   security, performance) on staged changes. Use `agents/code-reviewer.md`.
-2. **security-auditor** — OWASP Top 10, secrets, auth, deps CVEs. `agents/security-auditor.md`.
-3. **test-engineer** — coverage gaps: happy path, edge, error, concurrency. `agents/test-engineer.md`.
+   security, performance) on staged changes. Use `docs/agents/code-reviewer.md`.
+2. **security-auditor** — OWASP Top 10, secrets, auth, deps CVEs. `docs/agents/security-auditor.md`.
+3. **test-engineer** — coverage gaps: happy path, edge, error, concurrency. `docs/agents/test-engineer.md`.
 
 Issue all three in one turn (parallel). If subagents unavailable, run sequentially
 and merge in main context.
@@ -18,7 +18,7 @@ and merge in main context.
 ## Phase B — Merge
 Synthesize: Code Quality (Critical/Required + failing tests), Security (Critical/High
 → blockers), Performance, Accessibility, Infrastructure (env, migrations, monitoring),
-Documentation (README, ADRs, CLIENTE.md).
+Documentation (README, ADRs, docs/product/CLIENTE.md).
 
 ## Phase C — Decision
 ```markdown

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import saas_server  # noqa: E402
-import core.atomicmail_client as atomicmail_client  # noqa: E402
+import lucidfence.core.atomicmail_client as atomicmail_client  # noqa: E402
 
 
 class FakeTenantStore:

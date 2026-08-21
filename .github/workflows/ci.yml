@@ -31,8 +31,40 @@ jobs:
 
       - name: Run test suite
         env:
-          LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
+          LUCIDFENCE_PERF_TICK_S: "0.5"  # guard de regresión: mediana del mejor bloque (ver test_perf_engine)
         run: python3 tests/run_tests.py
+
+  verify-docs:
+    name: Verify (versión + enlaces de docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
+      # rotos en la documentación. Instantáneo, sin deps. La suite y la
+      # batería runtime van en sus jobs; verify.py --docs-only cubre lo que
+      # ningún otro job gateaba.
+      - name: python3 scripts/verify.py --docs-only
+        run: python3 scripts/verify.py --docs-only
+
+  ruff:
+    name: Lint (ruff F/E9)
+    runs-on: ubuntu-latest
+    # El hook plankton corre ruff en local, pero un contribuidor externo sin el
+    # hook mete lo que el hook prohíbe. Este job cierra ese hueco en CI: mismas
+    # clases (F/E9) y mismo .ruff.toml del repo. Falla el CI si ruff encuentra
+    # algo.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: python3 -m pip install ruff
+      - name: ruff check (lucidfence/ saas_server.py scripts/)
+        run: ruff check lucidfence/ saas_server.py scripts/
 
   frontend:
     name: Frontend syntax check
@@ -49,6 +81,11 @@ jobs:
         run: |
           node --check static/app.js
           node --check static/i18n.js
+          node --check static/web-app.js
+          node --check apps/uem-gateway/worker.mjs
+
+      - name: uem-gateway worker tests
+        run: node --test apps/uem-gateway/worker.test.mjs
 
   dependency-audit:
     name: Dependency audit
@@ -67,6 +104,30 @@ jobs:
           name: lucidfence-sbom
           path: sbom.cdx.json
 
+  runtime-artifacts:
+    name: No runtime artifacts in PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # data/cloud_state.json ya NO vive en main (ignorado): lo publica engine-cron
+      # en la rama cloud-state. Este guard rechaza que una PR lo reintroduzca (lo
+      # sirve GitHub Pages). Si una rama tambien lo toca, el conflicto de
+      # contenido con main es seguro y bloquea el merge — el mismo deadlock
+      # del issue #74 por otra via.
+      - name: Reject changes to files published by main
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-only --diff-filter=AM "origin/$BASE_REF...HEAD" -- data/cloud_state.json)
+          if [ -n "$changed" ]; then
+            echo "::error::data/cloud_state.json ya no se versiona en main: lo publica engine-cron en la rama cloud-state. No lo reintroduzcas aqui." >&2
+            echo "Restauralo en la rama: git checkout origin/$BASE_REF -- data/cloud_state.json" >&2
+            exit 1
+          fi
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -79,3 +140,38 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+
+  # "Verificar en runtime, no solo compila": la batería arranca el server
+  # real, un receptor webhook real y el MCP por stdio, y ejercita cada claim
+  # anunciado por su interfaz pública (25 checks). Un claim que no funciona
+  # en vivo bloquea el merge aunque los unit tests estén verdes — este job
+  # existe porque dos features llegaron a main con tests verdes y rotas en
+  # uso real (reloj del anti-spoofing y parsing del MCP explain-risk).
+  runtime-validation:
+    name: Runtime validation (claims en vivo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --require-hashes -r requirements.lock
+      - name: Validar claims en runtime
+        run: python3 scripts/runtime_validation.py
+
+  workflows-lint:
+    name: Workflows lint (actionlint)
+    # Los workflows solo se "prueban" al ejecutarse en produccion; este gate
+    # caza YAML/expresiones/shell rotos (shellcheck incluido) en la PR, antes
+    # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint de workflows (script único, mismo que en local)
+        # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
+        # falta alguno: sin copias inline y sin falsos verdes por herramienta
+        # ausente (la causa del run 32455895540).
+        run: bash scripts/lint_workflows.sh

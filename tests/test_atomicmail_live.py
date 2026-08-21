@@ -26,7 +26,7 @@ class AtomicMailLiveTest(unittest.TestCase):
         import concurrent.futures as cf
         import random
         import string
-        from core.atomicmail_client import TenantMailbox
+        from lucidfence.core.atomicmail_client import TenantMailbox
 
         to = os.environ.get("ATOMICMAIL_TEST_TO", "")
         # Use a non-routable but valid-looking target if none provided so the

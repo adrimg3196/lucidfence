@@ -14,21 +14,25 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config_loader  # noqa: E402
-from saas.tenant import TenantStore  # noqa: E402
-from core.engine import Engine  # noqa: E402
+from lucidfence.core import config_loader  # noqa: E402
+from lucidfence.saas.tenant import TenantStore  # noqa: E402
+from lucidfence.core.engine import Engine  # noqa: E402
 
 
-def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org") -> Engine:
+def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org",
+                     extra_config: dict | None = None) -> Engine:
     """Devuelve un Engine aislado en tempdir con fences/routes/policies vacíos
-    y un tenant de prueba. No toca el CWD ni data/ del repo."""
+    y un tenant de prueba. No toca el CWD ni data/ del repo.
+
+    `extra_config` se fusiona sobre la config base (p.ej. el bloque
+    `enforcement` para tests de rollout observe/enforce)."""
     tmp = Path(tempfile.mkdtemp(prefix="lucidfence-test-"))
     (tmp / "fences.json").write_text(json.dumps({"fences": []}), encoding="utf-8")
     (tmp / "routes.json").write_text("[]", encoding="utf-8")
     (tmp / "policies.json").write_text("[]", encoding="utf-8")
 
     ts = TenantStore(tmp)
-    org = ts.create(name=org_name, owner_id="owner-test", plan="free")
+    org = ts.create(name=org_name, owner_id="owner-test")
     tdir = ts.data_dir(org.id)
 
     cfg: dict = {
@@ -42,4 +46,6 @@ def make_temp_engine(cooldown_seconds: int = 3600, org_name: str = "test-org") -
         "action_cooldown_seconds": cooldown_seconds,
         "incident_webhook_url": "https://hooks.example.com/test",
     }
+    if extra_config:
+        cfg.update(extra_config)
     return Engine(cfg)

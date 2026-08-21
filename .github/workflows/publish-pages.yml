@@ -1,0 +1,59 @@
+name: publish-pages
+
+# Publica la superficie ESTÁTICA pública (landing + vitrina serverless) en
+# GitHub Pages. No es un runtime alojado: cloud.html lee el estado demo vía
+# raw.githubusercontent y todo lo demás corre en el navegador del visitante
+# (el roadmap declara "la vitrina serverless (GitHub Pages) cubre la
+# captación"). Motivo de origen: el despliegue antiguo de Pages quedó
+# congelado sirviendo una landing retirada, violando el P0 #110 en la
+# superficie pública aunque main ya estaba limpio. Este workflow hace que lo
+# publicado sea SIEMPRE lo que hay en main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "static/**"
+      - ".github/workflows/publish-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir sitio estático desde static/
+        run: |
+          mkdir -p _site
+          cp -rL static/* _site/
+          # Rutas absolutas /static/... no existen en un project page:
+          # se reescriben a relativas (todo vive en la raíz del sitio).
+          find _site -maxdepth 1 -name '*.html' -exec sed -i 's#"/static/#"#g' {} +
+          test -f _site/index.html
+          # Guardarraíl del P0 #110 también en el artefacto publicado:
+          # ninguna cadena de prueba social fabricada puede llegar a Pages.
+          ! grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

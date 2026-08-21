@@ -4,7 +4,7 @@
 
 **Goal:** Ejecutar varios UEM simultáneamente por tenant, consolidar dispositivos con procedencia y evaluar geofencing solo con evidencia de ubicación apta, enrutando acciones al proveedor remoto correcto.
 
-**Architecture:** Añadir un dominio `core/multiuem.py` independiente del contrato congelado `MDMAdapter`; envolver cada fuente/adapter como `ProviderBinding`; hacer que `MultiUEMOrchestrator` implemente el seam `fetch()` que ya consume `Engine` y el seam `execute()` que ya usa para acciones. La configuración legacy permanece intacta cuando `uem.providers` no está presente.
+**Architecture:** Añadir un dominio `lucidfence/core/multiuem.py` independiente del contrato congelado `MDMAdapter`; envolver cada fuente/adapter como `ProviderBinding`; hacer que `MultiUEMOrchestrator` implemente el seam `fetch()` que ya consume `Engine` y el seam `execute()` que ya usa para acciones. La configuración legacy permanece intacta cuando `uem.providers` no está presente.
 
 **Tech Stack:** Python 3.11, dataclasses/stdlib, servidor HTTP propio, vanilla JS, runner `tests/run_tests.py`, Playwright ya instalado por el proyecto.
 
@@ -26,7 +26,7 @@
 ### Task 1: Dominio normalizado y gate de evidencia
 
 **Files:**
-- Create: `core/multiuem.py`
+- Create: `lucidfence/core/multiuem.py`
 - Create: `tests/test_multiuem_domain.py`
 
 **Interfaces:**
@@ -122,7 +122,7 @@ Expected: `3 passed`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add core/multiuem.py tests/test_multiuem_domain.py
+git add lucidfence/core/multiuem.py tests/test_multiuem_domain.py
 git commit -m "feat(multiuem): add normalized device and location evidence"
 ```
 
@@ -131,7 +131,7 @@ git commit -m "feat(multiuem): add normalized device and location evidence"
 ### Task 2: Consolidación, aislamiento y enrutado del orquestador
 
 **Files:**
-- Modify: `core/multiuem.py`
+- Modify: `lucidfence/core/multiuem.py`
 - Create: `tests/test_multiuem_orchestrator.py`
 
 **Interfaces:**
@@ -200,7 +200,7 @@ Expected: all tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/multiuem.py tests/test_multiuem_orchestrator.py
+git add lucidfence/core/multiuem.py tests/test_multiuem_orchestrator.py
 git commit -m "feat(multiuem): orchestrate providers with safe identity merge"
 ```
 
@@ -209,18 +209,18 @@ git commit -m "feat(multiuem): orchestrate providers with safe identity merge"
 ### Task 3: Provider wrappers and tenant configuration
 
 **Files:**
-- Create: `core/multiuem_providers.py`
-- Create: `core/outbound_security.py`
-- Modify: `config_loader.py`
-- Modify: `core/secrets.py`
+- Create: `lucidfence/core/multiuem_providers.py`
+- Create: `lucidfence/core/outbound_security.py`
+- Modify: `lucidfence/core/config_loader.py`
+- Modify: `lucidfence/core/secrets.py`
 - Modify: `saas_server.py` (`_apply_tenant_integration`, connector persistence only)
-- Modify: `core/location_source.py`
-- Modify: `core/adapters/applivery.py`
-- Modify: `core/adapters/intune.py`
-- Modify: `core/adapters/jamf.py`
-- Modify: `core/adapters/workspace_one.py`
-- Modify: `core/adapters/chromeos.py`
-- Modify: `core/adapters/windows_conformidad.py`
+- Modify: `lucidfence/core/location_source.py`
+- Modify: `lucidfence/core/adapters/applivery.py`
+- Modify: `lucidfence/core/adapters/intune.py`
+- Modify: `lucidfence/core/adapters/jamf.py`
+- Modify: `lucidfence/core/adapters/workspace_one.py`
+- Modify: `lucidfence/core/adapters/chromeos.py`
+- Modify: `lucidfence/core/adapters/windows_conformidad.py`
 - Modify: `.env.example`
 - Create: `tests/test_multiuem_providers.py`
 - Create: `tests/test_connector_credentials_isolation.py`
@@ -253,7 +253,7 @@ Expected: FAIL because builder does not exist.
 Provider fetch wrappers must output `NormalizedDevice`. Applivery wraps `LiveLocationSource.fetch()`. Other built-ins call their list/report seam only when supported; an adapter without inventory capability remains action-only and reports zero inventory rather than fabricating devices. Constructors must not perform network calls.
 
 Extend the existing tenant integration document to store provider blocks below
-`integration.json` with mode `0600`. `core/secrets.py` must return a provider
+`integration.json` with mode `0600`. `lucidfence/core/secrets.py` must return a provider
 credential mapping scoped to one tenant. `_apply_tenant_integration` passes that
 mapping into config explicitly. Provider builders must not read process-global
 credentials once an explicit tenant provider block exists, including when its
@@ -288,7 +288,7 @@ Expected: all pass; frozen adapter contract unchanged.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/multiuem_providers.py core/outbound_security.py config_loader.py core/secrets.py saas_server.py core/location_source.py core/adapters .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py
+git add lucidfence/core/multiuem_providers.py lucidfence/core/outbound_security.py lucidfence/core/config_loader.py lucidfence/core/secrets.py saas_server.py lucidfence/core/location_source.py lucidfence/core/adapters .env.example tests/test_multiuem_providers.py tests/test_connector_credentials_isolation.py tests/test_uem_outbound_security.py
 git commit -m "feat(multiuem): connect tenant providers with hardened transport"
 ```
 
@@ -297,9 +297,9 @@ git commit -m "feat(multiuem): connect tenant providers with hardened transport"
 ### Task 4: Engine integration and fail-closed geofence transitions
 
 **Files:**
-- Modify: `core/engine.py`
-- Modify: `core/state_store.py`
-- Modify: `core/location_source.py`
+- Modify: `lucidfence/core/engine.py`
+- Modify: `lucidfence/core/state_store.py`
+- Modify: `lucidfence/core/location_source.py`
 - Create: `tests/test_multiuem_engine.py`
 - Create: `tests/test_location_evidence_transitions.py`
 
@@ -372,7 +372,7 @@ Expected: all pass.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add core/engine.py core/state_store.py core/location_source.py tests/test_multiuem_engine.py tests/test_location_evidence_transitions.py
+git add lucidfence/core/engine.py lucidfence/core/state_store.py lucidfence/core/location_source.py tests/test_multiuem_engine.py tests/test_location_evidence_transitions.py
 git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 ```
 
@@ -381,7 +381,7 @@ git commit -m "feat(engine): consume multi-UEM evidence fail closed"
 ### Task 5: Google and generic OIDC SSO
 
 **Files:**
-- Create: `core/oidc.py`
+- Create: `lucidfence/core/oidc.py`
 - Modify: `saas/auth.py`
 - Modify: `saas_server.py` (auth routes only)
 - Modify: `pyproject.toml`
@@ -478,7 +478,7 @@ Expected: all pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add core/oidc.py saas/auth.py saas_server.py pyproject.toml requirements.lock sbom.cdx.json .env.example tests/test_oidc_sso.py
+git add lucidfence/core/oidc.py saas/auth.py saas_server.py pyproject.toml requirements.lock sbom.cdx.json .env.example tests/test_oidc_sso.py
 git commit -m "feat(auth): add secure Google and generic OIDC SSO"
 ```
 
@@ -492,7 +492,7 @@ git commit -m "feat(auth): add secure Google and generic OIDC SSO"
 - Modify: `bin/lucidfence` only if bind validation is not already centralized
 - Modify: `static/app.js`
 - Modify: `static/i18n.js`
-- Modify: `docs/openapi.json`
+- Modify: `docs/architecture/openapi.json`
 - Create: `tests/test_multiuem_api.py`
 - Create: `tests/test_deployment_auth_modes.py`
 - Modify: `tests/test_webapp_e2e_dashboard.py`
@@ -580,7 +580,7 @@ Expected: all pass and no JS syntax errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add saas_server.py saas/auth.py bin/lucidfence static/app.js static/i18n.js docs/openapi.json tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py
+git add saas_server.py saas/auth.py bin/lucidfence static/app.js static/i18n.js docs/architecture/openapi.json tests/test_multiuem_api.py tests/test_deployment_auth_modes.py tests/test_webapp_e2e_dashboard.py
 git commit -m "feat(ui): support hosted login and local Multi-UEM ownership"
 ```
 

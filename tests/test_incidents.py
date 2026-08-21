@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def test_incident_lifecycle_persists_and_records_audit():
-    from core.incidents import IncidentStore
+    from lucidfence.core.incidents import IncidentStore
 
     with tempfile.TemporaryDirectory() as td:
         store = IncidentStore(Path(td))
@@ -45,7 +45,7 @@ def test_incident_lifecycle_persists_and_records_audit():
 
 
 def test_incident_invalid_transition_is_rejected():
-    from core.incidents import IncidentStore
+    from lucidfence.core.incidents import IncidentStore
 
     with tempfile.TemporaryDirectory() as td:
         store = IncidentStore(Path(td))
@@ -58,7 +58,7 @@ def test_incident_invalid_transition_is_rejected():
 
 
 def test_resolved_incident_reopens_when_risk_reappears_only_when_requested():
-    from core.incidents import IncidentStore
+    from lucidfence.core.incidents import IncidentStore
 
     with tempfile.TemporaryDirectory() as td:
         store = IncidentStore(Path(td))

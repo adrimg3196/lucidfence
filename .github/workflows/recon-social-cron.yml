@@ -1,0 +1,82 @@
+name: recon-social-cron
+
+# Capa 1 — Vigilia: escanea señales externas del mercado cada 6 horas.
+# Detecta: repos de competidores nuevos, tendencias de búsqueda,
+# menciones en redes, cambios en la competencia.
+# Reutiliza scripts/recon_repos.py + scripts/recon_social.py.
+# No toma acción — solo hace visible lo que está pasando afuera.
+# Los resultados se commitean para que el daily-analysis los consuma.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"          # cada 6 horas
+  workflow_dispatch:                # permitido forzar manualmente
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Recon de repos de competidores
+        run: |
+          set -euo pipefail
+          MAX=3
+          for i in $(seq 1 "$MAX"); do
+            echo "=== intento $i/$MAX ==="
+            if python3 scripts/recon_repos.py; then
+              echo "OK en intento $i"
+              break
+            fi
+            if [ "$i" -lt "$MAX" ]; then
+              WAIT=$((i * 10))
+              echo "Retry en $WAIT s..."
+              sleep $WAIT
+            fi
+          done
+          echo "Recon repos completado (puede ser snapshot anterior si todos los intentos fallaron)"
+
+      - name: Recon social (X/Reddit/YouTube)
+        run: |
+          set -euo pipefail
+          MAX=3
+          for i in $(seq 1 "$MAX"); do
+            echo "=== intento $i/$MAX ==="
+            if python3 scripts/recon_social.py; then
+              echo "OK en intento $i"
+              break
+            fi
+            if [ "$i" -lt "$MAX" ]; then
+              WAIT=$((i * 10))
+              echo "Retry en $WAIT s..."
+              sleep $WAIT
+            fi
+          done
+          echo "Recon social completado"
+
+      - name: Persistir resultados para el análisis diario
+        run: |
+          mkdir -p data/recon
+          echo "--- recon repos $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" > data/recon/latest_recon.txt
+          python3 scripts/recon_repos.py >> data/recon/latest_recon.txt 2>&1 || true
+          echo "" >> data/recon/latest_recon.txt
+          echo "--- recon social $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >> data/recon/latest_recon.txt
+          python3 scripts/recon_social.py >> data/recon/latest_recon.txt 2>&1 || true
+          echo "Recon guardado en data/recon/latest_recon.txt"
+
+      - name: Commit resultados de recon
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/recon/latest_recon.txt
+          git commit -m "chore(recon): snapshot de recon social (${{ github.run_id }})" || echo "Nothing to commit"
+          git push

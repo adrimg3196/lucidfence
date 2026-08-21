@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
+from lucidfence.saas.auth import AuthStore, ROLE_CAPS  # noqa: E402
 
 
 def test_admin_cannot_grant_owner_or_admin_role():
@@ -16,11 +16,11 @@ def test_admin_cannot_grant_owner_or_admin_role():
     assert "user:invite" in ROLE_CAPS["admin"]
     assert "user:invite" in ROLE_CAPS["owner"]
     # owner-only grant of privileged roles is enforced in the /api/users handler;
-    # here we assert the capability model itself keeps org:billing/org:delete
-    # exclusive to owner so a minted admin can't reach billing.
-    assert "org:billing" in ROLE_CAPS["owner"]
-    assert "org:billing" not in ROLE_CAPS["admin"]
+    # here we assert the capability model itself keeps org:delete/user:role
+    # exclusive to owner so a minted admin can't destroy the org or escalate.
+    assert "org:delete" in ROLE_CAPS["owner"]
     assert "org:delete" not in ROLE_CAPS["admin"]
+    assert "user:role" not in ROLE_CAPS["admin"]
 
 
 def test_viewer_has_no_write_capabilities():
@@ -97,8 +97,8 @@ def test_soar_webhook_hmac_requires_valid_signature_and_fresh_timestamp():
 
 
 def test_webhook_non_2xx_is_not_treated_as_delegated():
-    from core.actions import LiveAdapter
-    import core.adapters.applivery as P
+    from lucidfence.core.actions import LiveAdapter
+    import lucidfence.core.adapters.applivery as P
 
     class _Resp:
         status_code = 500
@@ -158,13 +158,29 @@ def test_saas_rate_limit_keys_by_ip_then_session_and_exempts_health():
     ok, retry_after, key = mod._rate_limit_check(ip_only, now=1002)
     assert ok is False and retry_after >= 8 and key.startswith("ip:203.0.113.10")
 
-    # An authenticated browser session gets its own bucket, so one noisy IP does
-    # not block every active session behind the same NAT/proxy.
-    session_a = _Handler(cookie="gf_session=session-a")
-    session_b = _Handler(cookie="gf_session=session-b")
-    assert mod._rate_limit_key(session_a) != mod._rate_limit_key(session_b)
-    assert mod._rate_limit_check(session_a, now=1002)[0]
-    assert mod._rate_limit_check(session_b, now=1002)[0]
+    # H-1 regression: an UNKNOWN / rotated session cookie must NOT get its own
+    # bucket. Two different forged cookies from the same IP must share the IP
+    # bucket and therefore be rate-limited together (otherwise the limiter is
+    # bypassed by rotating gf_session per request).
+    forged_a = _Handler(cookie="gf_session=forged-a")
+    forged_b = _Handler(cookie="gf_session=forged-b")
+    assert mod._rate_limit_key(forged_a) == mod._rate_limit_key(forged_b)
+    assert mod._rate_limit_key(forged_a) == "ip:203.0.113.10"
+
+    # A VALID session (against AuthStore) still gets an isolated session bucket
+    # so one noisy IP does not block every legitimate active session.
+    import tempfile
+    from lucidfence.saas.auth import AuthStore
+    _store = AuthStore(tempfile.mkdtemp())
+    _real_token = _store.create_session("org-user-1")
+    _real_handler = _Handler(cookie=f"gf_session={_real_token}")
+    _saved_auth = mod._auth
+    mod._auth = _store
+    try:
+        assert mod._rate_limit_key(_real_handler).startswith("sess:")
+        assert mod._rate_limit_key(_real_handler) != "ip:203.0.113.10"
+    finally:
+        mod._auth = _saved_auth
 
     # Keep external health probes safe for always-on deploys.
     assert mod._rate_limit_check(_Handler(path="/api/health"), now=1002) == (True, 0, "")

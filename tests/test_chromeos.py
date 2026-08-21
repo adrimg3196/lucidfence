@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 sys.path.insert(0, ".")
 
-from core.adapters import ChromeOSAdapter
+from lucidfence.core.adapters import ChromeOSAdapter
 
 
 class _Device:
@@ -92,7 +92,7 @@ def test_deterministic_mock_per_device():
 
 
 def test_build_from_config_helper():
-    from core.adapters import build_chromeos_adapter_from_config
+    from lucidfence.core.adapters import build_chromeos_adapter_from_config
     a = build_chromeos_adapter_from_config({
         "mdm": {"chromeos": {"live": True, "refresh_token": "rt", "client_id": "cid",
                              "client_secret": "csec", "customer_id": "C0123"}}

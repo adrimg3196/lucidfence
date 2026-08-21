@@ -3,15 +3,18 @@ class Lucidfence < Formula
 
   desc "Open-source local geofencing and explainable UEM/MDM risk control"
   homepage "https://github.com/adrimg3196/lucidfence"
-  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.1.1/lucidfence-1.1.1.tar.gz"
-  sha256 "244dab396c6fdbb3a560e074f513d3ed2de37fb27e890440a8b2fc3b75af7152"
+  url "https://github.com/adrimg3196/lucidfence/releases/download/v1.6.0/lucidfence-1.6.0.tar.gz"
+  sha256 "85e0d87307cf1b1e3293e2e8b219a316c89210b58042f3ac6a9c3a2b05467dd2"
   license "Apache-2.0"
 
   depends_on "python@3.11"
 
+  # Pins de requirements.lock del release (solo el runtime base; las
+  # dependencias opcionales de OIDC — pyjwt/cryptography — no van en la
+  # fórmula: `import jwt` está guardado y la feature es opt-in).
   resource "requests" do
-    url "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz"
-    sha256 "dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"
+    url "https://files.pythonhosted.org/packages/34/64/8860370b167a9721e8956ae116825caff829224fbca0ca6e7bf8ddef8430/requests-2.33.0.tar.gz"
+    sha256 "c7ebc5e8b0f21837386ad0e1c8fe8b829fa5f544d8df3b2253bff14ef29d7652"
   end
 
   resource "certifi" do
@@ -30,15 +33,18 @@ class Lucidfence < Formula
   end
 
   resource "urllib3" do
-    url "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6661c76461e25f024d5a38a46f04aaca912426a2b1d3/urllib3-2.6.3.tar.gz"
-    sha256 "1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed"
+    url "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz"
+    sha256 "231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"
   end
 
   def install
     libexec.install Dir["*"]
     venv = virtualenv_create(libexec/"venv", "python3.11")
     venv.pip_install resources
-    (bin/"lucidfence").write_env_script libexec/"bin/lucidfence",
+    # El tarball no trae bin/lucidfence: el entrypoint es lucidfence/cli.py,
+    # ejecutado con el python del venv (que ya ve requests y compañía).
+    (bin/"lucidfence").write_env_script libexec/"venv/bin/python3",
+      "\"#{libexec}/lucidfence/cli.py\"",
       PATH: "#{libexec}/venv/bin:$PATH"
   end
 
@@ -75,7 +81,7 @@ class Lucidfence < Formula
     page = shell_output("curl -fsS http://127.0.0.1:#{port}/")
     assert_match "LucidFence", page
     assert_match "Command Center", page
-    assert_match "lucidfence 1.1.1", shell_output("#{bin}/lucidfence --version")
+    assert_match "lucidfence 1.6.0", shell_output("#{bin}/lucidfence --version")
   ensure
     Process.kill("TERM", pid) if pid
   end

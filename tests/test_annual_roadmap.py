@@ -4,10 +4,10 @@ import json
 import tempfile
 from pathlib import Path
 
-from core.adapter_marketplace import verify_index
-from core.cluster import ClusterLease
-from core.compliance_controls import map_controls
-from saas.auth import AuthStore, ROLE_CAPS
+from lucidfence.core.adapter_marketplace import verify_index
+from lucidfence.core.cluster import ClusterLease
+from lucidfence.core.compliance_controls import map_controls
+from lucidfence.saas.auth import AuthStore, ROLE_CAPS
 from scripts.benchmark_10k import benchmark
 from scripts.generate_sbom import build_sbom
 
@@ -46,9 +46,10 @@ def test_adapter_marketplace_manifest_is_hash_verified():
 
 
 def test_sbom_contains_locked_dependencies_and_source_manifest():
+    # El SBOM es un artefacto de build (lo genera CI y lo sube como artifact),
+    # no un fichero versionado: se valida el recién construido, no una copia
+    # commiteada que cada PR tendría que regenerar (issue #74).
     sbom = build_sbom(ROOT)
-    committed = json.loads((ROOT / "sbom.cdx.json").read_text(encoding="utf-8"))
-    assert committed == sbom
     assert sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.5"
     purls = {item["purl"] for item in sbom["components"]}
     assert "pkg:pypi/requests@2.33.0" in purls and "pkg:pypi/urllib3@2.7.0" in purls
@@ -69,7 +70,7 @@ def test_10k_geofence_kernel_benchmark_meets_budget():
 def test_installer_and_enterprise_governance_artifacts_are_real():
     installer = (ROOT / "scripts" / "service_install.sh").read_text()
     assert "/api/readyz" in installer and "/health\"" not in installer
-    assert (ROOT / "docs" / "THREAT_MODEL.md").stat().st_size > 1500
-    assert (ROOT / "docs" / "PILOT_RUNBOOK.md").stat().st_size > 1500
-    schema = json.loads((ROOT / "docs" / "openapi.json").read_text())
+    assert (ROOT / "docs" / "architecture" / "THREAT_MODEL.md").stat().st_size > 1500
+    assert (ROOT / "docs" / "operations" / "PILOT_RUNBOOK.md").stat().st_size > 1500
+    schema = json.loads((ROOT / "docs" / "architecture" / "openapi.json").read_text())
     assert schema["openapi"] == "3.1.0" and len(schema["paths"]) >= 10

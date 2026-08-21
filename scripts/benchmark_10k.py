@@ -8,7 +8,7 @@ import math
 import statistics
 import time
 
-from core.geo import Point, haversine_m
+from lucidfence.core.geo import Point, haversine_m
 
 
 def benchmark(devices: int = 10_000, rounds: int = 5) -> dict:

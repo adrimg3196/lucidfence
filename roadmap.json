@@ -1,11 +1,11 @@
 {
   "meta": {
     "version": "1.0",
-    "status": "complete",
+    "status": "archived",
     "title": "LucidFence — Roadmap anual de mejora (tooling)",
     "tool": "geofencing",
     "created": "2026-07-20",
-    "updated": "2026-07-27",
+    "updated": "2026-08-01",
     "horizon": "12 meses · Q3-2026 → Q2-2027",
     "principles": [
       "Local-first & soberano: los datos del tenant nunca salen de su maquina.",
@@ -15,7 +15,8 @@
       "Sin secretos: nada de tokens en el cliente Pages ni en el repo.",
       "Mejora continua como ciudadano de primera clase: roadmap vivo + /loop MoA (proposers gratis + Opus 4.8)."
     ],
-    "completion": "18/18 features completed with local/runtime evidence; external paid credentials remain optional, not blockers."
+    "completion": "18/18 features completed with local/runtime evidence; external paid credentials remain optional, not blockers.",
+    "note": "Histórico del tooling de auto-mejora (/loop MoA), 18/18 completado. El roadmap de producto vivo es docs/roadmap/PRODUCT_ROADMAP.md (loop Roadmap). No reabrir este JSON."
   },
   "plan": {
     "phases": [
@@ -285,8 +286,8 @@
             },
             "_phase_id": "Q4-2026",
             "completion_evidence": [
-              "core/ai.py alert_blurb",
-              "core/alerts.py",
+              "lucidfence/core/ai.py alert_blurb",
+              "lucidfence/core/alerts.py",
               "Atomic Mail + signed webhook channels",
               "tenant-local AI settings"
             ]
@@ -323,7 +324,7 @@
             },
             "_phase_id": "Q4-2026",
             "completion_evidence": [
-              "core/predictive.py explainable short-horizon forecast",
+              "lucidfence/core/predictive.py explainable short-horizon forecast",
               "weekly_summary + anomaly detection",
               "Intelligence UI KPIs",
               "tests/test_predictive_movement.py"
@@ -443,8 +444,8 @@
             },
             "_phase_id": "Q1-2027",
             "completion_evidence": [
-              "core/provider_plugins.py",
-              "plugins/providers one-file contract",
+              "lucidfence/core/provider_plugins.py",
+              "lucidfence/plugins/providers one-file contract",
               "auto-discovery + validation",
               "tests/test_provider_plugins.py"
             ]
