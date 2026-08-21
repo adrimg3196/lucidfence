@@ -1,32 +1,41 @@
 # LucidFence
 
-**Multi-UEM local-first. BYOI (Bring Your Own Infrastructure).** Tu data en tu máquina, tú firmas los tokens UEM, tú controlas el despliegue. No hay backend propietario que guarde dispositivos ni credenciales.
+**Multi-UEM, local-first. BYOI (Bring Your Own Infrastructure).** Your data lives
+on your machine, you sign the UEM tokens, you control the deployment. There is no
+proprietary backend storing devices or credentials.
 
-## Qué es
+> 🇬🇧 **English** · [🇪🇸 Español](docs/README.es.md)
 
-Engine de geofencing + política de riesgo que habla con los adaptadores UEM que tú ya tienes (Applivery, Intune, Jamf, y más). Genera el estado de compliance, lo expone en un dashboard local, y opcionalmente publica un snapshot público para la vitrina.
+## What it is
 
-Local-first: el estado de los dispositivos vive en tu máquina. La nube es solo publicar un JSON demo si quieres la vitrina → raw.githubusercontent (CORS `*`, sin secretos por diseño).
+A geofencing engine + risk policy that talks to the UEM adapters you already run
+(Applivery, Intune, Jamf, Fleet, and more). It produces a compliance state, shows
+it on a local dashboard, and optionally publishes a public snapshot for the
+showcase.
 
-## Rápido
+Local-first: fleet state lives on your machine. The cloud is only an optional demo
+JSON snapshot for the showcase → raw.githubusercontent (CORS `*`, no secrets by design).
+
+## Quick start
 
 ```bash
-# 1 — instalar
+# 1 — install
 ./install.sh
-# o
+# or
 docker compose up -d
 
-# 2 — del install a ver tu flota, en pasos autoverificados
-lucidfence quickstart             # entorno → app → dashboard → fuente de datos
-# (equivale a: python3 saas_server.py en :8765 + comprobaciones)
+# 2 — from install to seeing your fleet, in self-verifying steps
+lucidfence quickstart             # env → app → dashboard → data source
+# (equivalent to: python3 saas_server.py on :8765 + checks)
 
-# 3 — tests (honestos)
+# 3 — tests (honest)
 python3 tests/run_tests.py
 ```
 
-`lucidfence quickstart` es el camino recomendado para un admin nuevo: comprueba
-el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
-tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
+`lucidfence quickstart` is the recommended path for a new admin: it checks the
+environment, starts the app, verifies the live dashboard, and tells you exactly
+how to connect your real UEM (Intune/Jamf/Applivery/Fleet) — with the concrete
+action if something is missing.
 
 > 📖 **Manual de uso** (con capturas): [español](docs/manual/MANUAL_DE_USO.md) ·
 > [English](docs/manual/USER_GUIDE.md) · interactivo en `/static/manual.html`
@@ -36,109 +45,98 @@ tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta
 > qué necesitas, cómo instalar, cómo comprobar que funciona, FAQ y cómo reportar
 > un bug. (Este README es la vista técnica del proyecto.)
 
-Dashboard: `http://localhost:8765` → `static/dashboard.html` (SPA local que habla con `:8765`).
+Dashboard: `http://localhost:8765` → `static/dashboard.html` (local SPA talking to `:8765`).
 
 ## Stack
 
-- Python 3.11, stdlib-first. HTTP propio en `saas_server.py` (no web frameworks).
-- Cada adaptador UEM es un plugin para `core/` — engine, policies, state_store, adapters, cve_feed_nvd, location_source (simulation).
-- Cloudflare Worker opcional para el gateway UEM (`apps/uem-gateway/`).
-- App macOS Swift opcional (`apps/macos/` + builder DMG).
+- Python 3.11, stdlib-first. Own HTTP in `saas_server.py` (no web frameworks).
+- Each UEM adapter is a plugin under `core/` — engine, policies (risk),
+  state_store, adapters, cve_feed_nvd, location_source (simulation).
+- Optional Cloudflare Worker for the UEM gateway (`apps/uem-gateway/`).
+- Optional macOS Swift app (`apps/macos/` + DMG builder).
 
-## Archivos que importan
+## Files that matter
 
 ```
-lucidfence/          # el único paquete Python (todo lo importable)
+lucidfence/          # the only Python package (everything importable)
 core/                # engine, policies (risk), state_store, adapters, cve_feed_nvd, location_source
-saas/                # tenants, auth local, RBAC
-mcp/                 # servidores MCP stdio read-only
-plugins/             # índice de adapters verificado por hash + providers de terceros
-cli.py / shell.py    # CLI de ciclo de vida y shell interactiva
+saas/                # tenants, local auth, RBAC
+mcp/                 # read-only stdio MCP servers
+plugins/             # hash-verified adapter index + third-party providers
+cli.py / shell.py    # lifecycle CLI and interactive shell
 
 apps/
-  macos/             # app Swift + builder DMG
-  uem-gateway/       # Cloudflare Worker opcional
+  macos/             # Swift app + DMG builder
+  uem-gateway/       # optional Cloudflare Worker
 
 data/
-  cloud_state.json           # estado publicado para la vitrina (commiteado, lo sirve Pages)
-  cloud_tenants/<id>/data/  # tenants de la nube (multi-tenant real vía saas-api)
+  cloud_state.json           # published showcase state (committed, served by Pages)
+  cloud_tenants/<id>/data/   # cloud tenants (real multi-tenant via saas-api)
 
 static/
-  dashboard.html     # SPA local
-  cloud.html         # vitrina serverless (lee data/cloud_state.json vía raw.githubusercontent)
+  dashboard.html     # local SPA
+  cloud.html         # serverless showcase (reads data/cloud_state.json via raw.githubusercontent)
   app.js
 
-docs/                # toda la documentación; índice en docs/README.md
-tests/               # runner honesto: tests/run_tests.py
+docs/                # all documentation; index in docs/README.md
+tests/               # honest runner: tests/run_tests.py
 ```
 
-## No está terminado (el openly honest gaps)
+## What works today
 
-Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
+- Compliance engine + risk policy: runs locally, reports in/no-compliant/violation devices.
+- UEM adapters available: Applivery, Intune, Jamf, Fleet (local state after ingest).
+  Per-UEM minimum-privilege onboarding in [`docs/integrations/`](docs/integrations/)
+  (Intune, Jamf, Applivery, Fleet) and the [location matrix](docs/integrations/LOCATION_MATRIX.md)
+  with what each UEM really provides.
+- **Simultaneous multi-UEM per tenant:** Applivery live by default; Intune
+  (Microsoft Graph) and Jamf Pro go live when you connect your tenant token
+  (they fall back to simulation without one). Zero data exfiltration. See the
+  [multi-UEM matrix](docs/integrations/MULTI_UEM.md) and
+  [PRODUCT_SPEC](docs/architecture/PRODUCT_SPEC.md).
+- **Declarative SOAR:** 4 frontline playbooks (critical CVE, CVE + out-of-perimeter,
+  non-compliant + out, high EPSS) with per-device audit (`matched_fields`).
+- Safe rollout for pilots: `enforcement.mode: observe|enforce`, per-action gating,
+  double-key wipe. Runbook: [`docs/operations/ENFORCEMENT.md`](docs/operations/ENFORCEMENT.md);
+  day-2 (service, backup, upgrade): [`docs/operations/DAY2.md`](docs/operations/DAY2.md).
+- Local dashboard on `:8765`.
+- Optional osquery posture: OS, storage, encryption, battery — correlated with
+  geospatial risk. See [`docs/integrations/OSQUERY.md`](docs/integrations/OSQUERY.md).
+- Cloud showcase: `data/cloud_state.json` published, read by `static/cloud.html`.
+- Honest test runner (`python3 tests/run_tests.py`): real gates, no stubs; the
+  tally lives in CI, not here (prose numbers go stale).
+- Local state cron: `geofence_daily_report.sh` produces the summary with no network.
+- License: Apache-2.0 (`LICENSE`), aligned with `pyproject.toml` and the Homebrew formula.
 
-| Área | Estado | Qué falta |
-|------|--------|-----------|
-| **README público / onboarding de terceros** | Completo — guía de arranque externa | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md): qué necesitas, cómo instalas, cómo compruebas que funciona, primer paso real (conectar UEM), FAQ y cómo reportar bugs/seguridad. Enlazada desde arriba. |
-| **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza reintroducir cloud_state.json en main — se publica en la rama cloud-state), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
-| **Publicación de release tags / versiones** | Completo — GitHub Releases publicadas | v1.5.0 publicada como GitHub Release con description y asset; `release.yml` construye, instala y arranca el artefacto antes de publicar. Ver CHANGELOG.md y la pestaña Releases. |
-| **Docker / compose para terceros documentado** | Completo — docker-compose.yml + Dockerfile existen | `docker compose up -d` corre LucidFence always-on en localhost:8765. Perfil `internet-facing` levanta Caddy para TLS. Ver `docker-compose.yml`. |
-| **Documentación de adapters UEM para contribuidores** | Completo — guía pública | `docs/contributing/new-adapter-guide.md`: cómo agregar un adaptador UEM nuevo con el contrato `MDMAdapter` y el camino mock offline. Scaffolding con `lucidfence adapter new`. |
-| **Vitrina pública viva / demo** | Completo — vitrina + demo walkthrough | `cloud.html` lee raw.githubusercontent, funcional. Demo paso a paso sin código en `docs/demo-walkthrough.md`. |
-| **Pricing / modelo de negocio declarado** | Declarado — 100% free OSS | **No hay pricing.** LucidFence es software libre y open-source bajo Apache-2.0: sin tier de pago, sin edición enterprise, sin funciones de pago, sin telemetría. Todo el producto es gratis para usar, modificar y distribuir. Ver §Modelo abajo. |
-| **Canales de soporte / issues triage** | Funcional | `CONTRIBUTING.md` con el flujo; issues de terceros triados por la flota (etiquetado + respuesta), autores externos nunca auto-mergeados. |
-| **Seguridad: disclosure policy** | Completo | `SECURITY.md` con el disclosure path; el loop Centinela ataca el propio LucidFence en localhost (método Strix) y registra hallazgos con PoC. |
+## Model (free & open-source)
 
-Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista.
+LucidFence is **free, libre, and open-source — 100% free**. There is no paid
+business model:
 
-## Lo que sí funciona hoy
+- **No pricing, no tiers.** There is no "pro", "enterprise", or "paid cloud"
+  edition. The whole product — engine, UEM adapters, dashboard, local
+  multi-tenant SaaS, MCP — is in this repo under Apache-2.0.
+- **No paid features or upsell.** Nothing sits behind a wall. Nothing requires a
+  commercial license.
+- **No telemetry, no exfiltration.** Tenant data lives on your machine; there is
+  no proprietary backend collecting it.
+- **BYOI (Bring Your Own Infrastructure).** You run the deployment with your own
+  UEM credentials and free tiers; the project charges nothing and intermediates nothing.
 
-- Engine de compliance + política de riesgo: corre local, reporta dispositivos dentro/no-compliant/violaciones.
-- Adapters UEM existentes: Applivery, Intune, Jamf, Fleet (estado local después de ingest).
-  Onboarding por UEM con mínimo privilegio en [`docs/integrations/`](docs/integrations/)
-  (Intune, Jamf, Applivery, Fleet) y la [matriz de ubicación](docs/integrations/LOCATION_MATRIX.md)
-  con lo que cada UEM da de verdad.
-- **Multi-UEM simultáneo por tenant:** Applivery live por defecto; Intune (Microsoft Graph) y Jamf Pro en modo live al conectar tu token del tenant (caen a simulación sin token). Cero exfiltración de datos. Ver [matriz de UEMs](docs/integrations/MULTI_UEM.md) y [PRODUCT_SPEC](docs/architecture/PRODUCT_SPEC.md).
-- **SOAR declarativo:** 4 playbooks frontline (CVE crítico, CVE + fuera de perímetro, no conforme + fuera, EPSS alto) con auditoría por dispositivo (`matched_fields`).
-- Rollout seguro para pilotos: `enforcement.mode: observe|enforce`, gating por
-  acción y doble llave para wipe. Runbook: [`docs/operations/ENFORCEMENT.md`](docs/operations/ENFORCEMENT.md);
-  día 2 (servicio, backup, upgrade): [`docs/operations/DAY2.md`](docs/operations/DAY2.md).
-- Dashboard local en `:8765`.
-- Postura opcional con osquery: SO, almacenamiento, cifrado y batería,
-  correlacionados con el riesgo geoespacial. Ver
-  [`docs/integrations/OSQUERY.md`](docs/integrations/OSQUERY.md).
-- Cloud vitrina: `data/cloud_state.json` publicado, leído por `static/cloud.html`.
-- Test runner honesto (`python3 tests/run_tests.py`): gates reales, no stubs; el tally vive en CI, no aquí (los números en prosa caducan).
-- Cron de estado local: `geofence_daily_report.sh` genera el resumen sin red.
-- License: Apache-2.0 (`LICENSE`), alineada con `pyproject.toml` y la fórmula Homebrew.
-
-## Modelo (free & open-source)
-
-LucidFence es **software libre y open-source, 100% gratis**. No hay modelo de
-negocio de pago:
-
-- **Sin pricing, sin tiers.** No existe una edición "pro", "enterprise" ni
-  "cloud de pago". Todo el producto —engine, adaptadores UEM, dashboard, SaaS
-  local multi-tenant, MCP— está en este repo bajo Apache-2.0.
-- **Sin funciones de pago ni upsell.** Nada queda detrás de un muro. Nada exige
-  una licencia comercial.
-- **Sin telemetría, sin exfiltración.** Los datos del tenant viven en su
-  máquina; no hay backend propietario que los recoja.
-- **BYOI (Bring Your Own Infrastructure).** Tú corres el despliegue con tus
-  propias credenciales UEM y tus tiers gratuitos; el proyecto no cobra ni
-  intermedia.
-
-Apache-2.0 permite a cualquiera —persona o empresa— usarlo, modificarlo y
-distribuirlo sin coste ni restricción. Si alguien construye un servicio de pago
-encima, es cosa suya; el proyecto en sí es y seguirá siendo gratis.
+Apache-2.0 lets anyone — person or company — use, modify, and distribute it at no
+cost or restriction. If someone builds a paid service on top, that's their call;
+the project itself is and will remain free.
 
 ## Credits
 
-Ver `AGENTS.md` para quién trabaja esto (agentes + Adri). Esto es desarrollo multi-agente concurrente + humano propietario, commits en nombres distintos.
+See `AGENTS.md` for who builds this (agents + Adri). This is concurrent
+multi-agent development + a human owner, with commits under different names.
 
 ## License
 
-Apache-2.0 — ver `LICENSE` para los términos completos. Sin restricciones de uso, modificación, distribución. Corporaciones pueden adoptar esto sin revisión legal de copysleft.
+Apache-2.0 — see `LICENSE` for the full terms. No restriction on use,
+modification, or distribution. Corporations can adopt this without copyleft legal review.
 
 ---
 
-*Full-local. Sin credenciales. Sin backend propietario de datos.*
+*Full-local. No credentials. No proprietary data backend.*

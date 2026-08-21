@@ -46,6 +46,8 @@ curl -s http://localhost:8765/api/health      # -> {"status":"ok",...}
 - Dashboard: **http://localhost:8765** (SPA local que habla con `:8765`).
 - Si ves la flota de demo, el modo simulación funciona; conecta tu UEM cuando
   quieras datos reales.
+- Para entrar al dashboard en local puedes usar la cuenta demo sembrada:
+  **`ciso@acme.test` / `demo1234`** (datos de demo, sin producción).
 - Suite de humo (opcional, honesta): `python3 tests/run_tests.py`.
 
 Un recorrido guiado sin escribir código está en
