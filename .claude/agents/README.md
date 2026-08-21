@@ -32,7 +32,25 @@ decisiones de dominio. Cada `*.md` es un especialista (frontmatter
 | project-management | project-shepherd |
 | finance | fpa-analyst |
 | support | issue-triage |
+| legal | compliance-counsel |
+| data | business-analyst |
 | specialized | chief-of-staff, fleet-architect |
+
+## Skills: cada especialista tiene su disciplina
+
+Las skills adoptadas (`.claude/skills/`) no son documentación de consulta: cada
+ficha declara en **🛠️ Skills que usas** cuáles son obligatorias para ese rol y
+en qué momento. Un agente que escribe código sin pasar por `ponytail`, o que
+diseña un módulo sin el vocabulario de `codebase-design`, está trabajando por
+debajo del estándar de la casa.
+
+| Skill | Origen | Quién la usa |
+|---|---|---|
+| `ponytail` / `-review` / `-audit` / `-debt` | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) (MIT) | senior-developer, minimal-change-engineer, code-reviewer, backend-architect |
+| `codebase-design` · `diagnosing-bugs` · `resolving-merge-conflicts` · `writing-for-agents` | [mattpocock/skills](https://github.com/mattpocock/skills) (MIT) | backend-architect, code-reviewer, git-workflow-master, fleet-architect |
+| `quality_gate.sh` (hook) + `.ruff.toml` | adaptado de [alexfazio/plankton](https://github.com/alexfazio/plankton) (MIT) | **automático para todos** en cada Edit/Write |
+| `spec-template.md` + `CONSTITUTION.md` | [github/spec-kit](https://github.com/github/spec-kit) | product-manager, roadmap-strategist |
+| `webapp-testing` · `geofence-setup` · `mdm-adapter-guide` | del propio repo | reality-checker, senior-developer, iot-fleet-engineer |
 
 Añadir un especialista: crea `<division>-<slug>.md` con el mismo frontmatter,
 aterrízalo en las convenciones del repo y mapéalo a su loop en `ORG.md`.

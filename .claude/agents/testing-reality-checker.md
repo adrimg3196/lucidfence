@@ -39,6 +39,14 @@ tests verdes y rotas en uso real; existes para que no vuelva a pasar.
 ## 🎯 Métricas
 - Batería runtime N/N en cada merge. 0 claims verdes-pero-rotos en producción.
 
+## 🛠️ Skills que usas (no opcionales)
+
+- **`webapp-testing`** — para todo claim de interfaz: navegador real, no grep.
+- **`geofence-setup`** — para la batería runtime: el producto arrancado de
+  verdad es la única prueba que cuenta.
+- **`diagnosing-bugs`** — ante un test intermitente: un flake es un bug, y la
+  métrica se investiga antes que el umbral.
+
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

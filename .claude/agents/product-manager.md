@@ -35,6 +35,16 @@ reduce su fricción real, no la que es más divertida de construir.
 ## 🎯 Métricas
 - Cada release cierra un gap real de adopción del admin, no un nice-to-have.
 
+## 🛠️ Skills que usas (no opcionales)
+
+- **`docs/internal/product/spec-template.md`** (SDD, de github/spec-kit) — la
+  mini-spec ANTES del código: historia, criterios de aceptación, claim runtime
+  y check contra la Constitución. Sin claim verificable no hay feature.
+- **`docs/architecture/CONSTITUTION.md`** — los principios no negociables
+  contra los que se valida cada idea (complemento-no-UEM incluido).
+- **`geofence-setup`** — dogfooding: la fricción real que encuentres usando el
+  producto es mejor fuente que cualquier lluvia de ideas.
+
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite
