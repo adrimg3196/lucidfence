@@ -1807,6 +1807,48 @@ class Handler(BaseHTTPRequestHandler):
             return _send_json(self, {"org": o.to_dict(), "plan": FREE_PLAN,
                                      "role": user["org_roles"].get(org)})
 
+        if route == "/api/org" and method == "DELETE":
+            # Borrar la organización es destructivo y owner-only. La capability
+            # 'org:delete' ya está modelada en ROLE_CAPS['owner']; aquí la
+            # enforcemos y además exigimos sesión (jamás una api_key, igual que
+            # el resto de operaciones destructivas de owner).
+            if not AuthStore.can(user["org_roles"].get(org), "org:delete") \
+                    or user.get("auth_type") == "api_key":
+                return _send_json(self, {
+                    "error": "solo un propietario con sesión puede eliminar la organización",
+                    "capability": "org:delete"}, 403)
+            # Guardarraíl del último propietario (ZERO-BACKLOG #70): una org
+            # nunca puede quedar sin owner, y el único owner no puede borrarla
+            # (se quedaría huérfana e inaccesible para facturación/gestión).
+            if _auth.count_org_owners(org) <= 1:
+                return _send_json(self, {
+                    "error": "no se puede eliminar la organización siendo su único propietario; "
+                             "transfiere la propiedad o dala de baja primero",
+                    "capability": "org:delete"}, 400)
+            # Estrictamente tenant-local: solo la org activa del usuario.
+            tdir = _tenants.data_dir(org)
+            append_audit(tdir, {"event": "org.deleted", "actor": user.get("id"),
+                                "org_id": org})
+            try:
+                with _engines_lock:
+                    old = _engines.pop(org, None)
+                    if old is not None:
+                        try:
+                            old.stop()
+                        except Exception:
+                            pass
+                removed = _tenants.delete(org)
+            except Exception as exc:  # robustness: never 500 on destructive op
+                return _send_json(self, {"ok": False,
+                                         "error": f"org_delete_error: {type(exc).__name__}: {exc}"})
+            if not removed:
+                return _send_json(self, {"ok": False, "error": "org no encontrada"}, 404)
+            # Invalida la cookie de org activa para que el cliente no quede
+            # apuntando a un tenant ya inexistente.
+            _clear_cookie(self, COOKIE_ORG)
+            return _send_json(self, {"ok": True, "org_id": org,
+                                     "destroyed_session_org": True})
+
         if route.startswith("/api/orgs/") and route.endswith("/switch") and method == "POST":
             target = route[len("/api/orgs/"):-len("/switch")]
             if target not in user["org_roles"]:
