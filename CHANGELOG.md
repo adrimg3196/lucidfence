@@ -4,6 +4,9 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
+- feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
+
 ## [1.6.0] - 2026-08-18
 
 ### Added

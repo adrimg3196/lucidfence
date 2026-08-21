@@ -19,6 +19,17 @@ primary_region = "mad"   # Madrid (cerca de ti); cambia a "gru" o "cdg" si prefi
   auto_start_machines = true
   min_machines_running = 1         # al menos 1 VM siempre viva (free tier)
 
+  # Healthcheck: Fly no reinicia máquinas enfermas sin esto. /api/health no
+  # requiere auth, así que un proceso colgado deja de recibir tráfico en vez de
+  # mentir con "always-on".
+  [[http_service.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+    protocol = "http"
+
   [http_service.concurrency]
     type = "requests"
     soft_limit = 200
