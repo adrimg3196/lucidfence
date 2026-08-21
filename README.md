@@ -28,11 +28,10 @@ python3 tests/run_tests.py
 el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
 tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
 
-> ¿Comparando con tu UEM actual? Lee las comparativas capability-by-capability,
-> cada celda cita la doc interna:
-> [LucidFence vs Intune](docs/comparisons/lucidfence-vs-intune.md) ·
-> [LucidFence vs Jamf](docs/comparisons/lucidfence-vs-jamf.md).
-
+> 📖 **Manual de uso** (con capturas): [español](docs/manual/MANUAL_DE_USO.md) ·
+> [English](docs/manual/USER_GUIDE.md) · interactivo en `/static/manual.html`
+> de tu instalación (selector ES/EN).
+>
 > ¿Primera vez? Empieza por **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**:
 > qué necesitas, cómo instalar, cómo comprobar que funciona, FAQ y cómo reportar
 > un bug. (Este README es la vista técnica del proyecto.)
@@ -80,7 +79,7 @@ Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 | Área | Estado | Qué falta |
 |------|--------|-----------|
 | **README público / onboarding de terceros** | Completo — guía de arranque externa | [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md): qué necesitas, cómo instalas, cómo compruebas que funciona, primer paso real (conectar UEM), FAQ y cómo reportar bugs/seguridad. Enlazada desde arriba. |
-| **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza cambios a cloud_state.json en PR), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
+| **CI real (no solo cron de state)** | Funcional — CI completa ya existe | GitHub Actions ya gatea: python tests, frontend syntax check, dependency audit (pip-audit + CycloneDX SBOM), runtime-artifacts (rechaza reintroducir cloud_state.json en main — se publica en la rama cloud-state), secret-scan (gitleaks). Ver `.github/workflows/ci.yml`. |
 | **Publicación de release tags / versiones** | Completo — GitHub Releases publicadas | v1.5.0 publicada como GitHub Release con description y asset; `release.yml` construye, instala y arranca el artefacto antes de publicar. Ver CHANGELOG.md y la pestaña Releases. |
 | **Docker / compose para terceros documentado** | Completo — docker-compose.yml + Dockerfile existen | `docker compose up -d` corre LucidFence always-on en localhost:8765. Perfil `internet-facing` levanta Caddy para TLS. Ver `docker-compose.yml`. |
 | **Documentación de adapters UEM para contribuidores** | Completo — guía pública | `docs/contributing/new-adapter-guide.md`: cómo agregar un adaptador UEM nuevo con el contrato `MDMAdapter` y el camino mock offline. Scaffolding con `lucidfence adapter new`. |
@@ -98,6 +97,8 @@ Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista
   Onboarding por UEM con mínimo privilegio en [`docs/integrations/`](docs/integrations/)
   (Intune, Jamf, Applivery, Fleet) y la [matriz de ubicación](docs/integrations/LOCATION_MATRIX.md)
   con lo que cada UEM da de verdad.
+- **Multi-UEM simultáneo por tenant:** Applivery live por defecto; Intune (Microsoft Graph) y Jamf Pro en modo live al conectar tu token del tenant (caen a simulación sin token). Cero exfiltración de datos. Ver [matriz de UEMs](docs/integrations/MULTI_UEM.md) y [PRODUCT_SPEC](docs/architecture/PRODUCT_SPEC.md).
+- **SOAR declarativo:** 4 playbooks frontline (CVE crítico, CVE + fuera de perímetro, no conforme + fuera, EPSS alto) con auditoría por dispositivo (`matched_fields`).
 - Rollout seguro para pilotos: `enforcement.mode: observe|enforce`, gating por
   acción y doble llave para wipe. Runbook: [`docs/operations/ENFORCEMENT.md`](docs/operations/ENFORCEMENT.md);
   día 2 (servicio, backup, upgrade): [`docs/operations/DAY2.md`](docs/operations/DAY2.md).

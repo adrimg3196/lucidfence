@@ -158,13 +158,29 @@ def test_saas_rate_limit_keys_by_ip_then_session_and_exempts_health():
     ok, retry_after, key = mod._rate_limit_check(ip_only, now=1002)
     assert ok is False and retry_after >= 8 and key.startswith("ip:203.0.113.10")
 
-    # An authenticated browser session gets its own bucket, so one noisy IP does
-    # not block every active session behind the same NAT/proxy.
-    session_a = _Handler(cookie="gf_session=session-a")
-    session_b = _Handler(cookie="gf_session=session-b")
-    assert mod._rate_limit_key(session_a) != mod._rate_limit_key(session_b)
-    assert mod._rate_limit_check(session_a, now=1002)[0]
-    assert mod._rate_limit_check(session_b, now=1002)[0]
+    # H-1 regression: an UNKNOWN / rotated session cookie must NOT get its own
+    # bucket. Two different forged cookies from the same IP must share the IP
+    # bucket and therefore be rate-limited together (otherwise the limiter is
+    # bypassed by rotating gf_session per request).
+    forged_a = _Handler(cookie="gf_session=forged-a")
+    forged_b = _Handler(cookie="gf_session=forged-b")
+    assert mod._rate_limit_key(forged_a) == mod._rate_limit_key(forged_b)
+    assert mod._rate_limit_key(forged_a) == "ip:203.0.113.10"
+
+    # A VALID session (against AuthStore) still gets an isolated session bucket
+    # so one noisy IP does not block every legitimate active session.
+    import tempfile
+    from lucidfence.saas.auth import AuthStore
+    _store = AuthStore(tempfile.mkdtemp())
+    _real_token = _store.create_session("org-user-1")
+    _real_handler = _Handler(cookie=f"gf_session={_real_token}")
+    _saved_auth = mod._auth
+    mod._auth = _store
+    try:
+        assert mod._rate_limit_key(_real_handler).startswith("sess:")
+        assert mod._rate_limit_key(_real_handler) != "ip:203.0.113.10"
+    finally:
+        mod._auth = _saved_auth
 
     # Keep external health probes safe for always-on deploys.
     assert mod._rate_limit_check(_Handler(path="/api/health"), now=1002) == (True, 0, "")

@@ -10,9 +10,9 @@ Corre, en orden, las cuatro comprobaciones que forman el gate QA del repo:
   1. Coherencia de versión   cli.VERSION == pyproject == .release-version
   2. Enlaces de docs          links relativos de *.md resuelven (docs/ + raíz)
   3. Batería runtime          scripts/runtime_validation.py debe dar N/N
-  4. Suite honesta            tests/run_tests.py; tolera SOLO la baseline
-                              conocida de test_oidc_sso.py (cryptography del
-                              sistema roto en algunos contenedores; verde en CI)
+  4. Suite honesta            tests/run_tests.py; 0 failed obligatorio. Los
+                              tests que no pueden correr aquí (cryptography
+                              fijada ausente) SALTAN con motivo, no fallan.
 
 Uso:
     python3 scripts/verify.py             # todo; exit 0 solo si todo pasa
@@ -28,18 +28,73 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
+
+# #51: el repo exige Python >= 3.11 (tomllib, match statements, etc.). El
+# sistema trae 3.9 y `import tomllib` rompe verify.py al arrancar. Fallamos
+# temprano con un mensaje claro en vez de un traceback de ImportError.
+_MIN_PY = (3, 11)
+if sys.version_info < _MIN_PY:
+    sys.stderr.write(
+        "ERROR: LucidFence `verify` necesita Python >= "
+        f"{'%d.%d' % _MIN_PY}, pero usa {sys.version.split()[0]}.\n"
+        "Usa un venv: python3.11 -m venv .venv && . .venv/bin/activate\n"
+        "  luego: python3.11 scripts/verify.py\n"
+    )
+    sys.exit(2)
+
+import tomllib  # noqa: E402  (después del guard de versión)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-# La única baseline de fallos tolerada: OIDC necesita un `cryptography` sano y
-# algunos contenedores lo traen roto. En CI (cryptography bueno) estos pasan.
-OIDC_BASELINE = "test_oidc_sso.py"
 
 
 def _run(cmd: list[str]) -> tuple[int, str]:
     p = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
     return p.returncode, (p.stdout or "") + (p.stderr or "")
+
+
+def check_license_apache2() -> tuple[bool, str]:
+    """LICENSE must be verbatim Apache-2.0 (SPDX) except the appendix block.
+
+    GitHub's license detector and OSS aggregators (LibHunt, alternativeto,
+    "open-source alternatives to Intune" lists) rely on a clean Apache-2.0
+    match; a paraphrased/modified LICENSE makes them report "Other" and omit
+    us. The terms-and-conditions body must be byte-identical to the ASF
+    canonical (vendored at scripts/license-ref/APACHE-2.0.txt); only the
+    APPENDIX boilerplate (copyright holder) is allowed to differ.
+    """
+    license_path = os.path.join(ROOT, "LICENSE")
+    ref_path = os.path.join(ROOT, "scripts", "license-ref", "APACHE-2.0.txt")
+    if not os.path.exists(license_path):
+        return False, "LICENSE ausente"
+    if not os.path.exists(ref_path):
+        return False, "referencia scripts/license-ref/APACHE-2.0.txt ausente"
+    with open(license_path, encoding="utf-8") as fh:
+        actual = fh.read()
+    with open(ref_path, encoding="utf-8") as fh:
+        ref = fh.read()
+
+    marker = "END OF TERMS AND CONDITIONS"
+
+    def terms(text: str) -> str:
+        idx = text.find(marker)
+        if idx == -1:
+            return text
+        end = text.find("\n", idx)
+        return text[:end] if end != -1 else text
+
+    actual_terms, ref_terms = terms(actual), terms(ref)
+    if actual_terms != ref_terms:
+        a, r = actual_terms.splitlines(), ref_terms.splitlines()
+        for i, (la, lr) in enumerate(zip(a, r)):
+            if la != lr:
+                return False, (f"términos Apache-2.0 difieren en línea {i + 1}: "
+                               f"LICENSE={la!r} vs canonical={lr!r}")
+        return False, "estructura de términos Apache-2.0 difiere (longitud)"
+    if "Licensed under the Apache License, Version 2.0" not in actual:
+        return False, "el apéndice no conserva el aviso Apache-2.0"
+    if "Copyright" not in actual:
+        return False, "el apéndice no conserva el copyright"
+    return True, "LICENSE == Apache-2.0 (términos verbatim; apéndice rellenado)"
 
 
 def check_version_consistency() -> tuple[bool, str]:
@@ -104,26 +159,23 @@ def check_runtime_battery() -> tuple[bool, str]:
 
 def check_test_suite() -> tuple[bool, str]:
     rc, out = _run([sys.executable, "tests/run_tests.py"])
-    m = re.search(r"===\s*(\d+)\s*passed,\s*(\d+)\s*failed\s*===", out)
+    m = re.search(r"===\s*(\d+)\s*passed,\s*(\d+)\s*skipped,\s*(\d+)\s*failed\s*===", out)
     if not m:
         tail = out.strip().splitlines()[-1] if out.strip() else "sin salida"
         return False, f"no se pudo leer el tally ({tail})"
-    passed, failed = int(m.group(1)), int(m.group(2))
+    passed, skipped, failed = int(m.group(1)), int(m.group(2)), int(m.group(3))
     if failed == 0:
-        return True, f"{passed} passed, 0 failed"
-    # Falla — ¿son todos la baseline conocida de OIDC?
+        return True, f"{passed} passed, {skipped} skipped, 0 failed"
+    # El runner honesto ahora SALTA (no falla) la baseline OIDC del contenedor,
+    # con motivo declarado. Cualquier `failed` aquí es un fallo real y bloquea.
     fail_lines = re.findall(r"^\s*-\s+(\S+::\S+)", out, re.MULTILINE)
-    non_baseline = [f for f in fail_lines if not f.startswith(OIDC_BASELINE)]
-    if fail_lines and not non_baseline:
-        return True, (f"{passed} passed, {failed} failed "
-                      f"(todos {OIDC_BASELINE} — baseline conocida del contenedor; "
-                      f"verde en CI)")
-    shown = non_baseline or [f"{failed} fallos no parseables"]
-    return False, f"{passed} passed, {failed} failed — reales: " + "; ".join(shown[:5])
+    shown = fail_lines or [f"{failed} fallos no parseables"]
+    return False, f"{passed} passed, {skipped} skipped, {failed} failed — reales: " + "; ".join(shown[:5])
 
 
 # (nombre, función, is_runtime, is_deterministic-doc-check)
 CHECKS = [
+    ("Licencia Apache-2.0 verbatim", check_license_apache2, False, False),
     ("Coherencia de versión", check_version_consistency, False, True),
     ("Enlaces de docs", check_doc_links, False, True),
     ("Batería runtime (en vivo)", check_runtime_battery, True, False),

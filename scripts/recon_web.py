@@ -5,7 +5,7 @@ Reddit (curl autenticado con cookies). Todos funcionan en headless/produccion
 sin navegador.
 
 Usado por cron recon-web-agent-reach (9AM). Uso: python3 scripts/recon_web.py"""
-import subprocess, os, re, json
+import subprocess, os, re
 
 VENV = os.path.expanduser("~/.agent-reach-venv")
 PY = os.path.join(VENV, "bin", "python")

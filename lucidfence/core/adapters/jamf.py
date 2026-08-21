@@ -19,8 +19,6 @@ Errors are mapped to AuthError / TransportError so the dashboard never
 
 from __future__ import annotations
 
-import json
-import logging
 import os
 import time
 from typing import Any, Optional
@@ -475,19 +473,19 @@ class JamfAdapter(MDMAdapter):
             "count": len(items),
         }
 
-    # --- inventory (multi-UEM) ---
-    # Jamf Pro expone el modo de gestión de forma derivable desde la sección
-    # GENERAL de cada dispositivo móvil. No hay un string literal
-    # "managementMode" en la API de Jamf; lo inferimos de los booleanos reales
-    # que la respuesta trae (managed / supervised), nunca de suposiciones.
-    # Esto alimenta el gate declarativo (core.declarative) para que DDM deje
-    # de caer siempre a imperativo. Ver Issue #88.
+    # --- inventory (Issue #88: declarative-eligibility signals) ---
+    # Jamf Pro exposes the management mode derivable from the GENERAL section of
+    # each mobile device. There is no literal "managementMode" string in the
+    # Jamf API; we derive it from the real booleans the response carries
+    # (managed / supervised), never from guesses. This feeds the declarative
+    # gate (core.declarative) so DDM stops falling through to imperative for
+    # every device.
     #
-    # Mapeo (Jamf Pro API v1/v2, mobile-devices?section=GENERAL):
-    #   managed=False                       -> None (no gestionado: sin DDM)
+    # Mapping (Jamf Pro API v1/v2, mobile-devices?section=GENERAL):
+    #   managed=False                       -> None (unmanaged: no DDM)
     #   managed=True  & supervised=True     -> "fully_managed" (ADE/DEP, DDM ok)
-    #   managed=True  & supervised=False    -> "mdm"           (MDM estándar)
-    #   ownership: dispositivo Jamf gestionado => "company" (activo de empresa)
+    #   managed=True  & supervised=False    -> "mdm"           (standard MDM)
+    #   ownership: a managed Jamf device    -> "company" (corporate asset)
     def _derive_management_mode(self, general: dict) -> str | None:
         if not general.get("managed"):
             return None
@@ -508,7 +506,7 @@ class JamfAdapter(MDMAdapter):
             name=general.get("name") or raw.get("name") or device_id,
             platform=(general.get("platform") or "").lower() or "unknown",
             serial_number=general.get("serialNumber"),
-            compliant=None,  # Jamf mobile-devices no expone compliance directo
+            compliant=None,  # Jamf mobile-devices doesn't expose compliance directly
             status=("managed" if general.get("managed") else "unmanaged"),
             management_mode=self._derive_management_mode(general),
             ownership=self._derive_ownership(general),
@@ -521,12 +519,12 @@ class JamfAdapter(MDMAdapter):
         )
 
     def fetch_devices(self) -> list:
-        """Inventory multi-UEM: lista dispositivos desde Jamf Pro.
+        """Inventory (multi-UEM): list devices from Jamf Pro.
 
-        En modo ``live`` llama a GET /api/v1/mobile-devices?section=GENERAL y
-        normaliza cada dispositivo incluyendo ``management_mode``/``ownership``
-        derivados de la respuesta real. En modo mock devuelve ``[]`` (sin flota
-        simulada) para no fabricar señales declarativas falsas.
+        In ``live`` mode it calls GET /api/v1/mobile-devices?section=GENERAL
+        and normalizes each device, including ``management_mode``/``ownership``
+        derived from the real response. In mock mode it returns ``[]`` (no
+        simulated fleet) so we don't fabricate declarative signals.
         """
         if not self.live:
             return []

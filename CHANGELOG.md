@@ -4,6 +4,14 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
+  de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
+  `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta
+  conflictos crónicos del merge train (#118, tarea t_e207227e).
+- gitops/repo-higiene: `lucidfence/plugins/adapters/index.json` ya no genera
+  conflictos de merge manuales: se regenera desde los `.py` mergeados vía el
+  driver custom `regen-adapter-index` (ver CONTRIBUTING.md → "Setup del repo").
+  Antes producía conflictos y hashes obsoletos que rompían `test_adapter_marketplace_manifest_is_hash_verified`.
 - feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
 - feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
 

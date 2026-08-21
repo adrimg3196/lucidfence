@@ -10,7 +10,6 @@ Implementa MDMAdapter (read-only contract: action='report').
 
 from __future__ import annotations
 
-import json
 import os
 import time
 import uuid

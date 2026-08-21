@@ -19,34 +19,11 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Verificar vitrina pública (reachability)
-        run: |
-          set -euo pipefail
-          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
-          TIMEOUT=30
-          echo "Checking vitrina publica: $URL"
-          if curl -fsS --max-time "$TIMEOUT" -o /dev/null "$URL"; then
-            echo "OK: vitrina publica reach able"
-          else
-            echo "::error::Vitrina publica NO reach able: $URL"
-            exit 1
-          fi
-
-      - name: Validar estructura minima de cloud_state.json
-        # Contrato del publisher real (lucidfence/core/cloud_publisher.py):
-        # claves estables del snapshot demo. Si el publisher cambia de esquema,
-        # este check debe cambiar en la misma PR.
-        run: |
-          set -euo pipefail
-          URL="https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
-          TIMEOUT=30
-          curl -fsS --max-time "$TIMEOUT" "$URL" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          required = ['service', 'generated_at', 'mode', 'totals', 'devices', 'fences']
-          missing = [k for k in required if k not in data]
-          assert not missing, f'Faltan claves: {missing}'
-          assert isinstance(data['devices'], list) and isinstance(data['fences'], list), 'devices/fences deben ser listas'
-          assert data['totals'].get('devices') == len(data['devices']), 'totals.devices no cuadra con len(devices)'
-          print(f\"OK: estructura validada ({len(data['devices'])} devices, {len(data['fences'])} fences)\")
-          "
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verificar vitrina (URL + esquema, fuente única)
+        # scripts/check_vitrina.py es EL verificador: URL canónica + esquema
+        # importado del publisher. Sin copias inline que puedan derivar.
+        run: python3 scripts/check_vitrina.py
