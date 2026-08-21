@@ -85,6 +85,54 @@ python3 scripts/merge_train.py --publish      # actualiza la issue de la cola
 python3 scripts/merge_train.py --enforce      # etiqueta stale-rebase / wip-over-limit
 ```
 
+## Definición operacional de DONE en el kanban
+
+El tablero kanban es la fuente de verdad del estado de trabajo de los agentes.
+Para que "DONE" signifique lo mismo que "entregado" en este charter, se aplica
+la siguiente regla estricta (decisión CEO 2026-08-21, tarea t_86afa3e2):
+
+> Una tarea de código solo se marca **DONE** cuando su cambio es ancestro de
+> `origin/main` **Y** `python3 scripts/verify.py` (o el gate que corresponda)
+> pasa **sobre `origin/main`**. Rama verde con PR abierto = estado "en review",
+> nunca "done".
+
+Comprobación obligatoria antes de cerrar cualquier tarea de código:
+1. `git merge-base --is-ancestor <tip-de-la-rama> origin/main` → debe ser true.
+2. El test/feature de la aceptación existe y pasa en `origin/main` (no solo en la
+   rama del agente). Si el test queda `untracked`, CI no lo corre: no cuenta.
+3. `python3 scripts/verify.py` APTO sobre `origin/main`.
+
+### Script obligatorio: `scripts/kanban_done_gate.py`
+
+La política de arriba NO se aplica a mano: todo cierre de una tarea de código
+debe pasar por el guard `scripts/kanban_done_gate.py`, que implementa los tres
+puntos de forma fall-closed (si no puede *demostrar* que el trabajo está en
+`origin/main`, bloquea — no pasa por defecto). Contrato:
+
+- `python3 scripts/kanban_done_gate.py <TASK_ID> --branch <rama-del-trabajo>`
+  verifica los tres checks contra `origin/main` (en un worktree efímero) y:
+  - exit 0 → APTO: se puede `hermes kanban complete`.
+  - exit 1 → FALLO: NO marcar done. Con `--enforce` deja un comentario de
+    evidencia y mueve la card a "en review".
+  - exit 2 → NO EVALUABLE: la tarea no tiene rama conocida y no se pasó
+    `--non-code`; el llamador debe declarar `--branch <rama>` o `--non-code`.
+- Tareas de proceso/docs (sin rama): correr con `--non-code` para que el gate
+  las deje pasar sin verificar ancestro/main.
+- `verify.py` en `main` tiene una "batería runtime en vivo" que a veces está
+  roja por causas ajenas a la card; por eso `--verify-mode` por defecto (`auto`)
+  corre el verify completo y, si el único fallo es esa batería, cae a `--fast`
+  y lo registra. Usa `--verify-mode full` si quieres exigir el verify completo.
+- Integración en el cierre de una card de código:
+  `python3 scripts/kanban_done_gate.py <TASK_ID> --branch <rama> --enforce
+  --complete-on-pass` (marca done solo si pasa; si no, comenta y mueve a review).
+
+Si el cambio vive solo en una rama (p. ej. `cto/88-management-mode-ownership`) y
+`main` no lo contiene, la tarea NO está done: se crea una tarjeta hija "entregar
+a main" y se deja la original como *trabajo-completado-en-rama*, no como
+entregado. Esta desconexión fue el origen del incidente t_86afa3e2: #88/#89 se
+marcaron done sin llegar a main, y el bot de QA abrió #205 contra un módulo
+(`core/declarative.py`) que no existe en main.
+
 ## Aislamiento del checkout
 
 Regla ya vigente en `AGENTS.md` y que este charter no relaja: **nunca editar
