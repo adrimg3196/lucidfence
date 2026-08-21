@@ -226,7 +226,7 @@ python3 tests/test_sdk_contract.py
 
 | If you want to… | Read this file first |
 |---|---|
-| Install the app | `docs/product/README_CLIENTE.md` (es) or `docs/README.en.md` (en) |
+| Install the app | `docs/product/README_CLIENTE.md` (es) or `README.md` (en, repo root) |
 | Understand the engine | `lucidfence/core/engine.py` (top-level scheduler) |
 | Add a fence | `lucidfence/core/fences.py` + `fences.json` |
 | Add an MDM | `lucidfence/core/adapters/ADAPTER.md` + `lucidfence/core/adapters/_template_adapter.py` |

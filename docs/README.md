@@ -1,13 +1,16 @@
 # Documentación de LucidFence
 
 Índice de la documentación del repositorio. El [`README.md`](../README.md) de la
-raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
+raíz (**en inglés**, superficie indexada primaria) es la puerta de entrada para
+usuarios; [`README.es.md`](README.es.md) es su espejo en español. Aquí vive todo
+lo demás.
 
 ## Para el usuario y el cliente
 
 | Documento | Contenido |
 | --- | --- |
-| [`README.en.md`](README.en.md) | README en inglés |
+| [`../README.md`](../README.md) | README raíz — inglés (superficie indexada primaria) |
+| [`README.es.md`](README.es.md) | Espejo del README raíz en español |
 | [`product/CLIENTE.md`](product/CLIENTE.md) | Guía de entrega al cliente |
 | [`product/README_CLIENTE.md`](product/README_CLIENTE.md) | Manual de la instalación de cliente |
 | [`product/README_SAAS.md`](product/README_SAAS.md) | Manual del modo SaaS multi-tenant |
