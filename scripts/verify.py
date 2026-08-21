@@ -52,6 +52,51 @@ def _run(cmd: list[str]) -> tuple[int, str]:
     return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
+def check_license_apache2() -> tuple[bool, str]:
+    """LICENSE must be verbatim Apache-2.0 (SPDX) except the appendix block.
+
+    GitHub's license detector and OSS aggregators (LibHunt, alternativeto,
+    "open-source alternatives to Intune" lists) rely on a clean Apache-2.0
+    match; a paraphrased/modified LICENSE makes them report "Other" and omit
+    us. The terms-and-conditions body must be byte-identical to the ASF
+    canonical (vendored at scripts/license-ref/APACHE-2.0.txt); only the
+    APPENDIX boilerplate (copyright holder) is allowed to differ.
+    """
+    license_path = os.path.join(ROOT, "LICENSE")
+    ref_path = os.path.join(ROOT, "scripts", "license-ref", "APACHE-2.0.txt")
+    if not os.path.exists(license_path):
+        return False, "LICENSE ausente"
+    if not os.path.exists(ref_path):
+        return False, "referencia scripts/license-ref/APACHE-2.0.txt ausente"
+    with open(license_path, encoding="utf-8") as fh:
+        actual = fh.read()
+    with open(ref_path, encoding="utf-8") as fh:
+        ref = fh.read()
+
+    marker = "END OF TERMS AND CONDITIONS"
+
+    def terms(text: str) -> str:
+        idx = text.find(marker)
+        if idx == -1:
+            return text
+        end = text.find("\n", idx)
+        return text[:end] if end != -1 else text
+
+    actual_terms, ref_terms = terms(actual), terms(ref)
+    if actual_terms != ref_terms:
+        a, r = actual_terms.splitlines(), ref_terms.splitlines()
+        for i, (la, lr) in enumerate(zip(a, r)):
+            if la != lr:
+                return False, (f"términos Apache-2.0 difieren en línea {i + 1}: "
+                               f"LICENSE={la!r} vs canonical={lr!r}")
+        return False, "estructura de términos Apache-2.0 difiere (longitud)"
+    if "Licensed under the Apache License, Version 2.0" not in actual:
+        return False, "el apéndice no conserva el aviso Apache-2.0"
+    if "Copyright" not in actual:
+        return False, "el apéndice no conserva el copyright"
+    return True, "LICENSE == Apache-2.0 (términos verbatim; apéndice rellenado)"
+
+
 def check_version_consistency() -> tuple[bool, str]:
     with open(os.path.join(ROOT, "pyproject.toml"), "rb") as fh:
         pyproject = tomllib.load(fh)["project"]["version"]
@@ -130,6 +175,7 @@ def check_test_suite() -> tuple[bool, str]:
 
 # (nombre, función, is_runtime, is_deterministic-doc-check)
 CHECKS = [
+    ("Licencia Apache-2.0 verbatim", check_license_apache2, False, False),
     ("Coherencia de versión", check_version_consistency, False, True),
     ("Enlaces de docs", check_doc_links, False, True),
     ("Batería runtime (en vivo)", check_runtime_battery, True, False),
