@@ -31,7 +31,7 @@ jobs:
 
       - name: Run test suite
         env:
-          LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
+          LUCIDFENCE_PERF_TICK_S: "0.5"  # guard de regresión: mediana del mejor bloque (ver test_perf_engine)
         run: python3 tests/run_tests.py
 
   verify-docs:
@@ -161,3 +161,17 @@ jobs:
           python3 -m pip install --require-hashes -r requirements.lock
       - name: Validar claims en runtime
         run: python3 scripts/runtime_validation.py
+
+  workflows-lint:
+    name: Workflows lint (actionlint)
+    # Los workflows solo se "prueban" al ejecutarse en produccion; este gate
+    # caza YAML/expresiones/shell rotos (shellcheck incluido) en la PR, antes
+    # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint de workflows (script único, mismo que en local)
+        # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
+        # falta alguno: sin copias inline y sin falsos verdes por herramienta
+        # ausente (la causa del run 32455895540).
+        run: bash scripts/lint_workflows.sh

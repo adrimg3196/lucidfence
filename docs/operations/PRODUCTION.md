@@ -22,9 +22,12 @@ stays under a regression ceiling:
 
 - **Fleet size measured: 10 devices, 1 circular fence.** Nothing larger is
   benchmarked.
-- A healthy tick is roughly **~0.02 s** locally; the CI ceiling is **0.5 s p95**
-  (`LUCIDFENCE_PERF_P95_S`), deliberately loose because it is a *regression*
-  guard on shared runners, **not** a latency SLA.
+- A healthy tick is roughly **~0.02 s** locally; the CI ceiling is **0.5 s**
+  (`LUCIDFENCE_PERF_TICK_S`), deliberately loose because it is a *regression*
+  guard on shared runners, **not** a latency SLA. The metric is the **median of
+  a block of ticks, taking the best of up to 3 blocks**: contention noise on a
+  shared runner can only make a tick slower, so the best block is the cleanest
+  measurement, while a genuine code regression shows up slow in every block.
 - The test is a **regression guard**, not a capacity model. It proves the tick
   did not blow up between commits — it does **not** establish a supported fleet
   ceiling.
