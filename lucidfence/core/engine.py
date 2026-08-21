@@ -22,14 +22,14 @@ _time = time  # alias so tests can monkeypatch time.time deterministically
 
 from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
-from lucidfence.core.adapters import ADAPTER_REGISTRY, build_bindings
+from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
-from lucidfence.core.declarative import declarative_path_for, resolve_declarative_subaction
+from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
