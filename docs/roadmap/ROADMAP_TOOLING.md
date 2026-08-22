@@ -29,7 +29,7 @@ La mejora continua es ciudadano de primera clase. Se sostiene en 6 capas:
 | 3 | **CLI** | `python3 -m lucidfence.core.roadmap_tooling [--validate/--status/--phase/--mark/--export]` | `lucidfence/core/roadmap_tooling.py` |
 | 4 | **API** | `GET /api/roadmap` (read + progress) + `PATCH /api/roadmap` (update) | `saas_server.py` |
 | 5 | **Dashboard** | Pestaña Roadmap: fases, features con badge de estado, barra de progreso global | `static/dashboard.html` + `app.js` |
-| 6 | **Loop** | `/loop` (Mixture-of-Agents): proposers gratis + Opus 4.8 como agregador, con verify | `loop_improve.py` |
+| 6 | **Loop** | `/loop` (Mixture-of-Agents): proposers gratis + agregador MoA local (127.0.0.1:8085, $0), con verify | `loop_improve.py` |
 | 7 | **QA** | `tests/roadmap_tooling_test.py` valida schema + CLI + API; no rompe el runner honesto | `tests/` |
 
 Principios que gobiernan toda feature del roadmap:
@@ -58,16 +58,17 @@ El `/loop` usa **Mixture-of-Agents**:
   si su API key está presente en `.env` / `LF_PROVIDER_*`. Sin clave, el proposer
   degrada a **análisis local determinístico** para que el loop sea demostrable
   sin secretos.
-- **Agregador (merge final):** **Claude Opus 4.8**. Se invoca vía `claude` CLI
-  (Claude Code, en `/Users/adri/.local/bin/claude`) si está disponible; si no,
-  merge heurístico local.
+- **Agregador (merge final, por defecto $0):** el servidor **MoA local** en
+  `127.0.0.1:8085` (el mismo que consume `lucidfence/core/ai.py`), invocado con
+  `moa_dry=true` (síntesis local, sin API keys, sin coste). Si el servicio no
+  está arriba, merge heurístico local. Opus 4.8 solo se usa en modo **opt-in
+  pagado** vía `LUCIDFENCE_CLAUDE_CLI=<ruta absoluta al binario claude>`, con
+  auto-descubrimiento de `claude` en PATH desactivado (ver `docs/internal/loop-budget.md`).
 
-> **Nota de honestidad (verificada 2026-07-20):** `opencode` NO está instalado en
-> este entorno, y no hay API keys de LLM en `config.json`/`.env`. Por tanto el
-> `/loop` aquí corre en **modo local determinístico** (proposers + agregador
-> heurístico) salvo que se provean claves. La arquitectura ya está cableada para
-> usar los free tiers reales en cuanto existan las claves. El agregador Opus 4.8
-> se prueba de verdad vía `claude` CLI cuando responde.
+> **Nota de honestidad (verificada 2026-08-22):** el `/loop` corre 100%-free por
+> defecto: proposers gratis (o análisis local determinístico sin claves) + agregador
+> MoA local sin coste. El agregador Opus 4.8 (de paga) solo se activa con una
+> variable de entorno explícita y sign-off de Product.
 
 ## El /loop (cómo "mejorar aún más todo")
 
@@ -75,7 +76,7 @@ El `/loop` usa **Mixture-of-Agents**:
 (o una concreta con `--feature Fx.y`):
 
 ```
-Prompt inicial → Proposers paralelos (gratis) → Opus 4.8 merge
+Prompt inicial → Proposers paralelos (gratis) → MoA local merge (127.0.0.1:8085)
    → ¿calidad >= 7/10? ── No ─→ repite (temp -0.1, max 3)
         │ Sí
         ▼
