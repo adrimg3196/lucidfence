@@ -11,8 +11,16 @@
 #     3. .worktrees in the build image   -> dockerignore_worktrees
 #     4. zero healthchecks               -> compose_healthcheck
 #     5. missing PYPI_TOKEN (SECRET)     -> pypi_token (soft warn)
+#   Kanban t_98e9b754 (RELEASE/DEPLOY hazard) added a 6th hard gate:
+#     6. docs/README.md index regression -> docs_readme_index
+#        The `marketing-outbox-2026-08-20` branch carries a STALE copy of
+#        docs/README.md (missing GETTING_STARTED, demo-walkthrough, apple_ddm,
+#        windows_dsc, new-adapter-guide, adapters/FLEET, NETWORK_LOCATION, ...).
+#        A 3-way merge onto main currently keeps main's newer index, but if
+#        that branch ever re-touches the file the stale copy could win silently.
+#        This gate fails the moment any canonical doc is no longer linked.
 #   This tool is a regression GATE: it fails (exit 1) if any of
-#   1-4 drift back, and soft-warns on 5. Run it in CI / pre-tag.
+#   1-4 or 6 drift back, and soft-warns on 5. Run it in CI / pre-tag.
 #
 # USAGE
 #   python3 release_preflight.py [--repo PATH] [--json] [--strict-secret]
@@ -113,6 +121,57 @@ def check_compose_healthcheck(repo):
     return has, {"present": has}
 
 
+# Canonical docs/README.md entries that must ALWAYS be linked on main.
+# Sourced from issue #191 (t_90a94690 / t_98e9b754): these are the files whose
+# index entries would be silently dropped if the stale marketing-outbox copy of
+# docs/README.md ever wins a merge. Each entry is matched as a markdown link
+# target ([...](<path>) or a directory token) inside docs/README.md.
+DOCS_INDEX_REQUIRED = [
+    # path, human label
+    ("GETTING_STARTED.md",                 "GETTING_STARTED"),
+    ("demo-walkthrough.md",                "demo-walkthrough"),
+    ("architecture/AI_AND_MCP.md",         "AI_AND_MCP"),
+    ("operations/apple_ddm.md",            "apple_ddm"),
+    ("operations/windows_dsc.md",          "windows_dsc"),
+    ("contributing/new-adapter-guide.md",  "new-adapter-guide"),
+    ("adapters/FLEET.md",                  "adapters/FLEET"),
+    ("integrations/NETWORK_LOCATION.md",   "NETWORK_LOCATION"),
+]
+
+
+def check_docs_readme_index(repo):
+    """docs/README.md must link every canonical doc from #191.
+
+    Hard gate (t_98e9b754): the `marketing-outbox-2026-08-20` branch carries a
+    STALE docs/README.md missing all the entries below. A 3-way merge onto main
+    currently keeps main's newer index, but if that branch re-touches the file
+    the stale copy could win silently. Fail the moment any required entry is no
+    longer linked, so the regression can never merge.
+    """
+    path = os.path.join(repo, "docs", "README.md")
+    txt = _read(path)
+    if txt is None:
+        return False, {"error": "docs/README.md missing"}
+    # Build the set of link targets (the text inside the trailing parentheses
+    # of each markdown link) plus any bare directory tokens.
+    link_targets = set(re.findall(r"\]\(([^)]+)\)", txt))
+    missing = []
+    for rel, label in DOCS_INDEX_REQUIRED:
+        # Match either a direct link to the file, or a link to its directory
+        # (e.g. `adapters/` covers `adapters/FLEET.md`). Strip any anchor.
+        base = rel.split("#", 1)[0]
+        dir_of = base.rsplit("/", 1)[0] + "/" if "/" in base else None
+        hit = any(
+            t.split("#", 1)[0].rstrip("/") == base.rstrip("/")
+            or (dir_of and t.split("#", 1)[0].rstrip("/") == dir_of.rstrip("/"))
+            for t in link_targets
+        )
+        if not hit:
+            missing.append(label)
+    ok = len(missing) == 0
+    return ok, {"missing": missing, "n_required": len(DOCS_INDEX_REQUIRED)}
+
+
 def check_pypi_token(repo, strict=False):
     tok = os.environ.get("PYPI_TOKEN") or os.environ.get("TWINE_PASSWORD")
     fly = os.environ.get("FLY_API_TOKEN")
@@ -129,6 +188,7 @@ CHECKS = [
     ("changelog_unreleased", check_changelog_unreleased, True),
     ("dockerignore_worktrees", check_dockerignore_worktrees, True),
     ("compose_healthcheck", check_compose_healthcheck, True),
+    ("docs_readme_index", check_docs_readme_index, True),  # t_98e9b754 guard
     ("pypi_token", check_pypi_token, False),  # soft by default
 ]
 
