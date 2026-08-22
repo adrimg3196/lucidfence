@@ -84,8 +84,16 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 `internal/` (kanban, estado, loop, plan, revisiones y la plantilla de
 mini-spec SDD [`internal/product/spec-template.md`](internal/product/spec-template.md))
 y `gtm/` (go-to-market) son material de trabajo del equipo: se excluyen del
-tarball de release vía `.gitattributes`. `agent-upgrade/`, `web-reach/`,
-`analysis/` y `assets/` son tooling y material auxiliar del bench.
+tarball de release vía `.gitattributes`.
+
+### Tooling del bench (no forma parte del producto)
+
+| Documento | Contenido |
+| --- | --- |
+| [`web-reach/SKILL.md`](web-reach/SKILL.md) | Búsqueda web/YouTube sin API ni login (fuente oficial del agente en este host) |
+| [`agent-upgrade/SKILL.md`](agent-upgrade/SKILL.md) | Patrones de referencia para mejorar la calidad del agente |
+| `analysis/` | Notebook de inteligencia de flota (`fleet_intelligence.ipynb`) |
+| `assets/` | Previews sociales y recursos visuales |
 
 ## Contratos para agentes
 
