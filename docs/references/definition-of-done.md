@@ -37,3 +37,14 @@ Complementa (no reemplaza) los criterios de aceptación de cada tarea.
 - "Los tests pasan" como sinónimo de done mientras se saltan doc/regresiones/verificación runtime.
 - Barra renegociada según presión de deadline.
 - "Done" declarado antes de la revisión humana en cambios que la necesitan.
+- "Done" en rama pero no en `origin/main`: el kanban marca DONE solo cuando el
+  commit es ancestro de `origin/main` y el gate pasa *sobre main* (ver "Definición
+  operacional de DONE en el kanban" en agent-team-charter.md). Rama verde con PR
+  abierto = "en review". Un agente que dejó el trabajo solo en su rama no entregó;
+  marcarlo done produce falsos positivos en cascada (p. ej. QA abriendo bugs contra
+  código que no existe en main).
+- **Antes de marcar DONE una tarea de código, corre
+  `python3 scripts/kanban_done_gate.py <TASK_ID> --branch <rama> --enforce
+  --complete-on-pass`** (definido en agent-team-charter.md). El guard bloquea
+  cualquier cierre cuyo commit no sea ancestro de `origin/main` o cuyo `verify.py`
+  no pase *sobre main*. No marques done "a mano" saltándolo.
