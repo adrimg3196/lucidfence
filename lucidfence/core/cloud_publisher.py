@@ -16,13 +16,6 @@ Uso:
     python3 -m lucidfence.core.cloud_publisher [--cycles N] [--tenant TENANT_ID]
 """
 from __future__ import annotations
-# Contrato publico del snapshot: las claves que TODO consumidor (vitrina,
-# health-checks, monitor) puede exigir. Cambiar el esquema del publisher
-# obliga a cambiar esta lista — y scripts/check_vitrina.py la importa, asi
-# que los checks de los workflows siguen al publisher automaticamente.
-PUBLISHED_REQUIRED_KEYS = ("service", "generated_at", "mode", "totals",
-                           "tenants", "devices", "fences")
-
 
 import argparse
 import json
@@ -38,6 +31,17 @@ sys.path.insert(0, str(ROOT))
 from lucidfence.saas.tenant import TenantStore  # noqa: E402
 from lucidfence.core.engine import Engine  # noqa: E402
 from lucidfence.core.adapters import ios_geofence_compliance  # noqa: E402
+# Contrato publico del snapshot: las claves que TODO consumidor (vitrina,
+# health-checks, monitor) puede exigir. Vive en el modulo HOJA
+# lucidfence/core/published_schema.py (stdlib puro) y se reexporta aqui para
+# no romper a nadie que ya lo importe de este modulo.
+# scripts/check_vitrina.py lo importa de la HOJA, no de aqui: este modulo
+# arrastra engine -> actions -> adapters -> applivery -> `import requests`, y
+# nightly-health-check.yml corre el checker sin pip install (por eso estuvo
+# 10 dias en rojo). Cambiar el esquema del publisher = cambiarlo en la hoja.
+from lucidfence.core.published_schema import (  # noqa: E402,F401
+    PUBLISHED_REQUIRED_KEYS,
+)
 
 
 # Flota simulada representativa (dispositivos frontline multi-plataforma).
