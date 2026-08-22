@@ -605,10 +605,31 @@ class Engine:
                             "human_gate": True,
                             "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
                         })
-                        if self._cycle_actions:
-                            self._cycle_actions[-1]["soar"] = True
-                            self._cycle_actions[-1]["soar_handoff"] = True
-                            self._cycle_actions[-1]["playbook_id"] = ex.get("playbook_id")
+                        # Registrar el handoff como su PROPIA entrada en la
+                        # superficie por ciclo del SOC. NO se muta la acción
+                        # previa (eso etiquetaba mal locate/notify como el
+                        # handoff) y NO hay guarda condicional (si el handoff es
+                        # la PRIMERA acción del ciclo — CVE crítico + fuera de
+                        # perímetro —, la guarda `if self._cycle_actions` lo
+                        # descartaba en silencio, dejando cero rastro en la
+                        # lista del ciclo). executed/ok=False: un handoff no
+                        # cuenta como ejecutado en stats ni arma cooldown (al
+                        # aprobar el humano la orden debe poder salir ya).
+                        self._cycle_actions.append({
+                            "ts": now_iso(),
+                            "device_id": ds.device_id,
+                            "action": aname,
+                            "soar": True,
+                            "soar_handoff": True,
+                            "human_gate": True,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "severity": ex.get("severity", "high"),
+                            "executed": False,
+                            "ok": False,
+                            "dry_run": self.dry_run,
+                            "note": "SOAR human-gate: pendiente de aprobacion manual",
+                        })
                         continue
                     if self._dedupe_action(
                         ds, aname, "soar", ex.get("playbook_id", "soar"),
