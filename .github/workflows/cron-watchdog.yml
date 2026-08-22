@@ -1,0 +1,136 @@
+name: cron-watchdog
+
+# META-VIGILANCIA: vigila el estado de los propios workflows de salud del repo.
+#
+# Por qué existe (incidente 2026-08-13 -> 2026-08-22):
+#   nightly-health-check falló 10 runs consecutivos (ModuleNotFoundError) y
+#   NADIE lo vio en 10 días. El sistema de vigilancia no se vigilaba: un checker
+#   roto es indistinguible de "todo bien" porque ambos producen cero
+#   notificaciones. Riesgo secundario: una alarma largo tiempo en rojo por causa
+#   conocida-irrelevante desensibiliza el canal; la próxima caída REAL llega a
+#   un canal ya ignorado.
+#
+# Qué hace:
+#   1. Consulta la GitHub API por los últimos runs de cada workflow de salud.
+#   2. Si alguno acumula >= WATCHDOG_MIN_FAILURES (2) fallos consecutivos,
+#      abre UN issue dedicado por workflow (idempotente: no duplica si ya hay
+#      uno abierto para ese workflow) con los run-ids y el error del último.
+#   3. Si un workflow que tenía issue abierto vuelve a verde, CIERRA el issue
+#      con un comentario de recuperación (evita la desensibilización: el canal
+#      vuelve a cero cuando está sano).
+#   4. Etiqueta todo con `cron-watchdog` para que el digest semanal del loop
+#      Dirección (el ÚNICO que notifica al humano) lo surfee aunque quede sin
+#      triar. Esto es la Opción C de la decisión CTO.
+#
+# Cubre el meta-nivel (Opción A de la decisión CTO) sin tocar los 5 workflows
+# programados. Coste 0: usa GITHUB_TOKEN.
+#
+# Nota de robustez: este workflow se vigila a sí mismo. Si el propio
+# cron-watchdog deja de arrancar, el fallback manual (`workflow_dispatch`) y la
+# revisión en el digest semanal del loop Dirección lo harían visible.
+
+on:
+  schedule:
+    - cron: "15 8 * * *"        # 08:15 UTC, justo tras nightly-health-check (08:00)
+  workflow_dispatch:            # permitido forzar manualmente
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  WATCHDOG_MIN_FAILURES: "2"
+  WATCHDOG_LOOKBACK: "10"       # cuántos runs analizar por workflow
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vigilar workflows de salud (meta-nivel)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Workflows de salud a vigilar (Opción B de la decisión CTO: el set nombrado).
+          WORKFLOWS=(
+            "nightly-health-check"
+            "monitor-hourly"
+            "engine-cron"
+            "merge-train"
+            "loop-audit"
+          )
+          MIN_FAILS="${WATCHDOG_MIN_FAILURES}"
+          LOOKBACK="${WATCHDOG_LOOKBACK}"
+          LABEL="cron-watchdog"
+          OWNER="${REPO%%/*}"
+          REPONAME="${REPO##*/}"
+
+          echo "Repo: $OWNER/$REPONAME | MIN_FAILS=$MIN_FAILS | LOOKBACK=$LOOKBACK"
+
+          any_opened=0
+          any_closed=0
+
+          for wf in "${WORKFLOWS[@]}"; do
+            echo "---- $wf ----"
+            # Obtener los últimos N runs (más recientes primero).
+            runs_json=$(gh api "repos/$OWNER/$REPONAME/actions/workflows/$wf.yml/runs?per_page=$LOOKBACK" \
+              --jq '.workflow_runs | map({conclusion, status, created_at, id})')
+
+            # Contar fallos consecutivos desde el run más reciente.
+            # Un run "completed" con conclusion != success cuenta como fallo.
+            # Si el run más reciente sigue "in_progress"/"queued", no contamos
+            # todavía (podría no haber terminado).
+            most_recent_status=$(echo "$runs_json" | jq -r '.[0].status // "unknown"')
+            echo "  most_recent_status=$most_recent_status"
+
+            # Fallos consecutivos desde el run más reciente (lista newest-first).
+            # Si el run más reciente no ha completado, no hay fallo "confirmado" aún.
+            consecutive_failures=$(echo "$runs_json" | jq '
+              def is_fail: (.status == "completed") and (.conclusion != "success");
+              if (.[0].status != "completed") then 0
+              else
+                ([ .[] | is_fail ] as $bools
+                 | ($bools | to_entries | map(select((.value|not)))[0].key) // ($bools | length))
+              end
+            ')
+            echo "  consecutive_failures(confirmed)=$consecutive_failures"
+
+            # ¿Hay ya un issue abierto para este workflow?
+            existing_json=$(gh api "repos/$OWNER/$REPONAME/issues?state=open&labels=$LABEL" \
+              --jq --arg wf "$wf" '.[] | select(.title | contains($wf)) | .number' 2>/dev/null || true)
+            existing_open=$(echo "$existing_json" | head -1)
+            echo "  existing_open_issue=${existing_open:-none}"
+
+            if [ "$consecutive_failures" -ge "$MIN_FAILS" ]; then
+              # Extraer el error del último run fallido para diagnóstico.
+              last_fail_id=$(echo "$runs_json" | jq -r '.[] | select((.status=="completed") and (.conclusion!="success")) | .id' | head -1)
+              last_fail_time=$(echo "$runs_json" | jq -r --argjson id "$last_fail_id" '.[] | select(.id==$id) | .created_at')
+              run_url="https://github.com/$OWNER/$REPONAME/actions/runs/$last_fail_id"
+              today=$(date -u +%Y-%m-%d)
+
+              if [ -z "$existing_open" ]; then
+                title="🚨 cron-watchdog: $wf lleva $consecutive_failures fallos consecutivos ($today)"
+                body="## Alerta de meta-vigilancia (cron-watchdog)\n\nEl workflow de salud **\`$wf\`** acumula **$consecutive_failures fallos consecutivos** confirmados (de los últimos $LOOKBACK runs analizados).\n\n- **Último run fallido:** [$last_fail_id]($run_url) — $last_fail_time UTC\n- **Impacto:** este es un componente de VIGILANCIA del repo. Si está roto, el resto del sistema de monitoreo puede estar ciego. Revisar antes de asumir \"todo bien\".\n- **Riesgo:** una alarma prolongada en rojo por causa conocida-irrelevante desensibiliza el canal; la próxima caída REAL pasaría desapercibida.\n- **Acción:** abrir el run, leer el error, y corregir. Si la causa es ya conocida y aceptada, cerrar este issue explícitamente y dejar nota.\n\nEste issue fue creado automáticamente por \`.github/workflows/cron-watchdog.yml\`. Se auto-cierra cuando el workflow vuelva a verde.\n\nEtiqueta: \`$LABEL\` (superfeada en el digest semanal del loop Dirección)."
+                gh api "repos/$OWNER/$REPONAME/issues" -f title="$title" -f body="$body" -f labels[]="$LABEL" >/dev/null
+                echo "  ✅ Issue abierto para $wf (fallos=$consecutive_failures)"
+                any_opened=1
+              else
+                echo "  ↳ Ya existe issue #$existing_open abierto para $wf — no se duplica."
+              fi
+            else
+              # Volvió a la normalidad (o nunca falló): cerrar issue abierto si lo hay.
+              if [ -n "$existing_open" ]; then
+                comment="✅ **Recuperado:** \`$wf\` ya no acumula fallos consecutivos (últimos runs OK). Cerrando alerta de cron-watchdog para evitar desensibilización del canal."
+                gh api "repos/$OWNER/$REPONAME/issues/$existing_open/comments" -f body="$comment" >/dev/null
+                gh api -X PATCH "repos/$OWNER/$REPONAME/issues/$existing_open" -f state="closed" >/dev/null
+                echo "  ✅ Issue #$existing_open cerrado (recuperado)."
+                any_closed=1
+              else
+                echo "  ✅ OK (sin fallos consecutivos)."
+              fi
+            fi
+          done
+
+          echo "==== resumen: opened=$any_opened closed=$any_closed ===="
