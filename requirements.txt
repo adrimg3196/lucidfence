@@ -1,7 +1,23 @@
-# LucidFence — dependencias (100% local)
-# Mantener en sincronía con pyproject.toml (SOC audit 2026-08-20, L-5): quien
-# instale por requirements.txt debe obtener el mismo conjunto auditado que CI
-# usa vía requirements.lock.
-requests>=2.31,<3
-PyJWT[crypto]==2.13.0
+# LucidFence — dependencias de instalación (derivadas de requirements.lock)
+#
+# requirements.lock es la fuente de verdad (hash-pinned, generado por
+# `uv pip compile pyproject.toml --generate-hashes -o requirements.lock`).
+# Este archivo replica sus versiones de manera reproducible: usa pins de
+# versión (==) iguales a las del lock, sin hashes, para instalaciones con
+# `pip install -r requirements.txt`. NO edites a mano: regenéra con
+#   uv pip compile pyproject.toml --generate-hashes -o requirements.lock
+# y luego sincroniza este archivo desde el lock.
+#
+# NOTA (hardening SOC 2026-08-22, hallazgo #1): el requirements.txt anterior
+# estaba obsoleto (solo `requests>=2.28`, sin PyJWT/cryptography y sin pins),
+# lo que hubiera dejado a un dev sin las dependencias críticas ni la
+# reproducibilidad del lock.
+certifi==2026.6.17
+cffi==2.1.0
+charset-normalizer==3.4.9
 cryptography==50.0.0
+idna==3.18
+pycparser==3.0
+PyJWT==2.13.0
+requests==2.33.0
+urllib3==2.7.0
