@@ -91,6 +91,19 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    3 checks runtime (43/43) + `docs/operations/coverage.md`. El negativo que
    ningún panel del sector enseña: dispositivos sin señal, "lost sheep" sin
    reportar, cercas vacías — visible para el admin, jamás acción automática.
+9. **Ingestión JSONL por lotes de postura osquery** — derivado de #73
+   (rescoped; las piezas pack-de-despliegue #116 y correlación Risk Engine ya
+   mergeadas en PR #116, no esperaba a #47 que está CLOSED/superseded). Único
+   trabajo nuevo real: endpoint/CLI `lucidfence osquery ingest <file.jsonl>`
+   (o `POST /api/osquery/ingest`) que reusa `read_result_log`/`parse_result_event`
+   y enruta al mismo `posture` que ya consume el engine (`risk_device.update`).
+   Tests + 1 check runtime. Esfuerzo bajo-medio; **sin cambios en `base.py` ni
+   en el gate de wipe** (osquery es evidencia read-only, no un `MDMAdapter`).
+   Alto valor para el admin (ingestión bulk de postura de flota).
+
+> Nota trazabilidad: #64 (iOS SLC) y #65 (ABM/ASM) NO son items de backlog —
+> requieren que LucidFence se convierta en MDM/agente propio (99 USD/año, rompe
+> $0), ya escalados a CEO en los issues. Mantener bloqueados/cerrados.
 
 ### Pasada de la flota completa sobre el producto (2026-08-17)
 
