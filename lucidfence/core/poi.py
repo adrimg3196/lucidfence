@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from lucidfence.core.geo import Point, haversine_m
+
+
+def _safe_seed_path(path: str | Path) -> Path:
+    """Defang path traversal on POI seed files.
+
+    Seeds should be internal/trusted files (bundled data/ seeds, tests),
+    which arrive as absolute paths and pass through unchanged (normalized).
+    If a future caller ever forwards a *relative* user-controlled path here,
+    keep only the basename so ``../../`` escapes are impossible (mirrors
+    storage.py._local_path)."""
+    p = Path(str(path))
+    if p.is_absolute():
+        return p.resolve()
+    return Path(Path.cwd()) / os.path.basename(str(path).replace("\\", "/"))
 
 
 @dataclass
@@ -80,7 +95,7 @@ class POIService:
         tags?, metadata?) or a GeoJSON FeatureCollection of Point features
         with those keys under `properties`.
         """
-        with open(path, "r", encoding="utf-8") as f:
+        with open(_safe_seed_path(path), "r", encoding="utf-8") as f:
             data = json.load(f)
         pois: List[POI] = []
         if isinstance(data, dict) and data.get("type") == "FeatureCollection":
@@ -102,7 +117,7 @@ class POIService:
         metadata (JSON string).
         """
         self._pois = []
-        with open(path, "r", encoding="utf-8", newline="") as f:
+        with open(_safe_seed_path(path), "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 tags = []
