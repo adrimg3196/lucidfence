@@ -95,7 +95,7 @@ Implementar (marcar subtasks/feature) → Verificar (tests/run_tests.py)
 ### Q3-2026 — Fundación de mejora tooling + Loop
 Roadmap vivo, `/loop` operativo, dashboard de mejora.
 - F1.1 Roadmap Tooling (CLI + API + Dashboard) · P0/small
-- F1.2 `/loop` de mejora (MoA: proposers gratis + Opus 4.8) · P0/medium
+- F1.2 `/loop` de mejora (MoA: proposers gratis + agregador MoA local 127.0.0.1:8085, $0; Opus 4.8 solo opt-in pagado) · P0/medium
 - F1.3 Dashboard de mejora (pestaña Roadmap en dashboard local) · P0/medium
 - F1.4 QA extendido con tests de roadmap + loop + providers · P0/medium
 - F1.5 Documentación de arquitectura MoA + loop + roadmap · P1/small
