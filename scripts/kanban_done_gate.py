@@ -418,7 +418,6 @@ def main(argv):
     # (ahorra tiempo cuando ya sabemos que bloqueamos).
     ok3 = False
     detail3 = ""
-    main_tmp = None
 
     def _attempt_verify():
         """Intenta crear worktree de origin/main y correr verify.
@@ -462,11 +461,6 @@ def main(argv):
                 return True, "verify.py APTO sobre origin/main (completo)", False
             if only_runtime and mode == "auto":
                 rc_f, out_f = _run(cmd_fast, cwd=tmp, timeout=120)
-                warn = ("fallback a --fast: el único fallo del verify completo "
-                        "era la 'Batería runtime (en vivo)' (conocida como "
-                        "flaky/no determinista en main); el resto del gate pasa. "
-                        "Re-evalúa con --verify-mode full cuando la batería en "
-                        "vivo esté verde.")
                 log(f"    python usado: {py}")
                 log(f"    verify completo (rc={rc_v}) falló solo por batería en "
                     f"vivo; fallback --fast rc={rc_f}")
