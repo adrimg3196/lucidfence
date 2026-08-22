@@ -22,7 +22,14 @@ import sys
 import urllib.request
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0])
-from lucidfence.core.cloud_publisher import PUBLISHED_REQUIRED_KEYS  # noqa: E402
+# El contrato del snapshot se importa del modulo HOJA published_schema, NO de
+# cloud_publisher: ese arrastra engine -> actions -> adapters -> applivery ->
+# `import requests`, y nightly-health-check.yml corre este script sin pip
+# install. Ese acoplamiento dejo la alarma nocturna en rojo 10 dias seguidos
+# (2026-08-13..08-22, ModuleNotFoundError: requests) con la vitrina viva.
+# published_schema no importa nada: este script sigue siendo stdlib puro y la
+# fuente del esquema sigue siendo una sola (cloud_publisher la reexporta).
+from lucidfence.core.published_schema import PUBLISHED_REQUIRED_KEYS  # noqa: E402
 
 # La URL canónica del snapshot vivo. data/cloud_state.json vive en la rama de
 # datos cloud-state (nunca en main — ver docs/adr/ADR-0011). La vitrina
