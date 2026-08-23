@@ -50,6 +50,7 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/TEAM_ACCESS.md`](operations/TEAM_ACCESS.md) | Acceso en equipo: reverse proxy + SSO OIDC |
 | [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
 | [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
+| [`operations/second_opinion.md`](operations/second_opinion.md) | Segunda opinión: lo que el UEM afirma vs lo que se observa, con evidencia de ambos lados |
 | [`operations/config_as_code.md`](operations/config_as_code.md) | Políticas y geocercas como código: `lucidfence apply` (valida, diff, what-if) |
 | [`operations/apple_ddm.md`](operations/apple_ddm.md) | Apple DDM: enforcement declarativo de geocercas |
 | [`operations/windows_dsc.md`](operations/windows_dsc.md) | Windows PowerShell DSC: matriz de soporte y despliegue |

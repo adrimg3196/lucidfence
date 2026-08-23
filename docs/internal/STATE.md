@@ -75,8 +75,19 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    +10 riesgo con razón, field `hardware_degraded` en políticas, 6 tests,
    check runtime (46/46), sección en `docs/operations/apple_ddm.md`.
    **El backlog numerado queda drenado**: el siguiente trabajo sale de los SÍ
-   de `docs/internal/product/BACKLOG.md` (nº1 pendiente: #12 panel multi-UEM
-   o #13 segunda opinión).
+   de `docs/internal/product/BACKLOG.md`.
+9. ~~**Segunda opinión: lo que el UEM dice vs lo que se observa**~~ — **HECHO
+   2026-08-23** (backlog evaluado #13): `lucidfence/core/second_opinion.py`
+   (función pura stdlib) + `GET /api/second-opinion` (`device:read`,
+   tenant-scoped) + 16 tests + 3 checks runtime (54/54) +
+   `docs/operations/second_opinion.md`. Contrasta la afirmación del UEM
+   (`compliant`, cifrado, fecha del check-in) contra canales que el UEM no
+   controla (postura osquery, readback DDM de hardware, integridad de
+   ubicación, CVE de apps), con evidencia de **ambos lados**. El hallazgo que
+   lo habilitó: la postura de osquery **sobrescribía** `encryption_enabled` y
+   borraba la afirmación del UEM — la contradicción era indetectable;
+   `DeviceState.uem_claimed_encryption` conserva ahora las dos caras.
+   **Nº1 pendiente ahora: #12 panel único multi-UEM con riesgo normalizado.**
 8b. ~~**Políticas y geocercas como código (`lucidfence apply`)**~~ — **HECHO
    2026-08-19** (backlog evaluado #1; tendencia GitHub validada: Fleet 4.90
    redobla en GitOps): validar → diff `+/~/-` → **what-if con replay del

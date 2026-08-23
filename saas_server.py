@@ -1214,6 +1214,30 @@ def _api_coverage(ctx: routing.Ctx):
     return coverage_report(devices, ctx.eng.fences, stale_after_s=stale_after_s)
 
 
+@api_route("GET", "/api/second-opinion", cap="device:read")
+def _api_second_opinion(ctx: routing.Ctx):
+    """Segunda opinión: lo que el UEM afirma vs lo que LucidFence observa.
+
+    Solo lectura sobre estado ya existente, estrictamente local y acotado al
+    tenant (ver core/second_opinion.py). Mismo gating que /api/coverage."""
+    from lucidfence.core.second_opinion import (
+        DEFAULT_STALE_CLAIM_AFTER_S, second_opinion_report)
+    # ?stale_claim_after_s=N ajusta cuándo un check-in del UEM se considera más
+    # viejo que nuestra observación. Fuera de rango -> 400, nunca silencio: un
+    # umbral ignorado devolvería un informe que miente.
+    stale_after_s = DEFAULT_STALE_CLAIM_AFTER_S
+    raw = (ctx.qs.get("stale_claim_after_s") or [None])[0]
+    if raw is not None:
+        try:
+            stale_after_s = int(raw)
+        except ValueError:
+            return {"error": "stale_claim_after_s debe ser entero (segundos)"}, 400
+        if not (60 <= stale_after_s <= 2592000):
+            return {"error": "stale_claim_after_s fuera de rango (60..2592000)"}, 400
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    return second_opinion_report(devices, stale_claim_after_s=stale_after_s)
+
+
 @api_route("GET", "/api/risk", cap="device:read")
 def _api_risk(ctx: routing.Ctx):
     product = _product_bundle(ctx.eng)
