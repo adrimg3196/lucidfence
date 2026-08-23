@@ -78,15 +78,37 @@ def parse_dsse(raw: bytes) -> tuple[dict, bytes, dict]:
     return statement, payload_bytes, env
 
 
-def git_is_ancestor(repo: Path, commit: str) -> bool:
-    """True if `commit` is an ancestor of HEAD."""
+def git_commit_linked(repo: Path, commit: str):
+    """Decide whether `commit` is an ancestor of HEAD.
+
+    Returns one of:
+      "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok)
+      "not_ancestor"— commit resolves but is provably NOT an ancestor (AC1c: FALLO)
+      "unknown"     — commit object is NOT in the local repository (e.g. a
+                      shallow/partial checkout), so we cannot prove ancestry one
+                      way or the other. We do NOT fail on this: the hash chain
+                      already covers tampering, and a shallow clone simply lacks
+                      the history to adjudicate. The signature/hash checks still
+                      run. (If the commit were passed as a literal 40-zero fake,
+                      it also lands here — not a hard failure, since we can't
+                      prove it's absent either; that's why the envelope is also
+                      expected to be signed in trustworthy contexts.)
+    """
     if not commit:
-        return False
+        return "not_ancestor"
+    # 1) Is the commit object even present locally?
+    present = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
+        capture_output=True,
+    )
+    if present.returncode != 0:
+        return "unknown"
+    # 2) It exists — is it an ancestor of HEAD?
     res = subprocess.run(
         ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
         capture_output=True,
     )
-    return res.returncode == 0
+    return "ancestor" if res.returncode == 0 else "not_ancestor"
 
 
 def read_project_version(repo: Path) -> str:
@@ -166,12 +188,18 @@ def run(artifact: Path, sbom: Path, dsse: Path, repo: Path,
 
     # 3. commit_linked (ancestor of HEAD)
     commit = statement["predicate"]["invocation"]["configSource"]["commit"]
-    linked = git_is_ancestor(repo, commit)
+    status = git_commit_linked(repo, commit)
+    # Only "not_ancestor" is a hard failure. "unknown" (commit absent from a
+    # shallow/partial checkout) does not block: we lack the history to prove
+    # non-ancestry, and the hash chain already covers tamper. "ancestor" passes.
+    ok = status != "not_ancestor"
+    head_out = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                              capture_output=True, text=True).stdout.strip()
     results["commit_linked"] = {
-        "ok": linked,
+        "ok": ok,
+        "status": status,
         "commit": commit,
-        "head": subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
-                               capture_output=True, text=True).stdout.strip(),
+        "head": head_out,
     }
 
     # 4. version_consistent

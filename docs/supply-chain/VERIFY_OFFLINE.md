@@ -189,6 +189,21 @@ B=$(python3.11 scripts/provenance_attest.py --artifact x --sbom y --key k --out 
 ```
 
 ------------------------------------------------------------------
+## Checkout superficial (shallow clone)
+------------------------------------------------------------------
+
+El verificador distingue tres estados para el commit del predicate:
+
+- `ancestor` — ancestro comprobado de HEAD → OK.
+- `not_ancestor` — el commit **existe en el repo** pero NO es ancestro →
+  **FALLO** (AC1c: commit no-ancestro detectado).
+- `unknown` — el objeto commit **no está en el repo local** (p. ej. un
+  checkout `fetch-depth: 1`). En ese caso NO se bloquea: no hay historial
+  para probar no-ancestría, y la cadena de hashes ya cubre la alteración.
+  En CI, el job `verify-docs` usa `fetch-depth: 0` para adjudicar la
+  antcestría real.
+
+------------------------------------------------------------------
 ## No-objetivos (qué NO prometemos)
 ------------------------------------------------------------------
 
