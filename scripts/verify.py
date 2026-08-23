@@ -157,6 +157,24 @@ def check_runtime_battery() -> tuple[bool, str]:
     passed, total = int(m.group(1)), int(m.group(2))
     if passed == total and rc == 0:
         return True, f"{passed}/{total} claims validados en vivo"
+    # ¿El fallo era de ENTORNO (p.ej. puerto ocupado por proceso ajeno) y no de
+    # producto? Lo decimos explícitamente para que el fallo no se lea como
+    # "main está roto" (coste: decenas de horas de DoD rojo para cualquier
+    # agente). El texto lo emite runtime_validation.py (check CLI lifecycle).
+    env_lines = [l.strip() for l in out.splitlines()
+                 if l.strip().startswith("FALLO")
+                 and "ENTORNO (no es regresión de producto)" in l]
+    if env_lines:
+        # El claim ya viene como "FALLO <nombre>: ENTORNO (no es regresión de
+        # producto): <razón>". Extraemos solo la <razón> para que el resumen
+        # sea legible y no repita prefijos.
+        reasons = []
+        for line in env_lines[:2]:
+            idx = line.find("): ")
+            reasons.append(line[idx + 3:] if idx != -1 else line)
+        return False, (f"{passed}/{total}; ENTORNO (no producto): "
+                       + " | ".join(reasons)
+                       + " — libera el puerto y reejecuta; main NO está roto")
     fails = [l.strip() for l in out.splitlines() if l.strip().startswith("FALLO")]
     return False, f"{passed}/{total}; " + "; ".join(fails[:5])
 

@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -31,6 +32,62 @@ def check(name: str, ok: bool, evidence: str) -> None:
 
 
 PORT = 8791  # puerto propio: no chocar con una instancia real en 8765
+
+
+def _port_occupant(port: int) -> tuple[bool, str]:
+    """Detecta si `port` (127.0.0.1) está ocupado por un proceso AJENO a este gate.
+
+    Devuelve (ocupado_por_ajeno, mensaje). Si el puerto responde con el banner
+    de LucidFence (es decir, lo levantó nuestro propio `start` de este gate) o
+    está libre, `ocupado_por_ajeno` es False. Si responde *otra* cosa —o un
+    listener que no es nuestro server—, es True y `mensaje` identifica el PID
+    para que el fallo sea de ENTORNO, no una regresión de producto.
+
+    El caso real: un saas_server.py huérfano (de un gate abortado previo, en un
+    temp dir ya borrado) ocupando 127.0.0.1:8792 hace que `lucidfence/cli.py
+    start` devuelva rc=1. Sin este detector el gate reporta "start_rc=1" y un
+    agente lo lee como "main está roto". Con él, el mensaje dice claramente que
+    el puerto está tomado por un proceso que este gate no arrancó.
+    """
+    import socket
+    # ¿Responde algo en el puerto? Si no, está libre -> no es ocupante ajeno.
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.4)
+    try:
+        s.connect(("127.0.0.1", port))
+    except OSError:
+        return False, ""
+    finally:
+        s.close()
+    # Hay un listener. ¿Es nuestro server (banner LucidFence)? Si `start` de
+    # este gate lo levantó, es nuestro y no es "ajeno".
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=0.5) as r:
+            body = r.read(2048)
+        if b"LucidFence" in body:
+            return False, ""
+    except Exception:
+        pass
+    # Listener presente pero NO es nuestro banner -> proceso ajeno.
+    pid = _listener_pid(port)
+    if pid:
+        return True, (f"puerto {port} ocupado por proceso ajeno (PID {pid}, no "
+                      f"arrancado por este gate)")
+    return True, f"puerto {port} ocupado por un proceso ajeno (listener presente)"
+
+
+def _listener_pid(port: int) -> int | None:
+    """Mejor esfuerzo: PID del proceso que escucha en 127.0.0.1:port vía lsof."""
+    try:
+        out = subprocess.run(["lsof", "-ti", f"TCP@127.0.0.1:{port}"],
+                             text=True, capture_output=True, timeout=3, check=False)
+        for line in out.stdout.splitlines():
+            line = line.strip()
+            if line.isdigit():
+                return int(line)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
 
 
 def http_req(method, path, body=None, cookie="", port=PORT, raw=False):
@@ -707,10 +764,32 @@ def main() -> int:
                 down = True
                 break
             time.sleep(0.5)
-        check("CLI start/status/stop contra servidor real",
-              start.returncode == 0 and s_cli == 200 and status.returncode == 0
-              and "activo" in status.stdout and stop.returncode == 0 and down,
-              f"start_rc={start.returncode}, health={s_cli}, status='{status.stdout.splitlines()[0] if status.stdout else ''}', stop_rc={stop.returncode}, apagado={down}")
+        ok_lifecycle = (start.returncode == 0 and s_cli == 200 and status.returncode == 0
+                        and "activo" in status.stdout and stop.returncode == 0 and down)
+        if ok_lifecycle:
+            evidencia = (f"start_rc={start.returncode}, health={s_cli}, "
+                         f"status='{status.stdout.splitlines()[0] if status.stdout else ''}', "
+                         f"stop_rc={stop.returncode}, apagado={down}")
+        else:
+            # Distinguir fallo de PRODUCTO ("nuestro server no arranca") de fallo
+            # de ENTORNO ("el puerto 8792 ya está tomado por un proceso ajeno").
+            # El segundo NO es una regresión de main: un agente lo leería como
+            # "main roto" y gastaría ~21h investigando un síntoma ambiental.
+            ocupado_ajeno = False
+            detalle_ocupante = ""
+            if start.returncode != 0:
+                ocupado_ajeno, detalle_ocupante = _port_occupant(8792)
+            if ocupado_ajeno:
+                evidencia = (f"ENTORNO (no es regresión de producto): {detalle_ocupante}. "
+                             f"El gate no pudo arrancar su propio server en 8792; "
+                             f"libera el puerto y reejecuta. start_rc={start.returncode}, "
+                             f"status_rc={status.returncode}, stop_rc={stop.returncode}")
+            else:
+                evidencia = (f"PRODUCTO: start_rc={start.returncode}, health={s_cli}, "
+                             f"status='{status.stdout.splitlines()[0] if status.stdout else ''}', "
+                             f"stop_rc={stop.returncode}, apagado={down} "
+                             f"(sin ocupante ajeno en 8792)")
+        check("CLI start/status/stop contra servidor real", ok_lifecycle, evidencia)
 
         # ============ 11. CLI quickstart: del install a ver la flota ==========
         print("\n== CLI quickstart (time-to-first-value del admin) ==")
