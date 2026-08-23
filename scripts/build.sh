@@ -28,7 +28,7 @@ rsync -a --exclude='data/tenants' --exclude='__pycache__' --exclude='.pytest_cac
       --exclude='brand' --exclude='.agents' --exclude='.claude' \
       --exclude='.claude-plugin' --exclude='.gemini' --exclude='.superpowers' \
       --exclude='.github' --exclude='data/reports' --exclude='data/cloud_tenants' \
-      --exclude='loop_improve.py' \
+      --exclude='loop_improve.py' --exclude='ZERO-BACKLOG.md' \
       ./ "$STAGE/"
 
 # --- SBOM del entregable ---

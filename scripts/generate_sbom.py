@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 REQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\\\s]+)")

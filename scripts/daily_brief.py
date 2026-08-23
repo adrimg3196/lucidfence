@@ -4,7 +4,7 @@ y lo guarda en brand/briefs/ con commit. Impacto real en el producto/video:
 cada dia hay un brief nuevo listo para renderizar.
 
 Uso: python3 scripts/daily_brief.py"""
-import os, subprocess, sys
+import os, subprocess, sys, datetime
 
 REPO = "/Users/adri/geofence-uem"
 sys.path.insert(0, os.path.join(REPO, "scripts"))

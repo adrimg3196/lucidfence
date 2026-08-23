@@ -75,5 +75,5 @@ jobs:
             gh issue comment "${EXISTING}" --repo adrimg3196/lucidfence --body "${BODY}"
           else
             echo "Creando issue diario"
-            gh issue create --repo adrimg3196/lucidfence --title "Informe diario ${TODAY}" --body "${BODY}" --label "daily-analysis,triage"
+            gh issue create --repo adrimg3196/lucidfence --title "Informe diario ${TODAY}" --body "${BODY}" --label "daily-analysis","triage"
           fi

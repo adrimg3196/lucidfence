@@ -31,13 +31,13 @@ jobs:
         run: |
           set -euo pipefail
           MAX=3
-          for i in $(seq 1 "$MAX"); do
+          for i in $(seq 1 $MAX); do
             echo "=== intento $i/$MAX ==="
             if python3 scripts/recon_repos.py; then
               echo "OK en intento $i"
               break
             fi
-            if [ "$i" -lt "$MAX" ]; then
+            if [ $i -lt $MAX ]; then
               WAIT=$((i * 10))
               echo "Retry en $WAIT s..."
               sleep $WAIT
@@ -49,13 +49,13 @@ jobs:
         run: |
           set -euo pipefail
           MAX=3
-          for i in $(seq 1 "$MAX"); do
+          for i in $(seq 1 $MAX); do
             echo "=== intento $i/$MAX ==="
             if python3 scripts/recon_social.py; then
               echo "OK en intento $i"
               break
             fi
-            if [ "$i" -lt "$MAX" ]; then
+            if [ $i -lt $MAX ]; then
               WAIT=$((i * 10))
               echo "Retry en $WAIT s..."
               sleep $WAIT

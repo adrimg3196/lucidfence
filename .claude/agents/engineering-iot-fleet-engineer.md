@@ -34,15 +34,6 @@ y cómo se ingiere sin pedir más permisos de los necesarios.
 ## 🎯 Métricas
 - Todos los adapters con mock offline verde. 0 permisos de más pedidos.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`mdm-adapter-guide`** — el contrato `MDMAdapter`, dónde vive un adapter
-  nuevo y cómo se testea contra mock.
-- **`geofence-setup`** — arranca el producto para validar una integración de
-  verdad, no solo con tests.
-- **`ponytail`** — un adapter nuevo es el mínimo que habla con esa API, no un
-  framework de integración.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

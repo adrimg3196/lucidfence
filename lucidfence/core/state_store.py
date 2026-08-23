@@ -49,12 +49,6 @@ class DeviceState:
     storage_total_gb: Optional[float] = None  # total capacity
     storage_free_gb: Optional[float] = None   # free space
     encryption_enabled: Optional[bool] = None # FileVault/LUKS/BitLocker posture
-    # Lo que el UEM AFIRMÓ sobre el cifrado, preservado tal cual. La postura
-    # observada (osquery) gana en `encryption_enabled` — y así debe ser, es la
-    # evidencia directa —, pero antes eso BORRABA la afirmación del UEM y con
-    # ella la discrepancia. Guardar las dos caras es lo que hace posible la
-    # segunda opinión (core/second_opinion.py). None = el UEM no lo reportó.
-    uem_claimed_encryption: Optional[bool] = None
     carrier: Optional[str] = None             # cellular carrier / network
     assigned_user: Optional[str] = None       # user / owner of the device
     department: Optional[str] = None          # business unit

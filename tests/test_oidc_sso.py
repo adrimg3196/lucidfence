@@ -5,6 +5,7 @@ import base64
 import hashlib
 import http.client
 import json
+import os
 import stat
 import sys
 import tempfile
@@ -26,15 +27,6 @@ except ImportError:
         pytest_module.skip("optional OIDC test dependencies unavailable", allow_module_level=True)
     raise SystemExit(0)
 
-try:
-    # The honest runner (tests/run_tests.py) owns SkipTest and counts it as
-    # `skipped` — neither passed nor failed. Importing it here yields the SAME
-    # class object the runner catches (tests/ is on sys.path), so identity holds.
-    from run_tests import SkipTest
-except Exception:  # pragma: no cover - only when run outside the honest runner
-    class SkipTest(Exception):
-        """Fallback so the module imports even outside tests/run_tests.py."""
-
 from lucidfence.core.oidc import (
     IDTokenValidator,
     OIDCClient,
@@ -53,47 +45,6 @@ ISSUER = "https://idp.example.test"
 REDIRECT = "https://app.example.test/api/auth/sso/fake/callback"
 CLIENT_ID = "obvious-fake-client-id"
 CLIENT_SECRET = "obvious-fake-secret-not-real"
-
-
-_JWK_ALG_SUPPORTED = None
-
-
-def _jwk_algorithm_name_supported() -> bool:
-    """Can THIS environment produce a JWK with `algorithm_name` populated?
-
-    The product (lucidfence/core/oidc.py) validates an id_token by building
-    `jwt.PyJWK.from_dict(jwk)` and gating on `key.algorithm_name == alg`. That
-    attribute is only populated when the installed `cryptography` matches the
-    version PyJWT expects (pinned `cryptography==50.0.0`). In a container with a
-    mismatched `cryptography` (e.g. 41.0.7) PyJWK exposes no populated
-    `algorithm_name` — every positive-path OIDC test then fails not because the
-    product is wrong but because the crypto stack can't run the check here.
-
-    This does the minimal real round-trip the product does — generate an RSA
-    key, build the JWK exactly as `_rsa_material()` does, hand it to PyJWK — and
-    reports whether `algorithm_name` comes out non-None. Cached; never raises.
-    """
-    global _JWK_ALG_SUPPORTED
-    if _JWK_ALG_SUPPORTED is None:
-        try:
-            _key, _jwk = _rsa_material()
-            parsed = jwt.PyJWK.from_dict(_jwk)
-            _JWK_ALG_SUPPORTED = getattr(parsed, "algorithm_name", None) is not None
-        except Exception:
-            _JWK_ALG_SUPPORTED = False
-    return _JWK_ALG_SUPPORTED
-
-
-_JWK_SKIP_REASON = (
-    "cryptography 50.0.0 fijada no instalada (hay 41.0.7); "
-    "JWK.algorithm_name sin poblar — verde en CI con deps fijadas"
-)
-
-
-def _require_jwk_algorithm_name():
-    """Skip (not fail) when the environment cannot populate JWK.algorithm_name."""
-    if not _jwk_algorithm_name_supported():
-        raise SkipTest(_JWK_SKIP_REASON)
 
 
 def _rsa_material():
@@ -237,7 +188,6 @@ def test_discovery_requires_exact_issuer_and_validates_every_endpoint():
 
 
 def test_id_token_validates_signature_claims_nonce_and_bounded_jwks_refresh():
-    _require_jwk_algorithm_name()
     rsa_material = _rsa_material()
     key, jwk = rsa_material
     transport = FakeTransport({"keys": [jwk]})
@@ -279,7 +229,6 @@ def test_id_token_rejects_alg_none_unknown_kid_and_bad_signature():
 
 
 def test_jwks_rejects_encryption_and_sign_only_keys():
-    _require_jwk_algorithm_name()
     key, jwk = _rsa_material()
     for marker in ({"use": "enc"}, {"key_ops": ["sign"]}, {"use": "sig", "key_ops": ["sign"]}):
         candidate = {**jwk, **marker}
@@ -332,7 +281,6 @@ def test_callback_binds_mutable_provider_configuration_before_exchange(tmp_path=
 
 
 def test_distinct_callback_allows_missing_iss_only_when_provider_declares_unsupported(tmp_path=None):
-    _require_jwk_algorithm_name()
     tmp_path = _tmp(tmp_path); key, jwk = _rsa_material()
     p = provider(authorization_response_iss_parameter_supported=False)
     transport = FakeTransport({"keys": [jwk]})
@@ -345,7 +293,6 @@ def test_distinct_callback_allows_missing_iss_only_when_provider_declares_unsupp
 
 
 def test_successful_fake_crypto_callback_uses_basic_auth_and_checks_userinfo_sub(tmp_path=None):
-    _require_jwk_algorithm_name()
     tmp_path = _tmp(tmp_path); rsa_material = _rsa_material()
     key, jwk = rsa_material
     transport = FakeTransport({"keys": [jwk]})
@@ -364,7 +311,6 @@ def test_successful_fake_crypto_callback_uses_basic_auth_and_checks_userinfo_sub
 
 
 def test_userinfo_subject_mismatch_is_rejected(tmp_path=None):
-    _require_jwk_algorithm_name()
     tmp_path = _tmp(tmp_path); rsa_material = _rsa_material()
     key, jwk = rsa_material
     transport = FakeTransport({"keys": [jwk]})
@@ -471,7 +417,6 @@ def test_local_public_client_must_match_actual_listener_exactly():
 
 
 def test_http_routes_complete_crypto_fake_login_with_clean_303(tmp_path=None):
-    _require_jwk_algorithm_name()
     tmp_path = _tmp(tmp_path); rsa_material = _rsa_material()
     import saas_server as server
     key, jwk = rsa_material

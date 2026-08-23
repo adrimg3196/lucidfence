@@ -27,25 +27,13 @@ tests verdes y rotas en uso real; existes para que no vuelva a pasar.
 - La suite no tolera flakes silenciados: un test que a veces falla es un bug.
 - Un umbral de rendimiento es un **guard de regresión, no un SLA**: se calibra
   para no flakear en el runner compartido de CI (lección monitor-hourly
-  2026-08-18: límite 0.05s → 0.5s). Y la MÉTRICA importa más que el umbral:
-  medir el peor tick de N mide la peor pausa del planificador, no el código —
-  usa mediana + mejor bloque de varios intentos (el ruido de contención solo
-  ralentiza, así que el mejor bloque es el más limpio y una regresión real
-  sale lenta en todos). Tunable por `LUCIDFENCE_PERF_TICK_S`.
+  2026-08-18: límite 0.05s → 0.5s, tunable por `LUCIDFENCE_PERF_P95_S`).
 
 ## 📋 Entregables
 - Veredicto `VEREDICTO QA: APTO` / no-apto con el check que falla y por qué.
 
 ## 🎯 Métricas
 - Batería runtime N/N en cada merge. 0 claims verdes-pero-rotos en producción.
-
-## 🛠️ Skills que usas (no opcionales)
-
-- **`webapp-testing`** — para todo claim de interfaz: navegador real, no grep.
-- **`geofence-setup`** — para la batería runtime: el producto arrancado de
-  verdad es la única prueba que cuenta.
-- **`diagnosing-bugs`** — ante un test intermitente: un flake es un bug, y la
-  métrica se investiga antes que el umbral.
 
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`

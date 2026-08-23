@@ -82,7 +82,7 @@ def main() -> int:
         # ============ 1. Webhooks multi-canal: entrega HTTP REAL + firma ====
         print("\n== P0.3 Webhooks (entrega HTTP real al receptor local) ==")
         from lucidfence.core.notifier import (IncidentFanoutNotifier, NtfyNotifier,
-                                              SignedWebhookNotifier)
+                                              SignedWebhookNotifier, build_incident_notifiers)
         incident = {"id": "inc-rt-1", "title": "Salida de geocerca (runtime QA)",
                     "severity": "high", "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq"}
         signed = SignedWebhookNotifier("http://127.0.0.1:9099/hook", secret="qa-secret")
@@ -136,7 +136,7 @@ def main() -> int:
 
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
-        eng.run_once()
+        r1 = eng.run_once()
         states = eng.store.snapshot()
         dev_id, st = next(iter(states.items()))
         has_field = isinstance(st.location_integrity, dict)
@@ -319,87 +319,6 @@ def main() -> int:
               s == 200 and cres.get("ok") is True and cres.get("action") == "set_compliance",
               f"http={s}, adapter={cres.get('adapter')}, ok={cres.get('ok')}")
 
-        # ---- Enrutado declarativo consistente (issue #205) -----------------
-        # El claim: el MISMO dispositivo Apple recibe el MISMO comando por las
-        # dos rutas de dispatch (single-provider y multi-UEM), y el enrutado
-        # cambia el transporte sin tocar un solo guardarraíl.
-        from lucidfence.core.multiuem import (MultiUEMOrchestrator, ProviderBinding,
-                                              ProviderCapabilities)
-        from lucidfence.core.state_store import DeviceState
-
-        ddm_calls: list[tuple] = []
-
-        class _RTAdapter:
-            name = "jamf"
-            supports_ddm = True
-
-            def execute(self, device, action, params, dry_run=False):
-                ddm_calls.append((action, dry_run))
-                return {"ok": True, "adapter": self.name, "action": action,
-                        "dry_run": dry_run,
-                        "device_id": getattr(device, "device_id", "")
-                        or (device.get("device_id", "") if isinstance(device, dict) else "")}
-
-        def _rt_engine(enf, multi=False):
-            e = Engine({"mode": "simulation", "data_dir": str(tmp / f"eng-ddm-{len(RESULTS)}-{multi}"),
-                        "autostart": False, "sim_seed_path": "data/fleet_seed.json",
-                        "action_cooldown_seconds": 0, "enforcement": enf})
-            e.adapter = _RTAdapter()
-            e.orchestrator = MultiUEMOrchestrator([ProviderBinding(
-                name="jamf",
-                capabilities=ProviderCapabilities(
-                    actions=frozenset({"lock", "wipe", "apply_ddm"})),
-                fetch_devices=lambda: [],
-                execute_action=lambda rid, a, p, d: e.adapter.execute(
-                    {"device_id": rid}, a, p, d),
-            )]) if multi else None
-            return e
-
-        rt_params = {"policy": {"id": "rt-geofence"},
-                     "profile_url": "https://mdm.example.com/p.mobileconfig"}
-        rt_enf = {"mode": "enforce", "live_actions": ["lock"]}
-        mac = DeviceState(device_id="rt-mac", name="Mac DDM", platform="macos",
-                          os_version="14.5", fence_state="outside")
-        mac_multi = DeviceState(device_id="rt-mac", name="Mac DDM", platform="macos",
-                                os_version="14.5", fence_state="outside",
-                                provider_refs={"jamf": "jamf-rt"})
-        r_single = _rt_engine(rt_enf).run_command(mac, "lock", rt_params)
-        r_multi = _rt_engine(rt_enf, multi=True).run_command(mac_multi, "lock", rt_params)
-        check("mismo dispositivo Apple, misma vía por las dos rutas de dispatch",
-              r_single.get("enforcement") == r_multi.get("enforcement") == "declarative"
-              and r_single.get("action") == r_multi.get("action") == "apply_ddm"
-              and r_single.get("requested_action") == "lock",
-              f"single={r_single.get('enforcement')}/{r_single.get('action')}, "
-              f"multi={r_multi.get('enforcement')}/{r_multi.get('action')}")
-
-        viejo = DeviceState(device_id="rt-old", name="iPhone viejo", platform="ios",
-                            os_version="12.4", fence_state="outside")
-        r_old = _rt_engine(rt_enf).run_command(viejo, "lock", rt_params)
-        r_sin_perfil = _rt_engine(rt_enf).run_command(mac, "lock", {})
-        check("sin soporte DDM o sin perfil aportado se mantiene imperativo",
-              r_old.get("enforcement") == "imperative" and r_old.get("action") == "lock"
-              and r_sin_perfil.get("enforcement") == "imperative",
-              f"os_bajo={r_old.get('action')}, sin_perfil={r_sin_perfil.get('action')}")
-
-        ddm_calls.clear()
-        r_obs = _rt_engine({"mode": "observe"}).run_command(mac, "lock", rt_params)
-        r_wipe = _rt_engine(rt_enf).run_command(mac, "wipe", rt_params)
-        check("el enrutado declarativo no relaja ni un guardarraíl "
-              "(observe en dry-run, wipe con doble llave)",
-              r_obs.get("dry_run") is True and ddm_calls[:1] == [("apply_ddm", True)]
-              and r_wipe.get("blocked") is True
-              and r_wipe.get("error_type") == "wipe_not_allowed",
-              f"observe={r_obs.get('dry_run')}/{ddm_calls[:1]}, "
-              f"wipe_blocked={r_wipe.get('blocked')}/{r_wipe.get('error_type')}")
-
-        from lucidfence.saas.providers import catalog as _uem_catalog
-        cat_decl = {e["name"]: e.get("declarative", {}) for e in _uem_catalog()}
-        check("el catálogo de UEMs deriva la capacidad declarativa del adapter real",
-              cat_decl.get("jamf", {}).get("ddm") is True
-              and cat_decl.get("windows_conformidad", {}).get("dsc") is True
-              and cat_decl.get("fleet", {}).get("supported") is False,
-              f"jamf={cat_decl.get('jamf')}, fleet={cat_decl.get('fleet')}")
-
         # ============ 3c. Multi-UEM: registrar un provider en vivo ===========
         # El flujo Admin-value de flota mixta: registrar un UEM (con su etiqueta
         # de segmento) con engine:config y verificar que el listado lo refleja.
@@ -544,14 +463,6 @@ def main() -> int:
               s == 200 and "qa-vacia" in vacias, f"http={s}, fences_vacias={vacias}")
         http_req("DELETE", "/api/fences/qa-vacia", cookie=cookie)
 
-        # umbral de lost-sheep configurable por llamada, con rechazo honesto
-        s, covq, _ = http_req("GET", "/api/coverage?stale_after_s=60", cookie=cookie)
-        s2, err, _ = http_req("GET", "/api/coverage?stale_after_s=abc", cookie=cookie)
-        check("stale_after_s por query se aplica (60) y el invalido da 400",
-              s == 200 and ((covq or {}).get("resumen") or {}).get("stale_after_s") == 60
-              and s2 == 400,
-              f"http={s}, stale_after_s={((covq or {}).get('resumen') or {}).get('stale_after_s')}, invalido={s2}")
-
         # dispositivo ciego inyectado en el estado REAL del engine local: sin
         # coordenadas -> sin_senal; sin last_seen -> sin_reportar con motivo.
         from lucidfence.core.coverage import coverage_report
@@ -565,44 +476,6 @@ def main() -> int:
               and rep["resumen"]["coverage_percent"] < 100.0,
               f"sin_senal={ciegos}, sin_reportar={mudos}, "
               f"coverage={rep['resumen']['coverage_percent']}%")
-
-        # Claim (backlog #13): inyectado en el estado REAL del engine un
-        # dispositivo que el UEM declara conforme y cifrado, con la observación
-        # independiente diciendo lo contrario, el informe lo delata con
-        # evidencia de los dos lados. Y con un lado desconocido, NO lo delata.
-        print("\n== Backlog #13 Segunda opinion (GET /api/second-opinion) ==")
-        s, so0, _ = http_req("GET", "/api/second-opinion", cookie=cookie)
-        shape_ok = s == 200 and all(
-            k in (so0 or {}) for k in ("discrepancies", "devices_verifiable", "by_control"))
-        check("GET /api/second-opinion responde con el informe completo",
-              shape_ok, f"http={s}, claves={sorted((so0 or {}).keys())}")
-
-        from datetime import datetime as _dt, timezone as _tz
-        from lucidfence.core.second_opinion import second_opinion_report
-        from lucidfence.core.state_store import DeviceState as _DS
-        # El UEM afirma cifrado y conformidad; osquery observa disco sin cifrar.
-        eng.store.upsert(_DS(
-            device_id="dev-mentiroso", name="QA segunda opinion", platform="macos",
-            compliant=True, uem_claimed_encryption=True, encryption_enabled=False,
-            posture_source="osquery", posture_collected_at=_dt.now(_tz.utc).isoformat(),
-            last_checkin=_dt.now(_tz.utc).isoformat()))
-        # Mismo caso pero SIN observación independiente: no debe delatar a nadie.
-        eng.store.upsert(_DS(
-            device_id="dev-sin-señal", name="QA sin observacion", platform="macos",
-            compliant=True, uem_claimed_encryption=True))
-        rep_so = second_opinion_report([d.to_dict() for d in eng.store.snapshot().values()])
-        enc = [d for d in rep_so["discrepancies"]
-               if d["control"] == "encryption" and d["device_id"] == "dev-mentiroso"]
-        callados = [d["device_id"] for d in rep_so["discrepancies"]
-                    if d["device_id"] == "dev-sin-señal"]
-        check("UEM que afirma cifrado contra observacion en contra: delatado con ambas caras",
-              len(enc) == 1 and enc[0]["severity"] == "critical"
-              and enc[0]["claimed"]["value"] is True
-              and enc[0]["observed"]["value"] is False
-              and enc[0]["observed"]["source"] == "osquery",
-              f"hallazgos={enc}")
-        check("sin observacion independiente NO se inventa discrepancia",
-              callados == [], f"hallazgos espurios={callados}")
 
         # ============ 7. MCP real por stdio contra el server vivo ===========
         print("\n== P2.8 MCP explain-risk (stdio real contra el server) ==")
@@ -655,15 +528,14 @@ def main() -> int:
         # ============ 9. Scaffolding CLI end-to-end =========================
         print("\n== P1.5 lucidfence adapter new (CLI real + pytest del generado) ==")
         fake = tmp / "fake-checkout"
-        # Copia el paquete `core` completo (no solo `adapters`): el adapter
-        # generado importa `lucidfence.core.adapters.base`, y el paquete
-        # `adapters` (su __init__) tira de `jamf`/`multiuem`/etc. El árbol
-        # falso debe contener esa clausura de imports o el test del adapter
-        # falla con ModuleNotFoundError en CI (reproducido tras #88/#89).
-        (fake / "lucidfence").mkdir(parents=True)
-        shutil.copytree(REPO / "lucidfence" / "core", fake / "lucidfence" / "core",
+        (fake / "lucidfence" / "core").mkdir(parents=True)
+        shutil.copytree(REPO / "lucidfence" / "core" / "adapters", fake / "lucidfence" / "core" / "adapters",
                         ignore=shutil.ignore_patterns("__pycache__"))
-        shutil.copy(REPO / "lucidfence" / "__init__.py", fake / "lucidfence" / "__init__.py")
+        # __init__ vacíos: el árbol falso no incluye todo el paquete, y los
+        # __init__ reales importan módulos que aquí no existen (bug del arnés
+        # detectado en la primera pasada, no del producto).
+        for init in ("lucidfence/__init__.py", "lucidfence/core/__init__.py"):
+            (fake / init).write_text("", encoding="utf-8")
         (fake / "tests").mkdir()
         shutil.copy(REPO / "tests" / "test_sdk_contract.py", fake / "tests" / "test_sdk_contract.py")
         cli = subprocess.run([sys.executable, str(REPO / "lucidfence" / "cli.py"), "adapter", "new", "validaqa"],

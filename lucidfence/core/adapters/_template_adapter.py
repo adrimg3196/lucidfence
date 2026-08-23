@@ -18,7 +18,7 @@ Contract (frozen — see tests/test_sdk_contract.py):
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from lucidfence.core.adapters.base import MDMAdapter
 

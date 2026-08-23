@@ -36,8 +36,8 @@ tienes, vía adapters (MDMAdapter).
 **4. SOAR declarativo, ya verificado en runtime.**
 4 playbooks frontline — CVE crítico, CVE + fuera de perímetro, no-conforme + fuera,
 EPSS alto — con auditoría por dispositivo (`matched_fields`). Y salida hacia tu
-Splunk/Cortex XSOAR vía webhook BYO, con egress SSRF-hardened y allow/deny-list por
-tenant (cierra RFC1918 y DNS-rebinding).
+Splunk/Cortex XSOAR vía webhook BYO, firmado HMAC-SHA256 por tenant
+(`X-LucidFence-Signature`), dirigido al SIEM que ya uses.
 
 Ideal para MSPs y CISOs con flotas reguladas (banca, sanidad, defensa, gobierno) o
 frontline (logística, retail, field service) que no pueden mandar ubicación a la

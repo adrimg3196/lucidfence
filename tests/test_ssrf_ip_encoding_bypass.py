@@ -31,6 +31,7 @@ _BLOCKED = [
 _ALLOWED = [
     "https://8.8.8.8",
     "https://api.applivery.io/v1",
+    "https://fleet.acme.test",
     "https://hooks.example.com/incident",
 ]
 

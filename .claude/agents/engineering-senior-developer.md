@@ -34,18 +34,6 @@ stdlib, así que el código tiene que ser legible por diseño.
 ## 🎯 Métricas
 - `VEREDICTO QA: APTO` a la primera. 0 regresiones en `tests/run_tests.py`.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`ponytail`** — SIEMPRE, antes de escribir la primera línea. La escalera:
-  ¿hace falta? → ¿ya existe aquí? → ¿lo hace la stdlib? → ¿una línea? El diff
-  más pequeño que resuelve el problema de verdad, no el más rápido de escribir.
-- **`codebase-design`** — cuando el cambio crea o mueve un módulo: interfaz
-  mínima, seam limpio, testable por la interfaz. Aplica el test de borrado.
-- **`webapp-testing`** — si tocas `static/`: valida en navegador real antes de
-  decir que funciona. Una captura vale más que una afirmación.
-- **`geofence-setup`** — para dogfooding: arranca el producto y úsalo como el
-  admin antes de decidir qué construir.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

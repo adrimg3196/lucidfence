@@ -92,74 +92,6 @@ def supports_ddm(device: Any) -> bool:
     return version >= minimum
 
 
-#: Acciones imperativas con equivalente declarativo MODELADO en este módulo.
-#:
-#: Solo hay uno, y es el único que `build_declarations` sabe construir: entregar
-#: el perfil de la política del estado de geocerca vía
-#: `com.apple.configuration.legacy`. En LucidFence `lock` es "aplica la postura
-#: restrictiva de este estado de geocerca", y esa postura viaja en ese perfil.
-#:
-#: Lo que NO está aquí es deliberado: Apple no publica declarations para
-#: `wipe` (EraseDevice), `reboot` (RestartDevice), `clear_passcode`
-#: (ClearPasscode), `locate` ni `message` — siguen siendo comandos MDMv1. No se
-#: inventan equivalencias: lo que Apple no modela, va imperativo.
-DECLARATIVE_EQUIVALENTS = {"lock": "apply_ddm"}
-
-
-def _declaration_inputs_ready(params: Any) -> bool:
-    """True si el llamante aportó lo mínimo para construir las declarations.
-
-    `build_declarations` exige la policy y una `profile_url` https (requisito de
-    `com.apple.configuration.legacy`). Sin ellas no hay nada declarativo que
-    enviar: se devuelve el camino imperativo en vez de fabricar un perfil vacío.
-    """
-    if not isinstance(params, dict):
-        return False
-    if not params.get("policy"):
-        return False
-    return str(params.get("profile_url", "") or "").startswith("https://")
-
-
-def ddm_declarative_subaction(
-    device: Any, action: Any, adapter: Any, params: Any = None
-) -> Optional[str]:
-    """[Renombrado en #205/#88] Acción declarativa a usar para `action`, o None.
-
-    Función pura: no toca red, estado ni configuración. Decide SOLO el
-    transporte — el gating (dry_run, fase observe/enforce, allow-list de
-    acciones, doble llave del wipe, cooldown, audit) es del engine y se aplica
-    igual sea cual sea la vía.
-
-    Criterio (los cuatro, en AND):
-      1. el adapter declara `supports_ddm` (capacidad del UEM),
-      2. la acción tiene equivalente declarativo modelado aquí,
-      3. el dispositivo admite DDM (`supports_ddm(device)`: plataforma + OS),
-      4. el llamante aportó el perfil que ese equivalente entrega.
-
-    Readback-honesto: cualquier dato desconocido (adapter sin flag, `os_version`
-    ausente, perfil no aportado) devuelve None, es decir, exactamente el
-    comportamiento imperativo de hoy. Nunca se adivina capacidad.
-    """
-    if not getattr(adapter, "supports_ddm", False):
-        return None
-    declarative = DECLARATIVE_EQUIVALENTS.get(action)
-    if declarative is None:
-        return None
-    if not supports_ddm(device):
-        return None
-    if not _declaration_inputs_ready(params):
-        return None
-    return declarative
-
-
-# Backward-compatibility alias. The bare name ``declarative_path_for`` now
-# collides with the management_mode/ownership gate in
-# ``lucidfence.core.declarative`` (the #88/#89 single source of truth for
-# routing). This module-level alias keeps legacy import paths working but is
-# DEPRECATED: new code must call ``ddm_declarative_subaction`` directly.
-declarative_path_for = ddm_declarative_subaction
-
-
 def _server_token(payload: dict) -> str:
     """Token de revisión determinista: mismo payload => mismo token.
 
@@ -297,10 +229,7 @@ def parse_status_report(report: Any) -> dict:
 __all__ = [
     "DDM_MIN_OS",
     "DEFAULT_STATUS_ITEMS",
-    "DECLARATIVE_EQUIVALENTS",
     "supports_ddm",
-    "ddm_declarative_subaction",
-    "declarative_path_for",  # deprecated alias of ddm_declarative_subaction
     "build_declarations",
     "build_status_subscriptions",
     "parse_status_report",

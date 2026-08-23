@@ -34,9 +34,9 @@ def test_dashboard_browser_smoke() -> None:
 
             page.wait_for_timeout(1000)
             page.wait_for_selector("body >> text=Command Center", timeout=15000)
-            assert page.title() == "LucidFence · Command Center", f"título inesperado: {page.title()!r}"
-            assert page.locator("text=OPERACIÓN").count() >= 1, "no se encontró la sección OPERACIÓN en la nav"
-            assert page.locator("text= Ciclo ").count() >= 1, "no se encontró el contador de ciclo"
+            assert page.title() == "LucidFence · Command Center"
+            assert page.locator("text=OPERACIÓN").count() >= 1
+            assert page.locator("text= Ciclo ").count() >= 1
 
             # Demo auto-login can leave the auth modal up in headless when the
             # Strict session cookie does not survive the bootstrap reload. If the
@@ -55,46 +55,37 @@ def test_dashboard_browser_smoke() -> None:
             # Reset expected anonymous /api/auth/me=401 from bootstrap, then
             # traverse every active product view and demand real rendered data.
             bad_responses.clear(); request_failures.clear(); console_msgs.clear(); page_errors.clear()
-            # Rediseño 2026-08-20: la nav muestra 6 vistas esenciales y pliega el
-            # resto bajo "Avanzado" (+ Ajustes en #navFoot). Las 21 vistas siguen
-            # existiendo: se cuentan tras desplegar el grupo.
-            page.evaluate("localStorage.setItem('lf_nav_adv','1')")
-            page.reload(); page.wait_for_selector("#nav a", timeout=15000)
-            hrefs = page.locator("#nav a, #navFoot a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
+            hrefs = page.locator("#nav a").evaluate_all("els => els.map(e => e.getAttribute('href'))")
             assert len(hrefs) == 21, f"Expected 21 product views, got {len(hrefs)}"
-            assert "#company" in hrefs, f"#company ausente de la nav: {hrefs}"
+            assert "#company" in hrefs
             for href in hrefs:
-                page.locator(f'#nav a[href="{href}"], #navFoot a[href="{href}"]').click()
+                page.locator(f'#nav a[href="{href}"]').click()
                 view_id = "view-" + href.lstrip("#")
                 page.wait_for_function("id => { const n=document.getElementById(id); return n && !n.classList.contains('hidden') && n.innerText.trim().length>0; }", arg=view_id, timeout=15000)
 
-            page.locator('#nav a[href="#company"], #navFoot a[href="#company"]').click()
+            page.locator('#nav a[href="#company"]').click()
             page.wait_for_selector("#companyNewGoal")
-            assert "Compañía autónoma" in page.locator("#view-company").inner_text(), \
-                f"#view-company sin titular: {page.locator('#view-company').inner_text()[:200]!r}"
-            assert "Mission Control" in page.locator("#view-company").inner_text(), \
-                f"#view-company sin agentes: {page.locator('#view-company').inner_text()[:300]!r}"
+            assert "Compañía autónoma" in page.locator("#view-company").inner_text()
+            assert "Mission Control" in page.locator("#view-company").inner_text()
             page.locator("#companyNewGoal").click()
             page.locator("#companyGoalTitle").fill("Objetivo E2E geofencing")
             page.locator("#companyGoalOutcome").fill("Reducir outside con simulación verificable")
             page.locator("#companyCreateGoal").click()
             page.wait_for_selector("#view-company >> text=Objetivo E2E geofencing", timeout=10000)
-            assert "dashboard.html" in page.url, f"navegación fuera del SPA: {page.url}"
+            assert "dashboard.html" in page.url
             page.locator("#companyRun").click()
             page.wait_for_selector("#view-company >> text=simulate_geofence", timeout=10000)
 
             page.locator("#lfLangBtn").click()
             page.wait_for_function("document.documentElement.lang === 'en'")
-            assert "Inventory" in page.locator("#nav").inner_text(), \
-                f"la nav no cambió a inglés: {page.locator('#nav').inner_text()[:200]!r}"
+            assert "Inventory" in page.locator("#nav").inner_text()
             page.get_by_role("link", name="Autonomous company", exact=True).click()
             page.wait_for_selector("#view-company >> text=Autonomous geofencing company", timeout=5000)
             page.get_by_role("link", name="Devices", exact=True).click()
             page.wait_for_selector('input[placeholder^="Search device"]', state="attached", timeout=5000)
             page.locator("#lfLangBtn").click()
             page.wait_for_function("document.documentElement.lang === 'es'")
-            assert page.get_by_role("link", name="Inventario", exact=True).count() == 1, \
-                f"la nav no volvió a español: {page.locator('#nav').inner_text()[:200]!r}"
+            assert page.get_by_role("link", name="Inventario", exact=True).count() == 1
 
             page.wait_for_timeout(500)
             new_errors = [m for m in console_msgs if m.startswith("error:")]

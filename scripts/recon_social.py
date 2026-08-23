@@ -5,7 +5,7 @@ Canales: YouTube (yt-dlp), web (Jina), X (twitter-cli+cookies), Reddit
 reporta estado. YouTube/web funcionan sin login.
 
 Uso: python3 scripts/recon_social.py"""
-import subprocess, os
+import subprocess, os, json
 
 VENV = os.path.expanduser("~/.agent-reach-venv")
 PY = os.path.join(VENV, "bin", "python")

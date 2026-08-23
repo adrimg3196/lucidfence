@@ -36,11 +36,8 @@ runtime-first, Fleet primera clase). Una por ciclo (WIP=1, título `feat: …`).
 1. `git fetch origin main && git checkout -B claude/pm-features origin/main`.
    Lee `docs/internal/LOOP.md` (§Norte, §Coordinación, §Raíl de entrega),
    `docs/roadmap/PRODUCT_ROADMAP.md`, `docs/internal/trends/signals.md`, `STATE.md`.
-2. Elige/diseña **una** función nueva y escribe su **mini-spec** con la
-   plantilla SDD (`spec-template.md`, adaptada de github/spec-kit): historia
-   de usuario, criterios de aceptación, claim runtime obligatorio y check
-   contra la Constitución (`docs/architecture/CONSTITUTION.md`). La spec va
-   en el cuerpo de la PR. Sin claim verificable no hay feature.
+2. Elige/diseña **una** función nueva. Escribe en 3-5 líneas: qué hace, para qué
+   admin, y cómo se valida en runtime (el claim que la batería probará).
 3. Delega la implementación en el especialista adecuado (Agent subagent_type:
    `engineering-senior-developer`, `engineering-iot-fleet-engineer`,
    `security-architect`, `engineering-backend-architect`): código stdlib +

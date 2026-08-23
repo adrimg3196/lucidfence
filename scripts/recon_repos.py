@@ -46,7 +46,7 @@ for q in QUERIES:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "lucidfence-recon"})
         data = json.load(urllib.request.urlopen(req, timeout=15))
-    except Exception:
+    except Exception as e:
         continue
     for r in data.get("items", []):
         full = r["full_name"]

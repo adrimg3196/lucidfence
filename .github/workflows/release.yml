@@ -98,11 +98,9 @@ jobs:
             echo "warning: no se encontró sección en CHANGELOG.md para v$tag"
             section="Release v$tag"
           fi
-          {
-            echo "section<<EOF"
-            echo "$section"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "section<<EOF" >> $GITHUB_OUTPUT
+          echo "$section" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Construir tarball versionado
         if: steps.guard.outputs.skip == 'false'
@@ -122,7 +120,7 @@ jobs:
           python3 lucidfence/cli.py --version | grep -F "lucidfence $VERSION"
           LUCIDFENCE_DATA_DIR=/tmp/smoke/data LUCIDFENCE_PORT=8797 python3 saas_server.py &
           SRV=$!
-          for _ in $(seq 1 40); do
+          for i in $(seq 1 40); do
             curl -fsS http://127.0.0.1:8797/api/health >/dev/null 2>&1 && break
             sleep 0.5
           done

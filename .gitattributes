@@ -46,35 +46,3 @@ artifact.tar              export-ignore
 
 # Metadatos
 .github/                 export-ignore
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Merge de fricción-cero para archivos generados / append-only (ver tarea
-# t_e207227e). Objetivo: cortar conflictos crónicos del merge train (#118).
-#
-# Logs append-only de los loops: TODOs/loops distintos escriben líneas al final
-# de forma concurrente. `merge=union` concatena ambos lados sin conflicto.
-# NO son export-ignore para git (solo export-ignore excluye del tarball de
-# release, no del merge). Son append-only por contrato documentado:
-#   - docs/internal/LOOP.md, loop-admin-value.md, release/README.md,
-#     trends/README.md, security/README.md, growth/README.md, roadmap/README.md
-# NOTA: docs/internal/STATE.md es REESCRITO (no append) por los loops → no va aquí.
-docs/internal/loop-run-log.md              merge=union
-docs/internal/release/history.md           merge=union
-docs/internal/trends/signals.md            merge=union
-docs/internal/security/findings.md         merge=union
-docs/internal/growth/experiments.md        merge=union
-docs/internal/growth/mentions.md           merge=union
-
-# Índice de adapters (lucidfence/plugins/adapters/index.json):
-#   - NO merge=union: es JSON; union dejaría "}{" inválido (probado empíricamente).
-#   - NO merge=ours: "ours" NO es driver integrado (probado: sigue en conflicto).
-#   - Contiene sha256 de los .py; tests/test_annual_roadmap.py lo verifica, así
-#     que un índice con hashes obsoletos rompe CI. El merge correcto es
-#     REGENERARLO desde los .py mergeados con scripts/build_adapter_index.py,
-#     vía el driver custom `regen-adapter-index` registrado en .git/config
-#     (ver CONTRIBUTING.md → "Setup del repo").
-lucidfence/plugins/adapters/index.json     merge=regen-adapter-index
-
-# data/*.jsonl son append-only por naturaleza, pero están gitignored
-# (data/*.jsonl en .gitignore) → no entran en merges. No hace falta atributo.
-

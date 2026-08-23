@@ -37,14 +37,6 @@ máquina que hace posible el auto-merge la mantienes tú.
 ## 🎯 Métricas
 - Release publicada sin intervención humana + `brew install` verificado.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`scripts/lint_workflows.sh`** — el ÚNICO modo de validar workflows. Nunca
-  llames a `actionlint` directamente: sin shellcheck en el PATH se salta los
-  checks de shell y da un verde falso (incidente 2026-08-21).
-- **`diagnosing-bugs`** — para un CI rojo intermitente: reproduce el fallo antes
-  de tocar el umbral. Casi siempre la métrica está mal, no el límite.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

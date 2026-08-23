@@ -245,33 +245,10 @@ publique el endpoint de entrega, el cambio es local a `_apply_ddm`.
 
 ### Selección del juego por estado de geocerca
 
-`apply_ddm` lee `fence_state` del `DeviceState` que ya recibe, así que el camino
-genérico (`Engine.run_command(dev, "apply_ddm", {...})`) selecciona el juego
-correcto en cada transición. El trigger sigue siendo del engine — DDM no
-geolocaliza.
-
-### Enrutado de la vía (issue #205)
-
-`Engine._execute_action` elige transporte con `ddm.ddm_declarative_subaction(device,
-action, adapter, params)`, y da el **mismo veredicto** por la ruta
-single-provider y por la del orquestador multi-UEM (antes solo la segunda
-enrutaba, así que el mismo dispositivo Apple podía recibir comandos distintos
-según el camino interno de código).
-
-La decisión exige las cuatro condiciones, en AND: el adapter declara
-`supports_ddm`, la acción tiene equivalente declarativo **modelado**
-(`ddm.DECLARATIVE_EQUIVALENTS`, hoy solo `lock -> apply_ddm`: Apple no publica
-declarations para `wipe`/`reboot`/`clear_passcode`/`locate`/`message`), el
-dispositivo lo admite (`supports_ddm(device)`) y el llamante aportó el perfil
-que las declarations transportan (`policy` + `profile_url` https). Cualquier
-dato desconocido cae a imperativo — el comportamiento de siempre.
-
-El enrutado cambia el **transporte, nunca el gating**: `dry_run` por defecto,
-fase observe/enforce, `enforcement.live_actions`, la doble llave del `wipe`
-(`allow_wipe` + `wipe_allowlist`), el cooldown destructivo y el action log se
-aplican **antes** de elegir vía y sobre la acción pedida. El resultado lleva
-`enforcement: "declarative" | "imperative"` (y `requested_action` en la vía
-declarativa) para que la vía quede auditada.
+No hay hook nuevo en el engine, a propósito: `apply_ddm` lee `fence_state` del
+`DeviceState` que ya recibe, así que el camino genérico
+(`Engine.run_command(dev, "apply_ddm", {...})`) selecciona el juego correcto en
+cada transición. El trigger sigue siendo del engine — DDM no geolocaliza.
 
 ## Tests
 

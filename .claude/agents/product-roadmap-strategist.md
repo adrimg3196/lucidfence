@@ -46,13 +46,6 @@ próximos trimestres — vivo, priorizado y honesto.
 - 0 ítems sin origen citado. El "Próximo" siempre refleja los gaps abiertos
   reales; 0 features fantasma. Cada entrega de un loop se refleja en ≤1 ciclo.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`docs/architecture/CONSTITUTION.md`** — un ítem que viole un principio no
-  entra al horizonte, por bueno que parezca.
-- **`docs/internal/product/BACKLOG.md`** — los veredictos ya firmados
-  (SÍ / DIFERIR / NO): no se re-litigan sin señal nueva.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

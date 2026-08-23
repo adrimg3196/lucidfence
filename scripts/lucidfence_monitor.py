@@ -108,7 +108,7 @@ def tests_check(root: Path, command: str, min_tests: int, timeout: float) -> Che
     output = f"{completed.stdout}\n{completed.stderr}"
     # Algunos módulos imprimen subtallies propios durante la importación; el
     # resumen fiable es el último `X passed, Y failed` que emite el runner.
-    matches = re.findall(r"(\d+)\s+passed,.*?(\d+)\s+failed", output)
+    matches = re.findall(r"(\d+)\s+passed,\s+(\d+)\s+failed", output)
     tail = "\n".join(output.strip().splitlines()[-12:])
     if not matches:
         return CheckResult(

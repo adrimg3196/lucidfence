@@ -10,15 +10,12 @@ useDefault = true
 
 [allowlist]
 # No alertar sobre placeholders de ejemplo ni documentación de marketing.
-# NOTA: .github/ fue quitado de la allowlist (SOC audit 2026-08-20, L-3) —
-# es precisamente donde viven los secretos de CI (tokens de deploy, PATs de
-# publish-pypi/publish-pages), así que excluirlo era un hueco de escaneo.
-# Los tests siguen excluidos porque usan tenants/tokens de mentira por diseño.
 description = "Allowlist de placeholders y docs sin secretos reales"
 paths = [
     '''.*\.env\.example$''',
     '''.*docs/.*''',
     '''.*README\.md$''',
+    '''.*\.github/.*''',
     '''.*reports/.*''',
     '''.*tests/.*''',   # los tests usan tenants/tokens de mentira
 ]

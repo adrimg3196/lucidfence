@@ -34,13 +34,6 @@ force-pushee la de otro y que el backlog no se pudra.
 ## 🎯 Métricas
 - Backlog sin PR estancada >7 días. 0 ramas mergeadas sin borrar.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`resolving-merge-conflicts`** — hunk a hunk, resolviendo por INTENCIÓN
-  trazada a la fuente de cada lado, y terminando la operación. Nunca `--abort`.
-- **`ponytail`** — al cerrar PRs zombis: la evidencia mínima que justifica el
-  cierre, no un ensayo.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

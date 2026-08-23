@@ -28,48 +28,7 @@ __all__ = [
     "MANAGEMENT_MODES",
     "OWNERSHIPS",
     "declarative_path_for",
-    "resolve_declarative_subaction",
 ]
-
-
-def resolve_declarative_subaction(
-    device: Any,
-    action: str,
-    params: dict,
-    *,
-    supports_ddm: bool = False,
-    supports_dsc: bool = False,
-    supports_amapi_policy: bool = False,
-    adapter: Any = None,
-) -> Optional[str]:
-    """Pick the declarative sub-action for ``action`` on ``device``, or ``None``.
-
-    See module history: combines the #89 management_mode/ownership gate with the
-    legacy #205 DDM-capability gate so both routing contracts stay green.
-    """
-    if (supports_ddm or supports_dsc or supports_amapi_policy):
-        if declarative_path_for(
-            device,
-            supports_ddm=supports_ddm,
-            supports_dsc=supports_dsc,
-            supports_amapi_policy=supports_amapi_policy,
-        ) == "declarative":
-            if supports_ddm and hasattr(adapter, "_apply_ddm"):
-                return "apply_ddm"
-            if supports_dsc and hasattr(adapter, "_apply_dsc"):
-                return "apply_dsc"
-            if supports_amapi_policy and hasattr(adapter, "_apply_amapi"):
-                return "apply_amapi"
-    if supports_ddm:
-        # Legacy #205 DDM transport-selection fallback (Apple-only "lock" ->
-        # "apply_ddm"). Kept lazy to avoid any cross-import surprise. No broad
-        # ``except Exception``: a real error must surface instead of being
-        # swallowed into a silent imperative fallback (regression guard).
-        from lucidfence.core.ddm import ddm_declarative_subaction as _ddm_path
-        sub = _ddm_path(device, action, adapter, params or {})
-        if sub:
-            return sub
-    return None
 
 # management_mode values an EMM/UEM actually reports. Mirrors the Android
 # DevicePolicyManager / AMAPI ownership vocabulary (DEVICE_OWNER,

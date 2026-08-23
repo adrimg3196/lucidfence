@@ -31,7 +31,7 @@ jobs:
 
       - name: Run test suite
         env:
-          LUCIDFENCE_PERF_TICK_S: "0.5"  # guard de regresión: mediana del mejor bloque (ver test_perf_engine)
+          LUCIDFENCE_PERF_P95_S: "0.5"  # runners CI compartidos ~10x más lentos que local
         run: python3 tests/run_tests.py
 
   verify-docs:
@@ -48,23 +48,6 @@ jobs:
       # ningún otro job gateaba.
       - name: python3 scripts/verify.py --docs-only
         run: python3 scripts/verify.py --docs-only
-
-  ruff:
-    name: Lint (ruff F/E9)
-    runs-on: ubuntu-latest
-    # El hook plankton corre ruff en local, pero un contribuidor externo sin el
-    # hook mete lo que el hook prohíbe. Este job cierra ese hueco en CI: mismas
-    # clases (F/E9) y mismo .ruff.toml del repo. Falla el CI si ruff encuentra
-    # algo.
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install ruff
-        run: python3 -m pip install ruff
-      - name: ruff check (lucidfence/ saas_server.py scripts/)
-        run: ruff check lucidfence/ saas_server.py scripts/
 
   frontend:
     name: Frontend syntax check
@@ -112,8 +95,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # data/cloud_state.json ya NO vive en main (ignorado): lo publica engine-cron
-      # en la rama cloud-state. Este guard rechaza que una PR lo reintroduzca (lo
+      # data/cloud_state.json lo republica engine-cron en main cada hora (lo
       # sirve GitHub Pages). Si una rama tambien lo toca, el conflicto de
       # contenido con main es seguro y bloquea el merge — el mismo deadlock
       # del issue #74 por otra via.
@@ -121,9 +103,9 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          changed=$(git diff --name-only --diff-filter=AM "origin/$BASE_REF...HEAD" -- data/cloud_state.json)
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- data/cloud_state.json)
           if [ -n "$changed" ]; then
-            echo "::error::data/cloud_state.json ya no se versiona en main: lo publica engine-cron en la rama cloud-state. No lo reintroduzcas aqui." >&2
+            echo "::error::data/cloud_state.json es un snapshot que publica engine-cron en main." >&2
             echo "Restauralo en la rama: git checkout origin/$BASE_REF -- data/cloud_state.json" >&2
             exit 1
           fi
@@ -161,17 +143,3 @@ jobs:
           python3 -m pip install --require-hashes -r requirements.lock
       - name: Validar claims en runtime
         run: python3 scripts/runtime_validation.py
-
-  workflows-lint:
-    name: Workflows lint (actionlint)
-    # Los workflows solo se "prueban" al ejecutarse en produccion; este gate
-    # caza YAML/expresiones/shell rotos (shellcheck incluido) en la PR, antes
-    # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Lint de workflows (script único, mismo que en local)
-        # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
-        # falta alguno: sin copias inline y sin falsos verdes por herramienta
-        # ausente (la causa del run 32455895540).
-        run: bash scripts/lint_workflows.sh

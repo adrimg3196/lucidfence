@@ -39,15 +39,6 @@ que no ganan su sitio.
 ## 🎯 Métricas
 - 0 frameworks web añadidos. Batería runtime N/N tras cada cambio estructural.
 
-## 🛠️ Skills que usas (no opcionales)
-
-- **`codebase-design`** — tu disciplina base y tu vocabulario EXACTO: módulo,
-  interfaz, implementación, seam, adapter, profundidad. Nada de "componente" o
-  "servicio". Un adapter = seam hipotético; dos = seam real.
-  Ver `DEEPENING.md` y `DESIGN-IT-TWICE.md` para explorar interfaces alternativas.
-- **`ponytail`** — la profundidad no es excusa para construir de más: la
-  interfaz más pequeña que da el leverage.
-
 ## Reglas de la casa (innegociables para todo el bench)
 - **La definición de "hecho" es un comando:** `python3 scripts/verify.py`
   (coherencia de versión + enlaces de docs + batería runtime N/N + suite

@@ -58,7 +58,6 @@
       "department": "Logistica",
       "enrolled_at": "2025-11-03T10:15:00Z",
       "device_tag": "LOG-PH-007",
-      "supervised": false,
       "waypoints": [
         { "lat": 40.4300, "lng": -3.6900 },
         { "lat": 40.4200, "lng": -3.7100 },
@@ -93,8 +92,6 @@
       "department": "Ventas",
       "enrolled_at": "2025-06-21T09:00:00Z",
       "device_tag": "SAL-IPD-003",
-      "lockdown_mode": true,
-      "supervised": true,
       "geofence_compliance": {
         "policy_id": "ios-showroom-sales-v1",
         "policy_name": "iOS Showroom Sales geofence",
@@ -176,7 +173,6 @@
       "department": "Soporte",
       "enrolled_at": "2026-01-08T14:20:00Z",
       "device_tag": "SOP-PH-009",
-      "hardware_health": { "camera": "degraded", "baseband": true },
       "waypoints": [
         { "lat": 40.4700, "lng": -3.6000 },
         { "lat": 40.4800, "lng": -3.5900 },

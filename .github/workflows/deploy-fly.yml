@@ -27,11 +27,12 @@ jobs:
       - name: Instalar flyctl
         run: |
           curl -L https://fly.io/install.sh | sh
-          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.fly/bin" >> $GITHUB_PATH
       # Gate de regresión (t_69acb514): las 4 invariantes mecánicas de release
       # deben cumplirse antes de `flyctl deploy`. El secreto (PYPI_TOKEN) es WARN.
       - name: Deploy preflight gate (mecánicas de release; debe exit 0)
         run: python3 scripts/release_preflight.py --repo "$GITHUB_WORKSPACE" --json
+
       - name: Desplegar
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

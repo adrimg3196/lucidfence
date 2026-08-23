@@ -41,21 +41,12 @@ class FleetAdapter(MDMAdapter):
     supports_ddm = False  # Fleet uses osquery/MDM profiles, not Apple DDM here.
 
     def __init__(self, org_id: str = "", endpoint_template: str = "",
-                 api_token: str = "", timeout: int = 30, base_url: str = "",
-                 webhook_url: str = "", api_key: str = ""):
-        # base_url es el nombre natural (y el que pide el wizard); se acepta
-        # también endpoint_template por compat con build_adapter/engine.
-        # api_key/webhook_url: build_adapter y /api/providers/test los pasan a
-        # TODO adapter registrado; sin aceptarlos aquí, construir FleetAdapter
-        # por esas rutas era TypeError (adapter roto en el wizard).
+                 api_token: str = "", timeout: int = 30):
         self.org_id = org_id
-        self.endpoint_template = (endpoint_template or base_url
+        self.endpoint_template = (endpoint_template
                                   or os.environ.get("FLEET_BASE_URL", "")
                                   ).rstrip("/")
-        self.api_token = api_token or api_key or os.environ.get("FLEET_API_TOKEN", "")
-        # espejo para el check de formato de base.test_connection (lee api_key)
-        self.api_key = self.api_token
-        self.webhook_url = webhook_url
+        self.api_token = api_token or os.environ.get("FLEET_API_TOKEN", "")
         self.timeout = timeout
         self._token: Optional[str] = None
         self._token_expires_at = 0.0

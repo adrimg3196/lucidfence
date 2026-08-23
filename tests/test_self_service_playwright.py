@@ -16,12 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parents[1]
-# La URL real que consulta la vitrina, leida del propio cloud.html para que el
-# test nunca vuelva a quedarse interceptando una URL que la vitrina ya no usa
-# (paso a la rama de datos cloud-state, 2026-08-20).
-import re as _re
-_cloud_html = (Path(__file__).resolve().parents[1] / "static" / "cloud.html").read_text(encoding="utf-8")
-STATE_URL = _re.search(r'const STATE_URL = "([^"]+)"', _cloud_html).group(1)
+STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json"
 
 
 def _load_module(path: Path):

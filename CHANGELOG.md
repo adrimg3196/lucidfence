@@ -4,26 +4,6 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
-- fix(ci): el health-check nocturno vuelve a poder alertar — `nightly-health-check`
-  llevaba **10 runs consecutivos en rojo** (2026-08-13..2026-08-22) con
-  `ModuleNotFoundError: No module named 'requests'`, no porque la vitrina
-  estuviese caída (estaba viva todo el tiempo) sino porque `scripts/check_vitrina.py`
-  importaba el contrato del snapshot desde `lucidfence.core.cloud_publisher`, que
-  arrastra `engine → actions → adapters → applivery → import requests`, y el
-  workflow lo ejecuta sin `pip install`. El contrato se extrae al módulo HOJA
-  `lucidfence/core/published_schema.py` (stdlib puro, reexportado por el publisher:
-  misma tupla, fuente única intacta) y el checker vuelve a ser stdlib puro como
-  promete su docstring. Con test de regresión que bloquea los terceros en un
-  subproceso y exige que el checker arranque igual — el test de contrato anterior
-  comprobaba que el workflow *llama* al checker, no que pueda *ejecutarlo*.
-- gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
-  de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
-  `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta
-  conflictos crónicos del merge train (#118, tarea t_e207227e).
-- gitops/repo-higiene: `lucidfence/plugins/adapters/index.json` ya no genera
-  conflictos de merge manuales: se regenera desde los `.py` mergeados vía el
-  driver custom `regen-adapter-index` (ver CONTRIBUTING.md → "Setup del repo").
-  Antes producía conflictos y hashes obsoletos que rompían `test_adapter_marketplace_manifest_is_hash_verified`.
 - feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
 - feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
 

@@ -105,7 +105,6 @@ def build_bindings(providers: list[dict]) -> list:
     ``adapter.fetch_devices``, actions from ``adapter.execute``.
     """
     from lucidfence.core.multiuem import ProviderBinding, ProviderCapabilities
-    from lucidfence.core.adapters.capabilities import capability_for
 
     bindings = []
     for p in providers or []:
@@ -118,17 +117,9 @@ def build_bindings(providers: list[dict]) -> list:
             endpoint_template=p.get("endpoint", ""),
             api_key=p.get("api_key", ""),
         )
-        # Matriz declarada por UEM (diseño §3.1 / REQ §3). Un UEM sin matriz
-        # explícita conserva el comportamiento legacy (todas las VALID_ACTIONS)
-        # para no romper adapters de la comunidad; uno con matriz usa SOLO lo
-        # que declara (acciones reales + dry-run), nunca más.
-        declared = capability_for(name)
-        if declared is not None:
-            capabilities = declared
-        else:
-            capabilities = getattr(adapter, "capabilities", None)
-            if not isinstance(capabilities, ProviderCapabilities):
-                capabilities = ProviderCapabilities(actions=frozenset(VALID_ACTIONS))
+        capabilities = getattr(adapter, "capabilities", None)
+        if not isinstance(capabilities, ProviderCapabilities):
+            capabilities = ProviderCapabilities(actions=frozenset(VALID_ACTIONS))
         bindings.append(ProviderBinding(
             name=name,
             capabilities=capabilities,

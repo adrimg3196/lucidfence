@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from datetime import datetime, timezone
@@ -105,7 +106,7 @@ def build_report(store: StateStore, fences: list, fence_id: str | None,
 def render_markdown(report: dict) -> str:
     t = report["totals"]
     lines = []
-    lines.append("# LucidFence Compliance Report")
+    lines.append(f"# LucidFence Compliance Report")
     lines.append("")
     lines.append(f"- Generated: `{report['generated_at']}`")
     lines.append(f"- Scope: `{report['scope']}`")
