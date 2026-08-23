@@ -55,6 +55,7 @@ from lucidfence.core.loop_governance import KillSwitch
 # => el agregador es el MoA local gratis (o el fallback heuristico). Esto
 # preserva la postura 100%-free del 2026-08-16. Requiere sign-off de Product
 # (impacto de modelo de negocio) anotado en docs/internal/loop-budget.md.
+# PAID_OPTIN_APPROVED #188  (CTO+PM co-signed opt-in; gated by ABSOLUTE LUCIDFENCE_CLAUDE_CLI only)
 _CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI", "")
 if _CLI and not Path(_CLI).is_absolute():
     # No permitimos auto-descubrimiento de `claude` en PATH (rompe 100%-free).
