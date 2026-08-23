@@ -1,4 +1,5 @@
 {
+  "paid_optin_approval": "PAID_OPTIN_APPROVED #188 — Opus 4.8 es opt-in de paga co-firmado CTO+PM; el agregador por defecto del /loop es el MoA local $0 (127.0.0.1:8085). Ver t_7f0590a9.",
   "meta": {
     "version": "1.0",
     "status": "archived",
@@ -13,7 +14,7 @@
       "Verificar en runtime: no basta con 'compila'; se valida producto vivo (:8765) y QA PASS/FAIL.",
       "Runner honesto: la suite de tests no oculta fallos; el numero verde es real.",
       "Sin secretos: nada de tokens en el cliente Pages ni en el repo.",
-      "Mejora continua como ciudadano de primera clase: roadmap vivo + /loop MoA (proposers gratis + Opus 4.8)."
+      "Mejora continua como ciudadano de primera clase: roadmap vivo + /loop MoA (proposers gratis + agregador MoA local $0; Opus 4.8 opt-in de paga)."
     ],
     "completion": "18/18 features completed with local/runtime evidence; external paid credentials remain optional, not blockers.",
     "note": "Histórico del tooling de auto-mejora (/loop MoA), 18/18 completado. El roadmap de producto vivo es docs/roadmap/PRODUCT_ROADMAP.md (loop Roadmap). No reabrir este JSON."
@@ -81,7 +82,7 @@
           },
           {
             "id": "F1.2",
-            "title": "/loop de mejora (MoA: proposers gratis + Opus 4.8)",
+            "title": "/loop de mejora (MoA: proposers gratis + agregador local $0; Opus 4.8 opt-in de paga)",
             "capability": "loop",
             "impact": "p0_must",
             "effort": "medium",
@@ -92,7 +93,7 @@
             "acceptance_criteria": [
               "python3 loop_improve.py --feature F1.1 corre 1 iteracion completa sin error",
               "Usa proposers gratis (OpenRouter/Nous, Groq, NVIDIA, Together, Fireworks, DeepInfra, GitHub, OpenAI) cuando hay clave",
-              "Agrega con Opus 4.8 (claude CLI o MoA server :8085) cuando esta disponible",
+              "Agrega con el servidor MoA local $0 (127.0.0.1:8085) por defecto; Opus 4.8 solo opt-in de paga via LUCIDFENCE_CLAUDE_CLI.",
               "Degrada a analisis local deterministico si no hay claves (loop demostrable sin secretos)",
               "Historial en data/loop_history.jsonl; max 3 iter, temp decay 0.1"
             ],
