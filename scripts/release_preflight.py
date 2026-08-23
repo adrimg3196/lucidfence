@@ -42,7 +42,10 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
+
+DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json"
 
 
 def _read(path):
@@ -183,6 +186,103 @@ def check_pypi_token(repo, strict=False):
     return True, detail
 
 
+# ---------------------------------------------------------------------------
+# Provenance / SBOM release checks (t_f455bc58 / #233)
+# HARD checks, but only engage when the operator passes the release artifact
+# + sbom + dsse envelope (see --artifact/--sbom/--dsse). Daily preflight is
+# unaffected when these are omitted.
+# ---------------------------------------------------------------------------
+def _read_project_version(repo):
+    pp = _read(os.path.join(repo, "pyproject.toml"))
+    if pp:
+        m = re.search(r'^version\s*=\s*[\"\']([^\"\']+)[\"\']', pp, re.M)
+        if m:
+            return m.group(1)
+    return None
+
+
+def check_sbom_present(repo, artifact=None, sbom=None, dsse=None):
+    path = sbom or os.path.join(repo, "sbom.cdx.json")
+    if not os.path.isfile(path):
+        return False, {"error": f"sbom missing: {path}"}
+    try:
+        import json as _json
+        data = _json.loads(_read(path))
+    except Exception as exc:  # noqa: BLE001
+        return False, {"error": f"sbom not parseable: {exc}"}
+    ok = data.get("bomFormat") == "CycloneDX" and data.get("specVersion") == "1.5"
+    return ok, {"path": path, "bomFormat": data.get("bomFormat"),
+                "specVersion": data.get("specVersion")}
+
+
+def check_provenance_present(repo, artifact=None, sbom=None, dsse=None):
+    path = dsse or os.path.join(repo, "provenance.dsse.json")
+    if not os.path.isfile(path):
+        return False, {"error": f"provenance envelope missing: {path}"}
+    try:
+        import base64
+        import json as _json
+        env = _json.loads(_read(path))
+        if env.get("payloadType") != DSSE_PAYLOAD_TYPE:
+            return False, {"error": f"unexpected payloadType: {env.get('payloadType')}"}
+        statement = _json.loads(base64.b64decode(env["payload"]))
+        return True, {"path": path,
+                      "predicateType": statement.get("predicateType"),
+                      "subject": statement.get("subject", [{}])[0].get("name")}
+    except Exception as exc:  # noqa: BLE001
+        return False, {"error": f"provenance not parseable: {exc}"}
+
+
+def check_prov_artifact_match(repo, artifact=None, sbom=None, dsse=None):
+    dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
+    art_path = artifact
+    if not art_path or not os.path.isfile(dsse_path):
+        return False, {"error": "need --artifact and --dsse to compare"}
+    import base64
+    import hashlib
+    import json as _json
+    env = _json.loads(_read(dsse_path))
+    statement = _json.loads(base64.b64decode(env["payload"]))
+    expected = statement["subject"][0]["digest"].get("sha256")
+    actual = hashlib.sha256(open(art_path, "rb").read()).hexdigest()
+    ok = expected == actual
+    return ok, {"expected": expected, "actual": actual}
+
+
+def check_prov_commit_ancestor(repo, artifact=None, sbom=None, dsse=None):
+    dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
+    if not os.path.isfile(dsse_path):
+        return False, {"error": "provenance envelope missing (need --dsse)"}
+    import base64
+    import json as _json
+    env = _json.loads(_read(dsse_path))
+    statement = _json.loads(base64.b64decode(env["payload"]))
+    commit = statement["predicate"]["invocation"]["configSource"]["commit"]
+    res = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
+                          commit, "HEAD"], capture_output=True)
+    ok = res.returncode == 0
+    return ok, {"commit": commit, "is_ancestor_of_head": ok}
+
+
+def check_prov_version_match(repo, artifact=None, sbom=None, dsse=None):
+    dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
+    if not os.path.isfile(dsse_path):
+        return False, {"error": "provenance envelope missing (need --dsse)"}
+    import base64
+    import json as _json
+    env = _json.loads(_read(dsse_path))
+    statement = _json.loads(base64.b64decode(env["payload"]))
+    pred_version = statement["predicate"]["version"]
+    pp_version = _read_project_version(repo)
+    rv = _read(os.path.join(repo, ".release-version"))
+    rv_version = rv.strip() if rv else None
+    versions = {"predicate": pred_version, "pyproject": pp_version}
+    if rv_version:
+        versions[".release-version"] = rv_version
+    ok = len(set(v for v in versions.values() if v)) <= 1
+    return ok, {"versions": versions}
+
+
 CHECKS = [
     ("version_consistency", check_version_consistency, True),
     ("changelog_unreleased", check_changelog_unreleased, True),
@@ -220,6 +320,16 @@ def main():
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--strict-secret", action="store_true",
                     help="treat missing PYPI_TOKEN as a hard failure")
+    # Provenance / SBOM release checks (t_f455bc58 / #233). Only engage when
+    # the operator is actually releasing an artifact.
+    ap.add_argument("--artifact", default=None,
+                    help="release artifact (e.g. dist/lucidfence-1.6.0.tar.gz) "
+                         "— enables the provenance/SBOM hard checks")
+    ap.add_argument("--sbom", default=None,
+                    help="CycloneDX SBOM path (default: <repo>/sbom.cdx.json)")
+    ap.add_argument("--dsse", default=None,
+                    help="DSSE provenance envelope (default: "
+                         "<repo>/provenance.dsse.json)")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo) if args.repo else _autodetect_repo()
@@ -227,15 +337,44 @@ def main():
         print(f"ERROR: repo path not found: {repo}", file=sys.stderr)
         return 2
 
+    # Base checklist (always runs).
+    checks = list(CHECKS)
+
+    # Provenance / SBOM checks only run when releasing an artifact.
+    release_mode = bool(args.artifact)
+    if release_mode:
+        checks += [
+            ("sbom_present", check_sbom_present, True),
+            ("provenance_present", check_provenance_present, True),
+            ("prov_artifact_match", check_prov_artifact_match, True),
+            ("prov_commit_ancestor", check_prov_commit_ancestor, True),
+            ("prov_version_match", check_prov_version_match, True),
+        ]
+    else:
+        # Avoid a misleading "PASS" on provenance checks that have no input.
+        checks = [c for c in checks if c[0] not in (
+            "sbom_present", "provenance_present", "prov_artifact_match",
+            "prov_commit_ancestor", "prov_version_match")]
+
     results = []
     hard_failed = 0
-    for name, fn, hard in CHECKS:
-        if name == "pypi_token":
-            ok, detail = fn(repo, strict=args.strict_secret)
-            is_hard = args.strict_secret
-        else:
-            ok, detail = fn(repo)
-            is_hard = hard
+    for name, fn, hard in checks:
+        try:
+            if name == "pypi_token":
+                ok, detail = fn(repo, strict=args.strict_secret)
+                is_hard = args.strict_secret
+            elif release_mode and name in (
+                "sbom_present", "provenance_present", "prov_artifact_match",
+                "prov_commit_ancestor", "prov_version_match",
+            ):
+                ok, detail = fn(repo, artifact=args.artifact,
+                                sbom=args.sbom, dsse=args.dsse)
+                is_hard = hard
+            else:
+                ok, detail = fn(repo)
+                is_hard = hard
+        except Exception as exc:  # noqa: BLE001
+            ok, detail, is_hard = False, {"error": f"{type(exc).__name__}: {exc}"}, hard
         status = "PASS" if ok else ("WARN" if not is_hard else "FAIL")
         # Soft-secret special case: present-but-unset => WARN (never hard-fail)
         if name == "pypi_token" and not detail.get("PYPI_TOKEN_set"):
@@ -246,10 +385,12 @@ def main():
                         "hard": is_hard, "detail": detail})
 
     if args.json:
-        print(json.dumps({"repo": repo, "hard_failed": hard_failed,
+        print(json.dumps({"repo": repo, "release_mode": release_mode,
+                          "hard_failed": hard_failed,
                           "checks": results}, indent=2, ensure_ascii=False))
     else:
-        print(f"=== release_preflight  ({repo}) ===")
+        print(f"=== release_preflight  ({repo}) ==="
+              + ("  [RELEASE MODE]" if release_mode else ""))
         for r in results:
             print(f"  [{r['status']:4s}] {r['check']}")
             if r["status"] != "PASS" or args.json is False:

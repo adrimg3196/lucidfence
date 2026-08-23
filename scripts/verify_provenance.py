@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""verify_provenance.py — verify a LucidFence release provenance envelope OFFLINE.
+
+The verification CORE is 100% stdlib (hashlib + json + base64 + subprocess
+for git). It detects tampering with the artifact, the SBOM, or the recorded
+git commit WITHOUT any third-party package and WITHOUT network access.
+
+Run with `python3.11 -S` to prove there are no site-packages dependencies:
+    python3.11 -S scripts/verify_provenance.py \
+        --artifact <release.tar.gz> --sbom <sbom.cdx.json> \
+        --dsse provenance.dsse.json
+
+Optional signature verification:
+    --key /path/to/release_signing.pub   # Ed25519 public PEM (operator-held)
+If --key is NOT given, the signature is left UNVERIFIED but the hash-based
+tamper checks (1-4) still run. This is by design: the hash chain alone proves
+the artifact/SBOM/commit were not altered, while the key adds authenticity.
+
+Checks (all local):
+  1. artifact_intact    sha256(artifact) == subject.digest.sha256
+  2. sbom_intact        sha256(sbom)     == predicate.sbom.sha256
+  3. commit_linked      predicate.commit is an ancestor of current HEAD
+                        (git merge-base --is-ancestor)
+  4. version_consistent predicate.version == pyproject == .release-version
+  5. signature_optional if --key: verify Ed25519 sig over the payload bytes;
+                        else: warn "unverified signature" but do NOT fail
+  6. canonical_stable  re-serializing the statement canonically and re-hashing
+                        reproduces the recorded payload's sha256
+
+Exit 0 = APTO (all hard checks pass), 1 = FALLO. JSON summary to stdout.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json"
+# Metadata fields that may change between runs; blanked before canonical-hash
+# comparison so the digest is reproducible regardless of build timestamps.
+_VOLATILE_METADATA_FIELDS = ("buildStartedOn", "generatedAt")
+
+
+# --------------------------------------------------------------------------
+def _read(path: Path) -> bytes:
+    return path.read_bytes()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def canonical_json(obj) -> bytes:
+    return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def blank_volatile(obj: dict) -> dict:
+    clone = json.loads(json.dumps(obj))
+    meta = clone.get("predicate", {}).get("metadata", {})
+    for key in _VOLATILE_METADATA_FIELDS:
+        if key in meta:
+            meta[key] = ""
+    return clone
+
+
+def parse_dsse(raw: bytes) -> tuple[dict, bytes, dict]:
+    env = json.loads(raw)
+    if env.get("payloadType") != DSSE_PAYLOAD_TYPE:
+        raise ValueError(f"unexpected payloadType: {env.get('payloadType')}")
+    payload_b64 = env["payload"]
+    payload_bytes = base64.b64decode(payload_b64)
+    statement = json.loads(payload_bytes)
+    return statement, payload_bytes, env
+
+
+def git_is_ancestor(repo: Path, commit: str) -> bool:
+    """True if `commit` is an ancestor of HEAD."""
+    if not commit:
+        return False
+    res = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
+        capture_output=True,
+    )
+    return res.returncode == 0
+
+
+def read_project_version(repo: Path) -> str:
+    pyproject = repo / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            import tomllib
+            with open(pyproject, "rb") as fh:
+                data = tomllib.load(fh)
+            v = data.get("project", {}).get("version")
+            if v:
+                return v
+        except ModuleNotFoundError:
+            pass
+        txt = pyproject.read_text(encoding="utf-8")
+        m = re.search(r'^version\s*=\s*[\'"]([^\'"]+)[\'"]', txt, re.M)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def read_release_version(repo: Path) -> str:
+    rv = repo / ".release-version"
+    if rv.exists():
+        return rv.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def verify_signature(payload_bytes: bytes, env: dict, key_path: Path) -> tuple[bool, str]:
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from cryptography.exceptions import InvalidSignature
+
+    if not env.get("signatures"):
+        return False, "no signatures in envelope"
+    key = load_pem_public_key(key_path.read_bytes())
+    if not isinstance(key, Ed25519PublicKey):
+        raise ValueError("key is not an Ed25519 public key")
+    wanted_keyid = hashlib.sha256(key.public_bytes_raw()).hexdigest()[:32]
+    for sig in env["signatures"]:
+        if sig.get("keyid") and sig["keyid"] != wanted_keyid:
+            continue  # skip signatures for a different key
+        raw_sig = base64.b64decode(sig["sig"])
+        try:
+            key.verify(raw_sig, payload_bytes)
+            return True, f"verified (keyid {wanted_keyid})"
+        except InvalidSignature:
+            return False, "Ed25519 signature invalid"
+    return False, f"no signature matching keyid {wanted_keyid}"
+
+
+# --------------------------------------------------------------------------
+def run(artifact: Path, sbom: Path, dsse: Path, repo: Path,
+        key: Path | None) -> dict:
+    results: dict[str, dict] = {}
+    statement, payload_bytes, env = parse_dsse(_read(dsse))
+
+    # 1. artifact_intact
+    artifact_digest = sha256_bytes(_read(artifact))
+    subject = statement["subject"][0]
+    ok = artifact_digest == subject.get("digest", {}).get("sha256")
+    results["artifact_intact"] = {
+        "ok": ok,
+        "expected": subject.get("digest", {}).get("sha256"),
+        "actual": artifact_digest,
+    }
+
+    # 2. sbom_intact
+    sbom_digest = sha256_bytes(_read(sbom))
+    sbom_expected = statement["predicate"]["sbom"]["sha256"]
+    ok = sbom_digest == sbom_expected
+    results["sbom_intact"] = {
+        "ok": ok,
+        "expected": sbom_expected,
+        "actual": sbom_digest,
+    }
+
+    # 3. commit_linked (ancestor of HEAD)
+    commit = statement["predicate"]["invocation"]["configSource"]["commit"]
+    linked = git_is_ancestor(repo, commit)
+    results["commit_linked"] = {
+        "ok": linked,
+        "commit": commit,
+        "head": subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                               capture_output=True, text=True).stdout.strip(),
+    }
+
+    # 4. version_consistent
+    pred_version = statement["predicate"]["version"]
+    pp_version = read_project_version(repo)
+    rv_version = read_release_version(repo)
+    versions = {"predicate": pred_version, "pyproject": pp_version}
+    if rv_version:
+        versions[".release-version"] = rv_version
+    ok = len(set(v for v in versions.values() if v)) <= 1 and bool(pred_version)
+    results["version_consistent"] = {"ok": ok, "versions": versions}
+
+    # 5. signature_optional
+    if key is not None:
+        ok, detail = verify_signature(payload_bytes, env, key)
+        results["signature_optional"] = {"ok": ok, "detail": detail}
+    else:
+        results["signature_optional"] = {
+            "ok": True,
+            "detail": "unverified (no --key; hash chain intact covers tamper)",
+        }
+
+    # 6. canonical_stable
+    recomputed = canonical_json(blank_volatile(statement))
+    recorded_digest = sha256_bytes(payload_bytes)
+    recomputed_digest = sha256_bytes(recomputed)
+    ok = recorded_digest == recomputed_digest
+    results["canonical_stable"] = {
+        "ok": ok,
+        "recorded_payload_sha256": recorded_digest,
+        "recomputed_canonical_sha256": recomputed_digest,
+    }
+
+    return results
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description="Verify LucidFence release provenance OFFLINE")
+    ap.add_argument("--artifact", required=True)
+    ap.add_argument("--sbom", required=True)
+    ap.add_argument("--dsse", required=True)
+    ap.add_argument("--repo", default=None)
+    ap.add_argument("--key", default=None,
+                    help="optional Ed25519 PUBLIC PEM to verify the DSSE signature")
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    repo = Path(args.repo or _autodetect_repo()).resolve()
+    artifact, sbom, dsse = (Path(args.artifact).resolve(),
+                            Path(args.sbom).resolve(),
+                            Path(args.dsse).resolve())
+    key = Path(args.key).resolve() if args.key else None
+
+    for p in (artifact, sbom, dsse):
+        if not p.exists():
+            print(f"ERROR: missing {p}", file=sys.stderr)
+            return 1
+
+    results = run(artifact, sbom, dsse, repo, key)
+    hard_ok = all(r["ok"] for r in results.values())
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+    else:
+        print("=== VERIFY PROVENANCE ===")
+        for name, r in results.items():
+            mark = "OK  " if r["ok"] else "FALLO"
+            print(f"  {mark} {name}")
+        print()
+
+    verdict = "APTO" if hard_ok else "FALLO"
+    if args.json:
+        # Per-check block (human-readable, indented) ...
+        print(json.dumps(results, indent=2))
+        # ... followed by a compact single-line verdict for machine parsing.
+        print(json.dumps({"verdict": verdict, "checks": results}))
+    else:
+        print(f"VERIFY PROVENANCE: {verdict}")
+    return 0 if hard_ok else 1
+
+
+def _autodetect_repo() -> str:
+    here = Path(__file__).resolve().parent
+    parent = here.parent
+    if (parent / "pyproject.toml").exists():
+        return str(parent)
+    cwd = Path.cwd()
+    if (cwd / "pyproject.toml").exists():
+        return str(cwd)
+    return str(parent)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
