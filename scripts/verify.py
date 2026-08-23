@@ -5,19 +5,22 @@ Inspirado en el `pnpm verify` de agentic-ship (github.com/moasq/agentic-ship):
 un único punto de entrada ejecutable que ES el gate de calidad, en vez de una
 lista de pasos que cada loop/agente re-escribe (y del que se olvida uno).
 
-Corre, en orden, las cuatro comprobaciones que forman el gate QA del repo:
+Corre, en orden, las comprobaciones que forman el gate QA del repo:
 
-  1. Coherencia de versión   cli.VERSION == pyproject == .release-version
-  2. Enlaces de docs          links relativos de *.md resuelven (docs/ + raíz)
-  3. Batería runtime          scripts/runtime_validation.py debe dar N/N
-  4. Suite honesta            tests/run_tests.py; 0 failed obligatorio. Los
+  1. Licencia Apache-2.0 verbatim
+  2. Coherencia de versión   cli.VERSION == pyproject == .release-version
+  3. Enlaces de docs          links relativos de *.md resuelven (docs/ + raíz)
+  4. Batería runtime          scripts/runtime_validation.py debe dar N/N
+  5. Suite honesta            tests/run_tests.py; 0 failed obligatorio. Los
                               tests que no pueden correr aquí (cryptography
                               fijada ausente) SALTAN con motivo, no fallan.
+  6. Provenance release       verifica el fixture de supply-chain offline
+                              (artifact + sbom + dsse) con scripts/verify_provenance.py
 
 Uso:
     python3 scripts/verify.py             # todo; exit 0 solo si todo pasa
-    python3 scripts/verify.py --fast      # omite la batería runtime (checks 1,2,4)
-    python3 scripts/verify.py --docs-only # solo versión + enlaces (instantáneo, CI)
+    python3 scripts/verify.py --fast      # omite la batería runtime (checks 1,2,3,5,6)
+    python3 scripts/verify.py --docs-only # solo versión + enlaces + provenance (instantáneo, CI)
     python3 scripts/verify.py --quiet     # solo el resumen final
 
 Stdlib-only (convención del repo). Exit 0 = APTO; !=0 = algo falló.
@@ -26,6 +29,7 @@ from __future__ import annotations
 
 import os
 import re
+import json
 import subprocess
 import sys
 
@@ -173,6 +177,47 @@ def check_test_suite() -> tuple[bool, str]:
     return False, f"{passed} passed, {skipped} skipped, {failed} failed — reales: " + "; ".join(shown[:5])
 
 
+# ---------------------------------------------------------------------------
+# Provenance release check (t_f455bc58 / #233)
+# Verifies the committed supply-chain fixture OFFLINE using
+# scripts/verify_provenance.py. This is the "único punto de hecho" hook for the
+# verifiable-provenance claim: it proves the shipped fixture (artifact + sbom +
+# dsse) is internally consistent and links to a git ancestor — with no network.
+# It is deterministic-doc (is_doc=True) so --docs-only / --fast behave sanely.
+# ---------------------------------------------------------------------------
+FIXTURE_DIR = os.path.join(ROOT, "docs", "supply-chain", "fixture")
+
+
+def check_provenance_release() -> tuple[bool, str]:
+    artifact = os.path.join(FIXTURE_DIR, "lucidfence-1.6.0.tar.gz")
+    sbom = os.path.join(FIXTURE_DIR, "sbom.cdx.json")
+    dsse = os.path.join(FIXTURE_DIR, "provenance.dsse.json")
+    missing = [p for p in (artifact, sbom, dsse) if not os.path.exists(p)]
+    if missing:
+        return False, "fixture ausente: " + ", ".join(os.path.relpath(p, ROOT) for p in missing)
+    # Invoke the standalone verifier; it returns JSON on stdout.
+    rc, out = _run([sys.executable, "scripts/verify_provenance.py",
+                    "--artifact", artifact, "--sbom", sbom, "--dsse", dsse,
+                    "--repo", ROOT, "--json"])
+    # The verifier prints the per-check JSON then a final JSON verdict line.
+    # Parse the last JSON object on stdout (the verdict dict).
+    verdict = None
+    for line in reversed(out.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                verdict = json.loads(line)
+            except json.JSONDecodeError:
+                verdict = None
+            break
+    if rc != 0 or not verdict:
+        return False, f"verify_provenance rc={rc}: " + (out.strip().splitlines()[-1] if out.strip() else "sin salida")
+    if verdict.get("verdict") != "APTO":
+        return False, "fixture no APTO: " + json.dumps(verdict.get("checks", {}), ensure_ascii=False)[:200]
+    predicate_ver = verdict.get("checks", {}).get("version_consistent", {}).get("versions", {}).get("predicate", "?")
+    return True, f"fixture APTO (v{predicate_ver})"
+
+
 # (nombre, función, is_runtime, is_deterministic-doc-check)
 CHECKS = [
     ("Licencia Apache-2.0 verbatim", check_license_apache2, False, False),
@@ -180,6 +225,7 @@ CHECKS = [
     ("Enlaces de docs", check_doc_links, False, True),
     ("Batería runtime (en vivo)", check_runtime_battery, True, False),
     ("Suite honesta", check_test_suite, False, False),
+    ("Provenance release", check_provenance_release, False, True),
 ]
 
 

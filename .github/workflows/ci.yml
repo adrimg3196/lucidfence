@@ -39,13 +39,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # provenance check needs full history to prove commit ancestry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
-      # rotos en la documentación. Instantáneo, sin deps. La suite y la
-      # batería runtime van en sus jobs; verify.py --docs-only cubre lo que
-      # ningún otro job gateaba.
+      # rotos en la documentación + verificación offline de la fixture de
+      # supply-chain (scripts/verify_provenance.py). Instantáneo, sin deps.
       - name: python3 scripts/verify.py --docs-only
         run: python3 scripts/verify.py --docs-only
 

@@ -8,7 +8,33 @@ import json
 import re
 from pathlib import Path
 
-REQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\\\s]+)")
+try:  # Python >= 3.11
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - fallback for < 3.11
+    tomllib = None
+
+REQ = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s]+)")
+
+
+def read_project_version(root: Path) -> str:
+    """Read the application version from pyproject.toml (single source of truth).
+
+    Uses tomllib on Python >= 3.11; falls back to a regex on older
+    interpreters. Never hardcodes a version.
+    """
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        if tomllib is not None:
+            with open(pyproject, "rb") as fh:
+                data = tomllib.load(fh)
+            version = data.get("project", {}).get("version")
+            if version:
+                return version
+        text = pyproject.read_text(encoding="utf-8")
+        m = re.search(r'^version\s*=\s*[\'"]([^\'"]+)[\'"]', text, re.M)
+        if m:
+            return m.group(1)
+    return "0.0.0"
 
 
 def build_sbom(root: Path) -> dict:
@@ -26,9 +52,11 @@ def build_sbom(root: Path) -> dict:
             continue
         files.append({"path": str(path.relative_to(root)),
                       "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    app_version = read_project_version(root)
     return {
         "bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1,
-        "metadata": {"component": {"type": "application", "name": "lucidfence", "version": "1.3.1"}},
+        "metadata": {"component": {"type": "application", "name": "lucidfence",
+                                   "version": app_version}},
         "components": components,
         "properties": [{"name": "lucidfence:source-file-count", "value": str(len(files))},
                        {"name": "lucidfence:source-manifest-sha256",
