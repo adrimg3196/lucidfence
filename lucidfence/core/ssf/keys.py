@@ -61,13 +61,6 @@ def load_signing_jwk(path: Path | None = None) -> Any:
     from cryptography.hazmat.primitives.asymmetric import ec
 
     priv = ec.generate_private_key(ec.SECP256R1())
-    from cryptography.hazmat.primitives import serialization
-
-    der = priv.private_bytes(
-        encoding=serialization.Encoding.DER,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
     numbers = priv.private_numbers()
     # Build JWK from the EC private numbers (P-256).
     jwk = {
