@@ -3,6 +3,25 @@
 Token/cost caps and the emergency stop for LucidFence improvement loops.
 Enforced manually by the maintainer and (where possible) by CI.
 
+## Aggregator policy (2026-08-22, decision t_bae7f2e4)
+
+The `/loop` MoA improvement loop MUST stay 100%-free, consistent with the
+SOAR/Multi-UEM claim (#188/#110) and the 100%-free posture of 2026-08-16.
+
+- **Default aggregator ($0):** the local MoA server at `127.0.0.1:8085`, called
+  with `moa_dry=true` (free local synthesis, no API keys, no cost). Same server
+  already consumed by `lucidfence/core/ai.py`.
+- **Fallback ($0):** deterministic local heuristic merge when MoA is down.
+- **Opus 4.8 (PAID, opt-in ONLY):** used solely when an operator sets
+  `LUCIDFENCE_CLAUDE_CLI=<absolute path to the claude binary>`. Auto-discovery
+  of `claude` in PATH is intentionally DISABLED so the loop can never silently
+  incur Opus spend. Enabling Opus requires explicit Product sign-off (business-
+  model impact) recorded here; it breaks 100%-free.
+
+This resolves the Finance & Ops alert of 2026-08-22: `loop_improve.py` previously
+auto-selected `claude` (Opus 4.8, paid) as the aggregator, the only paid component
+in the fleet. It is now the free local MoA by default.
+
 ## Caps
 
 - **Per-loop-run token cap:** 200k tokens (report-only triage).

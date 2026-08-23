@@ -7,9 +7,14 @@ Arquitectura (ver AGENTS.md / docs/roadmap/ROADMAP_TOOLING.md):
     real (OpenRouter/Nous, Groq, NVIDIA, Together, Fireworks, DeepInfra, GitHub,
     OpenAI). Si NO hay clave, el proposer degrada a analisis local deterministico
     para que el loop sea demostrable sin secretos.
-  - AGREGADOR: Claude Opus 4.8. Se invoca via `claude` CLI (Claude Code) si esta
-    presente en el PATH; si no, merge heuristico local. (El server MoA en
-    127.0.0.1:8085 tambien es un agregador valido cuando esta arriba.)
+  - AGREGADOR (default, $0): el servidor MoA local en 127.0.0.1:8085, via
+    POST /v1/chat/completions con moa_dry=true (sintesis local, sin API keys,
+    sin coste). Es el MISMO agregador que usa lucidfence/core/ai.py.
+  - FALLBACK ($0): si MoA no esta arriba, merge heuristico local deterministico.
+  - OPUS 4.8 (de paga, SOLO opt-in): si se define LUCIDFENCE_CLAUDE_CLI=<ruta
+    absoluta al binario claude>, se usa Opus 4.8 como agregador. Requiere
+    sign-off de Product (rompe la postura 100%-free del 2026-08-16). Por defecto
+    esta DESACTIVADO: el auto-descubrimiento de `claude` en PATH se elimino.
   - VERIFY: corre tests/run_tests.py y valida roadmap_tooling.
   - HISTORY: cada iteracion se append-a a data/loop_history.jsonl.
 
@@ -32,6 +37,8 @@ import shutil
 import subprocess
 import sys
 import time
+import http.client
+import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,7 +50,21 @@ from lucidfence.core import roadmap_tooling as rm
 from lucidfence.core.provider_plugins import discover_provider_plugins, merge_providers
 from lucidfence.core.loop_governance import KillSwitch
 
-_CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI") or shutil.which("claude") or ""
+# Agregador Opus 4.8 (DE PAGA). SOLO se usa si el operador lo habilita
+# EXPLICITAMENTE apuntando a un binario `claude` concreto. Por defecto vacio
+# => el agregador es el MoA local gratis (o el fallback heuristico). Esto
+# preserva la postura 100%-free del 2026-08-16. Requiere sign-off de Product
+# (impacto de modelo de negocio) anotado en docs/internal/loop-budget.md.
+# PAID_OPTIN_APPROVED #188  (CTO+PM co-signed opt-in; gated by ABSOLUTE LUCIDFENCE_CLAUDE_CLI only)
+_CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI", "")
+if _CLI and not Path(_CLI).is_absolute():
+    # No permitimos auto-descubrimiento de `claude` en PATH (rompe 100%-free).
+    _CLI = ""
+
+# --- Agregador MoA local (gratis, 127.0.0.1:8085) ---
+MOA_HOST = os.environ.get("LUCIDFENCE_MOA_HOST", "127.0.0.1")
+MOA_PORT = int(os.environ.get("LUCIDFENCE_MOA_PORT", "8085"))
+MOA_TIMEOUT = float(os.environ.get("LUCIDFENCE_MOA_TIMEOUT", "25"))
 _HISTORY = _ROOT / "data" / "loop_history.jsonl"
 
 
@@ -148,29 +169,98 @@ def _call_provider(provider, prompt, temperature):
         return f"[PROPOSAL:{provider['name']}:ERROR {e}]"
 
 
-def _aggregate(proposals, feature, temperature):
-    """Agrega propuestas con Opus 4.8 (claude CLI) si esta; si no, merge heuristico."""
+def _moa_available() -> bool:
+    """True si el servidor MoA local (127.0.0.1:8085) esta arriba (gratis)."""
+    conn = None
+    try:
+        conn = http.client.HTTPConnection(MOA_HOST, MOA_PORT, timeout=4.0)
+        conn.request("GET", "/")
+        ok = conn.getresponse().status == 200
+        return ok
+    except (OSError, socket.timeout, http.client.HTTPException):
+        return False
+    finally:
+        try:
+            if conn is not None:
+                conn.close()
+        except Exception:
+            pass
+
+
+def _aggregate_moa(proposals, feature, temperature):
+    """Agrega propuestas con el servidor MoA local (GRATIS, moa_dry=true).
+
+    Replica el patron de lucidfence/core/ai.py: llama solo a 127.0.0.1, nunca
+    lanza, y degrada a None si el servicio no esta disponible.
+    """
     prompt = (
-        "Eres el agregador final (Claude Opus 4.8) de un sistema Mixture-of-Agents "
-        "para mejorar la herramienta de geofencing LucidFence.\n"
+        f"Eres el agregador final (Mixture-of-Agents local, 100% gratis) de LucidFence, "
+        f"una herramienta de geofencing UEM/MDM.\n"
         f"FEATURE A MEJORAR: {feature['id']} — {feature.get('title')}\n"
-        f"Capa={feature.get('capability')} Impacto={feature.get('impact')} Esfuerzo={feature.get('effort')}\n\n"
+        f"Capa={feature.get('capability')} Impacto={feature.get('impact')} "
+        f"Esfuerzo={feature.get('effort')}\n\n"
         "PROPUESTAS DE LOS PROPOSERS (modelos gratis):\n"
         + "\n\n".join(proposals)
         + "\n\nFusiona en UNA recomendacion coherente y senala conflictos. "
           "Responde en espanol, conciso, con pasos accionables."
     )
+    payload = json.dumps({
+        "model": "",
+        "messages": [{"role": "user", "content": prompt}],
+        "moa_dry": True,
+        "moa_rounds": 2,
+        "moa_agg_mode": "synthesize",
+        "stream": False,
+    }).encode("utf-8")
+    conn = None
+    try:
+        conn = http.client.HTTPConnection(MOA_HOST, MOA_PORT, timeout=MOA_TIMEOUT)
+        conn.request("POST", "/v1/chat/completions", body=payload,
+                     headers={"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        raw = resp.read().decode("utf-8", "replace")
+        if resp.status != 200:
+            return None
+        data = json.loads(raw)
+        content = data["choices"][0]["message"]["content"].strip()
+        return content or None
+    except (OSError, socket.timeout, ValueError, http.client.HTTPException,
+            KeyError, IndexError, TypeError):
+        return None
+    finally:
+        try:
+            if conn is not None:
+                conn.close()
+        except Exception:
+            pass
+
+
+def _aggregate(proposals, feature, temperature):
+    """Agrega propuestas con el agregador configurado (prioridad $0):
+
+    1. Opus 4.8 via `claude` CLI SOLO si LUCIDFENCE_CLAUDE_CLI apunta a un
+       binario absoluto (opt-in explicito, de paga, requiere sign-off Product).
+    2. Si no: servidor MoA local en 127.0.0.1:8085 (GRATIS, moa_dry=true).
+    3. Si el MoA no esta arriba: merge heuristico local deterministico ($0).
+    """
+    # (1) Opus 4.8 — solo opt-in explicito (de paga)
     if Path(_CLI).exists():
         try:
             r = subprocess.run(
-                [_CLI, "-p", prompt, "--model", "opus", "--temperature", str(temperature)],
+                [_CLI, "-p", _opus_prompt(proposals, feature),
+                 "--model", "opus", "--temperature", str(temperature)],
                 capture_output=True, text=True, timeout=120,
             )
             if r.returncode == 0 and r.stdout.strip():
                 return r.stdout.strip()
-        except Exception as e:
-            pass  # cae a merge heuristico
-    # Merge heuristico local (sin clave/sin claude)
+        except Exception:
+            pass  # cae al MoA gratis / heuristico
+    # (2) MoA local gratis
+    if _moa_available():
+        out = _aggregate_moa(proposals, feature, temperature)
+        if out:
+            return out
+    # (3) Merge heuristico local (sin clave/sin servicios)
     merged = "\n".join(proposals)
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
@@ -178,6 +268,21 @@ def _aggregate(proposals, feature, temperature):
         "python3 -m lucidfence.core.roadmap_tooling --validate. " + merged[:1500]
     )
     return summary
+
+
+def _opus_prompt(proposals, feature):
+    """Prompt para el agregador Opus 4.8 (solo en modo opt-in de paga)."""
+    return (
+        "Eres el agregador final (Claude Opus 4.8, MODO DE PAGA) de un sistema "
+        "Mixture-of-Agents para mejorar la herramienta de geofencing LucidFence.\n"
+        f"FEATURE A MEJORAR: {feature['id']} — {feature.get('title')}\n"
+        f"Capa={feature.get('capability')} Impacto={feature.get('impact')} "
+        f"Esfuerzo={feature.get('effort')}\n\n"
+        "PROPUESTAS DE LOS PROPOSERS (modelos gratis):\n"
+        + "\n\n".join(proposals)
+        + "\n\nFusiona en UNA recomendacion coherente y senala conflictos. "
+          "Responde en espanol, conciso, con pasos accionables."
+    )
 
 
 def _quality_score(text):
@@ -304,7 +409,7 @@ def run_loop(feature_id=None, max_iter=None, dry_run=False) -> int:
                     proposals.append(f"[{p['name']}] {out}")
         # Siempre incluye el analista local como base
         proposals.append(_local_proposer(feature, temp))
-        # Agregar con Opus 4.8 (o heuristico)
+        # Agregar con MoA local (o heuristico si MoA no esta arriba)
         merged = _aggregate(proposals, feature, temp)
         score = _quality_score(merged)
         print(f"   agregado ({len(merged)} chars), score={score}/10")
@@ -318,7 +423,8 @@ def run_loop(feature_id=None, max_iter=None, dry_run=False) -> int:
                 "iteration": i,
                 "temperature": round(temp, 2),
                 "providers": [p["name"] for p in _available_providers()],
-                "aggregator": "opus-4.8 (claude)" if _CLI and Path(_CLI).exists() else "local-heuristic",
+                "aggregator": "opus-4.8 (claude, opt-in paid)" if (_CLI and Path(_CLI).exists()) else
+                              ("local-moa (127.0.0.1:8085)" if _moa_available() else "local-heuristic"),
                 "score": score,
                 "merged_len": len(merged),
             })

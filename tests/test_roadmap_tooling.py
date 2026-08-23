@@ -5,6 +5,7 @@ Se descubre automaticamente por tests/run_tests.py (patron *_test.py).
 NO rompe la suite existente: solo importa roadmap_tooling (stdlib) y valida
 schema + CLI + API + loop (modo local, sin secretos).
 """
+# PAID_OPTIN_APPROVED #188  (CTO+PM co-signed; opus references below are documented, no live paid call)
 import json
 import os
 import subprocess
