@@ -455,6 +455,9 @@ class Engine:
                     storage_total_gb=posture.get("storage_total_gb", rep.storage_total_gb),
                     storage_free_gb=posture.get("storage_free_gb", rep.storage_free_gb),
                     encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
+                    # La observación gana arriba; aquí se conserva intacto lo que
+                    # el UEM afirmó, para poder contrastarlas (second_opinion.py).
+                    uem_claimed_encryption=rep.encryption_enabled,
                     # DDM/UEM readback: carry None as None (unknown never fabricated).
                     lockdown_mode=rep.lockdown_mode,
                     supervised=rep.supervised,

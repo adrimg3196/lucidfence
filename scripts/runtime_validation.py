@@ -566,6 +566,44 @@ def main() -> int:
               f"sin_senal={ciegos}, sin_reportar={mudos}, "
               f"coverage={rep['resumen']['coverage_percent']}%")
 
+        # Claim (backlog #13): inyectado en el estado REAL del engine un
+        # dispositivo que el UEM declara conforme y cifrado, con la observación
+        # independiente diciendo lo contrario, el informe lo delata con
+        # evidencia de los dos lados. Y con un lado desconocido, NO lo delata.
+        print("\n== Backlog #13 Segunda opinion (GET /api/second-opinion) ==")
+        s, so0, _ = http_req("GET", "/api/second-opinion", cookie=cookie)
+        shape_ok = s == 200 and all(
+            k in (so0 or {}) for k in ("discrepancies", "devices_verifiable", "by_control"))
+        check("GET /api/second-opinion responde con el informe completo",
+              shape_ok, f"http={s}, claves={sorted((so0 or {}).keys())}")
+
+        from datetime import datetime as _dt, timezone as _tz
+        from lucidfence.core.second_opinion import second_opinion_report
+        from lucidfence.core.state_store import DeviceState as _DS
+        # El UEM afirma cifrado y conformidad; osquery observa disco sin cifrar.
+        eng.store.upsert(_DS(
+            device_id="dev-mentiroso", name="QA segunda opinion", platform="macos",
+            compliant=True, uem_claimed_encryption=True, encryption_enabled=False,
+            posture_source="osquery", posture_collected_at=_dt.now(_tz.utc).isoformat(),
+            last_checkin=_dt.now(_tz.utc).isoformat()))
+        # Mismo caso pero SIN observación independiente: no debe delatar a nadie.
+        eng.store.upsert(_DS(
+            device_id="dev-sin-señal", name="QA sin observacion", platform="macos",
+            compliant=True, uem_claimed_encryption=True))
+        rep_so = second_opinion_report([d.to_dict() for d in eng.store.snapshot().values()])
+        enc = [d for d in rep_so["discrepancies"]
+               if d["control"] == "encryption" and d["device_id"] == "dev-mentiroso"]
+        callados = [d["device_id"] for d in rep_so["discrepancies"]
+                    if d["device_id"] == "dev-sin-señal"]
+        check("UEM que afirma cifrado contra observacion en contra: delatado con ambas caras",
+              len(enc) == 1 and enc[0]["severity"] == "critical"
+              and enc[0]["claimed"]["value"] is True
+              and enc[0]["observed"]["value"] is False
+              and enc[0]["observed"]["source"] == "osquery",
+              f"hallazgos={enc}")
+        check("sin observacion independiente NO se inventa discrepancia",
+              callados == [], f"hallazgos espurios={callados}")
+
         # ============ 7. MCP real por stdio contra el server vivo ===========
         print("\n== P2.8 MCP explain-risk (stdio real contra el server) ==")
         rpc_in = "\n".join(json.dumps(m) for m in [
