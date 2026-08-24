@@ -23,7 +23,11 @@ from lucidfence.core.ssf import (  # noqa: E402
     build_device_compliance_change,
     compliance_status_from_score,
 )
-from lucidfence.core.ssf.keys import SIGNING_ALG, load_signing_jwk  # noqa: E402
+from lucidfence.core.ssf.keys import (  # noqa: E402
+    SIGNING_ALG,
+    _b64url_int,
+    load_signing_jwk,
+)
 from lucidfence.core.oidc import ASYMMETRIC_ALGORITHMS  # noqa: E402
 
 try:
@@ -51,6 +55,14 @@ def _stub_evaluate(risk_score: int, severity: str, reasons: list[str]):
 def _temp_key():
     d = Path(tempfile.mkdtemp(prefix="ssf-key-"))
     return d / "ssf_sign.json"
+
+
+def test_p256_jwk_scalar_preserves_fixed_32_byte_width():
+    import base64
+
+    encoded = _b64url_int(1)
+    raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+    assert raw == (b"\x00" * 31) + b"\x01", len(raw)
 
 
 def test_build_event_shape():
