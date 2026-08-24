@@ -1,0 +1,122 @@
+name: autonomy-guard
+
+# Loaded only from main. This controller never checks out a PR and can only
+# invalidate a previously green autonomy status when evidence is stale or the
+# live open-PR set has become overlapping/conflicting.
+on:
+  workflow_run:
+    workflows: [autonomy-evidence]
+    types: [requested, completed]
+  pull_request_target:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize, ready_for_review, closed]
+  schedule:
+    - cron: "17 * * * *"
+
+permissions: {}
+
+concurrency:
+  group: autonomy-live-gate
+  cancel-in-progress: false
+
+jobs:
+  invalidate:
+    name: invalidate-stale-or-conflicting-evidence
+    if: >-
+      github.repository == 'adrimg3196/lucidfence' &&
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_run' &&
+        github.event.workflow_run.repository.full_name == github.repository) ||
+       (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.base.ref == 'main'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Checkout trusted guard from main only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Invalidate evidence immediately while a PR is changing
+        if: >-
+          (github.event_name == 'workflow_run' && github.event.action == 'requested') ||
+          (github.event_name == 'pull_request_target' && github.event.action != 'closed')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          head_sha="${PR_HEAD_SHA:-$RUN_HEAD_SHA}"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \
+            -f state=failure \
+            -f context=autonomy-evidence \
+            -f description='Fresh trusted evidence is required after this PR event' \
+            -f target_url="$TARGET_URL" > /dev/null
+
+      - name: Derive live invalidations without exposing PR text
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main ]]
+          python3 -I -S scripts/emit_autonomy_evidence.py \
+            guard-open-prs --output "$RUNNER_TEMP/guard.json"
+
+      - name: Publish failures only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GUARD_JSON: ${{ runner.temp }}/guard.json
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 -I -S - <<'PY' > "$RUNNER_TEMP/invalidations.tsv"
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          document = json.loads(Path(os.environ["GUARD_JSON"]).read_bytes())
+          if document.get("schema") != "lucidfence-autonomy-guard/v1":
+              raise SystemExit("guard output schema mismatch")
+          invalidations = document.get("invalidations")
+          if not isinstance(invalidations, list):
+              raise SystemExit("guard invalidation inventory is malformed")
+          for item in invalidations:
+              number = item.get("pr_number") if isinstance(item, dict) else None
+              head = item.get("head_sha") if isinstance(item, dict) else None
+              reasons = item.get("reasons") if isinstance(item, dict) else None
+              if (
+                  not isinstance(number, int)
+                  or number < 1
+                  or not isinstance(head, str)
+                  or re.fullmatch(r"[0-9a-f]{40}", head) is None
+                  or not isinstance(reasons, list)
+                  or not reasons
+              ):
+                  raise SystemExit("guard invalidation entry is malformed")
+              print(f"{number}\t{head}")
+          PY
+          count=0
+          while IFS=$'\t' read -r pr_number head_sha; do
+            [[ "$pr_number" =~ ^[1-9][0-9]*$ ]]
+            [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+            gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$head_sha" \
+              -f state=failure \
+              -f context=autonomy-evidence \
+              -f description='Evidence expired or live objective conflict detected' \
+              -f target_url="$TARGET_URL" > /dev/null
+            count=$((count + 1))
+          done < "$RUNNER_TEMP/invalidations.tsv"
+          echo "Invalidated autonomy evidence for $count open pull request(s)." >> "$GITHUB_STEP_SUMMARY"

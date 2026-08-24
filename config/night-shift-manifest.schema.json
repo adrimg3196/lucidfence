@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lucidfence.dev/schemas/night-shift-manifest-v1.json",
+  "title": "LucidFence durable night-shift manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "base_sha",
+    "head_sha",
+    "run_id",
+    "run_attempt",
+    "workflow",
+    "workflow_ref",
+    "ref",
+    "objective",
+    "participants",
+    "artifacts",
+    "generated_at",
+    "validity",
+    "attestation",
+    "manifest_digest"
+  ],
+  "properties": {
+    "schema": {"const": "lucidfence-night-shift-manifest/v1", "type": "string"},
+    "repository": {"const": "adrimg3196/lucidfence", "type": "string"},
+    "base_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "head_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+    "run_id": {"pattern": "^[1-9][0-9]*$", "type": "string"},
+    "run_attempt": {"minimum": 1, "type": "integer"},
+    "workflow": {"const": "autonomy-evidence", "type": "string"},
+    "workflow_ref": {
+      "pattern": "^adrimg3196/lucidfence/\\.github/workflows/autonomy-evidence\\.yml@refs/pull/[1-9][0-9]*/merge$",
+      "type": "string"
+    },
+    "ref": {"pattern": "^refs/pull/[1-9][0-9]*/merge$", "type": "string"},
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "risk", "changed_paths"],
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+          "type": "string"
+        },
+        "risk": {"enum": ["normal", "high"], "type": "string"},
+        "changed_paths": {
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\\\r\\n]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "participants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "product_owner",
+        "maker",
+        "final_reviewer",
+        "reality_checker",
+        "appsec_primary",
+        "appsec_secondary"
+      ],
+      "properties": {
+        "product_owner": {"$ref": "#/$defs/productOwner"},
+        "maker": {"$ref": "#/$defs/maker"},
+        "final_reviewer": {"$ref": "#/$defs/finalReviewer"},
+        "reality_checker": {"$ref": "#/$defs/finalReviewer"},
+        "appsec_primary": {"$ref": "#/$defs/appsecPrimary"},
+        "appsec_secondary": {"$ref": "#/$defs/appsecSecondary"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ci",
+        "runtime",
+        "secrets",
+        "dependencies",
+        "license",
+        "appsec",
+        "reality",
+        "overlap",
+        "final-review"
+      ],
+      "properties": {
+        "ci": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "ci.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "runtime": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "runtime.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "secrets": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "secrets.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "dependencies": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "dependencies.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "license": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "license.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "appsec": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "appsec.json"}, "producer": {"$ref": "#/$defs/appsecPrimary"}}}
+          ]
+        },
+        "reality": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "reality.json"}, "producer": {"$ref": "#/$defs/finalReviewer"}}}
+          ]
+        },
+        "overlap": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "overlap.json"}, "producer": {"$ref": "#/$defs/maker"}}}
+          ]
+        },
+        "final-review": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "final-review.json"}, "producer": {"$ref": "#/$defs/finalReviewer"}}}
+          ]
+        },
+        "appsec-primary": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "appsec-primary.json"}, "producer": {"$ref": "#/$defs/appsecPrimary"}}}
+          ]
+        },
+        "appsec-secondary": {
+          "allOf": [
+            {"$ref": "#/$defs/artifactDescriptor"},
+            {"properties": {"path": {"const": "appsec-secondary.json"}, "producer": {"$ref": "#/$defs/appsecSecondary"}}}
+          ]
+        }
+      }
+    },
+    "generated_at": {"format": "date-time", "pattern": "Z$", "type": "string"},
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["not_before", "expires_at", "policy"],
+      "properties": {
+        "not_before": {"format": "date-time", "pattern": "Z$", "type": "string"},
+        "expires_at": {"format": "date-time", "pattern": "Z$", "type": "string"},
+        "policy": {"const": "P7D", "type": "string"}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "base_sha",
+        "head_sha",
+        "evidence_run",
+        "signer",
+        "predicate_type"
+      ],
+      "properties": {
+        "repository": {"const": "adrimg3196/lucidfence", "type": "string"},
+        "base_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "head_sha": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+        "evidence_run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "attempt", "workflow", "workflow_ref", "ref"],
+          "properties": {
+            "id": {"pattern": "^[1-9][0-9]*$", "type": "string"},
+            "attempt": {"minimum": 1, "type": "integer"},
+            "workflow": {"const": "autonomy-evidence", "type": "string"},
+            "workflow_ref": {
+              "pattern": "^adrimg3196/lucidfence/\\.github/workflows/autonomy-evidence\\.yml@refs/pull/[1-9][0-9]*/merge$",
+              "type": "string"
+            },
+            "ref": {"pattern": "^refs/pull/[1-9][0-9]*/merge$", "type": "string"}
+          }
+        },
+        "signer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run_id",
+            "run_attempt",
+            "workflow_ref",
+            "workflow_digest",
+            "ref",
+            "source_digest"
+          ],
+          "properties": {
+            "run_id": {"pattern": "^[1-9][0-9]*$", "type": "string"},
+            "run_attempt": {"minimum": 1, "type": "integer"},
+            "workflow_ref": {
+              "const": "adrimg3196/lucidfence/.github/workflows/autonomy-attest.yml@refs/heads/main",
+              "type": "string"
+            },
+            "workflow_digest": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+            "ref": {"const": "refs/heads/main", "type": "string"},
+            "source_digest": {"pattern": "^[0-9a-f]{40}$", "type": "string"}
+          }
+        },
+        "predicate_type": {"const": "https://slsa.dev/provenance/v1", "type": "string"}
+      }
+    },
+    "manifest_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": {"const": "sha256", "type": "string"},
+        "value": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "objective": {
+            "properties": {"risk": {"const": "high"}},
+            "required": ["risk"]
+          }
+        },
+        "required": ["objective"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": {"required": ["appsec-primary", "appsec-secondary"]}
+        }
+      },
+      "else": {
+        "properties": {
+          "artifacts": {
+            "properties": {"appsec-primary": false, "appsec-secondary": false}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "productOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "product/product-manager.md", "type": "string"},
+        "sha256": {
+          "const": "4a3fe4661e72e5173877bcba7c362392181774b20efc27ac1789171e98676c9d",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "maker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "engineering/engineering-api-platform-engineer.md", "type": "string"},
+        "sha256": {
+          "const": "278798c42d7a7cf4f42d3973795765403105ce60d518d647abfdaa522d862d8e",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "finalReviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "testing/testing-reality-checker.md", "type": "string"},
+        "sha256": {
+          "const": "6d32fcdb114233e13902ec6372d50293b120e85d490b5e81d372c29808f988a1",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "appsecPrimary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "security/security-appsec-engineer.md", "type": "string"},
+        "sha256": {
+          "const": "f3ee22350c9e0e7289d2d4747e7c1a8fe196d70340feec7b176b13bacc3deb77",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "appsecSecondary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"const": "security/security-architect.md", "type": "string"},
+        "sha256": {
+          "const": "b1a68e9614f7adb43938f5bd9964f6e41250febc9a57f691eefcbab58d5b1df1",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "canonicalProfile": {
+      "oneOf": [
+        {"$ref": "#/$defs/productOwner"},
+        {"$ref": "#/$defs/maker"},
+        {"$ref": "#/$defs/finalReviewer"},
+        {"$ref": "#/$defs/appsecPrimary"},
+        {"$ref": "#/$defs/appsecSecondary"}
+      ]
+    },
+    "artifactDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "producer", "sha256"],
+      "properties": {
+        "path": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.json$", "type": "string"},
+        "producer": {"$ref": "#/$defs/canonicalProfile"},
+        "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}
+      }
+    }
+  }
+}

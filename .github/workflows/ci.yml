@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   python:
     name: Python tests (3.11)
@@ -15,18 +19,25 @@ jobs:
       matrix:
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --require-hashes -r requirements.lock
-          python3 -m pip install playwright
+          set -euo pipefail
+          python3 -m pip install --only-binary=:all: --require-hashes \
+            -r requirements.lock
+          grep -E '^(greenlet|playwright|pyee|typing-extensions)==' \
+            config/autonomy-tools.lock > "$RUNNER_TEMP/playwright.lock"
+          [[ "$(wc -l < "$RUNNER_TEMP/playwright.lock")" -eq 4 ]]
+          python3 -m pip install --only-binary=:all: --require-hashes \
+            -r "$RUNNER_TEMP/playwright.lock"
           python3 -m playwright install --with-deps chromium
 
       - name: Run test suite
@@ -38,17 +49,24 @@ jobs:
     name: Verify (versión + enlaces de docs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # provenance check needs full history to prove commit ancestry
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
       # rotos en la documentación + verificación offline de la fixture de
       # supply-chain (scripts/verify_provenance.py). Instantáneo, sin deps.
       - name: python3 scripts/verify.py --docs-only
-        run: python3 scripts/verify.py --docs-only
+        run: |
+          set -euo pipefail
+          trusted_root="$RUNNER_TEMP/github-attestation-trusted-root.jsonl"
+          gh attestation trusted-root > "$trusted_root"
+          test -s "$trusted_root"
+          python3 scripts/verify.py --docs-only \
+            --attestation-trusted-root "$trusted_root"
 
   ruff:
     name: Lint (ruff F/E9)
@@ -58,12 +76,19 @@ jobs:
     # clases (F/E9) y mismo .ruff.toml del repo. Falla el CI si ruff encuentra
     # algo.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Install ruff
-        run: python3 -m pip install ruff
+        run: |
+          set -euo pipefail
+          grep -E '^ruff==' config/autonomy-tools.lock > "$RUNNER_TEMP/ruff.lock"
+          [[ "$(wc -l < "$RUNNER_TEMP/ruff.lock")" -eq 1 ]]
+          python3 -m pip install --only-binary=:all: --require-hashes \
+            -r "$RUNNER_TEMP/ruff.lock"
       - name: ruff check (lucidfence/ saas_server.py scripts/)
         run: ruff check lucidfence/ saas_server.py scripts/
 
@@ -71,10 +96,12 @@ jobs:
     name: Frontend syntax check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
 
@@ -92,15 +119,20 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-      - run: python3 -m pip install pip-audit
+      - name: Install hash-locked audit tooling
+        run: >-
+          python3 -m pip install --only-binary=:all: --require-hashes
+          -r config/autonomy-tools.lock
       - run: pip-audit -r requirements.lock
       - name: Generate CycloneDX SBOM
         run: python3 scripts/generate_sbom.py --out sbom.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: lucidfence-sbom
           path: sbom.cdx.json
@@ -110,9 +142,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       # data/cloud_state.json ya NO vive en main (ignorado): lo publica engine-cron
       # en la rama cloud-state. Este guard rechaza que una PR lo reintroduzca (lo
       # sirve GitHub Pages). Si una rama tambien lo toca, el conflicto de
@@ -133,14 +166,57 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+          persist-credentials: false
+      - name: Run tokenless hash-pinned gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          EVENT_NAME: ${{ github.event_name }}
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e
+          GITLEAKS_VERSION: 8.30.0
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --silent --show-error --location \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$archive"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$archive" | sha256sum --check --strict
+          tar --extract --gzip --no-same-owner --file "$archive" \
+            --directory "$RUNNER_TEMP" gitleaks
+          chmod 0755 "$RUNNER_TEMP/gitleaks"
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            [[ "$PR_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+            log_opts="$PR_BASE_SHA..$PR_HEAD_SHA"
+          elif [[ "$EVENT_NAME" == push ]]; then
+            [[ "$PUSH_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+            if [[ "$PUSH_BEFORE_SHA" =~ ^[0-9a-f]{40}$ ]] && \
+               [[ "$PUSH_BEFORE_SHA" != 0000000000000000000000000000000000000000 ]]; then
+              log_opts="$PUSH_BEFORE_SHA..$PUSH_HEAD_SHA"
+            else
+              log_opts="$PUSH_HEAD_SHA^!"
+            fi
+          else
+            echo '::error::Secret scan received an unsupported event.'
+            exit 1
+          fi
+          set +e
+          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact=100 \
+            --log-opts="$log_opts" \
+            --config .gitleaks.toml --report-format json \
+            --report-path "$RUNNER_TEMP/gitleaks-report.json" \
+            > /dev/null 2>&1
+          rc=$?
+          set -e
+          if [[ "$rc" -ne 0 ]]; then
+            echo '::error::Secret scan failed or detected sensitive material; details suppressed.'
+            exit 1
+          fi
 
   # "Verificar en runtime, no solo compila": la batería arranca el server
   # real, un receptor webhook real y el MCP por stdio, y ejercita cada claim
@@ -152,14 +228,16 @@ jobs:
     name: Runtime validation (claims en vivo)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --require-hashes -r requirements.lock
+        run: >-
+          python3 -m pip install --only-binary=:all: --require-hashes
+          -r requirements.lock
       - name: Validar claims en runtime
         run: python3 scripts/runtime_validation.py
 
@@ -170,7 +248,9 @@ jobs:
     # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Lint de workflows (script único, mismo que en local)
         # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
         # falta alguno: sin copias inline y sin falsos verdes por herramienta

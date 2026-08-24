@@ -1,0 +1,299 @@
+name: autonomy-evidence
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+# Candidate bytes execute only here. This workflow has no OIDC, attestation,
+# status, check, or repository-write authority. The workflow_run signer accepts
+# its bounded receipts only when this file matches the exact trusted base bytes.
+permissions: {}
+
+concurrency:
+  group: autonomy-evidence-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+env:
+  LF_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  LF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  evidence:
+    name: evidence-${{ matrix.kind }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kind:
+          - ci
+          - runtime
+          - secrets
+          - dependencies
+          - license
+          - appsec
+          - reality
+          - appsec-primary
+          - appsec-secondary
+    steps:
+      - name: Clone exact public PR commits without credentials
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags origin "$LF_BASE_SHA" "$LF_HEAD_SHA"
+          git checkout --detach --force "$LF_HEAD_SHA"
+          [[ "$(git rev-parse HEAD)" == "$LF_HEAD_SHA" ]]
+
+      - name: Prepare isolated trusted data paths
+        run: |
+          python3 -I -S - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          for name in (".trusted-control-plane", ".agency-agents-source"):
+              path = Path(name)
+              if path.is_symlink() or path.is_file():
+                  path.unlink()
+              elif path.exists():
+                  shutil.rmtree(path)
+          PY
+
+      - name: Clone control plane from exact public PR base
+        run: |
+          set -euo pipefail
+          git init .trusted-control-plane
+          git -C .trusted-control-plane remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          git -C .trusted-control-plane fetch --no-tags --depth=1 origin "$LF_BASE_SHA"
+          git -C .trusted-control-plane checkout --detach --force "$LF_BASE_SHA"
+          [[ "$(git -C .trusted-control-plane rev-parse HEAD)" == "$LF_BASE_SHA" ]]
+
+      - name: Set up trusted Python 3.11
+        id: trusted_python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Validate candidate dependency lock with exact-base code
+        if: contains(fromJSON('["runtime","dependencies","reality"]'), matrix.kind)
+        env:
+          TRUSTED_PYTHON: ${{ steps.trusted_python.outputs.python-path }}
+        run: >-
+          "$TRUSTED_PYTHON" -I -S .trusted-control-plane/scripts/emit_autonomy_evidence.py
+          --repo-root "$GITHUB_WORKSPACE" validate-lock
+
+      - name: Create candidate runtime outside the checkout
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        working-directory: ${{ runner.temp }}
+        env:
+          TRUSTED_PYTHON: ${{ steps.trusted_python.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          "$TRUSTED_PYTHON" -I -S -m venv autonomy-candidate-runtime
+          mkdir -p candidate-runtime-wheels
+          sudo install -d -m 0711 -o root -g root "$RUNNER_TEMP/supervisor-root"
+
+      - name: Inspect and install locked candidate wheels offline
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        working-directory: ${{ runner.temp }}
+        env:
+          TRUSTED_CONTROL: ${{ github.workspace }}/.trusted-control-plane
+          TRUSTED_PYTHON: ${{ steps.trusted_python.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          candidate_python="$RUNNER_TEMP/autonomy-candidate-runtime/bin/python"
+          wheelhouse="$RUNNER_TEMP/candidate-runtime-wheels"
+          "$candidate_python" -I -m pip --isolated download \
+            --disable-pip-version-check --no-input --no-cache-dir \
+            --only-binary=:all: --no-deps --require-hashes \
+            -r "$GITHUB_WORKSPACE/requirements.lock" --dest "$wheelhouse"
+          "$TRUSTED_PYTHON" -I -S \
+            "$TRUSTED_CONTROL/scripts/emit_autonomy_evidence.py" \
+            inspect-wheelhouse --runtime \
+            --lock "$GITHUB_WORKSPACE/requirements.lock" \
+            --wheelhouse "$wheelhouse"
+          "$candidate_python" -I -m pip --isolated install \
+            --disable-pip-version-check --no-input --no-cache-dir --no-compile \
+            --no-index --find-links "$wheelhouse" \
+            --only-binary=:all: --no-deps --require-hashes \
+            -r "$GITHUB_WORKSPACE/requirements.lock"
+
+      - name: Create hash-locked dependency-audit environment
+        if: matrix.kind == 'dependencies'
+        working-directory: ${{ runner.temp }}
+        env:
+          TRUSTED_CONTROL: ${{ github.workspace }}/.trusted-control-plane
+          TRUSTED_PYTHON: ${{ steps.trusted_python.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          "$TRUSTED_PYTHON" -I -S -m venv autonomy-trusted-tools
+          tools_python="$RUNNER_TEMP/autonomy-trusted-tools/bin/python"
+          wheelhouse="$RUNNER_TEMP/trusted-tool-wheels"
+          mkdir -p "$wheelhouse"
+          "$tools_python" -I -m pip --isolated download \
+            --disable-pip-version-check --no-input --no-cache-dir \
+            --only-binary=:all: --no-deps --require-hashes \
+            -r "$TRUSTED_CONTROL/config/autonomy-tools.lock" --dest "$wheelhouse"
+          "$TRUSTED_PYTHON" -I -S \
+            "$TRUSTED_CONTROL/scripts/emit_autonomy_evidence.py" \
+            inspect-wheelhouse \
+            --lock "$TRUSTED_CONTROL/config/autonomy-tools.lock" \
+            --wheelhouse "$wheelhouse"
+          "$tools_python" -I -m pip --isolated install \
+            --disable-pip-version-check --no-input --no-cache-dir --no-compile \
+            --no-index --find-links "$wheelhouse" \
+            --only-binary=:all: --no-deps --require-hashes \
+            -r "$TRUSTED_CONTROL/config/autonomy-tools.lock"
+
+      - name: Clone pinned public Agency Agents source as inert data
+        if: matrix.kind == 'license'
+        run: |
+          set -euo pipefail
+          git init .agency-agents-source
+          git -C .agency-agents-source remote add origin https://github.com/msitarzewski/agency-agents.git
+          git -C .agency-agents-source fetch --no-tags --depth=1 origin ebe9c99acb5c96f9468de368d8bead775387d1a7
+          git -C .agency-agents-source checkout --detach --force ebe9c99acb5c96f9468de368d8bead775387d1a7
+          [[ "$(git -C .agency-agents-source rev-parse HEAD)" == ebe9c99acb5c96f9468de368d8bead775387d1a7 ]]
+
+      - name: Freeze candidate execution bytes for the black-box child
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        run: |
+          set -euo pipefail
+          chmod -R a+rX,go-w "$GITHUB_WORKSPACE"
+          chmod -R a+rX,go-w "$RUNNER_TEMP/autonomy-candidate-runtime"
+          sudo -n -u nobody test -r "$GITHUB_WORKSPACE/saas_server.py"
+          sudo -n -u nobody test -x "$RUNNER_TEMP/autonomy-candidate-runtime/bin/python"
+
+      - name: Derive one independent preflight receipt
+        env:
+          CANDIDATE_PYTHON: ${{ runner.temp }}/autonomy-candidate-runtime/bin/python
+          KIND: ${{ matrix.kind }}
+          TRUSTED_PYTHON: ${{ steps.trusted_python.outputs.python-path }}
+          TRUSTED_ROOT: ${{ github.workspace }}/.trusted-control-plane
+        run: |
+          set -euo pipefail
+          trap 'echo "::error::Preflight evidence failed; raw output was suppressed."' ERR
+          evidence_dir="$RUNNER_TEMP/autonomy-evidence"
+          mkdir -p "$evidence_dir"
+          raw="$RUNNER_TEMP/$KIND.log"
+          case "$KIND" in
+            ci)
+              attestation_root="$RUNNER_TEMP/github-attestation-trusted-root.jsonl"
+              gh attestation trusted-root > "$attestation_root"
+              test -s "$attestation_root"
+              python3 scripts/verify.py --docs-only \
+                --attestation-trusted-root "$attestation_root" > "$raw" 2>&1
+              ;;
+            runtime|reality)
+              {
+                sudo -n "$TRUSTED_PYTHON" -I -S \
+                  "$TRUSTED_ROOT/scripts/supervise_autonomy_check.py" \
+                  --kind "$KIND" \
+                  --repo-root "$GITHUB_WORKSPACE" \
+                  --candidate-python "$CANDIDATE_PYTHON" \
+                  --output "$RUNNER_TEMP/supervisor-root/$KIND.json" \
+                  --sandbox-dir "$RUNNER_TEMP/untrusted-sandbox-$KIND" \
+                  --untrusted-user nobody \
+                  --base-sha "$LF_BASE_SHA" \
+                  --head-sha "$LF_HEAD_SHA" \
+                  --request-run-attempt "$GITHUB_RUN_ATTEMPT" \
+                  --request-run-id "$GITHUB_RUN_ID" \
+                  --trusted-source-sha "$LF_BASE_SHA"
+              } > "$raw" 2>&1
+              ;;
+            secrets)
+              "$TRUSTED_PYTHON" -I -S \
+                "$TRUSTED_ROOT/scripts/emit_autonomy_evidence.py" \
+                --repo-root "$GITHUB_WORKSPACE" \
+                scan-secrets --output "$raw"
+              ;;
+            dependencies)
+              "$RUNNER_TEMP/autonomy-trusted-tools/bin/python" -I -m pip_audit \
+                --disable-pip --no-deps --require-hashes \
+                -r requirements.lock > "$raw" 2>&1
+              ;;
+            license)
+              "$TRUSTED_PYTHON" -I -S \
+                "$TRUSTED_ROOT/scripts/generate_agency_catalog.py" \
+                --root "$GITHUB_WORKSPACE" \
+                --source "$GITHUB_WORKSPACE/.agency-agents-source" \
+                --verify-source > "$raw" 2>&1
+              ;;
+            appsec|appsec-primary|appsec-secondary)
+              "$TRUSTED_PYTHON" -I -S \
+                "$TRUSTED_ROOT/scripts/emit_autonomy_evidence.py" \
+                --repo-root "$GITHUB_WORKSPACE" \
+                --catalog "$TRUSTED_ROOT/data/agency_catalog.json" \
+                review --protect-trust-root --seat "$KIND" --output "$raw"
+              ;;
+            *)
+              exit 2
+              ;;
+          esac
+          test -s "$raw"
+          "$TRUSTED_PYTHON" -I -S \
+            "$TRUSTED_ROOT/scripts/emit_autonomy_evidence.py" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --catalog "$TRUSTED_ROOT/data/agency_catalog.json" \
+            emit --kind "$KIND" --log "$raw" \
+            --output "$evidence_dir/$KIND.json"
+          rm -f "$raw"
+
+      - name: Upload independent evidence bytes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: autonomy-evidence-part-${{ matrix.kind }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/autonomy-evidence/${{ matrix.kind }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload parent-owned black-box observation
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: autonomy-observation-${{ matrix.kind }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/supervisor-root/${{ matrix.kind }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  bundle:
+    name: autonomy-evidence-preflight
+    needs: [evidence]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Download independent evidence artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          pattern: autonomy-evidence-part-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence
+          merge-multiple: true
+
+      - name: Enforce exact bounded preflight inventory
+        run: |
+          set -euo pipefail
+          python3 -I -S - <<'PY'
+          from pathlib import Path
+
+          root = Path("evidence")
+          kinds = {
+              "appsec-primary", "appsec-secondary", "appsec", "ci",
+              "dependencies", "license", "reality", "runtime", "secrets",
+          }
+          expected = {f"{kind}.json" for kind in kinds}
+          entries = list(root.iterdir())
+          actual = {entry.name for entry in entries}
+          if actual != expected:
+              raise SystemExit(f"unexpected preflight inventory: {sorted(actual ^ expected)}")
+          for entry in entries:
+              if entry.is_symlink() or not entry.is_file() or entry.stat().st_size > 1024 * 1024:
+                  raise SystemExit(f"invalid preflight entry: {entry.name}")
+          PY
+
+      - name: Upload one bounded preflight bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: autonomy-evidence-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 7

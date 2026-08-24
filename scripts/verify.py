@@ -16,17 +16,21 @@ Corre, en orden, las comprobaciones que forman el gate QA del repo:
                               fijada ausente) SALTAN con motivo, no fallan.
   6. Provenance release       verifica el fixture de supply-chain offline
                               (artifact + sbom + dsse) con scripts/verify_provenance.py
+  7. Autonomy control plane   valida el catálogo fijado y los schemas duraderos
 
 Uso:
     python3 scripts/verify.py             # todo; exit 0 solo si todo pasa
     python3 scripts/verify.py --fast      # omite la batería runtime (checks 1,2,3,5,6)
     python3 scripts/verify.py --docs-only # solo versión + enlaces + provenance (instantáneo, CI)
     python3 scripts/verify.py --quiet     # solo el resumen final
+    python3 scripts/verify.py --attestation-trusted-root PATH
+                                           # root oficial independiente para archivo durable
 
 Stdlib-only (convención del repo). Exit 0 = APTO; !=0 = algo falló.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 import re
 import json
@@ -236,6 +240,50 @@ def check_provenance_release() -> tuple[bool, str]:
     return True, f"fixture APTO (v{predicate_ver})"
 
 
+def check_autonomy_control_plane(
+    root: str | os.PathLike[str] = ROOT,
+    *,
+    trusted_root_path: str | os.PathLike[str] | None = None,
+) -> tuple[bool, str]:
+    """Validate the pinned catalog and durable evidence schemas offline."""
+    from scripts.generate_agency_catalog import verify_repository
+    from scripts.verify_autonomy_evidence import verify_durable_store
+
+    resolved_root = os.fspath(root)
+    errors = verify_repository(resolved_root)
+    catalog_path = os.path.join(resolved_root, "data", "agency_catalog.json")
+    schema_path = os.path.join(resolved_root, "config", "night-shift-manifest.schema.json")
+    trends_path = os.path.join(resolved_root, "data", "night_shift", "trends.jsonl")
+    runs_path = os.path.join(resolved_root, "data", "night_shift", "runs")
+    try:
+        with open(schema_path, encoding="utf-8") as fh:
+            schema = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"manifest schema unreadable: {exc}")
+        schema = {}
+    if schema.get("properties", {}).get("schema", {}).get("const") != "lucidfence-night-shift-manifest/v1":
+        errors.append("manifest schema identifier mismatch")
+    errors.extend(
+        verify_durable_store(
+            runs_path,
+            now=datetime.now(timezone.utc),
+            catalog_path=catalog_path,
+            schema_path=schema_path,
+            trusted_root_path=trusted_root_path,
+        )
+    )
+    try:
+        with open(trends_path, encoding="utf-8") as fh:
+            for number, line in enumerate(fh, 1):
+                if line.strip():
+                    json.loads(line)
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"trends.jsonl invalid: {exc}")
+    if errors:
+        return False, "; ".join(errors[:5])
+    return True, "270 profiles, 17 divisions, durable manifest schema APTO"
+
+
 # (nombre, función, is_runtime, is_deterministic-doc-check)
 CHECKS = [
     ("Licencia Apache-2.0 verbatim", check_license_apache2, False, False),
@@ -244,10 +292,36 @@ CHECKS = [
     ("Batería runtime (en vivo)", check_runtime_battery, True, False),
     ("Suite honesta", check_test_suite, False, False),
     ("Provenance release", check_provenance_release, False, True),
+    ("Autonomy control plane", check_autonomy_control_plane, False, True),
 ]
 
 
+def _attestation_trusted_root_option(argv: list[str]) -> str | None:
+    """Read one explicit trusted-root path without changing legacy flags."""
+    option = "--attestation-trusted-root"
+    values: list[str] = []
+    for index, argument in enumerate(argv):
+        if argument == option:
+            if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+                raise ValueError(f"{option} requires PATH")
+            values.append(argv[index + 1])
+        elif argument.startswith(f"{option}="):
+            values.append(argument.split("=", 1)[1])
+    if not values or values == [""]:
+        if values:
+            raise ValueError(f"{option} requires PATH")
+        return None
+    if len(values) != 1:
+        raise ValueError(f"{option} may be provided only once")
+    return values[0]
+
+
 def main(argv: list[str]) -> int:
+    try:
+        attestation_trusted_root = _attestation_trusted_root_option(argv)
+    except ValueError as exc:
+        sys.stderr.write(f"ERROR: {exc}\n")
+        return 2
     fast = "--fast" in argv
     quiet = "--quiet" in argv
     docs_only = "--docs-only" in argv
@@ -260,7 +334,10 @@ def main(argv: list[str]) -> int:
                 print(f"  …  {name}: omitido (--fast)")
             continue
         try:
-            ok, detail = fn()
+            if fn is check_autonomy_control_plane:
+                ok, detail = fn(trusted_root_path=attestation_trusted_root)
+            else:
+                ok, detail = fn()
         except Exception as exc:  # noqa: BLE001
             ok, detail = False, f"excepción: {type(exc).__name__}: {exc}"
         results.append((name, ok, detail))

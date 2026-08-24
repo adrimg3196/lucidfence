@@ -1,0 +1,23 @@
+# LucidFence autonomy-B control plane. The repository has one verified owner;
+# no nonexistent user or team is introduced.
+/.github/workflows/ @adrimg3196
+/.github/CODEOWNERS @adrimg3196
+/.gitleaks.toml @adrimg3196
+/config/agency-agents.lock.json @adrimg3196
+/config/night-shift-manifest.schema.json @adrimg3196
+/config/autonomy-tools.lock @adrimg3196
+/data/agency_catalog.json @adrimg3196
+/data/night_shift/ @adrimg3196
+/scripts/generate_agency_catalog.py @adrimg3196
+/scripts/emit_autonomy_evidence.py @adrimg3196
+/scripts/supervise_autonomy_check.py @adrimg3196
+/scripts/verify_autonomy_evidence.py @adrimg3196
+/scripts/verify.py @adrimg3196
+/scripts/runtime_validation.py @adrimg3196
+/tests/run_tests.py @adrimg3196
+/tests/test_agency_catalog.py @adrimg3196
+/tests/test_autonomy_evidence.py @adrimg3196
+/tests/test_autonomy_evidence_producer.py @adrimg3196
+/tests/test_night_shift_schema.py @adrimg3196
+/requirements.lock @adrimg3196
+/pyproject.toml @adrimg3196

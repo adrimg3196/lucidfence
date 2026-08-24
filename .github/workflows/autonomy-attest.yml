@@ -1,0 +1,810 @@
+name: autonomy-attest
+
+# GitHub loads workflow_run definitions from the default branch. This workflow
+# never checks out or executes the PR head. It treats producer artifacts only
+# as bounded data after proving that the producer bytes equal trusted main.
+on:
+  workflow_run:
+    workflows: [autonomy-evidence]
+    types: [requested, completed]
+
+permissions: {}
+
+concurrency:
+  group: autonomy-attest-${{ github.event.workflow_run.head_repository.id }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  context:
+    name: trusted-context
+    if: >-
+      github.repository == 'adrimg3196/lucidfence' &&
+      github.event.action == 'completed' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      base_sha: ${{ steps.context.outputs.base_sha }}
+      head_sha: ${{ steps.context.outputs.head_sha }}
+      pr_number: ${{ steps.context.outputs.pr_number }}
+      ref: ${{ steps.context.outputs.ref }}
+      trigger_conclusion: ${{ steps.context.outputs.trigger_conclusion }}
+      workflow_ref: ${{ steps.context.outputs.workflow_ref }}
+    steps:
+      - name: Resolve one current PR and exact triggering run
+        id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          TRIGGER_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          [[ "$TRIGGER_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TRIGGER_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          run_json="$RUNNER_TEMP/trigger-run.json"
+          pulls_json="$RUNNER_TEMP/trigger-pulls.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TRIGGER_RUN_ID" > "$run_json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TRIGGER_RUN_ID/pull_requests" > "$pulls_json"
+          RUN_JSON="$run_json" PULLS_JSON="$pulls_json" python3 -I -S - <<'PY' > "$RUNNER_TEMP/context.env"
+          import json
+          import os
+          from pathlib import Path
+
+          run = json.loads(Path(os.environ["RUN_JSON"]).read_bytes())
+          pulls = json.loads(Path(os.environ["PULLS_JSON"]).read_bytes())
+          if (
+              run.get("event") != "pull_request"
+              or run.get("name") != "autonomy-evidence"
+              or run.get("path") != ".github/workflows/autonomy-evidence.yml"
+              or not isinstance(pulls, list)
+              or len(pulls) != 1
+          ):
+              raise SystemExit("trigger is not one canonical autonomy-evidence PR run")
+          pull = pulls[0]
+          number = pull.get("number")
+          base_sha = pull.get("base", {}).get("sha")
+          head_sha = pull.get("head", {}).get("sha")
+          if (
+              not isinstance(number, int)
+              or number < 1
+              or not isinstance(base_sha, str)
+              or len(base_sha) != 40
+              or not isinstance(head_sha, str)
+              or len(head_sha) != 40
+              or run.get("head_sha") != head_sha
+          ):
+              raise SystemExit("trigger PR identity is malformed")
+          print(f"pr_number={number}")
+          print(f"base_sha={base_sha}")
+          print(f"head_sha={head_sha}")
+          PY
+          source "$RUNNER_TEMP/context.env"
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$base_sha" == "$GITHUB_SHA" ]]
+          [[ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_attempt"])' "$run_json")" == "$TRIGGER_RUN_ATTEMPT" ]]
+          live_pr="$RUNNER_TEMP/live-pr.json"
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number" > "$live_pr"
+          LIVE_PR="$live_pr" BASE_SHA="$base_sha" HEAD_SHA="$head_sha" python3 -I -S - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          pull = json.loads(Path(os.environ["LIVE_PR"]).read_bytes())
+          if (
+              pull.get("state") != "open"
+              or pull.get("base", {}).get("ref") != "main"
+              or pull.get("base", {}).get("sha") != os.environ["BASE_SHA"]
+              or pull.get("head", {}).get("sha") != os.environ["HEAD_SHA"]
+              or pull.get("head", {}).get("repo", {}).get("full_name")
+              != "adrimg3196/lucidfence"
+          ):
+              raise SystemExit("trigger no longer matches one current in-repository PR")
+          PY
+          {
+            echo "base_sha=$base_sha"
+            echo "head_sha=$head_sha"
+            echo "pr_number=$pr_number"
+            echo "ref=refs/pull/$pr_number/merge"
+            echo "trigger_conclusion=$TRIGGER_CONCLUSION"
+            echo "workflow_ref=$GITHUB_REPOSITORY/.github/workflows/autonomy-evidence.yml@refs/pull/$pr_number/merge"
+          } >> "$GITHUB_OUTPUT"
+
+  evidence:
+    name: trusted-evidence-${{ matrix.kind }}
+    needs: [context]
+    if: ${{ needs.context.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        kind:
+          - ci
+          - runtime
+          - secrets
+          - dependencies
+          - license
+          - appsec
+          - reality
+          - appsec-primary
+          - appsec-secondary
+    steps:
+      - name: Checkout trusted control plane from main only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Download parent-owned black-box observation
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: autonomy-observation-${{ matrix.kind }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/source
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Download exact unprivileged preflight receipt
+        if: contains(fromJSON('["secrets","dependencies","license","appsec","appsec-primary","appsec-secondary"]'), matrix.kind)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: autonomy-evidence-part-${{ matrix.kind }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: ${{ runner.temp }}/source
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Build canonical conventional-CI API snapshot
+        if: matrix.kind == 'ci'
+        env:
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.context.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/source" "$RUNNER_TEMP/ci-api"
+          run_id=""
+          run_attempt=""
+          run_status=""
+          run_conclusion=""
+          for poll in $(seq 1 60); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100" > "$RUNNER_TEMP/ci-api/runs.json"
+            RUNS="$RUNNER_TEMP/ci-api/runs.json" PR_NUMBER="$PR_NUMBER" BASE_SHA="$BASE_SHA" HEAD_SHA="$HEAD_SHA" python3 -I -S - <<'PY' > "$RUNNER_TEMP/ci-api/selected.env"
+          import json
+          import os
+          from pathlib import Path
+
+          document = json.loads(Path(os.environ["RUNS"]).read_bytes())
+          matches = []
+          for run in document.get("workflow_runs", []):
+              pulls = run.get("pull_requests")
+              if not isinstance(pulls, list) or len(pulls) != 1:
+                  continue
+              pull = pulls[0]
+              if (
+                  run.get("name") == "CI"
+                  and run.get("path") == ".github/workflows/ci.yml"
+                  and run.get("event") == "pull_request"
+                  and run.get("head_sha") == os.environ["HEAD_SHA"]
+                  and pull.get("number") == int(os.environ["PR_NUMBER"])
+                  and pull.get("base", {}).get("sha") == os.environ["BASE_SHA"]
+                  and pull.get("head", {}).get("sha") == os.environ["HEAD_SHA"]
+              ):
+                  matches.append(run)
+          if matches:
+              run = max(matches, key=lambda item: int(item.get("id", 0)))
+              print(f"run_id={run.get('id', '')}")
+              print(f"run_attempt={run.get('run_attempt', '')}")
+              print(f"run_status={run.get('status', '')}")
+              print(f"run_conclusion={run.get('conclusion', '')}")
+          PY
+            source "$RUNNER_TEMP/ci-api/selected.env"
+            if [[ -n "${run_id:-}" && "$run_status" == "completed" ]]; then
+              break
+            fi
+            [[ "$poll" -lt 60 ]]
+            sleep 15
+          done
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+          [[ "$run_attempt" =~ ^[1-9][0-9]*$ ]]
+          [[ "$run_status" == "completed" ]]
+          [[ "$run_conclusion" == "success" ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/ci-api/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100" > "$RUNNER_TEMP/ci-api/jobs.json"
+          suite_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["check_suite_id"])' "$RUNNER_TEMP/ci-api/run.json")"
+          [[ "$suite_id" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/check-suites/$suite_id/check-runs?per_page=100" > "$RUNNER_TEMP/ci-api/checks.json"
+          for path in .github/workflows/autonomy-evidence.yml .github/workflows/ci.yml; do
+            key="$(printf '%s' "$path" | tr '/.' '__')"
+            gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$BASE_SHA" > "$RUNNER_TEMP/ci-api/$key.base.json"
+            gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$HEAD_SHA" > "$RUNNER_TEMP/ci-api/$key.head.json"
+          done
+          API_DIR="$RUNNER_TEMP/ci-api" BASE_SHA="$BASE_SHA" HEAD_SHA="$HEAD_SHA" PR_NUMBER="$PR_NUMBER" python3 -I -S - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["API_DIR"])
+          run = json.loads((root / "run.json").read_bytes())
+          jobs_wrapper = json.loads((root / "jobs.json").read_bytes())
+          checks_wrapper = json.loads((root / "checks.json").read_bytes())
+          names = (
+              "Dependency audit",
+              "Frontend syntax check",
+              "Lint (ruff F/E9)",
+              "No runtime artifacts in PR",
+              "Python tests (3.11) (3.11)",
+              "Runtime validation (claims en vivo)",
+              "Secret scan (gitleaks)",
+              "Verify (versión + enlaces de docs)",
+              "Workflows lint (actionlint)",
+          )
+          jobs_by_name = {item.get("name"): item for item in jobs_wrapper.get("jobs", [])}
+          checks_by_name = {item.get("name"): item for item in checks_wrapper.get("check_runs", [])}
+          normalized_jobs = []
+          normalized_checks = []
+          for name in names:
+              job = jobs_by_name.get(name, {})
+              check = checks_by_name.get(name, {})
+              normalized_jobs.append({
+                  "conclusion": job.get("conclusion"),
+                  "head_sha": job.get("head_sha"),
+                  "id": job.get("id"),
+                  "name": name,
+                  "run_attempt": run.get("run_attempt"),
+                  "run_id": job.get("run_id"),
+                  "status": job.get("status"),
+              })
+              normalized_checks.append({
+                  "check_suite_id": check.get("check_suite", {}).get("id"),
+                  "conclusion": check.get("conclusion"),
+                  "head_sha": check.get("head_sha"),
+                  "id": check.get("id"),
+                  "name": name,
+                  "status": check.get("status"),
+              })
+
+          control_files = []
+          for path in (".github/workflows/autonomy-evidence.yml", ".github/workflows/ci.yml"):
+              key = path.translate(str.maketrans("/.", "__"))
+              item = {"path": path}
+              for side, commit in (("base", os.environ["BASE_SHA"]), ("head", os.environ["HEAD_SHA"])):
+                  response = json.loads((root / f"{key}.{side}.json").read_bytes())
+                  if response.get("type") != "file" or response.get("encoding") != "base64":
+                      raise SystemExit("protected workflow API response is not one base64 file")
+                  encoded = response.get("content", "")
+                  if not isinstance(encoded, str):
+                      raise SystemExit("protected workflow API content is not text")
+                  raw = base64.b64decode("".join(encoded.split()), validate=True)
+                  item[side] = {
+                      "bytes": len(raw),
+                      "commit_sha": commit,
+                      "sha256": hashlib.sha256(raw).hexdigest(),
+                  }
+              control_files.append(item)
+
+          document = {
+              "checks": {"items": normalized_checks, "total_count": checks_wrapper.get("total_count")},
+              "control_files": control_files,
+              "jobs": {"items": normalized_jobs, "total_count": jobs_wrapper.get("total_count")},
+              "repository": "adrimg3196/lucidfence",
+              "run": {
+                  "check_suite_id": run.get("check_suite_id"),
+                  "conclusion": run.get("conclusion"),
+                  "event": run.get("event"),
+                  "head_sha": run.get("head_sha"),
+                  "id": run.get("id"),
+                  "name": run.get("name"),
+                  "path": run.get("path"),
+                  "pull_requests": [{
+                      "base_sha": os.environ["BASE_SHA"],
+                      "head_sha": os.environ["HEAD_SHA"],
+                      "number": int(os.environ["PR_NUMBER"]),
+                  }],
+                  "run_attempt": run.get("run_attempt"),
+                  "status": run.get("status"),
+              },
+              "schema": "lucidfence-github-ci-snapshot/v1",
+              "source": "github-rest-api/2022-11-28",
+          }
+          (root / "snapshot.json").write_text(
+              json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Execute one fixed check and discard raw output
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ matrix.kind }}
+          LF_BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          LF_HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          LF_PR_NUMBER: ${{ needs.context.outputs.pr_number }}
+          LF_REQUEST_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          LF_REQUEST_RUN_ID: ${{ github.event.workflow_run.id }}
+          LF_TRUSTED_CONTEXT: "1"
+        run: |
+          set -euo pipefail
+          trap 'echo "::error::Trusted source validation failed; raw content was suppressed."' ERR
+          mkdir -p "$RUNNER_TEMP/trusted-source"
+          case "$KIND" in
+            ci)
+              python3 -I -S scripts/emit_autonomy_evidence.py \
+                emit-ci-receipt \
+                --snapshot "$RUNNER_TEMP/ci-api/snapshot.json" \
+                --output "$RUNNER_TEMP/trusted-source/ci.json"
+              ;;
+            runtime|reality)
+              source="$RUNNER_TEMP/source/$KIND.json"
+              cp "$source" "$RUNNER_TEMP/trusted-source/$KIND.json"
+              ;;
+            *)
+              source="$RUNNER_TEMP/source/$KIND.json"
+              cp "$source" "$RUNNER_TEMP/trusted-source/$KIND.json"
+              ;;
+          esac
+          SOURCE="$RUNNER_TEMP/trusted-source/$KIND.json" python3 -I -S - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["SOURCE"])
+          if path.is_symlink() or not path.is_file() or not 1 <= path.stat().st_size <= 1024 * 1024:
+              raise SystemExit("trusted source receipt is absent or outside the safety bound")
+          raw = path.read_bytes()
+          value = json.loads(raw)
+          canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+          if not isinstance(value, dict) or raw != canonical:
+              raise SystemExit("trusted source receipt is not canonical JSON")
+          PY
+
+      - name: Upload one bounded trusted source receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trusted-source-${{ matrix.kind }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/trusted-source/${{ matrix.kind }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  normalize:
+    name: normalize-evidence-${{ matrix.kind }}
+    needs: [context, evidence]
+    if: ${{ needs.context.result == 'success' && needs.evidence.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        kind:
+          - ci
+          - runtime
+          - secrets
+          - dependencies
+          - license
+          - appsec
+          - reality
+          - overlap
+          - appsec-primary
+          - appsec-secondary
+    steps:
+      - name: Checkout trusted control plane from main only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Fetch candidate object without checkout or execution
+        env:
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$HEAD_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Download one trusted source receipt
+        if: matrix.kind != 'overlap'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: trusted-source-${{ matrix.kind }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/source
+
+      - name: Fetch observed candidate target as inert data
+        if: contains(fromJSON('["runtime","reality"]'), matrix.kind)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/candidate-target"
+          gh api "repos/$GITHUB_REPOSITORY/contents/saas_server.py?ref=$HEAD_SHA" > "$RUNNER_TEMP/candidate-target/api.json"
+          API_JSON="$RUNNER_TEMP/candidate-target/api.json" OUTPUT="$RUNNER_TEMP/candidate-target/saas_server.py" python3 -I -S - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          value = json.loads(Path(os.environ["API_JSON"]).read_bytes())
+          if value.get("type") != "file" or value.get("encoding") != "base64":
+              raise SystemExit("candidate target is not one base64 file")
+          encoded = value.get("content", "")
+          if not isinstance(encoded, str):
+              raise SystemExit("candidate target API content is not text")
+          raw = base64.b64decode("".join(encoded.split()), validate=True)
+          if not 1 <= len(raw) <= 10 * 1024 * 1024:
+              raise SystemExit("candidate target is outside the safety bound")
+          Path(os.environ["OUTPUT"]).write_bytes(raw)
+          PY
+
+      - name: Derive receipt from exact GitHub job or live overlap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: ${{ matrix.kind }}
+          LF_BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          LF_HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          LF_PR_NUMBER: ${{ needs.context.outputs.pr_number }}
+          LF_REQUEST_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          LF_REQUEST_RUN_ID: ${{ github.event.workflow_run.id }}
+          LF_TRUSTED_CONTEXT: "1"
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/$KIND.json"
+          if [[ "$KIND" == "overlap" ]]; then
+            raw="$RUNNER_TEMP/overlap.log"
+            python3 -I -S scripts/emit_autonomy_evidence.py overlap --output "$raw"
+            python3 -I -S scripts/emit_autonomy_evidence.py emit \
+              --kind overlap --log "$raw" --output "$receipt"
+          else
+            jobs="$RUNNER_TEMP/jobs.json"
+            job_log="$RUNNER_TEMP/$KIND.job.log"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > "$jobs"
+            JOBS_PATH="$jobs" JOB_NAME="trusted-evidence-$KIND" python3 -I -S - <<'PY' > "$RUNNER_TEMP/job.id"
+          import json
+          import os
+          from pathlib import Path
+
+          document = json.loads(Path(os.environ["JOBS_PATH"]).read_bytes())
+          matches = [job for job in document.get("jobs", []) if job.get("name") == os.environ["JOB_NAME"]]
+          if len(matches) != 1 or not isinstance(matches[0].get("id"), int):
+              raise SystemExit("exact trusted evidence job was not found")
+          print(matches[0]["id"])
+          PY
+            read -r job_id < "$RUNNER_TEMP/job.id"
+            [[ "$job_id" =~ ^[1-9][0-9]*$ ]]
+            for fetch_attempt in 1 2 3 4 5; do
+              if gh api "repos/$GITHUB_REPOSITORY/actions/jobs/$job_id/logs" > "$job_log" && [[ -s "$job_log" ]]; then
+                break
+              fi
+              rm -f "$job_log"
+              [[ "$fetch_attempt" -lt 5 ]]
+              sleep $((fetch_attempt * 2))
+            done
+            args=(--kind "$KIND" --jobs-json "$jobs" --job-log "$job_log" --output "$receipt")
+            case "$KIND" in
+              ci)
+                args+=(--conventional-ci-receipt "$RUNNER_TEMP/source/ci.json")
+                ;;
+              runtime|reality)
+                args+=(
+                  --supervisor-receipt "$RUNNER_TEMP/source/$KIND.json"
+                  --supervisor-target "$RUNNER_TEMP/candidate-target/saas_server.py"
+                )
+                ;;
+              *)
+                args+=(--preflight-receipt "$RUNNER_TEMP/source/$KIND.json")
+                ;;
+            esac
+            python3 -I -S scripts/emit_autonomy_evidence.py emit-job "${args[@]}"
+          fi
+
+      - name: Upload one independent structured receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trusted-evidence-part-${{ matrix.kind }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/${{ matrix.kind }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  attest:
+    name: trusted-autonomy-attestation
+    needs: [context, evidence, normalize]
+    if: ${{ always() && needs.context.result == 'success' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: autonomy-live-gate
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Publish pending trusted status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=pending \
+            -f context=autonomy-evidence \
+            -f description='Trusted derivation and attestation in progress' \
+            -f target_url="$TARGET_URL" > /dev/null
+
+      - name: Require complete trusted derivation and unprivileged preflight
+        env:
+          EVIDENCE_RESULT: ${{ needs.evidence.result }}
+          NORMALIZE_RESULT: ${{ needs.normalize.result }}
+          TRIGGER_CONCLUSION: ${{ needs.context.outputs.trigger_conclusion }}
+        run: |
+          set -euo pipefail
+          [[ "$EVIDENCE_RESULT" == "success" ]]
+          [[ "$NORMALIZE_RESULT" == "success" ]]
+          [[ "$TRIGGER_CONCLUSION" == "success" ]]
+
+      - name: Checkout trusted signer from main only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Fetch candidate object without checkout or execution
+        env:
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$HEAD_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Download independent trusted receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          pattern: trusted-evidence-part-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/autonomy-evidence
+          merge-multiple: true
+
+      - name: Enforce exact bounded receipt inventory
+        env:
+          BUNDLE_DIR: ${{ runner.temp }}/autonomy-evidence
+        run: |
+          set -euo pipefail
+          python3 -I -S - <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["BUNDLE_DIR"])
+          kinds = {
+              "appsec-primary", "appsec-secondary", "appsec", "ci",
+              "dependencies", "license", "overlap", "reality", "runtime", "secrets",
+          }
+          expected = {f"{kind}.json" for kind in kinds}
+          entries = list(root.iterdir())
+          actual = {entry.name for entry in entries}
+          if actual != expected:
+              raise SystemExit(f"unexpected evidence inventory: {sorted(actual ^ expected)}")
+          for entry in entries:
+              if entry.is_symlink() or not entry.is_file() or entry.stat().st_size > 1024 * 1024:
+                  raise SystemExit(f"invalid evidence receipt: {entry.name}")
+          PY
+
+      - name: Assemble and seal manifest with trusted main code
+        env:
+          BUNDLE_DIR: ${{ runner.temp }}/autonomy-evidence
+          GH_TOKEN: ${{ github.token }}
+          LF_BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          LF_HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          LF_PR_NUMBER: ${{ needs.context.outputs.pr_number }}
+          LF_REQUEST_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          LF_REQUEST_RUN_ID: ${{ github.event.workflow_run.id }}
+          LF_TRUSTED_CONTEXT: "1"
+        run: |
+          set -euo pipefail
+          final_raw="$RUNNER_TEMP/final-review.log"
+          python3 -I -S scripts/emit_autonomy_evidence.py final-review \
+            --evidence-dir "$BUNDLE_DIR" --output "$final_raw"
+          python3 -I -S scripts/emit_autonomy_evidence.py emit \
+            --kind final-review --log "$final_raw" \
+            --output "$BUNDLE_DIR/final-review.json"
+          python3 -I -S scripts/emit_autonomy_evidence.py changed-paths \
+            --output "$BUNDLE_DIR/changed-paths.json"
+          python3 -I -S scripts/emit_autonomy_evidence.py assemble \
+            --evidence-dir "$BUNDLE_DIR" --output "$BUNDLE_DIR/manifest.json"
+
+      - name: Verify assembled evidence before requesting OIDC
+        env:
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          BUNDLE_DIR: ${{ runner.temp }}/autonomy-evidence
+          EXPECTED_REF: ${{ needs.context.outputs.ref }}
+          EXPECTED_WORKFLOW_REF: ${{ needs.context.outputs.workflow_ref }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          TRIGGER_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          python3 -I -S scripts/verify_autonomy_evidence.py "$BUNDLE_DIR/manifest.json" \
+            --pre-attestation \
+            --evidence-dir "$BUNDLE_DIR" \
+            --catalog data/agency_catalog.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --run-id "$TRIGGER_RUN_ID" \
+            --run-attempt "$TRIGGER_RUN_ATTEMPT" \
+            --workflow autonomy-evidence \
+            --workflow-ref "$EXPECTED_WORKFLOW_REF" \
+            --ref "$EXPECTED_REF" \
+            --changed-paths-file "$BUNDLE_DIR/changed-paths.json" \
+            --attestation-source-digest "$GITHUB_SHA" \
+            --attestation-source-ref "$GITHUB_REF" \
+            --attestation-run-id "$GITHUB_RUN_ID" \
+            --attestation-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --attestation-workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --attestation-signer-digest "$GITHUB_WORKFLOW_SHA"
+
+      - name: Create official GitHub artifact attestation
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/autonomy-evidence/manifest.json
+
+      - name: Capture official trusted roots for offline verification
+        env:
+          TRUSTED_ROOT: ${{ runner.temp }}/trusted-root.jsonl
+        run: |
+          set -euo pipefail
+          gh attestation trusted-root > "$TRUSTED_ROOT"
+          test -s "$TRUSTED_ROOT"
+
+      - name: Verify official bundle offline and bind every evidence byte
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          BUNDLE_DIR: ${{ runner.temp }}/autonomy-evidence
+          EXPECTED_REF: ${{ needs.context.outputs.ref }}
+          EXPECTED_WORKFLOW_REF: ${{ needs.context.outputs.workflow_ref }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          TRIGGER_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id }}
+          TRUSTED_ROOT: ${{ runner.temp }}/trusted-root.jsonl
+          VERIFICATION_JSON: ${{ runner.temp }}/gh-attestation-verification.json
+        run: |
+          set -euo pipefail
+          python3 -I -S scripts/verify_autonomy_evidence.py "$BUNDLE_DIR/manifest.json" \
+            --evidence-dir "$BUNDLE_DIR" \
+            --catalog data/agency_catalog.json \
+            --attestation-bundle "$ATTESTATION_BUNDLE" \
+            --trusted-root "$TRUSTED_ROOT" \
+            --write-attestation-receipt "$VERIFICATION_JSON" \
+            --repository "$GITHUB_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --run-id "$TRIGGER_RUN_ID" \
+            --run-attempt "$TRIGGER_RUN_ATTEMPT" \
+            --workflow autonomy-evidence \
+            --workflow-ref "$EXPECTED_WORKFLOW_REF" \
+            --ref "$EXPECTED_REF" \
+            --changed-paths-file "$BUNDLE_DIR/changed-paths.json" \
+            --attestation-source-digest "$GITHUB_SHA" \
+            --attestation-source-ref "$GITHUB_REF" \
+            --attestation-run-id "$GITHUB_RUN_ID" \
+            --attestation-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --attestation-workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --attestation-signer-digest "$GITHUB_WORKFLOW_SHA"
+
+      - name: Record trusted summary with Reality Checker
+        env:
+          ATTESTATION_ID: ${{ steps.attest.outputs.attestation-id }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+          BASE_SHA: ${{ needs.context.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          MANIFEST_PATH: ${{ runner.temp }}/autonomy-evidence/manifest.json
+          TRUSTED_ROOT: ${{ runner.temp }}/trusted-root.jsonl
+        run: |
+          set -euo pipefail
+          manifest_digest="$(sha256sum "$MANIFEST_PATH" | cut -d ' ' -f 1)"
+          trusted_root_digest="$(sha256sum "$TRUSTED_ROOT" | cut -d ' ' -f 1)"
+          reality_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["result"]["status"])' "$(dirname "$MANIFEST_PATH")/reality.json")"
+          {
+            echo '### Trusted autonomy attestation'
+            echo
+            echo "- Attestation: $ATTESTATION_URL"
+            echo "- Attestation ID: $ATTESTATION_ID"
+            echo "- Base SHA: $BASE_SHA"
+            echo "- Head SHA: $HEAD_SHA"
+            echo "- Manifest SHA-256: $manifest_digest"
+            echo "- Trusted-root SHA-256: $trusted_root_digest"
+            echo "- Request run: ${{ github.event.workflow_run.id }} attempt ${{ github.event.workflow_run.run_attempt }}"
+            echo "- Trusted derivation/signer run: $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT"
+            echo "- Reality Checker: testing/testing-reality-checker.md ($reality_status)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload signed structured evidence and verification JSON
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: autonomy-attestation-${{ needs.context.outputs.head_sha }}-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: |
+            ${{ runner.temp }}/autonomy-evidence/*.json
+            ${{ steps.attest.outputs.bundle-path }}
+            ${{ runner.temp }}/gh-attestation-verification.json
+            ${{ runner.temp }}/trusted-root.jsonl
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Revalidate live PR identity and overlap, then publish success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 -I -S scripts/emit_autonomy_evidence.py overlap \
+            --output "$RUNNER_TEMP/final-live-overlap.json"
+          python3 -I -S - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          document = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "final-live-overlap.json").read_bytes()
+          )
+          if document.get("status") != "pass":
+              raise SystemExit("live overlap revalidation did not pass")
+          if document.get("overlaps") != [] or document.get("conflicts") != []:
+              raise SystemExit("live overlap revalidation is not empty")
+          PY
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=success \
+            -f context=autonomy-evidence \
+            -f description='Trusted evidence and attestation verified' \
+            -f target_url="$TARGET_URL" > /dev/null
+
+      - name: Publish failed trusted status
+        if: ${{ failure() && needs.context.outputs.head_sha != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.context.outputs.head_sha }}
+          TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=failure \
+            -f context=autonomy-evidence \
+            -f description='Trusted attestation failed' \
+            -f target_url="$TARGET_URL" > /dev/null
