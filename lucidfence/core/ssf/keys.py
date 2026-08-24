@@ -18,6 +18,8 @@ import errno
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -59,7 +61,15 @@ def load_signing_jwk(path: Path | None = None) -> Any:
     Returns a ``jwt.PyJWK`` ready to use with ``jwt.encode(..., algorithm="ES256")``.
     """
     jwt = _ensure_jwt()
-    p = Path(path) if path else DEFAULT_JWK_PATH
+    requested_path = Path(path) if path else DEFAULT_JWK_PATH
+    # Administrator-managed symlinks must keep pointing at the managed key.
+    # Atomic replacement therefore targets the referent, never the link inode.
+    p = (
+        requested_path.resolve(strict=True)
+        if requested_path.is_symlink()
+        else requested_path
+    )
+    jwks_path = requested_path.parent / "ssf_jwks.json"
     if p.exists():
         data = json.loads(p.read_text(encoding="utf-8"))
         if data.get("alg") != SIGNING_ALG:
@@ -74,7 +84,7 @@ def load_signing_jwk(path: Path | None = None) -> Any:
             # Commit the public file first and the private file last. If the final
             # replace fails, the still-legacy private file makes the next load
             # retry this idempotent migration.
-            _write_public_jwks(normalized, p.parent / "ssf_jwks.json")
+            _write_public_jwks(normalized, jwks_path)
             _atomic_write_text(
                 p,
                 json.dumps(normalized, indent=2, ensure_ascii=False),
@@ -99,7 +109,7 @@ def load_signing_jwk(path: Path | None = None) -> Any:
         "use": "sig",
     }
     parsed = jwt.PyJWK.from_dict(jwk)
-    _write_public_jwks(jwk, p.parent / "ssf_jwks.json")
+    _write_public_jwks(jwk, jwks_path)
     _atomic_write_text(
         p,
         json.dumps(jwk, indent=2, ensure_ascii=False),
@@ -168,6 +178,8 @@ def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
     """Atomically replace text after fsyncing a same-directory temporary."""
+    if path.is_symlink():
+        path = path.resolve(strict=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         destination_stat = path.stat()
@@ -190,6 +202,7 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
         if destination_stat is None:
             os.chmod(temporary_path, default_mode)
         else:
+            _reject_unverifiable_native_acl(path)
             # os.replace installs the temporary inode, so copy access metadata
             # first. Extended attributes include Linux POSIX ACLs and security
             # labels; any mismatch aborts before the destination is replaced.
@@ -227,6 +240,33 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
             except FileNotFoundError:
                 pass
         raise
+
+
+def _reject_unverifiable_native_acl(path: Path) -> None:
+    """Abort when a BSD-style ACL cannot be preserved with stdlib metadata APIs."""
+    native_acl_platforms = ("darwin", "freebsd", "openbsd", "netbsd")
+    if not sys.platform.startswith(native_acl_platforms):
+        return
+    try:
+        inspected_path = path.resolve(strict=True)
+        result = subprocess.run(
+            ["ls", "-lde", str(inspected_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise PermissionError(
+            f"cannot verify native ACL before replacing {path}"
+        ) from exc
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines or not lines[0].split():
+        raise PermissionError(f"cannot verify native ACL before replacing {path}")
+    mode = lines[0].split(maxsplit=1)[0]
+    if "+" in mode:
+        raise PermissionError(
+            f"cannot safely replace native ACL-protected file {path}"
+        )
 
 
 def _read_xattrs(path: Path) -> dict[str, bytes] | None:
