@@ -4,9 +4,22 @@ import hashlib
 import subprocess
 import tempfile
 import zipfile
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class _CanonicalParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.href: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "link" and values.get("rel") == "canonical":
+            self.href = values.get("href")
 
 
 def test_web_bundle_is_self_contained_and_owner_neutral():
@@ -44,3 +57,17 @@ def test_web_bundle_is_self_contained_and_owner_neutral():
             names = set(zf.namelist())
             assert "lucidfence-web/web.html" in names
             assert not any(name.endswith(".py") for name in names)
+
+
+def test_public_page_canonicals_work_for_self_hosting_and_project_pages():
+    for page in ("cloud.html", "dashboard.html"):
+        parser = _CanonicalParser()
+        parser.feed((ROOT / "static" / page).read_text())
+        assert parser.href is not None
+
+        for base in (
+            f"https://admin.example/static/{page}",
+            f"https://example.github.io/lucidfence/{page}",
+        ):
+            resolved = urlparse(urljoin(base, parser.href))
+            assert resolved.path == urlparse(base).path
