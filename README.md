@@ -1,5 +1,7 @@
 # LucidFence
 
+[English](docs/README.en.md) · Español (esta página)
+
 **Multi-UEM local-first. BYOI (Bring Your Own Infrastructure).** Tu data en tu máquina, tú firmas los tokens UEM, tú controlas el despliegue. No hay backend propietario que guarde dispositivos ni credenciales.
 
 ## Qué es
@@ -10,23 +12,46 @@ Local-first: el estado de los dispositivos vive en tu máquina. La nube es solo 
 
 ## Rápido
 
+### Desde el repositorio (macOS o Linux)
+
 ```bash
-# 1 — instalar
+git clone https://github.com/adrimg3196/lucidfence.git
+cd lucidfence
+
+# El instalador usa Docker si está disponible; si no, usa Python 3.11+.
+# Solo termina con éxito cuando /api/health responde (timeout: 30 s).
 ./install.sh
-# o
-docker compose up -d
+# Alternativa explícita con Docker:
+# docker compose up -d --build
 
-# 2 — del install a ver tu flota, en pasos autoverificados
-lucidfence quickstart             # entorno → app → dashboard → fuente de datos
-# (equivale a: python3 saas_server.py en :8765 + comprobaciones)
+# Comprobar el servicio que acaba de arrancar
+curl -fsS http://127.0.0.1:8765/api/health
 
-# 3 — tests (honestos)
-python3 tests/run_tests.py
+# Opcional con Python 3.11+: recorrido autoverificado sin un CLI global
+python3 -m lucidfence.cli quickstart
 ```
 
-`lucidfence quickstart` es el camino recomendado para un admin nuevo: comprueba
-el entorno, arranca la app, verifica el dashboard vivo y te dice cómo conectar
-tu UEM real (Intune/Jamf/Applivery/Fleet), con la acción concreta si algo falta.
+El script espera de forma acotada a que la aplicación responda y falla si no
+arranca; después deja la aplicación en `http://127.0.0.1:8765`. Ni el script ni
+Docker instalan un comando `lucidfence` global en el host. Si Python 3.11+ está
+disponible, `python3 -m lucidfence.cli quickstart` ejecuta el recorrido desde el
+checkout: comprueba el entorno, verifica el dashboard vivo y orienta la
+conexión de Intune, Jamf, Applivery o Fleet.
+
+### Homebrew (macOS)
+
+```bash
+brew install adrimg3196/lucidfence/lucidfence
+lucidfence --version    # confirma la versión instalada
+lucidfence              # inicia el servicio local y abre el dashboard
+lucidfence doctor       # diagnóstico de la instalación
+```
+
+Homebrew instala el CLI, no `LucidFence.app`. La aplicación de escritorio es
+un preview separado; consulta [Desktop para macOS](docs/operations/DESKTOP_APP.md).
+El tap puede tardar en incorporar una release nueva: comprueba siempre
+`lucidfence --version` y compárala con [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases)
+antes de depender de una función reciente.
 
 > 📖 **Manual de uso** (con capturas): [español](docs/manual/MANUAL_DE_USO.md) ·
 > [English](docs/manual/USER_GUIDE.md) · interactivo en `/static/manual.html`
@@ -88,7 +113,9 @@ Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 | **Canales de soporte / issues triage** | Funcional | `CONTRIBUTING.md` con el flujo; issues de terceros triados por la flota (etiquetado + respuesta), autores externos nunca auto-mergeados. |
 | **Seguridad: disclosure policy** | Completo | `SECURITY.md` con el disclosure path; el loop Centinela ataca el propio LucidFence en localhost (método Strix) y registra hallazgos con PoC. |
 
-Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista.
+El onboarding de terceros está cubierto por
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md): instalación reproducible,
+comprobación del servicio, conexión del UEM, FAQ y canales de soporte.
 
 ## Lo que sí funciona hoy
 

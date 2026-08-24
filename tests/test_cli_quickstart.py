@@ -33,23 +33,30 @@ def test_quickstart_stops_when_environment_fails():
            "checks": [{"name": "python", "ok": False, "severity": "error",
                        "detail": "Python 3.11+ requerido"}]}
     with mock.patch("lucidfence.core.doctor.run_doctor", return_value=bad), \
+         mock.patch("shutil.which", return_value=None), \
          mock.patch("lucidfence.cli.cmd_start") as start:
         rc, out = _run_quickstart()
     assert rc == 1
     start.assert_not_called()  # no arranca la app si el entorno falla
     assert "FAIL" in out and "python" in out
+    assert "`python3 -m lucidfence.cli quickstart`" in out
+    assert "`lucidfence quickstart`" not in out
 
 
 def test_quickstart_happy_path_when_app_already_up():
     good = {"ok": True, "errors": 0, "warnings": 0, "checks": []}
     with mock.patch("lucidfence.core.doctor.run_doctor", return_value=good), \
+         mock.patch("shutil.which", return_value=None), \
          mock.patch("lucidfence.cli._healthy", return_value=True), \
+         mock.patch("lucidfence.cli.Path.is_file", return_value=False), \
          mock.patch("lucidfence.cli.cmd_start") as start:
         rc, out = _run_quickstart()
     assert rc == 0
     start.assert_not_called()  # ya activa → no re-arranca
     assert "[1/4] OK" in out and "[2/4] OK" in out
     assert "Abre tu flota" in out
+    assert "`python3 -m lucidfence.cli validate-config`" in out
+    assert "`lucidfence validate-config`" not in out
 
 
 def test_quickstart_starts_app_when_down():
@@ -62,3 +69,27 @@ def test_quickstart_starts_app_when_down():
         rc, out = _run_quickstart()
     assert rc == 0
     start.assert_called_once()
+
+
+def test_quickstart_module_mode_reports_a_runnable_status_command():
+    good = {"ok": True, "errors": 0, "warnings": 0, "checks": []}
+    with mock.patch("lucidfence.core.doctor.run_doctor", return_value=good), \
+         mock.patch("shutil.which", return_value=None), \
+         mock.patch("lucidfence.cli._healthy", return_value=False), \
+         mock.patch("lucidfence.cli.cmd_start", return_value=1):
+        rc, out = _run_quickstart()
+    assert rc == 1
+    assert "`python3 -m lucidfence.cli status`" in out
+    assert "`lucidfence status`" not in out
+
+
+def test_quickstart_keeps_global_commands_when_cli_is_installed():
+    good = {"ok": True, "errors": 0, "warnings": 0, "checks": []}
+    with mock.patch("lucidfence.core.doctor.run_doctor", return_value=good), \
+         mock.patch("shutil.which", return_value="/opt/homebrew/bin/lucidfence"), \
+         mock.patch("lucidfence.cli._healthy", return_value=True), \
+         mock.patch("lucidfence.cli.Path.is_file", return_value=False):
+        rc, out = _run_quickstart()
+    assert rc == 0
+    assert "`lucidfence validate-config`" in out
+    assert "`python3 -m lucidfence.cli validate-config`" not in out

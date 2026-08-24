@@ -15,9 +15,15 @@ permissions:
   contents: read
   issues: write
 
+# Un cron sin concurrency puede solaparse consigo mismo y multiplicar fallos.
+concurrency:
+  group: daily-analysis
+  cancel-in-progress: false
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
