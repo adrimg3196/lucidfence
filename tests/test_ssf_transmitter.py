@@ -65,6 +65,50 @@ def test_p256_jwk_scalar_preserves_fixed_32_byte_width():
     assert raw == (b"\x00" * 31) + b"\x01", len(raw)
 
 
+def test_existing_short_p256_jwk_is_normalized_without_key_rotation():
+    if jwt is None:
+        raise SystemExit("SKIP: PyJWT[crypto] not installed")
+
+    import base64
+    import json
+
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    def encode_fixed(value: int) -> str:
+        raw = value.to_bytes(32, "big")
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    key_path = _temp_key()
+    numbers = ec.derive_private_key(1, ec.SECP256R1()).private_numbers()
+    legacy = {
+        "kty": "EC",
+        "crv": "P-256",
+        "d": "AQ",
+        "x": encode_fixed(numbers.public_numbers.x),
+        "y": encode_fixed(numbers.public_numbers.y),
+        "kid": "legacy-short-p256",
+        "alg": "ES256",
+        "use": "sig",
+    }
+    key_path.write_text(json.dumps(legacy), encoding="utf-8")
+
+    loaded = load_signing_jwk(key_path)
+    assert loaded.key.private_numbers().private_value == 1
+
+    migrated = json.loads(key_path.read_text(encoding="utf-8"))
+    raw_d = base64.urlsafe_b64decode(
+        migrated["d"] + "=" * (-len(migrated["d"]) % 4)
+    )
+    assert raw_d == (b"\x00" * 31) + b"\x01"
+
+    public = json.loads(
+        (key_path.parent / "ssf_jwks.json").read_text(encoding="utf-8")
+    )["keys"][0]
+    assert "d" not in public
+    assert public["x"] == migrated["x"]
+    assert public["y"] == migrated["y"]
+
+
 def test_build_event_shape():
     ev = build_device_compliance_change(
         "dev-abc",
