@@ -42,13 +42,13 @@ jobs:
   regen:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # En push a main necesitamos poder pushear la corrección.
           ref: ${{ github.event_name == 'push' && 'main' || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
