@@ -18,6 +18,7 @@ import errno
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -185,6 +186,8 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
         destination_stat = path.stat()
     except FileNotFoundError:
         destination_stat = None
+    if destination_stat is not None:
+        _reject_unreplaceable_file_flags(path, destination_stat)
 
     temporary_path: Path | None = None
     try:
@@ -235,11 +238,36 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
         os.replace(temporary_path, path)
     except BaseException:
         if temporary_path is not None:
+            if hasattr(os, "chflags"):
+                try:
+                    os.chflags(temporary_path, 0)
+                except OSError:
+                    pass
             try:
                 temporary_path.unlink()
-            except FileNotFoundError:
+            except OSError:
                 pass
         raise
+
+
+def _reject_unreplaceable_file_flags(path: Path, destination_stat: Any) -> None:
+    """Reject BSD flags that can block replacement or temporary cleanup."""
+    flags = getattr(destination_stat, "st_flags", 0)
+    blocking_names = (
+        "UF_IMMUTABLE",
+        "SF_IMMUTABLE",
+        "UF_APPEND",
+        "SF_APPEND",
+    )
+    active = [
+        name
+        for name in blocking_names
+        if flags & getattr(stat, name, 0)
+    ]
+    if active:
+        raise PermissionError(
+            f"cannot replace {path}: blocking file flags {', '.join(active)}"
+        )
 
 
 def _reject_unverifiable_native_acl(path: Path) -> None:

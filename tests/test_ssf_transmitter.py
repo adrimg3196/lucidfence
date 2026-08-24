@@ -659,6 +659,57 @@ def test_native_acl_entries_block_replace_when_mode_marker_is_xattr():
     assert set(key_path.parent.iterdir()) == {key_path, jwks_path}
 
 
+def test_unreplaceable_file_flags_are_rejected_before_temp_creation():
+    import stat
+    from types import SimpleNamespace
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    root = Path(tempfile.mkdtemp(prefix="ssf-immutable-flags-"))
+
+    class _FlaggedPath:
+        parent = root
+        name = "protected-key.json"
+
+        @staticmethod
+        def is_symlink():
+            return False
+
+        @staticmethod
+        def stat():
+            return SimpleNamespace(
+                st_flags=stat.UF_IMMUTABLE,
+                st_uid=os.getuid() if hasattr(os, "getuid") else 0,
+                st_gid=os.getgid() if hasattr(os, "getgid") else 0,
+            )
+
+        def __str__(self):
+            return str(root / self.name)
+
+    class _MustNotCreateTemporary:
+        @staticmethod
+        def NamedTemporaryFile(**_kwargs):
+            raise AssertionError("temporary created for immutable destination")
+
+    real_tempfile = keys_module.tempfile
+    keys_module.tempfile = _MustNotCreateTemporary
+    try:
+        try:
+            keys_module._atomic_write_text(
+                _FlaggedPath(),
+                "private-key",
+                default_mode=0o600,
+            )
+        except PermissionError as exc:
+            assert "file flags" in str(exc)
+        else:
+            raise AssertionError("immutable destination was accepted")
+    finally:
+        keys_module.tempfile = real_tempfile
+
+    assert list(root.iterdir()) == []
+
+
 def test_build_event_shape():
     ev = build_device_compliance_change(
         "dev-abc",
