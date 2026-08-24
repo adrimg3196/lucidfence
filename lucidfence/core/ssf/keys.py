@@ -80,7 +80,10 @@ def load_signing_jwk(path: Path | None = None) -> Any:
 
 
 def _b64url_int(value: int) -> str:
-    raw = value.to_bytes((value.bit_length() + 7) // 8, "big")
+    # RFC 7518: P-256 d/x/y are fixed-width 32-octet sequences. Deriving
+    # the length from bit_length() drops leading zero octets and can make a
+    # valid EC key intermittently invalid when parsed as JWK.
+    raw = value.to_bytes(32, "big")
     import base64
 
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
