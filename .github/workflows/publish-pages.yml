@@ -41,12 +41,18 @@ jobs:
           test -f _site/index.html
           # Guardarraíl del P0 #110 también en el artefacto publicado:
           # ninguna cadena de prueba social fabricada puede llegar a Pages.
-          if grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site; then
+          grep_status=0
+          grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site || grep_status=$?
+          if [ "$grep_status" -eq 0 ]; then
             echo "::error::prueba social fabricada detectada en el artefacto"
             exit 1
           fi
-          # Gate bloqueante: publica solo el sitemap de páginas intencionalmente
-          # públicas y conserva las URL portables para project Pages/self-hosting.
+          if [ "$grep_status" -gt 1 ]; then
+            echo "::error::grep no pudo inspeccionar todo el artefacto"
+            exit "$grep_status"
+          fi
+          # Gate bloqueante y exclusivo de este GitHub Project Pages: el
+          # sitemap no representa la superficie SEO de instalaciones self-hosted.
           python3 scripts/pages_seo_check.py --static-dir _site
       - uses: actions/configure-pages@v5
         with:

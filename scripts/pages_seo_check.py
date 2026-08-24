@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Validate the intentionally public GitHub Pages discovery surface.
+"""Validate the repository's GitHub Pages discovery surface.
 
-The gate checks the sitemap and any URL metadata that already exists.  It
-deliberately does not require or validate ``robots.txt``: a project Pages site
-at ``/<repository>/`` cannot publish the origin-level ``/robots.txt`` file.
+The sitemap is exclusively a deployment artifact for this GitHub Project Pages
+site; it is not an SEO contract for self-hosted installations.  The gate also
+checks any canonical and ``og:url`` metadata that already exists against each
+page's Pages URL.  It deliberately does not require or validate ``robots.txt``:
+a project Pages site at ``/<repository>/`` cannot publish the origin-level
+``/robots.txt`` file.
 """
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
 
@@ -40,14 +43,14 @@ class _UrlMetadataParser(HTMLParser):
         if tag.lower() == "link":
             rel = (attributes.get("rel") or "").lower().split()
             href = attributes.get("href")
-            if "canonical" in rel and href:
+            if "canonical" in rel and href is not None:
                 self.values.append(("canonical", href))
         elif tag.lower() == "meta":
             property_name = (
                 attributes.get("property") or attributes.get("name") or ""
             ).lower()
             content = attributes.get("content")
-            if property_name == "og:url" and content:
+            if property_name == "og:url" and content is not None:
                 self.values.append(("og:url", content))
 
 
@@ -89,6 +92,50 @@ def _route_within_project(path: str, root_path: str) -> str | None:
         return None
     relative = path[len(root_path) :] if root_path else path
     return relative or "/"
+
+
+def _expected_page_path(html_path: Path, root_path: str) -> str:
+    routes_by_file = {filename: route for route, filename in PUBLIC_ROUTES.items()}
+    route = routes_by_file.get(html_path.name, f"/{html_path.name}")
+    if route == "/":
+        return f"{root_path}/" if root_path else "/"
+    return f"{root_path}{route}"
+
+
+def _validate_page_url(
+    *,
+    html_path: Path,
+    kind: str,
+    value: str,
+    expected_host: str,
+    root_path: str,
+) -> list[str]:
+    """Validate one canonical/og:url against the page that declares it."""
+    expected_path = _expected_page_path(html_path, root_path)
+    document_url = urlunsplit(("https", expected_host, expected_path, "", ""))
+    raw_value = value.strip()
+    parsed_value = urlsplit(raw_value)
+    prefix = f"{html_path.name}: {kind} {value!r}"
+
+    if not raw_value:
+        return [f"{prefix} está vacío"]
+    if parsed_value.scheme and parsed_value.scheme != "https":
+        return [f"{prefix} usa un esquema no permitido"]
+    if parsed_value.netloc and parsed_value.netloc != expected_host:
+        return [f"{prefix} usa un host externo"]
+
+    resolved = urlsplit(urljoin(document_url, raw_value))
+    if resolved.scheme != "https" or resolved.netloc != expected_host:
+        return [f"{prefix} usa un host externo"]
+    if _route_within_project(resolved.path, root_path) is None:
+        return [f"{prefix} queda fuera de site-root"]
+    if resolved.query or resolved.fragment:
+        return [f"{prefix} contiene query o fragmento"]
+    if resolved.path != expected_path:
+        return [
+            f"{prefix} no apunta a su propia ruta {expected_path}"
+        ]
+    return []
 
 
 def validate(static_dir: Path, raw_site_root: str) -> list[str]:
@@ -136,10 +183,15 @@ def validate(static_dir: Path, raw_site_root: str) -> list[str]:
             errors.append(f"no se pudo leer {html_path.name}: {exc}")
             continue
         for kind, value in parser.values:
-            if "/static/" in value:
-                errors.append(
-                    f"{html_path.name}: {kind} contiene /static/ y no es portable"
+            errors.extend(
+                _validate_page_url(
+                    html_path=html_path,
+                    kind=kind,
+                    value=value,
+                    expected_host=expected_host,
+                    root_path=root_path,
                 )
+            )
 
     return errors
 
@@ -156,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"- {error}")
         return 1
-    print("APTO: sitemap público y metadatos URL portables")
+    print("APTO: sitemap de GitHub Pages y metadatos URL coherentes")
     return 0
 
 

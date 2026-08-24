@@ -120,7 +120,7 @@ def test_pages_seo_check_rejects_missing_public_page_url():
 
 
 def test_pages_seo_check_rejects_static_segment_in_existing_canonical():
-    """Existing canonicals stay portable across self-hosting and project Pages."""
+    """Existing canonicals cannot point at the non-deployed source directory."""
     with tempfile.TemporaryDirectory(prefix="pages-seo-canonical-") as tmp:
         static_dir = _fixture(Path(tmp))
         cloud = static_dir / "cloud.html"
@@ -134,6 +134,133 @@ def test_pages_seo_check_rejects_static_segment_in_existing_canonical():
 
     assert result.returncode == 1
     assert "/static/" in result.stdout
+
+
+def test_pages_seo_check_rejects_root_relative_canonical_outside_project():
+    """A domain-root URL must not escape the GitHub Project Pages prefix."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-root-relative-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        cloud = static_dir / "cloud.html"
+        cloud.write_text(
+            cloud.read_text(encoding="utf-8").replace(
+                'href="cloud.html"', 'href="/cloud.html"'
+            ),
+            encoding="utf-8",
+        )
+        result = _check(static_dir)
+
+    assert result.returncode == 1
+    assert "fuera de site-root" in result.stdout
+
+
+def test_pages_seo_check_rejects_external_og_url():
+    """Existing Open Graph URLs cannot advertise an external host."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-external-og-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        cloud = static_dir / "cloud.html"
+        cloud.write_text(
+            cloud.read_text(encoding="utf-8").replace(
+                "</head>",
+                '<meta property="og:url" '
+                'content="https://outside.example/lucidfence/cloud.html">'
+                "</head>",
+            ),
+            encoding="utf-8",
+        )
+        result = _check(static_dir)
+
+    assert result.returncode == 1
+    assert "host externo" in result.stdout
+
+
+def test_pages_seo_check_rejects_canonical_for_a_different_page():
+    """A page cannot canonicalize itself to another page in the project."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-mismatch-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        cloud = static_dir / "cloud.html"
+        cloud.write_text(
+            cloud.read_text(encoding="utf-8").replace(
+                'href="cloud.html"', 'href="manual.html"'
+            ),
+            encoding="utf-8",
+        )
+        result = _check(static_dir)
+
+    assert result.returncode == 1
+    assert "no apunta a su propia ruta" in result.stdout
+
+
+def test_pages_seo_check_accepts_same_page_absolute_and_project_root_urls():
+    """Correct absolute and project-root metadata resolve to the declaring page."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-valid-metadata-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        cloud = static_dir / "cloud.html"
+        cloud.write_text(
+            cloud.read_text(encoding="utf-8")
+            .replace(
+                'href="cloud.html"',
+                f'href="{SITE_ROOT}/cloud.html"',
+            )
+            .replace(
+                "</head>",
+                '<meta property="og:url" content="/lucidfence/cloud.html">'
+                "</head>",
+            ),
+            encoding="utf-8",
+        )
+        result = _check(static_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_pages_seo_check_rejects_duplicate_sitemap_url():
+    """Duplicate URLs make the discovery contract ambiguous."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-duplicate-") as tmp:
+        result = _check(
+            _fixture(
+                Path(tmp),
+                [
+                    "/",
+                    "/cloud.html",
+                    "/cloud.html",
+                    "/manual.html",
+                    "/web.html",
+                    "/whitelabel.html",
+                ],
+            )
+        )
+
+    assert result.returncode == 1
+    assert "duplicada" in result.stdout
+
+
+def test_pages_seo_check_rejects_external_sitemap_host():
+    """Every sitemap URL must use the configured GitHub Pages host."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-host-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        sitemap = static_dir / "sitemap.xml"
+        sitemap.write_text(
+            sitemap.read_text(encoding="utf-8").replace(
+                f"{SITE_ROOT}/cloud.html",
+                "https://outside.example/lucidfence/cloud.html",
+            ),
+            encoding="utf-8",
+        )
+        result = _check(static_dir)
+
+    assert result.returncode == 1
+    assert "fuera de site-root" in result.stdout
+
+
+def test_pages_seo_check_rejects_missing_public_file():
+    """A listed URL must resolve to a file in the Pages artifact."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-missing-file-") as tmp:
+        static_dir = _fixture(Path(tmp))
+        (static_dir / "manual.html").unlink()
+        result = _check(static_dir)
+
+    assert result.returncode == 1
+    assert "falta la página pública manual.html" in result.stdout
 
 
 def test_repository_sitemap_matches_public_page_contract():
@@ -154,3 +281,6 @@ def test_pages_workflow_copies_once_and_runs_a_blocking_gate():
     assert "cp static/robots.txt" not in workflow
     assert "python3 scripts/pages_seo_check.py --static-dir _site" in workflow
     assert "continue-on-error" not in workflow
+    assert "grep_status=$?" in workflow
+    assert '[ "$grep_status" -gt 1 ]' in workflow
+    assert "project Pages/self-hosting" not in workflow
