@@ -1,0 +1,67 @@
+--- recon repos 2026-08-24T07:28:38Z ---
+=== RECON REPOS (GitHub) — inspiracion video LucidFence ===
+
+1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
+   MDM - Blackberry Dynamics SDK integration with mobile application
+   https://github.com/malam84/UemDeviceManagement
+
+2. api-evangelist/mobileiron  ★0  [] #uem_mdm
+   MobileIron was a pioneer in mobile device management (MDM) and enterprise mobility management (EMM), later unified endpoint management (UEM), securing mobile devices, applications, and content for enterprises with capabilities such as Zero Sign-On, Mobile Threat Defense, and secure connectivity.
+   https://github.com/api-evangelist/mobileiron
+
+3. kaushik-shridhar/LakshmanRekha  ★0  [CSS] #geofence
+   IoT based geofencing system to help monitor COVID-19 patients and ensure compliance with quarantine boundaries. Pairs a web dashboard with a wearable device powered by ESP12 to track movement and detect geofence breaches. Built during the peak of pandemic, it aimed to protect frontline workers by enabling real-time alerts for boundary violations.
+   https://github.com/kaushik-shridhar/LakshmanRekha
+
+4. mochunab/contents-maker  ★4  [TypeScript] #video
+   AI-powered content production studio — 7 generators (trend tracker, card news, short-form video, meme ad, ad copy, ad creative, thumbnail) + browser-side video rendering engine (Canvas + WebCodecs + Remotion 4)
+   https://github.com/mochunab/contents-maker
+
+5. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/Divyalakshmiyarram/video-script-generator
+
+6. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/StephenStepDude/video-script-generator
+
+Total referencias traidas: 7 (minimo 3)
+
+=== PULSO SOCIAL (agent-reach: X + Reddit) ===
+>>> UEM MDM mobile device management
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> geofencing device compliance
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> video marketing generator react
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+>>> remotion video template
+  X: (no cookies X)
+  Reddit: (no cookie Reddit)
+
+--- recon social 2026-08-24T07:28:39Z ---
+=== RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
+
+>>> YouTube: Applivery UEM
+   (unavailable: agent-reach python no instalado)
+>>> YouTube: Jamf Pro
+   (unavailable: agent-reach python no instalado)
+
+>>> Web (Jina): referencia agent-reach
+Title: GitHub - Panniantong/Agent-Reach: Give your AI agent eyes to see the entire internet. Read & search Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu — one CLI, zero API fees.
+URL Source: https://github.com/Panniantong/agent-reach
+Markdo
+
+>>> X (twitter-cli + cookies):
+(unavailable: cookies X no configuradas)
+
+>>> Reddit (opencli reddit):
+(unavailable: opencli no instalado)
+
+=== ESTADO DE CANALES ===
+YouTube: unavailable
+web/Jina: available
+X: unavailable
+Reddit: unavailable
