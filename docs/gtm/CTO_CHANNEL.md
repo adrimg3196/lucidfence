@@ -111,8 +111,9 @@ realinea al canónico.
   - `2026-08-21-no-goals.md` (pts 4-5) — `t_7b575db8` (co-firmada, decisión A).
   - `2026-08-21-declarative-enforcement.md` — `t_1a407df5` (co-firmada,
     corregida a decisión A antes de firmar).
-- Gate `gtm_claim_linter.py`: funcional (test negativo de control
-  `TEC-WEBHOOK-SSRF` bloquea "SSRF-hardened/RFC1918", exit 1).
+- Gate `gtm_claim_linter.py`: funcional — verificado por test negativo de
+  control que rechaza el wording stale "egress RFC1918 blocked by default"
+  (regla del webhook saliente, exit 1).
 - Canal: operativo y explícito. Marketing abre hijas de `t_a8252f28` para
   nuevos claims; el CTO co-firma antes de publicar.
 
