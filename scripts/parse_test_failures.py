@@ -22,6 +22,12 @@ import sys
 from pathlib import Path
 
 FAIL_RE = re.compile(r"^\s*FAIL\s+(\S+\.py)(?:::\S+)?")
+# La linea final que run_tests.py imprime SIEMPRE que llega al final. Si no
+# esta, el runner ABORTO (puerto ocupado, kill, fichero inexistente, Python
+# viejo) sin imprimir ni un FAIL — y contar cero FAILs en esa salida seria un
+# falso verde: el monitor quedaria OK sin haber ejecutado un solo test.
+TALLY_RE = re.compile(r"^=== \d+ passed, \d+ skipped, \d+ failed ===$", re.M)
+RUNNER_ABORTADO = "_runner_abortado_sin_tally"
 
 
 def load_quarantine(path: str) -> set[str]:
@@ -43,6 +49,10 @@ def load_quarantine(path: str) -> set[str]:
 def classify(text: str, quarantine: set[str]) -> dict:
     real: set[str] = set()
     quarantined: set[str] = set()
+    if not TALLY_RE.search(text):
+        # Fallo real sintetico: la salida no llego al tally, asi que la
+        # ausencia de lineas FAIL no significa nada. Fail-closed.
+        real.add(RUNNER_ABORTADO)
     for line in text.splitlines():
         m = FAIL_RE.match(line)
         if not m:

@@ -57,19 +57,38 @@ jobs:
       - name: Comprobar aliveness de cloud-state
         id: alive
         timeout-minutes: 8
+        env:
+          # El input entra por env, no interpolado en el shell con ${{ }}.
+          INPUT_MAX_AGE: ${{ github.event.inputs.max_age_minutes }}
         run: |
           set -euo pipefail
-          MAX_AGE="${{ github.event.inputs.max_age_minutes || env.DEADMAN_MAX_AGE }}"
+          MAX_AGE="${INPUT_MAX_AGE:-$DEADMAN_MAX_AGE}"
+          echo "$MAX_AGE" | grep -Eq '^[0-9]+$' || {
+            echo "::error::max_age_minutes no numerico: '$MAX_AGE'"; exit 1; }
+          echo "max_age=$MAX_AGE" >> "$GITHUB_OUTPUT"
           if python3 scripts/cloud_state_aliveness.py --max-age-minutes "$MAX_AGE"; then
             echo "status=fresh" >> "$GITHUB_OUTPUT"
+            # Histeresis para el cierre: solo se cierra el incidente cuando el
+            # snapshot esta CLARAMENTE fresco (mitad del umbral). Sin esto, una
+            # edad oscilando alrededor del umbral genera churn abrir/cerrar.
+            if python3 scripts/cloud_state_aliveness.py --max-age-minutes "$((MAX_AGE / 2))" --quiet; then
+              echo "clearly_fresh=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "clearly_fresh=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "status=stale" >> "$GITHUB_OUTPUT"
+            echo "clearly_fresh=false" >> "$GITHUB_OUTPUT"
             echo "::warning::cloud-state estancado (dead-man activado)"
           fi
 
       - name: Abrir/actualizar incidente si está STALE
         if: steps.alive.outputs.status == 'stale'
         uses: actions/github-script@v7
+        env:
+          # El umbral que este run uso de verdad (input o default), para que el
+          # issue no mienta cuando se dispara a mano con otro valor.
+          EFFECTIVE_MAX_AGE: ${{ steps.alive.outputs.max_age }}
         with:
           script: |
             const label = process.env.DEADMAN_LABEL;
@@ -94,7 +113,7 @@ jobs:
 
             const body = `## Dead-man de engine-cron activado (${today})\n\n` +
               `- **Cuándo:** ${new Date().toISOString()}\n` +
-              `- **Qué:** \`data/cloud_state.json\` en la rama \`cloud-state\` lleva > ${process.env.DEADMAN_MAX_AGE} min sin actualizarse.\n` +
+              `- **Qué:** \`data/cloud_state.json\` en la rama \`cloud-state\` lleva > ${process.env.EFFECTIVE_MAX_AGE} min sin actualizarse.\n` +
               `- **Impacto:** La vitrina pública de Marketing y el daily-analysis de Product se rompen (fallo #270).\n` +
               `- **Acción sugerida:** verificar que \`engine-cron\` esté corriendo y empujando a \`cloud-state\`; revisar los últimos runs de \`engine-cron\` y \`cloud-state-deadman\`.\n\n` +
               `Este issue se actualiza solo (no se duplica) mientras persista el estancamiento; se cierra automáticamente cuando el snapshot vuelva a estar fresco.`;
@@ -111,8 +130,8 @@ jobs:
               console.log(`Issue creado: #${created.data.number}`);
             }
 
-      - name: Cerrar incidente si volvió a estar fresco
-        if: steps.alive.outputs.status == 'fresh'
+      - name: Cerrar incidente si volvió a estar CLARAMENTE fresco
+        if: steps.alive.outputs.clearly_fresh == 'true'
         uses: actions/github-script@v7
         with:
           script: |

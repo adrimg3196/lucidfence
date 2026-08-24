@@ -73,7 +73,24 @@ def test_parse_test_failures_splits_real_vs_quarantined():
         "  FAIL  tests/test_web_bundle.py::t1: InvalidKeyError\n"
         "  FAIL  test_ssf_transmitter.py::t2: InvalidKeyError\n"
         "  FAIL  tests/test_engine.py::t3: AssertionError\n"
+        "=== 1 passed, 0 skipped, 3 failed ===\n"
     )
     res = mod.classify(out, quarantine)
     assert set(res["quarantined"]) == {"test_ssf_transmitter.py", "test_web_bundle.py"}, res
     assert res["real"] == ["test_engine.py"], res
+
+
+def test_parse_test_failures_trata_el_aborto_del_runner_como_fallo_real():
+    """Salida sin la linea de tally = el runner no termino: falso verde si se ignora.
+
+    Caso real reproducido: run_tests.py aborta con ':8765 ya esta ocupado' sin
+    imprimir un solo FAIL. Contar cero FAILs ahi y reportar OK dejaria al
+    monitor verde para siempre sin ejecutar tests.
+    """
+    mod = _load("parse_test_failures")
+    res = mod.classify("ERROR: :8765 ya está ocupado; QA hermético no "
+                       "reutiliza servidores existentes.\n", set())
+    assert res["real"] == [mod.RUNNER_ABORTADO], res
+    # Y una salida completa NO dispara el sintetico.
+    sana = "  PASS  test_a.py::t\n=== 1 passed, 0 skipped, 0 failed ===\n"
+    assert mod.classify(sana, set())["real"] == []
