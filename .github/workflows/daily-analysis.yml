@@ -23,7 +23,16 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # OJO con este numero: `timeout-minutes` de JOB cuenta tambien el tiempo que
+    # el job pasa ESPERANDO runner, no solo ejecutando. En una cuenta gratuita
+    # los runs de `schedule` ya llegan con retraso y la cola puede pasar de 10
+    # min. Cuando salta, el job queda `cancelled` pero el RUN queda `failure`,
+    # y un run de `schedule` en `failure` manda correo al propietario: un
+    # hipo de infraestructura disfrazado de fallo del repo (pasó: run 32734026688,
+    # 15 min en cola, cero pasos ejecutados). El limite util contra CUELGUES va
+    # a nivel de PASO, que solo corre cuando ya hay runner; el de job se queda
+    # como red de seguridad holgada.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,9 +43,11 @@ jobs:
         run: bash scripts/load_recon_snapshot.sh data/recon/latest_recon.txt origin recon-state
 
       - name: Instalar deps
+        timeout-minutes: 8
         run: python -m pip install -r requirements.txt
 
       - name: Recopilar datos del dia
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -63,6 +74,7 @@ jobs:
           pip list --outdated --format=columns 2>/dev/null | tail -n +3 | head -10 || echo "  (no disponible)"
 
       - name: Escribir informe
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -10,7 +10,15 @@ Este guard fija lo mínimo comprobable, con la causa real detrás de cada regla:
      corre cada 15 min: dos ciclos a la vez se pelean por la misma rama de datos
      y ambos fallan. Un fallo se convierte en dos.
   2. `timeout-minutes` — sin él, un cuelgue ocupa un runner hasta el límite de
-     6 h de GitHub, y el siguiente ciclo se apila detrás.
+     6 h de GitHub, y el siguiente ciclo se apila detrás. Pero el de JOB cuenta
+     también la ESPERA de runner, no solo la ejecución: en una cuenta gratuita
+     los runs de `schedule` ya llegan con retraso y la cola pasa de 10 min con
+     facilidad. Cuando salta por cola, el job queda `cancelled` y el RUN queda
+     `failure` — es decir, correo al propietario por un hipo de infraestructura,
+     con cero pasos ejecutados. Ocurrió: run 32734026688 de `engine-cron`, 15
+     min en cola, ni un paso, `timeout-minutes: 10` de job. Por eso el límite
+     estricto contra cuelgues va a nivel de PASO (que solo corre cuando ya hay
+     runner) y el de job se deja holgado como red de seguridad.
   3. Ningún `|| true` sobre `git fetch`/`git ls-remote` — el patrón que motivó
      este fichero: `engine-cron` hacía `git fetch ... || true` y, si el fetch
      fallaba por red, tomaba la rama del `else` y creaba una rama HUÉRFANA cuyo
@@ -64,6 +72,50 @@ def test_cada_cron_declara_timeout():
         assert "timeout-minutes:" in texto, (
             f"{nombre} es un cron sin `timeout-minutes`: un cuelgue ocupa un "
             f"runner hasta el limite de 6 h y apila los ciclos siguientes.")
+
+
+PISO_TIMEOUT_JOB_MIN = 20
+
+
+def _timeouts_de_job(texto: str) -> list[int]:
+    """`timeout-minutes` a nivel de job (4 espacios), no los de paso (8)."""
+    return [int(m) for m in re.findall(r"(?m)^    timeout-minutes: (\d+)\s*$", texto)]
+
+
+def test_el_timeout_de_job_de_un_cron_no_puede_ser_corto():
+    """Un timeout de job corto convierte la cola de runners en correo de fallo.
+
+    `timeout-minutes` de job empieza a contar cuando el job se ENCOLA, no
+    cuando arranca. Si el runner tarda mas que el limite, GitHub mata un job
+    que no llego a ejecutar un solo paso y el run sale `failure` -> correo.
+    El limite util contra cuelgues es el de PASO; este solo es red de
+    seguridad, y como tal tiene que ser holgado.
+    """
+    for nombre, texto in _programados():
+        for minutos in _timeouts_de_job(texto):
+            assert minutos >= PISO_TIMEOUT_JOB_MIN, (
+                f"{nombre}: `timeout-minutes: {minutos}` a nivel de job es "
+                f"demasiado corto (minimo {PISO_TIMEOUT_JOB_MIN}). Ese contador "
+                f"incluye la espera de runner, asi que una cola larga mata el "
+                f"job antes del primer paso y el run sale `failure`, que manda "
+                f"correo al propietario. Pon el limite estricto en el paso "
+                f"(`timeout-minutes` con 8 espacios) y deja el de job holgado.")
+
+
+def test_cada_cron_pone_un_limite_estricto_a_nivel_de_paso():
+    """Sin timeout de paso, subir el de job dejaria los cuelgues sin guardia.
+
+    Este test es la contrapartida del anterior: si el de job se relaja hasta
+    ser holgado, el limite real contra un proceso colgado tiene que existir
+    en algun paso. Si no, habriamos cambiado un problema (correo por cola)
+    por otro (cuelgue sin cortar).
+    """
+    for nombre, texto in _programados():
+        pasos = re.findall(r"(?m)^        timeout-minutes: (\d+)\s*$", texto)
+        assert pasos, (
+            f"{nombre}: ningun paso declara `timeout-minutes`. El de job es "
+            f"holgado a proposito (incluye la cola de runners), asi que sin "
+            f"un limite de paso un proceso colgado se come el runner entero.")
 
 
 def test_ningun_cron_se_traga_el_error_de_una_consulta_remota():
