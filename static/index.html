@@ -100,6 +100,12 @@
     .faq-list{display:grid;grid-template-columns:1fr 1fr;gap:36px 48px;max-width:960px}
     .faq-list h3{font-size:20px;margin-bottom:8px;letter-spacing:-.01em}
     .faq-list p{font-size:14px;color:var(--muted);line-height:1.65;text-wrap:pretty}
+    .res-list{display:grid;grid-template-columns:1fr 1fr;gap:20px 48px;max-width:960px}
+    .res-list a{display:flex;gap:10px;align-items:baseline;font-size:15px;color:var(--fg);font-weight:600;transition:color .2s}
+    .res-list a:hover{color:var(--accent-h)}
+    .res-list a small{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.55;text-wrap:pretty}
+    .res-list .arrow{color:var(--accent);flex:none}
+    @media(max-width:860px){.res-list{grid-template-columns:1fr}}
 
     footer{border-top:1px solid var(--border);padding:36px 0;color:var(--muted-2);font-size:13px}
     .foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
@@ -130,6 +136,7 @@
         <a href="#instalar">Gratis</a>
         <a href="#deploy">Instalación</a>
         <a href="#faq">FAQ</a>
+        <a href="#recursos">Recursos</a>
         <a href="cloud.html">Vitrina</a>
         <a href="whitelabel.html">Whitelabel</a>
       </nav>
@@ -281,6 +288,31 @@
           <h3>¿Cuándo sé que está vivo?</h3>
           <p>En local: al abrir <code>http://localhost:8765</code>. En la vitrina pública: el estado demo se regenera cada 15 min para validar el motor sin datos reales.</p>
         </div>
+      </div>
+    </section>
+
+    <section id="recursos">
+      <div class="sec-head">
+        <h2>Comparativas y guía de arranque</h2>
+        <p>Documentación técnica capability-by-capability y la guía para tener LucidFence corriendo en tu infraestructura.</p>
+      </div>
+      <div class="res-list">
+        <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/comparisons/lucidfence-vs-intune.md">
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span>LucidFence vs Microsoft Intune<small>Geocercas, cumplimiento UEM/MDM y SOAR declarativo frente a la suite de Microsoft.</small></span>
+        </a>
+        <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/comparisons/lucidfence-vs-jamf.md">
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span>LucidFence vs Jamf<small>Gestión de Apple y cumplimiento locales comparados capacidad por capacidad.</small></span>
+        </a>
+        <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/GETTING_STARTED.md">
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span>Guía de arranque (Getting Started)<small>Descarga, ejecuta y conserva tus datos en tu propia infraestructura.</small></span>
+        </a>
+        <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/README.en.md">
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+          <span>Project overview (English)<small>The same LucidFence overview, written for English-speaking teams.</small></span>
+        </a>
       </div>
     </section>
   </main>
