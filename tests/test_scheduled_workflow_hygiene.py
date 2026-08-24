@@ -118,6 +118,42 @@ def test_cada_cron_pone_un_limite_estricto_a_nivel_de_paso():
             f"un limite de paso un proceso colgado se come el runner entero.")
 
 
+def _disparados_por_pr() -> list[tuple[str, str]]:
+    """[(nombre, texto)] de los workflows con disparador `pull_request:`.
+
+    pull_request_target queda fuera a propósito: corre en el contexto de la
+    rama base con permisos elevados y su concurrencia tiene otra semántica
+    (merge-train ya la declara a su manera).
+    """
+    out = []
+    for p in sorted(WORKFLOWS.glob("*.yml")):
+        texto = p.read_text(encoding="utf-8")
+        if re.search(r"^\s+pull_request:", texto, re.M):
+            out.append((p.name, texto))
+    return out
+
+
+def test_cada_workflow_de_pr_cancela_el_run_superado():
+    """Un force-push sobre un run de PR en vuelo = correo de fallo sin señal.
+
+    El run superado sigue corriendo contra una ref que ya no existe, muere en
+    `failure` y GitHub manda correo al dueño (pasó: gitleaks contra un sha
+    huérfano, run 32757168118, cero hallazgos reales). Con `concurrency` +
+    `cancel-in-progress` el run superado se CANCELA, y los cancelados no
+    generan correo. El correo de fallo debe ser señal, nunca un artefacto de
+    la mecánica de git.
+    """
+    for nombre, texto in _disparados_por_pr():
+        assert re.search(r"^concurrency:", texto, re.M), (
+            f"{nombre} corre en pull_request sin `concurrency`: un force-push "
+            f"deja el run viejo corriendo contra una ref muerta y el fallo "
+            f"resultante manda correo al propietario sin decir nada.")
+        assert "cancel-in-progress:" in texto, (
+            f"{nombre} declara concurrency pero sin `cancel-in-progress`: el "
+            f"run superado se encola en vez de cancelarse y puede seguir "
+            f"muriendo contra refs que ya no existen.")
+
+
 def test_ningun_cron_se_traga_el_error_de_una_consulta_remota():
     """`git fetch ... || true` fue el origen de un fallo que mentía sobre su causa."""
     patron = re.compile(r"git\s+(fetch|ls-remote)[^\n|]*\|\|\s*true")
