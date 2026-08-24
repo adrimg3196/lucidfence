@@ -15,23 +15,76 @@
 set -euo pipefail
 
 PORT="${LUCIDFENCE_PORT:-8765}"
+HEALTH_TIMEOUT="${LUCIDFENCE_HEALTH_TIMEOUT:-30}"
+VENV_DIR="${LUCIDFENCE_VENV_DIR:-.venv}"
 REPO="adrimg3196/lucidfence"
 REPO_URL="https://github.com/$REPO.git"
 PUBLIC_HOST="${LUCIDFENCE_PUBLIC_HOST:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+case "$HEALTH_TIMEOUT" in
+  ''|*[!0-9]*)
+    echo "ERROR: LUCIDFENCE_HEALTH_TIMEOUT debe ser un entero positivo." >&2
+    exit 2
+    ;;
+esac
+if [ "$HEALTH_TIMEOUT" -lt 1 ]; then
+  echo "ERROR: LUCIDFENCE_HEALTH_TIMEOUT debe ser mayor que cero." >&2
+  exit 2
+fi
+
+service_health_payload() {
+  local port="$1"
+  local url="http://127.0.0.1:${port}/api/health"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS "$url"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$url" <<'PY'
+import sys
+import urllib.request
+
+with urllib.request.urlopen(sys.argv[1], timeout=5) as response:
+    if response.status != 200:
+        raise SystemExit(1)
+    print(response.read(4096).decode("utf-8", errors="replace"))
+PY
+    return
+  fi
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    docker compose exec -T lucidfence python3 -c \
+      "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=5); print(r.read(4096).decode('utf-8', errors='replace'))"
+    return
+  fi
+  echo "ERROR: no hay cliente HTTP disponible (curl, Python 3 o el contenedor Docker)." >&2
+  return 127
+}
+
 service_verify_health() {
   local port="$1"
   local timeout="${2:-30}"
-  local start
+  local start payload
   start="$(date +%s)"
-  until curl -sf "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; do
+  while ! payload="$(service_health_payload "$port" 2>/dev/null)"; do
     sleep 1
     if [ "$(($(date +%s) - start))" -ge "$timeout" ]; then
       return 1
     fi
   done
-  curl -sf "http://127.0.0.1:${port}/api/health"
+  printf '%s\n' "$payload"
+}
+
+install_verify_health() {
+  local mode="$1"
+  local payload
+  echo "== Esperando health de LucidFence (máximo ${HEALTH_TIMEOUT}s) =="
+  if ! payload="$(service_verify_health "$PORT" "$HEALTH_TIMEOUT")"; then
+    echo "ERROR: LucidFence no respondió en /api/health tras ${HEALTH_TIMEOUT}s (${mode})." >&2
+    return 1
+  fi
+  echo "== Health confirmado: ${payload} =="
 }
 
 service_systemd_install() {
@@ -164,7 +217,7 @@ fi
 
 assert_secure_repo_url() {
   case "$REPO_URL" in
-    https://github.com/$REPO.git) return 0 ;;
+    https://github.com/"$REPO".git) return 0 ;;
   esac
   echo "ERROR: REPO_URL debe usar HTTPS hacia github.com/$REPO.git; no se permiten transportes no verificados." >&2
   exit 1
@@ -209,9 +262,13 @@ if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; 
   if [ -n "$PUBLIC_HOST" ]; then
     echo "   Internet-facing: activando reverse proxy TLS para $PUBLIC_HOST"
     LUCIDFENCE_PUBLIC_HOST="$PUBLIC_HOST" docker compose --profile internet-facing up -d --build
-    echo "== LucidFence arrancado en https://$PUBLIC_HOST =="
   else
     docker compose up -d --build
+  fi
+  install_verify_health "Docker"
+  if [ -n "$PUBLIC_HOST" ]; then
+    echo "== LucidFence arrancado en https://$PUBLIC_HOST =="
+  else
     echo "== LucidFence arrancado en http://localhost:$PORT =="
     echo "   Puerto publicado solo en 127.0.0.1. Para internet: LUCIDFENCE_PUBLIC_HOST=tu.dominio ./install.sh"
   fi
@@ -228,8 +285,23 @@ fi
 ensure_repo_checkout
 verify_locked_deps
 
-echo "   Instalando dependencias verificadas (requirements.lock)…"
-python3 -m pip install -q --require-hashes -r requirements.lock
+PYTHON_RUNTIME="${VENV_DIR}/bin/python"
+if [ ! -x "$PYTHON_RUNTIME" ]; then
+  echo "== Creando entorno Python aislado en ${VENV_DIR} =="
+  if ! python3 -m venv "$VENV_DIR"; then
+    echo "ERROR: Python no pudo crear el entorno virtual." >&2
+    echo "   En Debian/Ubuntu instala python3-venv; en macOS usa Python de Homebrew o Docker." >&2
+    exit 1
+  fi
+fi
+if ! "$PYTHON_RUNTIME" -m pip --version >/dev/null 2>&1; then
+  echo "ERROR: el entorno virtual no contiene pip; reinstala Python con venv/ensurepip o usa Docker." >&2
+  exit 1
+fi
+
+echo "   Instalando dependencias verificadas (requirements.lock) en ${VENV_DIR}…"
+"$PYTHON_RUNTIME" -m pip install -q --require-hashes -r requirements.lock
+echo "== Dependencias instaladas en ${VENV_DIR} =="
 
 mkdir -p data
 # Arma el pre-commit local (scripts/pre-commit.sh) como git hook nativo.
@@ -239,8 +311,23 @@ if [ -f "$SCRIPT_DIR/scripts/pre-commit.sh" ]; then
   echo "== Pre-commit hook activado (scripts/pre-commit.sh) =="
 fi
 echo "== Arrancando LucidFence en segundo plano (puerto $PORT) =="
-nohup python3 saas_server.py > lucidfence.log 2>&1 &
-echo $! > lucidfence.pid
+nohup "$PYTHON_RUNTIME" saas_server.py > lucidfence.log 2>&1 &
+server_pid=$!
+echo "$server_pid" > lucidfence.pid
+if ! install_verify_health "Python"; then
+  kill "$server_pid" >/dev/null 2>&1 || true
+  wait "$server_pid" >/dev/null 2>&1 || true
+  rm -f lucidfence.pid
+  echo "   Revisa el log de arranque: lucidfence.log" >&2
+  exit 1
+fi
+if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+  wait "$server_pid" >/dev/null 2>&1 || true
+  rm -f lucidfence.pid
+  echo "ERROR: el proceso Python terminó aunque /api/health respondió; puede existir otro servicio en el puerto ${PORT}." >&2
+  echo "   Revisa el log de arranque: lucidfence.log" >&2
+  exit 1
+fi
 echo "== LucidFence arrancado en http://localhost:$PORT =="
 echo "   PID: $(cat lucidfence.pid)  ·  log: lucidfence.log"
 echo "   Para pararlo: kill \$(cat lucidfence.pid)"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -315,6 +316,15 @@ def cmd_doctor(args) -> int:
     return 0 if report["ok"] else 1
 
 
+def _quickstart_command(subcommand: str) -> str:
+    """Return a command the current installation path can actually run."""
+    program = (
+        "lucidfence" if shutil.which("lucidfence")
+        else "python3 -m lucidfence.cli"
+    )
+    return f"{program} {subcommand}"
+
+
 def cmd_quickstart(args) -> int:
     """Del install a ver tu flota, en pasos autoverificados.
 
@@ -336,7 +346,7 @@ def cmd_quickstart(args) -> int:
         for check in report["checks"]:
             if not check["ok"] and check["severity"] != "warning":
                 print(f"          - {check['name']}: {check['detail']}")
-        print("      Arréglalo y repite `lucidfence quickstart`.")
+        print(f"      Arréglalo y repite `{_quickstart_command('quickstart')}`.")
         return 1
 
     # 2/4 — app local arrancada
@@ -345,7 +355,10 @@ def cmd_quickstart(args) -> int:
     else:
         rc = cmd_start(SimpleNamespace(host=host, port=port, open_browser=False))
         if rc != 0 or not _healthy(host, port):
-            print("[2/4] FAIL La app no arrancó. Revisa `lucidfence status` y el log.")
+            print(
+                "[2/4] FAIL La app no arrancó. Revisa "
+                f"`{_quickstart_command('status')}` y el log."
+            )
             return 1
         print(f"[2/4] OK  App arrancada en {url}")
 
@@ -354,12 +367,15 @@ def cmd_quickstart(args) -> int:
 
     # 4/4 — fuente de datos de la flota
     if Path("config.json").is_file():
-        print("[4/4] OK  config.json detectado — valida tu UEM: `lucidfence validate-config`")
+        print(
+            "[4/4] OK  config.json detectado — valida tu UEM: "
+            f"`{_quickstart_command('validate-config')}`"
+        )
     else:
         print("[4/4] --  Sin config.json: arranca en modo demo (flota simulada).")
         print("          Conecta tu UEM real (Intune/Jamf/Applivery/Fleet):")
         print("          copia config.example.json a config.json, edítalo y")
-        print("          verifica con `lucidfence validate-config`.")
+        print(f"          verifica con `{_quickstart_command('validate-config')}`.")
 
     print(f"\nListo. Abre tu flota:  {url}")
     print("Integra un UEM real:   docs/integrations/  (mínimo privilegio por UEM)")
