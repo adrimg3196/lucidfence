@@ -19,12 +19,23 @@ cp "$snapshot_path" "$temp_snapshot"
 # El checkout del workflow es efímero y el snapshot ya está preservado.
 # Descartar la copia trackeada evita que el cambio bloquee el cambio de rama.
 git checkout -- .
-git fetch "$remote" "$branch" --depth 1 || true
-if git show-ref --verify --quiet "refs/remotes/${remote}/${branch}"; then
+# `|| true` sobre el fetch se tragaba CUALQUIER fallo y entonces se creaba una
+# rama HUERFANA (historia nueva) cuyo push se rechaza por non-fast-forward: un
+# parpadeo de red acababa disfrazado de problema de historia de git. Se
+# distingue "la rama no existe" (ls-remote RC=2) de "no he podido preguntar".
+rc=0
+git ls-remote --exit-code --heads "$remote" "$branch" >/dev/null 2>&1 || rc=$?
+if [[ "$rc" -eq 0 ]]; then
+  git fetch "$remote" "$branch" --depth 1
   git checkout -B "$branch" "${remote}/${branch}"
-else
+elif [[ "$rc" -eq 2 ]]; then
+  echo "${branch} aun no existe: primera publicacion (rama huerfana)"
   git checkout --orphan "$branch"
   git rm -rf --cached . >/dev/null 2>&1 || true
+else
+  echo "ERROR: no se pudo consultar ${remote}/${branch} (rc=${rc}); se aborta en" \
+       "vez de crear una rama huerfana que rompa el historial" >&2
+  exit 1
 fi
 
 mkdir -p "$(dirname "$snapshot_in_branch")"
