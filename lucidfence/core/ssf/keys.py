@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import errno
 import json
 import os
-import stat
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -169,9 +170,9 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
     """Atomically replace text after fsyncing a same-directory temporary."""
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        target_mode = stat.S_IMODE(path.stat().st_mode)
+        destination_stat = path.stat()
     except FileNotFoundError:
-        target_mode = default_mode
+        destination_stat = None
 
     temporary_path: Path | None = None
     try:
@@ -186,7 +187,38 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temporary_path, target_mode)
+        if destination_stat is None:
+            os.chmod(temporary_path, default_mode)
+        else:
+            # os.replace installs the temporary inode, so copy access metadata
+            # first. Extended attributes include Linux POSIX ACLs and security
+            # labels; any mismatch aborts before the destination is replaced.
+            if hasattr(os, "chown"):
+                os.chown(
+                    temporary_path,
+                    destination_stat.st_uid,
+                    destination_stat.st_gid,
+                )
+            source_xattrs = _read_xattrs(path)
+            if source_xattrs is not None:
+                _synchronize_xattrs(temporary_path, source_xattrs, source=path)
+            shutil.copystat(path, temporary_path)
+            if source_xattrs is not None:
+                copied_xattrs = _read_xattrs(temporary_path)
+                if copied_xattrs != source_xattrs:
+                    raise OSError(
+                        errno.EIO,
+                        f"cannot preserve extended attributes for {path}",
+                    )
+            if hasattr(os, "chown"):
+                copied_stat = temporary_path.stat()
+                if (
+                    copied_stat.st_uid != destination_stat.st_uid
+                    or copied_stat.st_gid != destination_stat.st_gid
+                ):
+                    raise PermissionError(
+                        f"cannot preserve owner/group for {path}"
+                    )
         os.replace(temporary_path, path)
     except BaseException:
         if temporary_path is not None:
@@ -195,6 +227,54 @@ def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
             except FileNotFoundError:
                 pass
         raise
+
+
+def _read_xattrs(path: Path) -> dict[str, bytes] | None:
+    """Read all extended attributes, or None when the filesystem lacks them."""
+    required = ("listxattr", "getxattr")
+    if not all(hasattr(os, name) for name in required):
+        return None
+    unsupported = {errno.EINVAL, errno.ENOTSUP}
+    if hasattr(errno, "EOPNOTSUPP"):
+        unsupported.add(errno.EOPNOTSUPP)
+    try:
+        names = os.listxattr(path)
+        return {name: os.getxattr(path, name) for name in names}
+    except OSError as exc:
+        if exc.errno in unsupported:
+            return None
+        raise OSError(
+            exc.errno or errno.EACCES,
+            f"cannot inspect extended attributes for {path}",
+        ) from exc
+
+
+def _synchronize_xattrs(
+    destination: Path,
+    expected: dict[str, bytes],
+    *,
+    source: Path,
+) -> None:
+    """Make destination xattrs exactly match source, failing closed."""
+    required = ("listxattr", "getxattr", "setxattr", "removexattr")
+    if not all(hasattr(os, name) for name in required):
+        if expected:
+            raise OSError(
+                errno.ENOTSUP,
+                f"cannot preserve extended attributes for {source}",
+            )
+        return
+    try:
+        present = set(os.listxattr(destination))
+        for name in present.difference(expected):
+            os.removexattr(destination, name)
+        for name, value in expected.items():
+            os.setxattr(destination, name, value)
+    except OSError as exc:
+        raise OSError(
+            exc.errno or errno.EPERM,
+            f"cannot preserve extended attribute for {source}",
+        ) from exc
 
 
 def _write_public_jwks(private_jwk: dict, jwks_path: Path) -> None:

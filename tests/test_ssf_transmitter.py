@@ -58,6 +58,20 @@ def _temp_key():
     return d / "ssf_sign.json"
 
 
+def _user_xattrs_supported(directory: Path) -> bool:
+    if not all(hasattr(os, name) for name in ("setxattr", "getxattr")):
+        return False
+    probe = directory / ".xattr-probe"
+    probe.write_bytes(b"probe")
+    try:
+        os.setxattr(probe, b"user.lucidfence-probe", b"supported")
+        return os.getxattr(probe, b"user.lucidfence-probe") == b"supported"
+    except OSError:
+        return False
+    finally:
+        probe.unlink()
+
+
 def test_p256_jwk_scalar_preserves_fixed_32_byte_width():
     import base64
 
@@ -237,6 +251,9 @@ def test_persisted_jwk_migration_is_atomic_and_retriable():
         fsync = staticmethod(real_os.fsync)
         replace = staticmethod(fail_private_replace)
 
+    if hasattr(real_os, "chown"):
+        _FailPrivateReplaceOS.chown = staticmethod(real_os.chown)
+
     keys_module._ensure_jwt = lambda: _StubJWT
     try:
         keys_module.os = _FailPrivateReplaceOS
@@ -302,12 +319,96 @@ def test_key_file_permissions_are_safe_and_preserved():
         key_path.write_text(json.dumps(generated), encoding="utf-8")
         key_path.chmod(0o640)
         jwks_path.chmod(0o664)
+        private_owner = (key_path.stat().st_uid, key_path.stat().st_gid)
+        public_owner = (jwks_path.stat().st_uid, jwks_path.stat().st_gid)
+        xattr_name = b"user.lucidfence-test"
+        xattrs_supported = _user_xattrs_supported(key_path.parent)
+        if xattrs_supported:
+            os.setxattr(key_path, xattr_name, b"private-metadata")
+            os.setxattr(jwks_path, xattr_name, b"public-metadata")
         load_signing_jwk(key_path)
     finally:
         keys_module._ensure_jwt = real_ensure_jwt
 
     assert stat.S_IMODE(key_path.stat().st_mode) == 0o640
     assert stat.S_IMODE(jwks_path.stat().st_mode) == 0o664
+    assert (key_path.stat().st_uid, key_path.stat().st_gid) == private_owner
+    assert (jwks_path.stat().st_uid, jwks_path.stat().st_gid) == public_owner
+    if xattrs_supported:
+        assert os.getxattr(key_path, xattr_name) == b"private-metadata"
+        assert os.getxattr(jwks_path, xattr_name) == b"public-metadata"
+
+
+def test_migration_fails_closed_when_access_metadata_cannot_be_copied():
+    import json
+    import shutil
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    key_path = _temp_key()
+    if not _user_xattrs_supported(key_path.parent):
+        return
+    jwks_path = key_path.parent / "ssf_jwks.json"
+    legacy = {
+        "kty": "EC",
+        "crv": "P-256",
+        "d": "AQ",
+        "x": "Ag",
+        "y": "Aw",
+        "kid": "legacy-protected-p256",
+        "alg": "ES256",
+        "use": "sig",
+    }
+    key_path.write_text(json.dumps(legacy), encoding="utf-8")
+    jwks_path.write_text('{"sentinel": true}', encoding="utf-8")
+    xattr_name = b"user.lucidfence-test"
+    os.setxattr(key_path, xattr_name, b"private-metadata")
+    os.setxattr(jwks_path, xattr_name, b"public-metadata")
+    private_before = key_path.read_bytes()
+    public_before = jwks_path.read_bytes()
+
+    class _StubJWT:
+        class PyJWK:
+            @staticmethod
+            def from_dict(data):
+                return data
+
+    real_os = keys_module.os
+    real_shutil = keys_module.shutil
+    real_ensure_jwt = keys_module._ensure_jwt
+
+    class _RejectXattrOS:
+        def __getattr__(self, name):
+            return getattr(real_os, name)
+
+        def setxattr(self, _path, _name, _value):
+            raise PermissionError("simulated ACL/xattr copy failure")
+
+    class _CopystatWithoutXattrs:
+        @staticmethod
+        def copystat(source, destination):
+            shutil.copymode(source, destination)
+
+    keys_module.os = _RejectXattrOS()
+    keys_module.shutil = _CopystatWithoutXattrs
+    keys_module._ensure_jwt = lambda: _StubJWT
+    try:
+        try:
+            load_signing_jwk(key_path)
+        except OSError as exc:
+            assert "preserve extended attribute" in str(exc)
+        else:
+            raise AssertionError("migration replaced a file without its access metadata")
+    finally:
+        keys_module.os = real_os
+        keys_module.shutil = real_shutil
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    assert key_path.read_bytes() == private_before
+    assert jwks_path.read_bytes() == public_before
+    assert os.getxattr(key_path, xattr_name) == b"private-metadata"
+    assert os.getxattr(jwks_path, xattr_name) == b"public-metadata"
+    assert set(key_path.parent.iterdir()) == {key_path, jwks_path}
 
 
 def test_build_event_shape():
