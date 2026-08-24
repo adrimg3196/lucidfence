@@ -2,6 +2,10 @@
 
 > **Geofencing that doesn't exfiltrate. Risk that explains itself.**
 
+*English overview of LucidFence — the counterpart of the [root `README.md`](../README.md)
+(Spanish, for first-time users). For a full step-by-step English walkthrough with
+screenshots, see [`docs/manual/USER_GUIDE.md`](manual/USER_GUIDE.md).*
+
 [![Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](../LICENSE)
 [![Multi-MDM](https://img.shields.io/badge/MDM-Applivery%20%7C%20Intune%20%7C%20Jamf-9cf)](../lucidfence/core/adapters/ADAPTER.md)
 [![Local-first](https://img.shields.io/badge/architecture-100%25%20local-blue)](../saas_server.py)
@@ -22,14 +26,37 @@ automated actions — **MDM-agnostic** via adapters.
 
 ## Install (client, $0, sovereign)
 
+LucidFence runs fully on your machine. Two equivalent paths:
+
+**Option A — installer / Docker (any OS)**
+
 ```bash
-brew install adrimg3196/lucidfence/lucidfence
-# opens Launchpad → LucidFence.app → dashboard at http://localhost:8765
+# 1 — install (clones the repo and starts LucidFence on your machine)
+./install.sh
+# or, if you have Docker:
+docker compose up -d
+
+# 2 — from install to seeing your fleet, in self-verifying steps
+lucidfence quickstart   # env → app → dashboard → data source
 ```
 
-Or download the release tarball and run `lucidfence serve`. The desktop app
-(`.app` on macOS) starts the on-prem server and opens the dashboard in your browser.
-Login demo: `ciso@acme.test` / `demo1234`.
+**Option B — Homebrew (macOS)**
+
+```bash
+brew install adrimg3196/lucidfence/lucidfence
+lucidfence              # starts the local server on 127.0.0.1:8765
+```
+
+`brew` installs the `lucidfence` **CLI** (not a `.app`). Lifecycle helpers:
+`lucidfence status | stop | doctor`. Dashboard: http://localhost:8765.
+
+**macOS desktop app (optional preview).** A drag-and-drop `LucidFence.app`
+for Mac users who prefer not to use Terminal is published as a separate
+**Apple Silicon–only, not-yet-notarized preview** (v1.2.0-desktop-preview.1).
+See [docs/operations/DESKTOP_APP.md](operations/DESKTOP_APP.md) for the
+download, requirements, and build instructions.
+
+**Demo login** (auto-seeded, safe to use): `ciso@acme.test` / `demo1234`.
 
 ## Why (the moat)
 
