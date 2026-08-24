@@ -4,6 +4,7 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- fix(ci): relajar ruleset de ramas de datos a solo protección-contra-borrado — `LucidFence Autonomy B` ahora aplica solo a `~DEFAULT_BRANCH` (antes `~DEFAULT_BRANCH` + `~ALL`), de modo que `engine-cron`/`recon-social-cron` pueden empujar directo a `cloud-state`/`recon-state` sin `GH013` (#270). Registro en `docs/operations/BRANCH_CONFIG.md`.
 - fix(ci): el health-check nocturno vuelve a poder alertar — `nightly-health-check`
   llevaba **10 runs consecutivos en rojo** (2026-08-13..2026-08-22) con
   `ModuleNotFoundError: No module named 'requests'`, no porque la vitrina
