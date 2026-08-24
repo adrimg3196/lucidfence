@@ -1,0 +1,226 @@
+name: cron-watchdog
+
+# Meta-vigilancia para los workflows programados que protegen la operación.
+# La decisión se calcula offline en lucidfence.core.cron_watchdog; este archivo
+# limita su responsabilidad a leer GitHub y aplicar una mutación idempotente.
+on:
+  schedule:
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cron-watchdog
+  cancel-in-progress: false
+
+env:
+  WATCHDOG_MIN_FAILURES: "2"
+  WATCHDOG_LOOKBACK: "10"
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Vigilar workflows de salud
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          source scripts/gh_retry.sh
+
+          WORKFLOWS=(
+            "nightly-health-check"
+            "monitor-hourly"
+            "engine-cron"
+            "merge-train"
+          )
+          MIN_FAILS="${WATCHDOG_MIN_FAILURES}"
+          LOOKBACK="${WATCHDOG_LOOKBACK}"
+          LABEL="cron-watchdog"
+          OWNER="${REPO%%/*}"
+          REPONAME="${REPO##*/}"
+          any_opened=0
+          any_closed=0
+
+          repo_json=$(gh_retry api "repos/$OWNER/$REPONAME")
+          DEFAULT_BRANCH=$(printf '%s\n' "$repo_json" | jq -r '.default_branch')
+          if [[ -z "$DEFAULT_BRANCH" || "$DEFAULT_BRANCH" == "null" ]]; then
+            echo "::error::No se pudo determinar la rama por defecto."
+            exit 1
+          fi
+
+          # Primera ejecución segura: crea la etiqueta si falta y normaliza su
+          # color/descripcion si ya existe. --force hace el bootstrap idempotente.
+          gh_retry label create "$LABEL" --repo "$REPO" --color "B60205" \
+            --description "Meta-vigilancia de workflows programados" --force >/dev/null
+
+          find_open_alerts() {
+            local wf="$1"
+            local response filtered
+
+            if ! response=$(gh_retry api \
+              "repos/$OWNER/$REPONAME/issues?state=open&labels=$LABEL&per_page=100"); then
+              return 2
+            fi
+            if ! filtered=$(printf '%s\n' "$response" | jq -c --arg wf "$wf" \
+              "[.[] | select(.pull_request == null) | select(.title | startswith(\"🚨 cron-watchdog: \" + \$wf + \" \")) | .number] | unique | sort"); then
+              return 2
+            fi
+            printf '%s\n' "$filtered"
+          }
+
+          alert_issue_exists_after_create() {
+            local current count
+
+            if ! current=$(find_open_alerts "$wf"); then
+              return 2
+            fi
+            if ! count=$(printf '%s\n' "$current" | jq -r 'length'); then
+              return 2
+            fi
+            ((count > 0))
+          }
+
+          RECONCILE_COMMENT_ISSUE=""
+          RECONCILE_COMMENT_MARKER=""
+
+          comment_exists_after_create() {
+            local response count
+
+            if ! response=$(gh_retry api \
+              "repos/$OWNER/$REPONAME/issues/$RECONCILE_COMMENT_ISSUE/comments?per_page=100"); then
+              return 2
+            fi
+            if ! count=$(printf '%s\n' "$response" | \
+              jq -r --arg marker "$RECONCILE_COMMENT_MARKER" \
+              "[.[] | select(.body | contains(\$marker))] | length"); then
+              return 2
+            fi
+            ((count > 0))
+          }
+
+          close_issue_with_comment() {
+            local issue_number="$1"
+            local close_comment="$2"
+            local comment_marker="$3"
+
+            # Cerrar primero evita duplicar comentarios si una ejecución queda
+            # a medias: el siguiente run ya no volverá a listar este issue.
+            gh_retry api -X PATCH "repos/$OWNER/$REPONAME/issues/$issue_number" \
+              -f state="closed" >/dev/null
+            RECONCILE_COMMENT_ISSUE="$issue_number"
+            RECONCILE_COMMENT_MARKER="$comment_marker"
+            gh_retry --reconcile comment_exists_after_create api \
+              "repos/$OWNER/$REPONAME/issues/$issue_number/comments" \
+              -f body="$close_comment" >/dev/null
+          }
+
+          echo "Repo: $OWNER/$REPONAME | branch=$DEFAULT_BRANCH | MIN_FAILS=$MIN_FAILS | LOOKBACK=$LOOKBACK"
+
+          for wf in "${WORKFLOWS[@]}"; do
+            echo "---- $wf ----"
+
+            runs_response=$(gh_retry api \
+              "repos/$OWNER/$REPONAME/actions/workflows/$wf.yml/runs?per_page=100")
+            runs_json=$(printf '%s\n' "$runs_response" | jq -c \
+              '.workflow_runs | map({conclusion, status, created_at, id, head_branch, event})')
+
+            # gh recibe y devuelve JSON; jq recibe --arg. Mezclar --arg dentro
+            # de `gh api` hacía fallar la búsqueda y duplicaba el issue.
+            existing_issues=$(find_open_alerts "$wf")
+
+            decision_args=(
+              --default-branch "$DEFAULT_BRANCH"
+              --min-failures "$MIN_FAILS"
+              --lookback "$LOOKBACK"
+            )
+            existing_count=$(printf '%s\n' "$existing_issues" | jq -r 'length')
+            for ((index = 0; index < existing_count; index++)); do
+              issue_number=$(printf '%s\n' "$existing_issues" | \
+                jq -r --argjson index "$index" ".[\$index]")
+              decision_args+=(--existing-issue "$issue_number")
+            done
+            decision_json=$(printf '%s\n' "$runs_json" | \
+              python3 -m lucidfence.core.cron_watchdog "${decision_args[@]}")
+            action=$(printf '%s\n' "$decision_json" | jq -r '.action')
+            reason=$(printf '%s\n' "$decision_json" | jq -r '.reason')
+            consecutive_failures=$(printf '%s\n' "$decision_json" | \
+              jq -r '.consecutive_failures')
+
+            echo "  action=$action reason=$reason failures=$consecutive_failures issues=$existing_issues"
+
+            case "$action" in
+              open)
+                last_failure_id=$(printf '%s\n' "$decision_json" | jq -r '.latest_run_id')
+                last_failure_at=$(printf '%s\n' "$decision_json" | jq -r '.latest_created_at')
+                run_url="https://github.com/$OWNER/$REPONAME/actions/runs/$last_failure_id"
+                today=$(date -u +%Y-%m-%d)
+                title="🚨 cron-watchdog: $wf lleva $consecutive_failures fallos consecutivos ($today)"
+                printf -v body '## Alerta de meta-vigilancia (cron-watchdog)\n\nEl workflow de salud **%s** acumula **%s fallos consecutivos** confirmados (de los últimos %s runs analizados).\n\n- **Último run fallido:** [%s](%s) — %s UTC\n- **Impacto:** este componente vigila la salud operativa; si falla, el resto del monitoreo puede quedar ciego.\n- **Acción:** revisar el run y corregir la causa.\n\nEste issue fue creado por .github/workflows/cron-watchdog.yml y solo se auto-cierra después de un run completado correctamente.\n\nEtiqueta: **%s**.' \
+                  "$wf" "$consecutive_failures" "$LOOKBACK" \
+                  "$last_failure_id" "$run_url" "$last_failure_at" "$LABEL"
+                gh_retry --reconcile alert_issue_exists_after_create api \
+                  "repos/$OWNER/$REPONAME/issues" \
+                  -f title="$title" -f body="$body" -f "labels[]=$LABEL" >/dev/null
+                echo "  Issue abierto para $wf."
+                any_opened=1
+                ;;
+              reconcile)
+                primary_issue=$(printf '%s\n' "$decision_json" | jq -r '.primary_issue')
+                close_count=$(printf '%s\n' "$decision_json" | \
+                  jq -r '.issues_to_close | length')
+                for ((index = 0; index < close_count; index++)); do
+                  issue_number=$(printf '%s\n' "$decision_json" | \
+                    jq -r --argjson index "$index" ".issues_to_close[\$index]")
+                  comment_marker="<!-- cron-watchdog:duplicate:$wf:primary-$primary_issue -->"
+                  printf -v comment '%s\n\nAlerta duplicada consolidada en #%s; se mantiene un único issue operativo para %s.' \
+                    "$comment_marker" "$primary_issue" "$wf"
+                  close_issue_with_comment \
+                    "$issue_number" "$comment" "$comment_marker"
+                  echo "  Issue duplicado #$issue_number cerrado; permanece #$primary_issue."
+                  any_closed=1
+                done
+                ;;
+              close)
+                close_count=$(printf '%s\n' "$decision_json" | \
+                  jq -r '.issues_to_close | length')
+                if ((close_count == 0)); then
+                  echo "::error::El evaluador pidió cerrar sin issues abiertos."
+                  exit 1
+                fi
+                recovery_run_id=$(printf '%s\n' "$decision_json" | jq -r '.latest_run_id')
+                comment_marker="<!-- cron-watchdog:recovered:$wf:$recovery_run_id -->"
+                printf -v comment '%s\n\n✅ Recuperado: %s completó correctamente su run más reciente. Cerrando la alerta para devolver el canal a estado limpio.' \
+                  "$comment_marker" "$wf"
+                for ((index = 0; index < close_count; index++)); do
+                  issue_number=$(printf '%s\n' "$decision_json" | \
+                    jq -r --argjson index "$index" ".issues_to_close[\$index]")
+                  close_issue_with_comment \
+                    "$issue_number" "$comment" "$comment_marker"
+                  echo "  Issue #$issue_number cerrado tras recuperación confirmada."
+                  any_closed=1
+                done
+                ;;
+              keep)
+                echo "  Sin mutación: el estado existente sigue siendo correcto."
+                ;;
+              skip)
+                echo "  Estado indeterminado; no se abre ni se cierra ningún issue."
+                ;;
+              *)
+                echo "::error::Acción desconocida del evaluador: $action"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "Resumen: opened=$any_opened closed=$any_closed"
