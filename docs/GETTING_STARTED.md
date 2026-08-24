@@ -11,8 +11,10 @@ ni telemetría.
 
 ## 1. Qué necesitas
 
-- **Python 3.11+** (el producto es stdlib-first; sin frameworks web). O bien
-  **Docker** si prefieres no tocar Python.
+- **Python 3.11+ con `venv`** (el instalador crea `.venv` y no modifica el
+  Python del sistema). O bien **Docker** si prefieres no tocar Python.
+- `git` para clonar el repositorio. `curl` es opcional: si no existe, el
+  instalador verifica la salud con Python o desde el propio contenedor.
 - Opcional para datos reales: acceso a tu UEM (Applivery, Intune, Jamf, Fleet…)
   con un token de servicio. Sin él, LucidFence arranca en **modo simulación**
   con una flota de demo — suficiente para evaluarlo.
@@ -21,29 +23,55 @@ ni telemetría.
 
 ## 2. Instalar y arrancar
 
-```bash
-# opción A — script de instalación
-./install.sh
-lucidfence quickstart      # entorno → app → dashboard → fuente de datos (autoverificado)
+### Opción A — repositorio (macOS o Linux)
 
-# opción B — Docker (always-on en localhost:8765)
-docker compose up -d
+```bash
+git clone https://github.com/adrimg3196/lucidfence.git
+cd lucidfence
+
+# Usa Docker si está disponible; si no, arranca con Python 3.11+.
+# Solo termina con éxito cuando /api/health responde (timeout: 30 s).
+./install.sh
+# Alternativa explícita con Docker:
+# docker compose up -d --build
 ```
 
-`lucidfence quickstart` es el camino recomendado: comprueba el entorno, arranca
-la app, verifica que el dashboard responde en vivo y te dice —con la acción
-concreta— cómo conectar tu UEM real si falta algo.
+El script espera de forma acotada a que LucidFence responda y falla si el
+servicio no arranca. Ni el script ni Docker instalan un comando `lucidfence`
+global en el host. Si tienes Python 3.11+, puedes ejecutar el recorrido
+autoverificado desde el checkout:
+
+```bash
+python3 -m lucidfence.cli quickstart
+```
+
+### Opción B — Homebrew (macOS)
+
+```bash
+brew install adrimg3196/lucidfence/lucidfence
+lucidfence --version
+lucidfence
+lucidfence doctor
+```
+
+Homebrew sí instala el CLI. No instala `LucidFence.app`: el preview de escritorio
+para Apple Silicon es una descarga separada, documentada en
+[Desktop para macOS](operations/DESKTOP_APP.md).
+El tap puede quedar temporalmente por detrás de la release más reciente:
+comprueba `lucidfence --version` y contrástala con
+[GitHub Releases](https://github.com/adrimg3196/lucidfence/releases) antes de
+usar una función nueva.
 
 ## 3. Comprobar que funciona
 
 Deberías poder abrir el dashboard y ver una flota (real o de demo):
 
 ```bash
-# el server escucha aquí:
-curl -s http://localhost:8765/api/health      # -> {"status":"ok",...}
+# Comprobación manual opcional; el instalador ya hizo este mismo gate.
+curl -fsS http://127.0.0.1:8765/api/health
 ```
 
-- Dashboard: **http://localhost:8765** (SPA local que habla con `:8765`).
+- Dashboard: **http://127.0.0.1:8765** (SPA local que habla con `:8765`).
 - Si ves la flota de demo, el modo simulación funciona; conecta tu UEM cuando
   quieras datos reales.
 - Suite de humo (opcional, honesta): `python3 tests/run_tests.py`.
