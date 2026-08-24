@@ -122,10 +122,14 @@ def load_feed(path: str) -> int:
         app = (it.get("app") or it.get("product") or it.get("software") or "").strip().lower()
         if not app:
             continue
+        raw_score = it.get("score") or it.get("baseScore") or 0
+        # Trust the score when it exists; otherwise the severity string is
+        # unverifiable (no CVSS base) and must NOT be counted as critical/high.
+        severity = classify_cve_severity(it.get("severity"), raw_score)
         entry = {
             "id": it.get("id") or it.get("cve") or it.get("cveId") or "CVE-UNKNOWN",
-            "severity": (it.get("severity") or _score_to_sev(it.get("score") or it.get("baseScore")) or "medium").lower(),
-            "score": it.get("score") or it.get("baseScore") or 0,
+            "severity": severity,
+            "score": raw_score,
             "title": it.get("title") or it.get("description") or "",
             "epss": it.get("epss") or 0.0,
         }
@@ -146,6 +150,28 @@ def _score_to_sev(score) -> Optional[str]:
     if s >= 4.0:
         return "medium"
     return "low"
+
+
+def classify_cve_severity(severity, score) -> str:
+    """Return a *trustworthy* CVSS severity bucket for a CVE entry.
+
+    A CVE with no usable CVSS score (score missing, non-numeric, or <= 0)
+    CANNOT be trusted to a critical/high bucket: feeds that carry only a
+    severity *string* (e.g. NVD keywordSearch text match, no CPE/version)
+    would otherwise produce false attribution. Such entries are marked
+    ``"unknown"`` and must never be counted as critical/high.
+
+    When a real score is present we derive the bucket from the score itself
+    (never from the untrusted string), so the critical/high counts always
+    come from real CVSS. See roadmap #244/#246 and task t_6479d79a.
+    """
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        s = 0.0
+    if s > 0:
+        return _score_to_sev(s) or "unknown"
+    return "unknown"
 
 
 def _active_db() -> dict:
@@ -207,6 +233,11 @@ def enrich_apps(apps: Optional[list[dict]], db: Optional[dict] = None) -> list[d
         cves = list(db.get(_norm(name), []))
         a["cves"] = cves
         if cves:
+            for c in cves:
+                # Normalize every entry's severity to a score-derived bucket
+                # when a real CVSS score exists, else mark it "unknown" so it
+                # can never inflate critical/high counts (attribution integrity).
+                c["severity"] = classify_cve_severity(c.get("severity"), c.get("score"))
             sev_order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
             max_sev = max(cves, key=lambda c: sev_order.get((c.get("severity") or "low").lower(), 0))
             a["max_cve_severity"] = (max_sev.get("severity") or "low").lower()
@@ -228,11 +259,16 @@ def device_cve_summary(apps: list[dict]) -> dict:
     max_risk = max((a["cve_risk"] for a in enriched), default=0)
     critical = sum(1 for a in enriched if a["max_cve_severity"] == "critical")
     high = sum(1 for a in enriched if a["max_cve_severity"] == "high")
+    unknown = sum(
+        1 for a in enriched
+        if a["max_cve_severity"] in (None, "unknown")
+    )
     return {
         "apps_total": len(enriched),
         "vulnerable_apps": len(vuln_apps),
         "critical_cve_apps": critical,
         "high_cve_apps": high,
+        "unknown_cve_apps": unknown,
         "max_cve_risk": max_risk,
         "apps": enriched,
     }
