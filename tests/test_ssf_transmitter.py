@@ -484,6 +484,43 @@ def test_symlinked_key_path_migrates_target_without_replacing_link():
     assert public["kid"] == legacy["kid"]
 
 
+def test_dangling_symlinked_key_path_creates_target_without_replacing_link():
+    from types import SimpleNamespace
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    root = Path(tempfile.mkdtemp(prefix="ssf-dangling-symlink-"))
+    managed_dir = root / "managed"
+    configured_dir = root / "configured"
+    managed_dir.mkdir()
+    configured_dir.mkdir()
+    target_path = managed_dir / "admin-key.json"
+    link_path = configured_dir / "ssf_sign.json"
+    try:
+        link_path.symlink_to(target_path)
+    except (NotImplementedError, OSError) as exc:
+        raise SkipTest(f"symlinks unavailable: {exc}") from exc
+
+    class _StubJWT:
+        class PyJWK:
+            @staticmethod
+            def from_dict(data):
+                return SimpleNamespace(key_id=data["kid"])
+
+    real_ensure_jwt = keys_module._ensure_jwt
+    keys_module._ensure_jwt = lambda: _StubJWT
+    try:
+        loaded = load_signing_jwk(link_path)
+    finally:
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    assert loaded.key_id == "lucidfence-ssf-es256-1"
+    assert link_path.is_symlink()
+    assert link_path.resolve() == target_path.resolve()
+    assert target_path.is_file()
+    assert (configured_dir / "ssf_jwks.json").is_file()
+
+
 def test_native_acl_blocks_replace_when_it_cannot_be_verified():
     import json
     from types import SimpleNamespace
@@ -529,6 +566,75 @@ def test_native_acl_blocks_replace_when_it_cannot_be_verified():
     real_ensure_jwt = keys_module._ensure_jwt
     keys_module.sys = SimpleNamespace(platform="darwin")
     keys_module.subprocess = _NativeACLSubprocess
+    keys_module._ensure_jwt = lambda: _StubJWT
+    try:
+        try:
+            load_signing_jwk(key_path)
+        except PermissionError as exc:
+            assert "native ACL" in str(exc)
+        else:
+            raise AssertionError("migration replaced a native-ACL-protected key")
+    finally:
+        if real_sys is missing:
+            del keys_module.sys
+        else:
+            keys_module.sys = real_sys
+        if real_subprocess is missing:
+            del keys_module.subprocess
+        else:
+            keys_module.subprocess = real_subprocess
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    assert key_path.read_bytes() == private_before
+    assert jwks_path.read_bytes() == public_before
+    assert set(key_path.parent.iterdir()) == {key_path, jwks_path}
+
+
+def test_native_acl_entries_block_replace_when_mode_marker_is_xattr():
+    import json
+    from types import SimpleNamespace
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    key_path = _temp_key()
+    jwks_path = key_path.parent / "ssf_jwks.json"
+    legacy = {
+        "kty": "EC",
+        "crv": "P-256",
+        "d": "AQ",
+        "x": "Ag",
+        "y": "Aw",
+        "kid": "native-acl-with-xattr-p256",
+        "alg": "ES256",
+        "use": "sig",
+    }
+    key_path.write_text(json.dumps(legacy), encoding="utf-8")
+    jwks_path.write_text('{"sentinel": true}', encoding="utf-8")
+    private_before = key_path.read_bytes()
+    public_before = jwks_path.read_bytes()
+
+    class _StubJWT:
+        class PyJWK:
+            @staticmethod
+            def from_dict(data):
+                return data
+
+    class _NativeACLAndXattrSubprocess:
+        @staticmethod
+        def run(*_args, **_kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout="-rw-r-----@ 1 root wheel 1 Aug 24 12:00 protected-key\n"
+                " 0: user:receiver allow read\n",
+                stderr="",
+            )
+
+    missing = object()
+    real_sys = getattr(keys_module, "sys", missing)
+    real_subprocess = getattr(keys_module, "subprocess", missing)
+    real_ensure_jwt = keys_module._ensure_jwt
+    keys_module.sys = SimpleNamespace(platform="darwin")
+    keys_module.subprocess = _NativeACLAndXattrSubprocess
     keys_module._ensure_jwt = lambda: _StubJWT
     try:
         try:

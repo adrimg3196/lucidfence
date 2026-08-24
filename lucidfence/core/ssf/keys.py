@@ -65,7 +65,7 @@ def load_signing_jwk(path: Path | None = None) -> Any:
     # Administrator-managed symlinks must keep pointing at the managed key.
     # Atomic replacement therefore targets the referent, never the link inode.
     p = (
-        requested_path.resolve(strict=True)
+        requested_path.resolve(strict=False)
         if requested_path.is_symlink()
         else requested_path
     )
@@ -179,7 +179,7 @@ def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
     """Atomically replace text after fsyncing a same-directory temporary."""
     if path.is_symlink():
-        path = path.resolve(strict=True)
+        path = path.resolve(strict=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         destination_stat = path.stat()
@@ -263,7 +263,13 @@ def _reject_unverifiable_native_acl(path: Path) -> None:
     if result.returncode != 0 or not lines or not lines[0].split():
         raise PermissionError(f"cannot verify native ACL before replacing {path}")
     mode = lines[0].split(maxsplit=1)[0]
-    if "+" in mode:
+    # macOS gives the xattr marker ("@") precedence over the ACL marker
+    # ("+"). With ``-e``, native ACL entries still follow the listing line,
+    # so inspect those entries instead of trusting the mode token alone.
+    has_acl_entry = any(
+        line.lstrip().partition(":")[0].isdigit() for line in lines[1:]
+    )
+    if "+" in mode or has_acl_entry:
         raise PermissionError(
             f"cannot safely replace native ACL-protected file {path}"
         )
