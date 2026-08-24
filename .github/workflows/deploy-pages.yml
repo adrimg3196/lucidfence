@@ -22,14 +22,14 @@ jobs:
   bundle:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Construir bundle estático owner-neutral
         run: python3 scripts/build_web_bundle.py
       - name: Verificar checksums
         working-directory: dist/lucidfence-web
         run: sha256sum -c SHA256SUMS
       - name: Publicar artefacto descargable, no hosting
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lucidfence-web
           path: dist/lucidfence-web.zip

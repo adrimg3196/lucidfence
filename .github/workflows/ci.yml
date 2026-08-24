@@ -15,10 +15,10 @@ jobs:
       matrix:
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -38,10 +38,10 @@ jobs:
     name: Verify (versión + enlaces de docs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # provenance check needs full history to prove commit ancestry
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
@@ -58,8 +58,8 @@ jobs:
     # clases (F/E9) y mismo .ruff.toml del repo. Falla el CI si ruff encuentra
     # algo.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install ruff
@@ -71,12 +71,12 @@ jobs:
     name: Frontend syntax check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Syntax check app.js
         run: |
@@ -92,15 +92,15 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: python3 -m pip install pip-audit
       - run: pip-audit -r requirements.lock
       - name: Generate CycloneDX SBOM
         run: python3 scripts/generate_sbom.py --out sbom.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: lucidfence-sbom
           path: sbom.cdx.json
@@ -110,7 +110,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # data/cloud_state.json ya NO vive en main (ignorado): lo publica engine-cron
@@ -133,11 +133,11 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
@@ -152,8 +152,8 @@ jobs:
     name: Runtime validation (claims en vivo)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install dependencies
@@ -170,7 +170,7 @@ jobs:
     # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Lint de workflows (script único, mismo que en local)
         # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
         # falta alguno: sin copias inline y sin falsos verdes por herramienta
