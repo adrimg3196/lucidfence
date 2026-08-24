@@ -81,6 +81,14 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Mover [Unreleased] -> [version] en el CHANGELOG ANTES de leerlo, para
+      # que la release nunca caiga en el fallback "Release vX.Y.Z" vacío (visto
+      # en v1.5.0). El script es idempotente: si la sección ya existe, no toca.
+      # Se escribe en disco para que el release quede versionado (t_9e6615ad).
+      - name: Mover [Unreleased] -> [version] en CHANGELOG
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 scripts/move_changelog_unreleased.py --version "${{ steps.ver.outputs.version }}"
+
       - name: Leer changelog
         if: steps.guard.outputs.skip == 'false'
         id: changelog
@@ -94,9 +102,12 @@ jobs:
             found && /^## \[/ { found=0 }
             found { print }
           ' CHANGELOG.md)
+          # El paso "Mover [Unreleased] -> [version]" garantiza que la sección
+          # existe; si no la hay, es un fallo de automatización, no un fallback
+          # silencioso. Antes esto producía el body vacío "Release vX.Y.Z".
           if [ -z "$section" ]; then
-            echo "warning: no se encontró sección en CHANGELOG.md para v$tag"
-            section="Release v$tag"
+            echo "::error::No se encontró sección [${tag}] en CHANGELOG.md tras mover [Unreleased]. ¿Se corrió move_changelog_unreleased?"
+            exit 1
           fi
           {
             echo "section<<EOF"
