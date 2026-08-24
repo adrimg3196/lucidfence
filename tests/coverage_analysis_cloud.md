@@ -1,7 +1,7 @@
 # Coverage Analysis — LucidFence Cloud (multi-tenant)
 
 **Scope:** `lucidfence/core/cloud_publisher.py`, `scripts/saas_api_op.py`, `static/cloud.html`, `engine-cron.yml`
-**Runner:** `tests/run_tests.py` — HONESTO para tests estilo `test_*()` (99 pass / 6 fail, exit=1; fallos no ocultos). Gap residual: `test_it_admin_features.py` corre suite inline a nivel módulo y no hace `raise SystemExit`, así que sus `check()` fallidos NO entran en el tally ni en `sys.exit(1)`. No afecta a las 4 áreas de abajo (0 tests las cubren).
+**Runner:** `tests/run_tests.py` — HONESTO. `test_it_admin_features.py` corre suite inline a nivel módulo y finaliza con `raise SystemExit(1 if failures else 0)` (línea 133, commit `950c1cc`); `run_tests.py` lo captura en el bucle de descubrimiento (líneas 119-148) y lo suma al tally → `sys.exit(1)` cuando hay fallos. Verificado 2026-08-24 con harness behavioral (stub HTTP en puerto efímero: los `check()` fallan y el módulo sale vía `SystemExit(1)`, que el runner registra como 1 failed). No afecta a las 4 áreas de abajo (0 tests las cubren).
 
 ## Veredicto: **NEEDS_TESTS**
 
