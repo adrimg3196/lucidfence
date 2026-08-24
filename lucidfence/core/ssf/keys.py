@@ -12,7 +12,12 @@ can verify, again with no mandatory network endpoint.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import os
+import stat
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +37,9 @@ DEFAULT_JWKS_PATH = DEFAULT_KEYS_DIR / "ssf_jwks.json"
 _KID = "lucidfence-ssf-es256-1"
 _P256_COMPONENT_BYTES = 32
 _P256_JWK_FIELDS = ("d", "x", "y")
+_BASE64URL_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+)
 
 
 def _ensure_jwt() -> Any:
@@ -62,11 +70,15 @@ def load_signing_jwk(path: Path | None = None) -> Any:
         if changed:
             # Migrate legacy short components in place without rotating the key.
             # Parse first so malformed or inconsistent material is never written.
-            p.write_text(
-                json.dumps(normalized, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            # Commit the public file first and the private file last. If the final
+            # replace fails, the still-legacy private file makes the next load
+            # retry this idempotent migration.
             _write_public_jwks(normalized, p.parent / "ssf_jwks.json")
+            _atomic_write_text(
+                p,
+                json.dumps(normalized, indent=2, ensure_ascii=False),
+                default_mode=0o600,
+            )
         return parsed
 
     # First run: generate EC P-256 locally (no network).
@@ -85,10 +97,14 @@ def load_signing_jwk(path: Path | None = None) -> Any:
         "alg": SIGNING_ALG,
         "use": "sig",
     }
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(jwk, indent=2, ensure_ascii=False), encoding="utf-8")
+    parsed = jwt.PyJWK.from_dict(jwk)
     _write_public_jwks(jwk, p.parent / "ssf_jwks.json")
-    return jwt.PyJWK.from_dict(jwk)
+    _atomic_write_text(
+        p,
+        json.dumps(jwk, indent=2, ensure_ascii=False),
+        default_mode=0o600,
+    )
+    return parsed
 
 
 def _b64url_int(value: int) -> str:
@@ -96,9 +112,36 @@ def _b64url_int(value: int) -> str:
     # the length from bit_length() drops leading zero octets and can make a
     # valid EC key intermittently invalid when parsed as JWK.
     raw = value.to_bytes(_P256_COMPONENT_BYTES, "big")
-    import base64
-
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _decode_p256_component(field: str, encoded: str) -> bytes:
+    """Decode one canonical, unpadded Base64url P-256 JWK component."""
+    if not encoded or any(char not in _BASE64URL_ALPHABET for char in encoded):
+        raise ValueError(
+            f"invalid unpadded base64url in P-256 JWK component {field!r}"
+        )
+
+    try:
+        raw = base64.b64decode(
+            encoded + "=" * (-len(encoded) % 4),
+            altchars=b"-_",
+            validate=True,
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(
+            f"invalid unpadded base64url in P-256 JWK component {field!r}"
+        ) from exc
+
+    # Reject alternative encodings with non-zero discarded bits. JWK uses the
+    # canonical unpadded Base64url representation, so decoding successfully is
+    # necessary but not sufficient.
+    canonical = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    if canonical != encoded:
+        raise ValueError(
+            f"invalid unpadded base64url in P-256 JWK component {field!r}"
+        )
+    return raw
 
 
 def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -106,15 +149,13 @@ def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if data.get("kty") != "EC" or data.get("crv") != "P-256":
         return data, False
 
-    import base64
-
     normalized = dict(data)
     changed = False
     for field in _P256_JWK_FIELDS:
         encoded = normalized.get(field)
         if not isinstance(encoded, str):
             continue
-        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        raw = _decode_p256_component(field, encoded)
         if len(raw) < _P256_COMPONENT_BYTES:
             padded = raw.rjust(_P256_COMPONENT_BYTES, b"\x00")
             normalized[field] = (
@@ -124,8 +165,44 @@ def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     return normalized, changed
 
 
+def _atomic_write_text(path: Path, text: str, *, default_mode: int) -> None:
+    """Atomically replace text after fsyncing a same-directory temporary."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target_mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        target_mode = default_mode
+
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary_path, target_mode)
+        os.replace(temporary_path, path)
+    except BaseException:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
+        raise
+
+
 def _write_public_jwks(private_jwk: dict, jwks_path: Path) -> None:
     """Persist the public JWK (no 'd') so a Receiver can verify offline."""
     pub = {k: v for k, v in private_jwk.items() if k != "d"}
     doc = {"keys": [pub]}
-    jwks_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8")
+    _atomic_write_text(
+        jwks_path,
+        json.dumps(doc, indent=2, ensure_ascii=False),
+        default_mode=0o644,
+    )

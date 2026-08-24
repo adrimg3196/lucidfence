@@ -26,6 +26,7 @@ from lucidfence.core.ssf import (  # noqa: E402
 from lucidfence.core.ssf.keys import (  # noqa: E402
     SIGNING_ALG,
     _b64url_int,
+    _normalize_p256_jwk,
     load_signing_jwk,
 )
 from lucidfence.core.oidc import ASYMMETRIC_ALGORITHMS  # noqa: E402
@@ -107,6 +108,206 @@ def test_existing_short_p256_jwk_is_normalized_without_key_rotation():
     assert "d" not in public
     assert public["x"] == migrated["x"]
     assert public["y"] == migrated["y"]
+
+
+def test_all_legacy_short_p256_components_are_left_padded():
+    import base64
+
+    normalized, changed = _normalize_p256_jwk(
+        {
+            "kty": "EC",
+            "crv": "P-256",
+            "d": "AQ",
+            "x": "Ag",
+            "y": "Aw",
+        }
+    )
+
+    assert changed is True
+    for field, final_byte in (("d", 1), ("x", 2), ("y", 3)):
+        encoded = normalized[field]
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        assert raw == (b"\x00" * 31) + bytes([final_byte]), field
+
+
+def test_malformed_p256_base64url_is_rejected_before_parsing():
+    malformed_values = ("!!!!AQ", "!!", "AQ==", "A Q", "", "AB")
+
+    for malformed in malformed_values:
+        try:
+            _normalize_p256_jwk(
+                {
+                    "kty": "EC",
+                    "crv": "P-256",
+                    "d": malformed,
+                    "x": _b64url_int(2),
+                    "y": _b64url_int(3),
+                }
+            )
+        except ValueError as exc:
+            assert "invalid unpadded base64url" in str(exc)
+            assert "'d'" in str(exc)
+        else:
+            raise AssertionError(f"malformed base64url accepted: {malformed!r}")
+
+
+def test_malformed_persisted_jwk_leaves_private_and_public_files_unchanged():
+    import json
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    key_path = _temp_key()
+    jwks_path = key_path.parent / "ssf_jwks.json"
+    malformed = {
+        "kty": "EC",
+        "crv": "P-256",
+        # The old permissive decoder silently discarded "!" and read this as AQ.
+        "d": "!!!!AQ",
+        "x": _b64url_int(2),
+        "y": _b64url_int(3),
+        "kid": "malformed-p256",
+        "alg": "ES256",
+        "use": "sig",
+    }
+    key_path.write_text(json.dumps(malformed), encoding="utf-8")
+    jwks_path.write_text('{"sentinel": true}', encoding="utf-8")
+    private_before = key_path.read_bytes()
+    public_before = jwks_path.read_bytes()
+
+    class _MustNotParse:
+        class PyJWK:
+            @staticmethod
+            def from_dict(_data):
+                raise AssertionError("malformed JWK reached PyJWK parsing")
+
+    real_ensure_jwt = keys_module._ensure_jwt
+    keys_module._ensure_jwt = lambda: _MustNotParse
+    try:
+        try:
+            load_signing_jwk(key_path)
+        except ValueError as exc:
+            assert "invalid unpadded base64url" in str(exc)
+        else:
+            raise AssertionError("malformed persisted JWK was accepted")
+    finally:
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    assert key_path.read_bytes() == private_before
+    assert jwks_path.read_bytes() == public_before
+
+
+def test_persisted_jwk_migration_is_atomic_and_retriable():
+    import base64
+    import json
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    key_path = _temp_key()
+    jwks_path = key_path.parent / "ssf_jwks.json"
+    legacy = {
+        "kty": "EC",
+        "crv": "P-256",
+        "d": "AQ",
+        "x": "Ag",
+        "y": "Aw",
+        "kid": "legacy-short-p256",
+        "alg": "ES256",
+        "use": "sig",
+    }
+    key_path.write_text(json.dumps(legacy), encoding="utf-8")
+    jwks_path.write_text('{"sentinel": true}', encoding="utf-8")
+    private_before = key_path.read_bytes()
+
+    class _StubJWT:
+        class PyJWK:
+            @staticmethod
+            def from_dict(data):
+                return data
+
+    real_ensure_jwt = keys_module._ensure_jwt
+    real_os = keys_module.os
+
+    def fail_private_replace(source, destination):
+        if Path(destination) == key_path:
+            raise OSError("simulated private-key replace failure")
+        return real_os.replace(source, destination)
+
+    class _FailPrivateReplaceOS:
+        chmod = staticmethod(real_os.chmod)
+        fsync = staticmethod(real_os.fsync)
+        replace = staticmethod(fail_private_replace)
+
+    keys_module._ensure_jwt = lambda: _StubJWT
+    try:
+        keys_module.os = _FailPrivateReplaceOS
+        try:
+            load_signing_jwk(key_path)
+        except OSError as exc:
+            assert "simulated private-key replace failure" in str(exc)
+        else:
+            raise AssertionError("migration ignored the private-key write failure")
+        finally:
+            keys_module.os = real_os
+
+        # Public data commits first, while the private migration remains pending.
+        assert key_path.read_bytes() == private_before
+        public_after_failure = json.loads(jwks_path.read_text(encoding="utf-8"))
+        assert "d" not in public_after_failure["keys"][0]
+        assert set(key_path.parent.iterdir()) == {key_path, jwks_path}
+
+        # Because the private file is still legacy, the next load retries safely.
+        loaded = load_signing_jwk(key_path)
+        assert loaded["kid"] == legacy["kid"]
+    finally:
+        keys_module.os = real_os
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    migrated = json.loads(key_path.read_text(encoding="utf-8"))
+    public = json.loads(jwks_path.read_text(encoding="utf-8"))["keys"][0]
+    for field in ("d", "x", "y"):
+        raw = base64.urlsafe_b64decode(
+            migrated[field] + "=" * (-len(migrated[field]) % 4)
+        )
+        assert len(raw) == 32, field
+    assert public == {key: value for key, value in migrated.items() if key != "d"}
+
+
+def test_key_file_permissions_are_safe_and_preserved():
+    if os.name != "posix":
+        return
+
+    import json
+    import stat
+
+    from lucidfence.core.ssf import keys as keys_module
+
+    key_path = _temp_key()
+    jwks_path = key_path.parent / "ssf_jwks.json"
+
+    class _StubJWT:
+        class PyJWK:
+            @staticmethod
+            def from_dict(data):
+                return data
+
+    real_ensure_jwt = keys_module._ensure_jwt
+    keys_module._ensure_jwt = lambda: _StubJWT
+    try:
+        generated = load_signing_jwk(key_path)
+        assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(jwks_path.stat().st_mode) == 0o644
+
+        # Force a legacy migration and verify both pre-existing modes survive.
+        generated["d"] = "AQ"
+        key_path.write_text(json.dumps(generated), encoding="utf-8")
+        key_path.chmod(0o640)
+        jwks_path.chmod(0o664)
+        load_signing_jwk(key_path)
+    finally:
+        keys_module._ensure_jwt = real_ensure_jwt
+
+    assert stat.S_IMODE(key_path.stat().st_mode) == 0o640
+    assert stat.S_IMODE(jwks_path.stat().st_mode) == 0o664
 
 
 def test_build_event_shape():
