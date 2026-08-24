@@ -1464,6 +1464,9 @@ def test_guard_invalidates_both_sides_of_live_overlap_and_stale_success():
 
 
 def test_workflows_separate_unprivileged_evidence_from_trusted_official_attestation():
+    tools_lock = (ROOT / "config" / "autonomy-tools.lock").read_text(
+        encoding="utf-8"
+    )
     ci_workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"
     )
@@ -1550,6 +1553,10 @@ def test_workflows_separate_unprivileged_evidence_from_trusted_official_attestat
     assert "execution-marker-${{ matrix.kind }}" not in signer_workflow
     assert "Clone control plane from exact public PR base" in producer_workflow
     assert "config/autonomy-tools.lock" in producer_workflow
+    assert (
+        "playwright==1.62.0 "
+        "--hash=sha256:ba33bae6a13b3d9d354c751cb618af357d20fe1d57767cbcce52079bbef17ad3"
+    ) in tools_lock
     assert "--isolated download" in producer_workflow
     assert "--no-index --find-links" in producer_workflow
     assert "--only-binary=:all:" in producer_workflow
