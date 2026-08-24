@@ -24,12 +24,10 @@ Solo usa la stdlib de Python 3.
 """
 
 import argparse
-import os
 import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import urlparse
 
 REQUIRED_META = [
     ("title", re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)),
@@ -129,7 +127,7 @@ def main() -> int:
     static_dir = next((c for c in candidates if c.is_dir()), Path(args.static_dir))
 
     problems: list[str] = []
-    print(f"== pages_seo_check.py ==")
+    print("== pages_seo_check.py ==")
     print(f"static-dir: {static_dir.resolve()}")
     print(f"site-root : {args.site_root}")
     print()
