@@ -13,6 +13,7 @@ on:
     branches: [main]
     paths:
       - "static/**"
+      - "scripts/pages_seo_check.py"
       - ".github/workflows/publish-pages.yml"
   workflow_dispatch:
 
@@ -40,7 +41,13 @@ jobs:
           test -f _site/index.html
           # Guardarraíl del P0 #110 también en el artefacto publicado:
           # ninguna cadena de prueba social fabricada puede llegar a Pages.
-          ! grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site
+          if grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site; then
+            echo "::error::prueba social fabricada detectada en el artefacto"
+            exit 1
+          fi
+          # Gate bloqueante: publica solo el sitemap de páginas intencionalmente
+          # públicas y conserva las URL portables para project Pages/self-hosting.
+          python3 scripts/pages_seo_check.py --static-dir _site
       - uses: actions/configure-pages@v5
         with:
           enablement: true
