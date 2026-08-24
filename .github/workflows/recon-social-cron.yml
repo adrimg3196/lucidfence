@@ -44,7 +44,7 @@ jobs:
         continue-on-error: true
         run: |
           set -uo pipefail
-          python3 scripts/recon_repos.py > data/recon/repos_${GITHUB_RUN_ID}.log 2>&1 || true
+          python3 scripts/recon_repos.py > "data/recon/repos_${GITHUB_RUN_ID}.log" 2>&1 || true
           echo "exit_repos=$?" >> "$GITHUB_OUTPUT"
 
       - name: Recon social (X/Reddit/YouTube)
@@ -52,13 +52,12 @@ jobs:
         continue-on-error: true
         run: |
           set -uo pipefail
-          python3 scripts/recon_social.py > data/recon/social_${GITHUB_RUN_ID}.log 2>&1 || true
+          python3 scripts/recon_social.py > "data/recon/social_${GITHUB_RUN_ID}.log" 2>&1 || true
           echo "exit_social=$?" >> "$GITHUB_OUTPUT"
 
       - name: Persistir resultados + estado unavailable explícito
         run: |
           mkdir -p data/recon
-          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # Marcar canales que dependen de binarios externos ausentes.
           UNAVAILABLE=""
           command -v opencli >/dev/null 2>&1 || UNAVAILABLE="${UNAVAILABLE} opencli"
