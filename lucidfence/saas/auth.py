@@ -2,7 +2,8 @@
 """Local authentication, sessions and RBAC for the LucidFence SaaS.
 
 100% local, no external identity provider:
-- Passwords hashed with scrypt (salt + n + r + p), stored per-user as JSON.
+- Passwords hashed with PBKDF2-HMAC-SHA256 at >= 600k iterations (OWASP-aligned),
+  stored per-user as a self-describing string `pbkdf2_sha256$<iters>$<salt-hex>$<hash-hex>`.
 - Sessions are random tokens stored server-side with expiry, returned to the
   client as an httpOnly cookie by the HTTP layer.
 - RBAC: each user has a role per organization. Capability checks enforce what
@@ -110,25 +111,78 @@ class User:
         return self.org_roles.get(org_id)
 
 
-def _hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+# --- Password KDF (PBKDF2-HMAC-SHA256) -------------------------------------
+# OWASP-aligned work factor. 600k iterations on SHA-256 is in line with current
+# OWASP guidance (>= 600k for PBKDF2-HMAC-SHA256). Stored hashes are
+# self-describing: `pbkdf2_sha256$<iters>$<salt-hex>$<hash-hex>`, so the work
+# factor can be raised later without locking out existing users.
+_KDF_ITERS = 600_000
+_KDF_PRF = "sha256"
+_LEGACY_ITERS = 100_000  # migration floor: accept pre-2026-08 hashes, rehash on next login
+
+
+def _pbkdf2(password: str, salt: bytes, iters: int) -> bytes:
+    return hashlib.pbkdf2_hmac(_KDF_PRF, password.encode("utf-8"), salt, iters, 64)
+
+
+def _hash_password_new(password: str, salt: Optional[bytes] = None) -> str:
     if salt is None:
-        salt = os.urandom(16).hex()
-    # stdlib PBKDF2-HMAC-SHA256 (100k rounds). Standard, audited KDF.
-    # (Replaces a hand-rolled HMAC loop — same on-disk format: pw_hash.hex+pw_salt.)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
-                                bytes.fromhex(salt), 100000, 64)
-    return dk.hex(), salt
+        salt = os.urandom(16)
+    if not isinstance(salt, (bytes, bytearray)):
+        raise TypeError("salt must be bytes")
+    dk = _pbkdf2(password, salt, _KDF_ITERS)
+    return f"pbkdf2_sha256${_KDF_ITERS}${bytes(salt).hex()}${dk.hex()}"
 
 
-def verify_password(password: str, pw_hash: str, pw_salt: str) -> bool:
-    dk, _ = _hash_password(password, pw_salt)
-    return hmac.compare_digest(dk, pw_hash)
+def _parse_stored(stored: str) -> Optional[tuple[str, int, bytes, bytes]]:
+    """Parse a self-describing hash. Returns (prf, iters, salt, dk) or None."""
+    parts = stored.split("$")
+    if len(parts) != 4 or parts[0] != "pbkdf2_sha256":
+        return None
+    try:
+        iters = int(parts[1])
+        salt = bytes.fromhex(parts[2])
+        dk = bytes.fromhex(parts[3])
+    except ValueError:
+        return None
+    if not (16 <= len(salt) <= 64) or not dk:
+        return None
+    return _KDF_PRF, iters, salt, dk
+
+
+def verify_password(password: str, pw_hash: str, pw_salt: str) -> tuple[bool, bool]:
+    """Returns (ok, needs_rehash).
+
+    `pw_salt` is kept for backwards compatibility with the legacy <100k format,
+    where the salt and hash were stored as separate JSON fields. A legacy hash is
+    verified with the legacy derivation (100k) and flagged for rehash so the
+    caller can transparently upgrade it on the next successful login.
+    """
+    parsed = _parse_stored(pw_hash)
+    if parsed is not None:
+        _prf, iters, salt, expected = parsed
+        got = _pbkdf2(password, salt, iters)
+        ok = hmac.compare_digest(got, expected)
+        # Rehash when the stored work factor is below the current floor.
+        needs_rehash = ok and iters < _KDF_ITERS
+        return ok, needs_rehash
+    # Legacy format: pw_hash.hex + pw_salt (100k rounds, no iteration stored).
+    if pw_salt:
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
+                                bytes.fromhex(pw_salt), _LEGACY_ITERS, 64)
+        ok = hmac.compare_digest(dk.hex(), pw_hash)
+        return ok, ok  # legacy -> always rehash on success
+    return False, False
 
 
 # Hash dummy precomputado: iguala el coste PBKDF2 cuando el email no existe,
 # eliminando el oráculo de timing de enumeración de usuarios.
-_DUMMY_SALT = "00" * 16
-_DUMMY_HASH, _ = _hash_password("lucidfence-dummy-password", _DUMMY_SALT)
+_DUMMY_HASH = _hash_password_new("lucidfence-dummy-password")
+# _DUMMY_SALT is unused under the new self-describing format (salt lives inside the
+# stored hash), but kept as the empty-string pw_salt slot for the verify() call in
+# authenticate() — which only matters for the legacy branch; the dummy is always the
+# new format so it returns (ok, False) there.
+_DUMMY_SALT = ""
 
 
 def _login_max_fails() -> int:
@@ -230,10 +284,10 @@ class AuthStore:
                 raise ValueError("El email ya está registrado")
             if role not in ROLE_CAPS:
                 raise ValueError(f"Rol inválido: {role}")
-            pw_hash, salt = _hash_password(password)
+            pw_hash = _hash_password_new(password)
             user = User(
                 id=f"usr_{uuid.uuid4().hex[:10]}",
-                email=email, name=name, pw_hash=pw_hash, pw_salt=salt,
+                email=email, name=name, pw_hash=pw_hash, pw_salt="",
                 org_roles={org_id: role}, created_at=_now(),
             )
             self._users[user.id] = user
@@ -315,10 +369,16 @@ class AuthStore:
             verify_password(password, _DUMMY_HASH, _DUMMY_SALT)
             self._record_login_failure(key)
             return None
-        ok = verify_password(password, u.pw_hash, u.pw_salt)
+        ok, needs_rehash = verify_password(password, u.pw_hash, u.pw_salt)
         if locked:
             return None
         if ok:
+            # Transparent KDF upgrade: legacy/low-iteration hashes are silently
+            # re-hashed at the current work factor on the next successful login.
+            if needs_rehash:
+                u.pw_hash = _hash_password_new(password)
+                u.pw_salt = ""
+                self._save_users()
             with self._lock:
                 self._failed_logins.pop(key, None)
             return u

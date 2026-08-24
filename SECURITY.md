@@ -20,7 +20,19 @@ This policy covers the code and infrastructure in this repository: the Python en
 
 ## Public key
 
-TODO: add maintainer PGP key / SOTD link when the project is ready for external reporting.
+LucidFence does not currently publish a PGP key for encrypted reports. Use either
+channel below instead — both are monitored and satisfy responsible disclosure:
+
+- **GitHub Security Advisory (preferred):** open a private vulnerability report via
+  the "Report a security vulnerability" button on this repo
+  (https://github.com/adrimg3196/lucidfence/security/advisories/new). This stays
+  end-to-end private until we publish a fix.
+- **Direct contact:** DM `@adrimg3196` on GitHub
+  (https://github.com/adrimg3196) with the subject "LucidFence security report".
+  Expect an acknowledgement within 5 business days.
+
+If you need PGP for a high-sensitivity report, ask via either channel above and a
+maintainer will provide a key or a mutually agreed secure channel.
 
 ## Security boundaries
 
@@ -109,4 +121,6 @@ Regression coverage: `tests/test_egress_allowlist.py`.
 
 ## Contact
 
-TODO: add maintainer contact (email or DM channel) when the project is ready for external reporting.
+Report security issues to **`@adrimg3196` on GitHub** (DM or the Security Advisory
+form linked in the Public key section above). Do not open a public issue for the
+vulnerability until we've confirmed it and published a fix.

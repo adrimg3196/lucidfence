@@ -724,13 +724,11 @@ def _set_cookie(handler, name: str, value: str, max_age: int = 60 * 60 * 24 * 7)
     lst = getattr(handler, "_set_cookies", None)
     if lst is None:
         lst = handler._set_cookies = []
-    secure = ""
-    try:
-        proto = (handler.headers.get("X-Forwarded-Proto") or "").lower()
-        if proto == "https" or os.environ.get("LUCIDFENCE_TLS") == "1":
-            secure = "Secure; "
-    except Exception:
-        secure = ""
+    # `Secure` is ALWAYS set. Browsers treat 127.0.0.1/localhost as a secure
+    # context, so the local SaaS on :8765 keeps working; any non-loopback
+    # deployment that is NOT behind TLS can no longer leak the session cookie
+    # in cleartext (SOC finding #11).
+    secure = "Secure; "
     expires = formatdate(time.time() + max_age, usegmt=True)
     lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Strict; Max-Age={max_age}; Expires={expires}")
 
@@ -739,15 +737,16 @@ def _clear_cookie(handler, name: str):
     lst = getattr(handler, "_set_cookies", None)
     if lst is None:
         lst = handler._set_cookies = []
-    lst.append(f"{name}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
+    lst.append(f"{name}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
 
 
 def _set_oidc_cookie(handler, name: str, value: str, max_age: int):
-    """Host-only OIDC cookie. Proxy headers are intentionally not trusted."""
+    """Host-only OIDC cookie. Proxy headers are intentionally not trusted.
+    `Secure` is always set (see _set_cookie)."""
     lst = getattr(handler, "_set_cookies", None)
     if lst is None:
         lst = handler._set_cookies = []
-    secure = "Secure; " if os.environ.get("LUCIDFENCE_TLS") == "1" else ""
+    secure = "Secure; "
     expires = formatdate(time.time() + max_age, usegmt=True)
     lst.append(f"{name}={value}; Path=/; HttpOnly; {secure}SameSite=Lax; Max-Age={max_age}; Expires={expires}")
 
@@ -945,6 +944,19 @@ def _log_event(event: str, **fields) -> None:
     print(json.dumps(record, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
+def _is_tls(handler) -> bool:
+    """True when the request arrived over TLS (forwarded proto) or the server is
+    configured for TLS (LUCIDFENCE_TLS=1). Used to gate HSTS so plaintext
+    loopback dev stays usable and HSTS is never pinned on a bare http origin."""
+    try:
+        proto = (handler.headers.get("X-Forwarded-Proto") or "").lower()
+        if proto == "https":
+            return True
+    except Exception:
+        pass
+    return os.environ.get("LUCIDFENCE_TLS") == "1"
+
+
 def _send_json(handler, obj, code=200):
     body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
     handler.send_response(code)
@@ -954,6 +966,9 @@ def _send_json(handler, obj, code=200):
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("X-Request-ID", _request_id(handler))
+    if _is_tls(handler):
+        handler.send_header("Strict-Transport-Security",
+                            "max-age=31536000; includeSubDomains")
     api_version = getattr(handler, "_api_version", "")
     if api_version:
         handler.send_header("X-API-Version", api_version)
@@ -999,8 +1014,13 @@ def _send_file(handler, path: Path, content_type: str):
     handler.send_header("X-Frame-Options", "DENY")
     handler.send_header("Cache-Control", "no-store")
     handler.send_header("X-Request-ID", _request_id(handler))
+    if _is_tls(handler):
+        handler.send_header("Strict-Transport-Security",
+                            "max-age=31536000; includeSubDomains")
+    # No 'unsafe-inline' anywhere: inline scripts were moved to static/*.js
+    # (cloud.html -> static/cloud.js) so a strict script-src is enforceable.
     csp = ("default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
-           "script-src 'self' 'unsafe-inline'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
+           "script-src 'self'; connect-src 'self' https://raw.githubusercontent.com https://api.github.com; "
            "frame-ancestors 'none'") if path.name in ("cloud.html", "index.html") else (
            "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; "
            "script-src 'self'; connect-src 'self'; frame-ancestors 'none'")

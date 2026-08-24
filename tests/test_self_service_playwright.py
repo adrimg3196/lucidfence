@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # test nunca vuelva a quedarse interceptando una URL que la vitrina ya no usa
 # (paso a la rama de datos cloud-state, 2026-08-20).
 import re as _re
-_cloud_html = (Path(__file__).resolve().parents[1] / "static" / "cloud.html").read_text(encoding="utf-8")
-STATE_URL = _re.search(r'const STATE_URL = "([^"]+)"', _cloud_html).group(1)
+_cloud_js = (Path(__file__).resolve().parents[1] / "static" / "cloud.js").read_text(encoding="utf-8")
+STATE_URL = _re.search(r'const STATE_URL = "([^"]+)"', _cloud_js).group(1)
 
 
 def _load_module(path: Path):

@@ -41,8 +41,10 @@ def test_every_cloud_state_url_is_the_canonical_one():
 
 
 def test_cloud_html_uses_canonical_url():
-    html = open(os.path.join(ROOT, "static", "cloud.html"), encoding="utf-8").read()
-    m = re.search(r'const STATE_URL = "([^"]+)"', html)
+    # The vitrina state URL now lives in static/cloud.js (the inline script was
+    # externalized so cloud.html can be served with a strict CSP, no 'unsafe-inline').
+    js = open(os.path.join(ROOT, "static", "cloud.js"), encoding="utf-8").read()
+    m = re.search(r'const STATE_URL = "([^"]+)"', js)
     assert m and m.group(1) == CANONICAL_URL
 
 
