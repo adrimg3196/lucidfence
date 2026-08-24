@@ -32,7 +32,16 @@ concurrency:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # OJO con este numero: `timeout-minutes` de JOB cuenta tambien el tiempo que
+    # el job pasa ESPERANDO runner, no solo ejecutando. En una cuenta gratuita
+    # los runs de `schedule` ya llegan con retraso y la cola puede pasar de 10
+    # min. Cuando salta, el job queda `cancelled` pero el RUN queda `failure`,
+    # y un run de `schedule` en `failure` manda correo al propietario: un
+    # hipo de infraestructura disfrazado de fallo del repo (pasó: run 32734026688,
+    # 15 min en cola, cero pasos ejecutados). El limite util contra CUELGUES va
+    # a nivel de PASO, que solo corre cuando ya hay runner; el de job se queda
+    # como red de seguridad holgada.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +50,7 @@ jobs:
           python-version: "3.11"
 
       - name: Publicar cola y etiquetar PRs podridos
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/merge_train.py --publish --enforce
