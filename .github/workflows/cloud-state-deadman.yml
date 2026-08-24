@@ -1,0 +1,125 @@
+name: cloud-state-deadman
+
+# Dead-man switch para engine-cron (t_9e6615ad). El watchdog de #228 vigila
+# que los *workflows* programados corran; éste vigila que el *dato vivo* se
+# siga publicando. El fallo #270 ocurrió precisamente porque engine-cron
+# "corría" pero cloud-state se estancó: la vitrina de Marketing y el
+# daily-analysis de Product se rompieron sin que nadie lo notara.
+#
+# Cada N min comprueba la antigüedad de data/cloud_state.json en la rama
+# cloud-state (scripts/cloud_state_aliveness.py). Si está estancado > umbral,
+# crea/actualiza un issue de incidente (idempotente) etiquetado
+# 'cloud-state-deadman' para que el dueño lo vea sin esperar al reporte semanal.
+
+on:
+  schedule:
+    # 4 veces por hora (cada 15 min, desfasado de engine-cron en +5) para
+    # detectar a la primera el estancamiento y no esperar a la próxima hora.
+    - cron: "5,20,35,50 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_age_minutes:
+        description: "Umbral de antigüedad (min) que declara STALE el snapshot"
+        required: false
+        default: "75"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cloud-state-deadman
+  cancel-in-progress: false
+
+env:
+  DEADMAN_MAX_AGE: "75"   # > 4 ciclos de 15 min de engine-cron (margen)
+  DEADMAN_LABEL: "cloud-state-deadman"
+
+jobs:
+  deadman:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Comprobar aliveness de cloud-state
+        id: alive
+        run: |
+          set -euo pipefail
+          MAX_AGE="${{ github.event.inputs.max_age_minutes || env.DEADMAN_MAX_AGE }}"
+          if python3 scripts/cloud_state_aliveness.py --max-age-minutes "$MAX_AGE"; then
+            echo "status=fresh" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=stale" >> "$GITHUB_OUTPUT"
+            echo "::warning::cloud-state estancado (dead-man activado)"
+          fi
+
+      - name: Abrir/actualizar incidente si está STALE
+        if: steps.alive.outputs.status == 'stale'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = process.env.DEADMAN_LABEL;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const titlePrefix = `🚨 cloud-state dead-man: `;
+            const today = new Date().toISOString().split('T')[0];
+
+            // Crear la etiqueta si falta (idempotente).
+            try {
+              await github.rest.issues.createLabel({
+                owner, repo, name: label,
+                color: 'B60205',
+                description: 'Dead-man de engine-cron: cloud-state dejó de publicarse'
+              });
+            } catch (e) { /* ya existe */ }
+
+            const existing = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: label, per_page: 10
+            });
+            const open = existing.data.find(i => i.title.startsWith(titlePrefix));
+
+            const body = `## Dead-man de engine-cron activado (${today})\n\n` +
+              `- **Cuándo:** ${new Date().toISOString()}\n` +
+              `- **Qué:** \`data/cloud_state.json\` en la rama \`cloud-state\` lleva > ${process.env.DEADMAN_MAX_AGE} min sin actualizarse.\n` +
+              `- **Impacto:** La vitrina pública de Marketing y el daily-analysis de Product se rompen (fallo #270).\n` +
+              `- **Acción sugerida:** verificar que \`engine-cron\` esté corriendo y empujando a \`cloud-state\`; revisar los últimos runs de \`engine-cron\` y \`cloud-state-deadman\`.\n\n` +
+              `Este issue se actualiza solo (no se duplica) mientras persista el estancamiento; se cierra automáticamente cuando el snapshot vuelva a estar fresco.`;
+
+            if (open) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: open.number, body: `Re-detectado estancamiento: ${new Date().toISOString()}`
+              });
+              console.log(`Issue existente actualizado: #${open.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo, title: titlePrefix + today, body, labels: [label, 'triage', 'P1']
+              });
+              console.log(`Issue creado: #${created.data.number}`);
+            }
+
+      - name: Cerrar incidente si volvió a estar fresco
+        if: steps.alive.outputs.status == 'fresh'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = process.env.DEADMAN_LABEL;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const titlePrefix = `🚨 cloud-state dead-man: `;
+            const existing = await github.rest.issues.listForRepo({
+              owner, repo, state: 'open', labels: label, per_page: 10
+            });
+            for (const i of existing.data.filter(x => x.title.startsWith(titlePrefix))) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: i.number,
+                body: `✅ cloud-state volvió a estar fresco (${new Date().toISOString()}). Cerrando incidente.`
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: i.number, state: 'closed'
+              });
+              console.log(`Issue #${i.number} cerrado (snapshot fresco).`);
+            }
