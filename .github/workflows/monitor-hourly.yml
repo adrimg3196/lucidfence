@@ -60,9 +60,11 @@ jobs:
             echo "status=fail" >> "$GITHUB_OUTPUT"
             cat /tmp/failures.json
           fi
-          echo "failures<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/failures.json >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "failures<<EOF"
+            cat /tmp/failures.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Detectar regresiones de CI recientes
         env:
