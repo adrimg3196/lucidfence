@@ -18,24 +18,24 @@ import argparse
 import datetime
 import json
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
 # URL canónica del snapshot vivo (en la rama cloud-state, nunca en main).
-# Se importa de scripts/check_vitrina.py para no duplicar la fuente de verdad;
-# si no se puede importar, se usa el literal como fallback.
-try:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    import check_vitrina  # type: ignore
+# Importada de scripts/check_vitrina.py, la fuente ÚNICA. Sin fallback literal:
+# duplicar la URL aquí es exactamente la deriva que la fuente única evita, y si
+# el import falla, fallar es lo correcto (fail-closed), no adivinar la URL.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_vitrina  # noqa: E402
 
-    CANONICAL_URL = check_vitrina.CANONICAL_URL
-except Exception:  # pragma: no cover - defensa de import
-    CANONICAL_URL = (
-        "https://raw.githubusercontent.com/adrimg3196/lucidfence/"
-        "cloud-state/data/cloud_state.json"
-    )
+CANONICAL_URL = check_vitrina.CANONICAL_URL
 
 TIMEOUT_S = 30
+# Un parpadeo de red no es un dead-man: sin reintentos, cada fallo transitorio
+# del fetch abriría un incidente falso. 3 intentos con espera creciente.
+FETCH_ATTEMPTS = 3
+FETCH_BACKOFF_S = (5, 15)
 
 
 def parse_generated_at(value: str) -> datetime.datetime:
@@ -80,12 +80,23 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
-    try:
-        with urllib.request.urlopen(args.url, timeout=TIMEOUT_S) as r:
-            raw = r.read()
-        data = json.loads(raw)
-    except Exception as exc:
-        print(f"STALE: no se pudo obtener el snapshot: {type(exc).__name__}: {exc}")
+    data = None
+    ultimo_error: Exception | None = None
+    for intento in range(FETCH_ATTEMPTS):
+        if intento:
+            time.sleep(FETCH_BACKOFF_S[min(intento - 1, len(FETCH_BACKOFF_S) - 1)])
+        try:
+            with urllib.request.urlopen(args.url, timeout=TIMEOUT_S) as r:
+                raw = r.read()
+            data = json.loads(raw)
+            break
+        except Exception as exc:
+            ultimo_error = exc
+            print(f"intento {intento + 1}/{FETCH_ATTEMPTS} fallido: "
+                  f"{type(exc).__name__}: {exc}", file=sys.stderr)
+    if data is None:
+        print(f"STALE: no se pudo obtener el snapshot tras {FETCH_ATTEMPTS} "
+              f"intentos: {type(ultimo_error).__name__}: {ultimo_error}")
         print("::error::engine-cron dead-man: vitrina cloud-state no alcanzable")
         return 1
 

@@ -49,9 +49,13 @@ jobs:
 
       - name: Resolver versión
         id: ver
+        env:
+          # El input entra por env: interpolado con ${{ }} en el shell, un
+          # valor como '"; comando' se ejecutaria ANTES de la validacion.
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            v="${{ inputs.version }}"
+            v="$INPUT_VERSION"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             v="${GITHUB_REF_NAME#v}"
           else
@@ -84,10 +88,40 @@ jobs:
       # Mover [Unreleased] -> [version] en el CHANGELOG ANTES de leerlo, para
       # que la release nunca caiga en el fallback "Release vX.Y.Z" vacío (visto
       # en v1.5.0). El script es idempotente: si la sección ya existe, no toca.
-      # Se escribe en disco para que el release quede versionado (t_9e6615ad).
       - name: Mover [Unreleased] -> [version] en CHANGELOG
         if: steps.guard.outputs.skip == 'false'
         run: python3 scripts/move_changelog_unreleased.py --version "${{ steps.ver.outputs.version }}"
+
+      # El move de arriba solo vive en el workspace del runner. Sin este paso,
+      # main nunca gana la sección [version]: la siguiente release renombraría
+      # un [Unreleased] que aún arrastra los bullets de ESTA y re-publicaría
+      # sus notas. Se persiste por el raíl normal (rama claude/** -> agent-pr
+      # abre la PR -> automerge en verde), no con push directo a main, para no
+      # saltarse el ruleset ni el CI. Si el push falla, la release DEBE fallar:
+      # seguir en silencio recrearía la deriva que este paso existe para evitar.
+      - name: Persistir CHANGELOG movido (rama claude/ -> PR -> automerge)
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG sin cambios (la sección [${VERSION}] ya estaba commiteada)"
+            exit 0
+          fi
+          git config user.name "lucidfence-release[bot]"
+          git config user.email "release@lucidfence.local"
+          git checkout -B "claude/changelog-v${VERSION}"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): mover [Unreleased] a [${VERSION}] (corte de release)"
+          for espera in 2 4 8 0; do
+            git push -u origin "claude/changelog-v${VERSION}" --force-with-lease && exit 0
+            [ "$espera" -eq 0 ] && break
+            sleep "$espera"
+          done
+          echo "::error::no se pudo pushear claude/changelog-v${VERSION};" \
+               "sin esto main queda sin la sección [${VERSION}] y la próxima" \
+               "release re-publicaría estas notas"
+          exit 1
 
       - name: Leer changelog
         if: steps.guard.outputs.skip == 'false'
@@ -106,7 +140,14 @@ jobs:
           # existe; si no la hay, es un fallo de automatización, no un fallback
           # silencioso. Antes esto producía el body vacío "Release vX.Y.Z".
           if [ -z "$section" ]; then
-            echo "::error::No se encontró sección [${tag}] en CHANGELOG.md tras mover [Unreleased]. ¿Se corrió move_changelog_unreleased?"
+            if grep -qF "## [$tag]" CHANGELOG.md; then
+              echo "::error::La sección [${tag}] existe pero está VACÍA:" \
+                   "[Unreleased] no tenía contenido al cortar la release." \
+                   "Apunta los cambios al CHANGELOG antes de re-tagear."
+            else
+              echo "::error::No hay sección [${tag}] en CHANGELOG.md ni" \
+                   "[Unreleased] que mover. ¿Se corrió move_changelog_unreleased?"
+            fi
             exit 1
           fi
           {
