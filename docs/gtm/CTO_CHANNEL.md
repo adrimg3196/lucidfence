@@ -55,8 +55,15 @@ Paso a paso:
    - Declarativo → solo DSC (Windows, build-only + read-back Graph) y DDM
      (Apple, build-only, geofence posture). Decision A de `t_2c00a8f2`.
    - SOAR webhook → `notifier.py` / `saas_server.py` HMAC-SHA256 por tenant.
-3. **Correr el linter yo mismo** para confirmar `0 BLOCK` en el archivo:
+3. **Correr el linter yo mismo** para confirmar `0 BLOCK` en el archivo.
+   IMPORTANTE: `--scope outbox` solo escanea `docs/gtm/outbox/` y OMITE los
+   archivos canónicos de co-firma (`docs/gtm/CTO_CHANNEL.md` y `.cto_input_188.md`,
+   que viven fuera de `outbox/`). Para co-firmar estos dos, pasar los paths
+   explícitos:
    ```bash
+   python3.11 scripts/gtm_claim_linter.py --technical \
+     docs/gtm/CTO_CHANNEL.md .cto_input_188.md
+   # o, para revisar solo el outbox de Marketing:
    python3.11 scripts/gtm_claim_linter.py --scope outbox --technical
    ```
    Los `[INFO]` de reconciliación (p.ej. "Nunca Intune/Jamf live sin token")
