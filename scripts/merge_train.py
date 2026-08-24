@@ -55,6 +55,28 @@ def age_days(iso: str) -> int:
 
 GREEN_CONCLUSIONS = ("SUCCESS", "NEUTRAL", "SKIPPED")
 FAILED_CONCLUSIONS = ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED")
+# Umbral de STALE para el gate de producción (NO-SANA), según
+# docs/internal/STATE.md bloque `## MODO DRENAJE`. Ojo: NO es STALE_DAYS=3
+# (ese es el umbral de la label `stale-rebase`, un concepto distinto).
+NOSANA_STALE_DAYS = 7
+
+
+def is_nosana(pr: dict) -> bool:
+    """PR abierta NO-SANA = ANY(STALE, CONFLICTING, RED), definición de
+    autoridad en docs/internal/STATE.md (MODO DRENAJE, recalibrado 2026-08-24):
+      - STALE: >7 días sin actividad (updatedAt)
+      - CONFLICTING: estado de merge en conflicto (BLOCKED_BY_CONFLICT/DIRTY)
+      - RED: cualquier check-run completado con conclusión failure/timed_out/canceled
+    Una PR verde pero `behind` main NO cuenta (el raíl de auto-merge la drena)."""
+    state = pr.get("mergeStateStatus") or "UNKNOWN"
+    if state in BLOCKED_BY_CONFLICT:
+        return True
+    if age_days(pr["updatedAt"]) > NOSANA_STALE_DAYS:
+        return True
+    checks = pr.get("statusCheckRollup") or []
+    if any((c.get("conclusion") or "") in FAILED_CONCLUSIONS for c in checks):
+        return True
+    return False
 
 
 def ci_state(pr: dict) -> tuple[int, int, int]:
@@ -112,11 +134,19 @@ def build_queue(prs: list[dict]) -> dict:
     # entra primero. Lo no-listo se ordena detrás, también por antigüedad.
     rows.sort(key=lambda r: (r["status"] != "ready", -r["age"]))
     ready = [r for r in rows if r["status"] == "ready"]
+    # Métrica de autoridad del gate de producción (ver docs/internal/STATE.md
+    # bloque `## MODO DRENAJE` y docs/references/agent-team-charter.md Regla 1).
+    # NO-SANA = ANY(STALE, CONFLICTING, RED). Una PR verde pero `behind` main NO
+    # cuenta (el raíl de auto-merge la drena). El gate de "se puede coger
+    # trabajo nuevo" es NO-SANA == 0, NO el recuento de PRs (over_limit).
+    nosana = sum(1 for pr in prs if is_nosana(pr))
     return {
         "generated_at": now().isoformat(timespec="seconds"),
         "open_total": len(rows),
         "wip_limit": GLOBAL_WIP_LIMIT,
         "over_limit": len(rows) > GLOBAL_WIP_LIMIT,
+        "nosana_total": nosana,
+        "drain_mode": nosana > 0,
         "next_up": ready[0]["number"] if ready else None,
         "rows": rows,
     }
@@ -124,17 +154,22 @@ def build_queue(prs: list[dict]) -> dict:
 
 def render(queue: dict) -> str:
     lines = []
-    drain = queue["over_limit"]
+    # Gate de producción = métrica NO-SANA (docs/internal/STATE.md, MODO DRENAJE),
+    # NO el recuento de PRs. Mientras haya >=1 PR NO-SANA, el modo drenaje está
+    # ACTIVO y nadie coge trabajo nuevo. El recuento de PRs (over_limit) es solo
+    # informativo.
+    drain = queue["drain_mode"]
     if drain:
         lines.append(
-            f"> **MODO DRENAJE** — {queue['open_total']} PRs abiertos "
-            f"(límite {queue['wip_limit']}). Nadie empieza trabajo nuevo: "
-            "solo rebasar, mergear o cerrar. Regla 1 del charter."
+            f"> **MODO DRENAJE** — {queue['nosana_total']} PR(s) NO-SANAS "
+            f"abierta(s) (de {queue['open_total']} abiertas en total). "
+            f"Nadie empieza trabajo nuevo: solo rebasar, mergear o cerrar. "
+            f"Regla 1 del charter (métrica NO-SANA: STALE | CONFLICTING | RED)."
         )
     else:
         lines.append(
             f"> {queue['open_total']}/{queue['wip_limit']} PRs abiertos — "
-            "dentro de límite, se puede coger trabajo nuevo."
+            "0 NO-SANAS — se puede coger trabajo nuevo."
         )
     lines.append("")
     nxt = queue["next_up"]
