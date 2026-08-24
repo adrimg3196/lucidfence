@@ -92,37 +92,6 @@ jobs:
         if: steps.guard.outputs.skip == 'false'
         run: python3 scripts/move_changelog_unreleased.py --version "${{ steps.ver.outputs.version }}"
 
-      # El move de arriba solo vive en el workspace del runner. Sin este paso,
-      # main nunca gana la sección [version]: la siguiente release renombraría
-      # un [Unreleased] que aún arrastra los bullets de ESTA y re-publicaría
-      # sus notas. Se persiste por el raíl normal (rama claude/** -> agent-pr
-      # abre la PR -> automerge en verde), no con push directo a main, para no
-      # saltarse el ruleset ni el CI. Si el push falla, la release DEBE fallar:
-      # seguir en silencio recrearía la deriva que este paso existe para evitar.
-      - name: Persistir CHANGELOG movido (rama claude/ -> PR -> automerge)
-        if: steps.guard.outputs.skip == 'false'
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          if git diff --quiet -- CHANGELOG.md; then
-            echo "CHANGELOG sin cambios (la sección [${VERSION}] ya estaba commiteada)"
-            exit 0
-          fi
-          git config user.name "lucidfence-release[bot]"
-          git config user.email "release@lucidfence.local"
-          git checkout -B "claude/changelog-v${VERSION}"
-          git add CHANGELOG.md
-          git commit -m "docs(changelog): mover [Unreleased] a [${VERSION}] (corte de release)"
-          for espera in 2 4 8 0; do
-            git push -u origin "claude/changelog-v${VERSION}" --force-with-lease && exit 0
-            [ "$espera" -eq 0 ] && break
-            sleep "$espera"
-          done
-          echo "::error::no se pudo pushear claude/changelog-v${VERSION};" \
-               "sin esto main queda sin la sección [${VERSION}] y la próxima" \
-               "release re-publicaría estas notas"
-          exit 1
-
       - name: Leer changelog
         if: steps.guard.outputs.skip == 'false'
         id: changelog
@@ -155,6 +124,55 @@ jobs:
             echo "$section"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      # El move de arriba solo vive en el workspace del runner. Sin este paso,
+      # main nunca gana la sección [version]: la siguiente release renombraría
+      # un [Unreleased] que aún arrastra los bullets de ESTA y re-publicaría
+      # sus notas. Se persiste por el raíl normal (rama claude/** -> agent-pr
+      # abre la PR -> automerge en verde), no con push directo a main, para no
+      # saltarse el ruleset ni el CI. Corre DESPUÉS de "Leer changelog": así una
+      # sección vacía muere en la validación antes de publicar nada (Codex #295).
+      # Si el push falla, la release DEBE fallar: seguir en silencio recrearía
+      # la deriva que este paso existe para evitar.
+      - name: Persistir CHANGELOG movido (rama claude/ -> PR -> automerge)
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          # PAT y no GITHUB_TOKEN: GitHub SUPRIME los workflows disparados por
+          # pushes hechos con el token del job, así que con GITHUB_TOKEN
+          # agent-pr nunca abriría la PR y la rama quedaría huérfana — el mismo
+          # drift con otra cara (Codex P1 en #295). Mismo secret que usan
+          # agent-pr/agent-automerge.
+          AGENTS_PAT: ${{ secrets.AGENTS_GITHUB_PAT }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG sin cambios (la sección [${VERSION}] ya estaba commiteada)"
+            exit 0
+          fi
+          if [ -z "$AGENTS_PAT" ]; then
+            echo "::error::AGENTS_GITHUB_PAT no configurado. Con GITHUB_TOKEN el" \
+                 "push no dispara agent-pr (GitHub suprime workflows de pushes" \
+                 "con ese token): la rama quedaría huérfana sin PR y main sin" \
+                 "la sección [${VERSION}]."
+            exit 1
+          fi
+          git config user.name "lucidfence-release[bot]"
+          git config user.email "release@lucidfence.local"
+          git checkout -B "claude/changelog-v${VERSION}"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): mover [Unreleased] a [${VERSION}] (corte de release)"
+          for espera in 2 4 8 0; do
+            git push --force-with-lease \
+              "https://x-access-token:${AGENTS_PAT}@github.com/${GITHUB_REPOSITORY}.git" \
+              "claude/changelog-v${VERSION}" && exit 0
+            [ "$espera" -eq 0 ] && break
+            sleep "$espera"
+          done
+          echo "::error::no se pudo pushear claude/changelog-v${VERSION};" \
+               "sin esto main queda sin la sección [${VERSION}] y la próxima" \
+               "release re-publicaría estas notas"
+          exit 1
 
       - name: Construir tarball versionado
         if: steps.guard.outputs.skip == 'false'
