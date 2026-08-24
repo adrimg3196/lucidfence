@@ -5,6 +5,7 @@ All notable changes to LucidFence are documented here.
 ## [Unreleased]
 
 - fix(ci): relajar ruleset de ramas de datos a solo protección-contra-borrado — `LucidFence Autonomy B` ahora aplica solo a `~DEFAULT_BRANCH` (antes `~DEFAULT_BRANCH` + `~ALL`), de modo que `engine-cron`/`recon-social-cron` pueden empujar directo a `cloud-state`/`recon-state` sin `GH013` (#270). Registro en `docs/operations/BRANCH_CONFIG.md`.
+- fix(ci): desatascar deadlock repo-wide por check fantasma — el ruleset `LucidFence Autonomy B` (21249696) exigía `autonomy-evidence`, pero su workflow solo vivía en el PR #264 (rojo) y no en `main`, así que **todos los PR verdes del repo quedaban `BLOCKED` por diseño** (p.ej. #289: 14/14 checks en verde y aun así `mergeStateStatus=BLOCKED`). Se quitó `autonomy-evidence` de `required_status_checks`; los 9 checks reales y demás reglas siguen intactos. Se volverá a requerir cuando su workflow aterrice en `main` y reporte en verde. Regla anti-deadlock añadida en `docs/operations/BRANCH_CONFIG.md` (t_9c8c2878).
 - fix(ci): el health-check nocturno vuelve a poder alertar — `nightly-health-check`
   llevaba **10 runs consecutivos en rojo** (2026-08-13..2026-08-22) con
   `ModuleNotFoundError: No module named 'requests'`, no porque la vitrina
