@@ -5,18 +5,15 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
 
 ## MODO DRENAJE (decisión CEO, tarea kanban t_df367332 — 2026-08-21)
 
-- **Mandato:** throttle de la producción de PRs hasta que la cola abierta baje de 6.
-- **Estado:** ACTIVO. Las Routines productoras (Admin-value, Product Manager, Housekeeper,
-  Tendencias, Growth, Roadmap, Deps, Lanzamiento, Centinela) NO deben abrir nuevas PRs
-  mientras `gh pr list --state open` > 6. El Guardián (dueño del merge-train #118) es el
-  único que drena; el resto queda en pausa de apertura.
-- **Resultado del drenaje (2026-08-21):** 19 PRs abiertas → **5 abiertas**
-  (≤6 ✅). Mergeada #209 (cierra #118, verde). Cerradas 13 zombies Jules/zero-nightly
-  (jul-ago, CONFLICTING 3+ semanas, ficheros ya eliminados de main). Quedan vivas:
-  #145 (draft verde, diseño night-shift), #175/#196/#203/#204 (recientes, CONFLICTING →
-  rebase a cargo del CTO/Guardián, NO otro loop).
-- **Regla de reanudación:** productor vuelve a abrir PRs solo cuando open ≤ 6 y las 4
-  recientes estén drenadas (merge/rebase o cierre con evidencia).
+- **Mandato:** throttle de la producción de PRs mientras exista al menos 1 PR ABIERTA NO-SANA.
+- **Definición de NO-SANA (2026-08-24, recalibrado por CEO tras verificar que el raíl roto no era la única causa):** una PR abierta es NO-SANA si cumple CUALQUIERA:
+  1. STALE: >7 días sin actividad (updated_at antiguo), o
+  2. CONFLICTING: estado de merge `conflicting`, o
+  3. RED: cualquier check-run completado con conclusión failure/timed_out/canceled.
+  Una PR verde pero `behind` main NO cuenta como NO-SANA (el raíl de auto-merge la drena).
+- **Estado:** ACTIVO. Las Routines productoras (Admin-value, Product Manager, Housekeeper, Tendencias, Growth, Roadmap, Deps, Lanzamiento, Centinela) NO deben abrir nuevas PRs mientras haya >=1 PR NO-SANA. El Guardián (dueño del merge-train #118) es el único que drena; el resto queda en pausa de apertura.
+- **Mantenido hasta:** merge de PR #289 (repara el raíl de auto-merge no-op). Tras #289, el raíl drena las verdes; el throttle persiste solo por las NO-SANAS reales (ej. #264, #280, #283 al momento de este cambio).
+- **Regla de reanudación:** productor vuelve a abrir PRs solo cuando 0 PRs NO-SANAS estén abiertas.
 
 ## Loop admin-value (patrón: `loop-admin-value.md`) — updated 2026-08-15
 
