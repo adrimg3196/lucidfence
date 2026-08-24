@@ -22,6 +22,45 @@ Añadir más agentes con estas reglas empeora el problema: más PRs en paralelo
 sobre el mismo código = más conflictos = más rot. Este charter existe para
 arreglar la organización, no la capacidad.
 
+## Reglas de Oro (orden de primer nivel)
+
+> Estas reglas son innegociables y se enforce mecánicamente (pre-flight o gate),
+> no solo por disciplina del agente. Toda propuesta que las contradiga se rechaza
+> en review sin excepción.
+
+### Regla de Oro #1 — No añadir un check fantasma a `required_status_checks`
+
+**Nunca añadir un contexto a `required_status_checks` (de cualquier ruleset de
+protección de rama) antes de que el workflow que lo emite esté MERGEADO en
+`origin/main` Y reportando en verde en una PR real.**
+
+Razón (lección verificada 2026-08-24, tarea t_497540b9): el ruleset 21249696
+"LucidFence Autonomy B" exigía el check `autonomy-evidence`, cuyo workflow solo
+existía en el PR #264 (rojo) y NO en main. Ningún PR podía reportar el check →
+todos los PR verdes quedaban **BLOCKED por diseño** (deadlock repo-wide: 10/10
+PRs bloqueados). Se resolvió quitando el check fantasma (t_9c8c2878). Coste:
+horas de deadlock en toda la flota.
+
+La regla tiene dos mitades, ambas obligatorias:
+1. **Workflow en `origin/main`** (no en una rama/PR). Se valida el job
+   `name:` / job id / workflow `name:` contra el árbol de `origin/main`.
+2. **Run verde en `origin/main`**: `gh run list` del workflow en la rama `main`
+   con `--status success`. Un check "verde en mi rama" no cuenta — eso es
+   justamente lo que causó el deadlock (t_925438a3: anti-falsos-positivos por
+   staleness de rama).
+
+Mecanismo de enforce (obligatorio en cualquier changeset que toque rulesets):
+- **Pre-flight:** `python3 scripts/ruleset_check_guard.py --diff <changeset.diff>`
+  (o `--context "<nombre>"` por cada contexto nuevo). Debe salir `exit 0`.
+- **Auditoría periódica del ruleset vivo:** `python3 scripts/ruleset_check_guard.py --audit-live`
+  (default ruleset 21249696). Debe salir `exit 0`.
+- En review, el revisor exige el resultado del pre-flight en el cuerpo del PR;
+  sin él, la review se rechaza. Ver `docs/operations/BRANCH_CONFIG.md` para el
+  registro canónico de rulesets y el flujo de cambio.
+
+La regla #1 es de aplicación transversal: se cumple **además de** las "cinco
+reglas" operativas de abajo, no en su lugar.
+
 ## Roles
 
 | Rol | Quién | Responsabilidad | Límite |
@@ -132,6 +171,23 @@ a main" y se deja la original como *trabajo-completado-en-rama*, no como
 entregado. Esta desconexión fue el origen del incidente t_86afa3e2: #88/#89 se
 marcaron done sin llegar a main, y el bot de QA abrió #205 contra un módulo
 (`core/declarative.py`) que no existe en main.
+
+## Guard de rulesets — anti-check-fantasma (Regla de Oro #1)
+
+Todo changeset que modifique un ruleset y añada contextos a `required_status_checks`
+debe pasar `scripts/ruleset_check_guard.py` **antes de aterrizar** (Regla de Oro #1,
+tarea t_26b7fac6). El guard es fail-closed: si no puede demostrar que cada contexto
+nuevo tiene workflow en `origin/main` con un run verde en `main`, bloquea:
+
+```bash
+python3 scripts/ruleset_check_guard.py --diff <(git diff origin/main... -- .github/rulesets ...) \
+  && echo "RULESET_OK" || echo "RULESET_BLOCKED"
+# auditoría del ruleset vivo:
+python3 scripts/ruleset_check_guard.py --audit-live
+```
+
+En review de un PR que toque rulesets, el revisor exige el resultado del pre-flight
+en el cuerpo del PR; sin él, la review se rechaza. Ver `docs/operations/BRANCH_CONFIG.md`.
 
 ## Aislamiento del checkout
 
