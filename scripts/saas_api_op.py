@@ -5,6 +5,24 @@ Invocado por .github/workflows/saas-api.yml con env:
   ACTION     create_tenant | add_fence | remove_tenant
   TENANT_ID  slug del tenant
   PAYLOAD    JSON con los datos
+  LUCIDFENCE_API_SIGNATURE  HMAC-SHA256 del mensaje "<ACTION>|<PAYLOAD>"
+                            calculado por el solicitante con el secreto de
+                            operador (LUCIDFENCE_API_SECRET, solo server-side).
+  LUCIDFENCE_API_ROLE       scopes separados por coma que el solicitante
+                            presenta (p.ej. "org:write,org:delete").
+  LUCIDFENCE_API_SECRET     (server-side) secreto compartido usado para
+                            verificar la firma. Si no está configurado,
+                            NINGUNA petición es aceptada (fail-closed).
+
+Seguridad (SEC t_1ff47164):
+  Toda acción serverless valida (1) una firma HMAC del solicitante y
+  (2) un rol/scope con privilegio vinculado a la ACTION. Sin firma válida o
+  sin el scope requerido, main() RECHAZA (exit != 0) y NO ejecuta mutación
+  alguna. Nadie que sólo pueda setear ACTION/TENANT_ID/PAYLOAD puede borrar
+  tenants de la vitrina cloud.
+
+Mensaje firmado:  ACTION + "|" + PAYLOAD (la cadena cruda tal cual llega en
+la env var PAYLOAD). El cliente debe firmar exactamente esa concatenación.
 
 Escribe el estado del tenant en data/cloud_tenants/<id>/data/*.json de forma
 que lucidfence/core/cloud_publisher.py lo procese y lo publique en la vitrina cloud.
@@ -18,6 +36,8 @@ Paylodads:
   add_fence:
     {"fence":{...}}  (se añade al tenant)
 """
+import hashlib
+import hmac
 import json
 import os
 import sys
@@ -26,12 +46,59 @@ from pathlib import Path
 ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE = ROOT / "data" / "cloud_tenants"
 
+# --- Auth env vars ---
+SIGNATURE_ENV = "LUCIDFENCE_API_SIGNATURE"
+ROLE_ENV = "LUCIDFENCE_API_ROLE"
+SECRET_ENV = "LUCIDFENCE_API_SECRET"
+
+# RBAC: cada ACTION requiere un scope con privilegio.
+ACTION_REQUIRED_SCOPE = {
+    "create_tenant": "org:write",
+    "add_fence": "org:write",
+    "remove_tenant": "org:delete",
+}
+
 
 def _tenant_dir(tid: str) -> Path:
     tid = (tid or "").strip().lower()
     if not tid or not tid.replace("-", "").replace("_", "").isalnum():
         raise ValueError("tenant_id inválido (solo alfanumérico, - y _)")
     return BASE / tid / "data"
+
+
+def verify_request_signature(action: str, raw_payload: str, signature: str) -> bool:
+    """Verifica la firma HMAC-SHA256 del solicitante.
+
+    Mensaje = "<action>|<raw_payload>", firmado con LUCIDFENCE_API_SECRET
+    (secreto server-side). Fail-closed: si falta el secreto o la firma,
+    o no coinciden, devuelve False. Comparación en tiempo constante.
+    """
+    secret = os.environ.get(SECRET_ENV, "")
+    if not secret or not signature:
+        return False
+    message = f"{action}|{raw_payload}".encode("utf-8")
+    expected = hmac.new(secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def check_authz(action: str, role: str) -> bool:
+    """Devuelve True si `role` (scopes separados por coma) concede el scope
+    requerido por `action`."""
+    required = ACTION_REQUIRED_SCOPE.get(action)
+    if not required:
+        return False
+    granted = [r.strip() for r in (role or "").split(",")]
+    return required in granted
+
+
+def authorize(action: str, raw_payload: str, role: str, signature: str) -> bool:
+    """Gate completo de autorización: firma HMAC válida Y rol con el scope
+    requerido por la ACTION. Sin ambos, la acción no debe ejecutarse."""
+    if not verify_request_signature(action, raw_payload, signature):
+        return False
+    if not check_authz(action, role):
+        return False
+    return True
 
 
 def create_tenant(tid: str, payload: dict):
@@ -95,6 +162,22 @@ def main():
     except Exception as e:
         print(f"PAYLOAD no es JSON válido: {e}")
         sys.exit(1)
+
+    # --- Authorization gate (SEC t_1ff47164): HMAC signature + RBAC by ACTION ---
+    # Fail-closed: sin firma válida O sin el scope requerido por la ACTION,
+    # NO se ejecuta ninguna mutación. Se devuelve sin salir del proceso para
+    # que el llamador (test o workflow) pueda inspeccionar el estado intacto;
+    # el mensaje ACCESS DENIED queda en stdout/stderr como señal de rechazo.
+    signature = os.environ.get(SIGNATURE_ENV, "")
+    role = os.environ.get(ROLE_ENV, "")
+    if not authorize(action, raw, role, signature):
+        msg = (
+            "ACCESS DENIED: firma HMAC inválida o rol/scope insuficiente para "
+            f"la acción '{action}'. No se ejecuta ninguna mutación."
+        )
+        print(msg, file=sys.stderr)
+        return
+
     if action == "create_tenant":
         create_tenant(tid, payload)
     elif action == "add_fence":
