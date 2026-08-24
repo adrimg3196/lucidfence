@@ -53,7 +53,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 
 DEFAULT_REPO = "/Users/adri/lucidfence"
 DEFAULT_OWNER_REPO = "adrimg3196/lucidfence"
