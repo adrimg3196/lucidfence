@@ -15,11 +15,15 @@ arreglado. Eso es exactamente el falso verde que este repo no admite.
 
 Una lista de cuarentena es una herramienta legitima —aisla un test de
 infraestructura genuinamente inestable mientras aterriza su arreglo— pero solo
-si NO PUEDE PUDRIRSE. Este fichero le pone los tres frenos que le faltaban:
+si NO PUEDE PUDRIRSE. Este fichero le pone los frenos que le faltaban:
 
-  1. cada entrada dice QUIEN la puso, POR QUE y HASTA CUANDO;
-  2. una entrada caducada rompe la suite (el silencio no se hereda);
-  3. un test en cuarentena que vuelve a pasar rompe la suite (se sale solo).
+  1. cada entrada dice QUIEN la puso, POR QUE, HASTA CUANDO y contra que issue;
+  2. una entrada caducada —o de mas de 30 dias— rompe la suite: el silencio no
+     se hereda, alguien tiene que renovarlo por escrito;
+  3. una entrada que apunta a un fichero inexistente rompe la suite.
+
+Hubo un cuarto freno ("si el test ya pasa, sacalo de la lista") que retire tras
+revisarlo; el porque esta escrito abajo, donde estaba.
 
 El guard es inerte mientras no exista `tests/QUARANTINE.txt`: no obliga a
 adoptar el mecanismo, solo impide usarlo a ciegas.
@@ -42,6 +46,10 @@ QUARANTINE = ROOT / "tests" / "QUARANTINE.txt"
 _OWNER = re.compile(r"owner=(\S+)")
 _CADUCA = re.compile(r"caduca=(\d{4}-\d{2}-\d{2})")
 _ISSUE = re.compile(r"issue=#?(\d+)")
+# `motivo=` se exigia en el mensaje de error pero no se comprobaba: una
+# entrada con owner/caduca/issue y sin motivo pasaba. Un guard que promete
+# una cosa y verifica otra es el mismo falso verde que persigue.
+_MOTIVO = re.compile(r"motivo=(\S.*?)(?=\s+\w+=|$)")
 _MAX_DIAS = 30
 
 
@@ -69,6 +77,9 @@ def test_cada_entrada_declara_duenno_motivo_caducidad_e_issue():
             falta.append("caduca=YYYY-MM-DD")
         if not _ISSUE.search(comentario):
             falta.append("issue=#N")
+        motivo = _MOTIVO.search(comentario)
+        if not motivo or len(motivo.group(1).strip()) < 10:
+            falta.append("motivo=<por que falla, no solo que falla>")
         assert not falta, (
             f"QUARANTINE.txt:{n} ({fichero}) silencia un test sin {', '.join(falta)}. "
             f"Formato: '{fichero}  # owner=@quien motivo=... caduca=YYYY-MM-DD issue=#N'")
@@ -99,38 +110,19 @@ def test_el_fichero_en_cuarentena_existe():
             f"QUARANTINE.txt:{n}: {fichero} no existe; borra la entrada.")
 
 
-def test_un_test_en_cuarentena_que_ya_pasa_sale_de_la_lista():
-    """El caso que motivo este guard.
-
-    Si el test silenciado vuelve a pasar de forma estable, seguir ignorandolo
-    deja al repo ciego ante la proxima regresion DE VERDAD en esa zona. Se sale
-    solo de la cuarentena: la suite obliga.
-    """
-    import importlib.util
-
-    for n, fichero, _ in _entradas():
-        ruta = next((c for c in (ROOT / "tests" / fichero, ROOT / fichero) if c.exists()), None)
-        if ruta is None:
-            continue  # lo cubre test_el_fichero_en_cuarentena_existe
-        spec = importlib.util.spec_from_file_location(f"_q_{ruta.stem}", ruta)
-        if spec is None or spec.loader is None:
-            continue
-        mod = importlib.util.module_from_spec(spec)
-        try:
-            spec.loader.exec_module(mod)
-        except Exception:
-            continue  # no importa ni en local: la cuarentena esta justificada
-
-        fallo = False
-        for nombre in dir(mod):
-            if not nombre.startswith("test_"):
-                continue
-            try:
-                getattr(mod, nombre)()
-            except Exception:
-                fallo = True
-                break
-        assert fallo, (
-            f"QUARANTINE.txt:{n}: {fichero} PASA entero en este entorno. Un test "
-            f"que ya funciona no puede seguir silenciado: sacalo de la lista o "
-            f"documenta en el issue por que solo falla en CI.")
+# NO existe aqui un test "si el fichero en cuarentena ya pasa, sacalo de la
+# lista". Lo escribi, lo revise y lo retire, y merece quedar explicado para que
+# el siguiente no lo reintroduzca:
+#
+# Un test genuinamente inestable PASA la mayoria de las veces — el caso que
+# motivo todo esto fallaba el 1,10% de las ejecuciones. Un check que exige "ha
+# fallado en esta pasada" se dispararia en ~99 de cada 100 pasadas y obligaria a
+# sacar de cuarentena justo al test que la necesita: seria yo generando el ruido
+# que vine a quitar.
+#
+# Ademas, ejecutarlo AQUI no prueba nada sobre ALLI: las entradas dicen "falla
+# en CI" y este guard corre en cualquier entorno. Que pase en local es
+# informacion sobre local.
+#
+# Lo que SI cierra el agujero es la caducidad: ninguna entrada sobrevive mas de
+# 30 dias sin que alguien la renueve por escrito. Esa es la garantia sostenible.
