@@ -30,6 +30,8 @@ DEFAULT_JWK_PATH = DEFAULT_KEYS_DIR / "ssf_sign.json"
 DEFAULT_JWKS_PATH = DEFAULT_KEYS_DIR / "ssf_jwks.json"
 
 _KID = "lucidfence-ssf-es256-1"
+_P256_COMPONENT_BYTES = 32
+_P256_JWK_FIELDS = ("d", "x", "y")
 
 
 def _ensure_jwt() -> Any:
@@ -55,7 +57,17 @@ def load_signing_jwk(path: Path | None = None) -> Any:
             raise RuntimeError(
                 f"vendored SSF key alg is {data.get('alg')!r}, expected {SIGNING_ALG}"
             )
-        return jwt.PyJWK.from_dict(data)
+        normalized, changed = _normalize_p256_jwk(data)
+        parsed = jwt.PyJWK.from_dict(normalized)
+        if changed:
+            # Migrate legacy short components in place without rotating the key.
+            # Parse first so malformed or inconsistent material is never written.
+            p.write_text(
+                json.dumps(normalized, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            _write_public_jwks(normalized, p.parent / "ssf_jwks.json")
+        return parsed
 
     # First run: generate EC P-256 locally (no network).
     from cryptography.hazmat.primitives.asymmetric import ec
@@ -83,10 +95,33 @@ def _b64url_int(value: int) -> str:
     # RFC 7518: P-256 d/x/y are fixed-width 32-octet sequences. Deriving
     # the length from bit_length() drops leading zero octets and can make a
     # valid EC key intermittently invalid when parsed as JWK.
-    raw = value.to_bytes(32, "big")
+    raw = value.to_bytes(_P256_COMPONENT_BYTES, "big")
     import base64
 
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _normalize_p256_jwk(data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Left-pad legacy short P-256 components without changing key identity."""
+    if data.get("kty") != "EC" or data.get("crv") != "P-256":
+        return data, False
+
+    import base64
+
+    normalized = dict(data)
+    changed = False
+    for field in _P256_JWK_FIELDS:
+        encoded = normalized.get(field)
+        if not isinstance(encoded, str):
+            continue
+        raw = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
+        if len(raw) < _P256_COMPONENT_BYTES:
+            padded = raw.rjust(_P256_COMPONENT_BYTES, b"\x00")
+            normalized[field] = (
+                base64.urlsafe_b64encode(padded).rstrip(b"=").decode("ascii")
+            )
+            changed = True
+    return normalized, changed
 
 
 def _write_public_jwks(private_jwk: dict, jwks_path: Path) -> None:
