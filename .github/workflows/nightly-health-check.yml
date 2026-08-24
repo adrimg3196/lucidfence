@@ -15,9 +15,15 @@ on:
 permissions:
   contents: read
 
+# Un cron sin concurrency puede solaparse consigo mismo y multiplicar fallos.
+concurrency:
+  group: nightly-health-check
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

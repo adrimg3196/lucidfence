@@ -17,9 +17,16 @@ on:
 permissions:
   contents: write
 
+# Cron cada 15 min: sin concurrency dos ciclos pueden solaparse y pelearse por
+# la misma rama de datos; sin timeout, un cuelgue ocupa un runner sin fin.
+concurrency:
+  group: engine-cron
+  cancel-in-progress: false
+
 jobs:
   cycle:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,12 +52,25 @@ jobs:
           # checkout de rama se niega con el arbol sucio. El runner es efimero
           # y el snapshot ya esta copiado: descartar todo es seguro.
           git checkout -- .
-          git fetch origin cloud-state --depth 1 || true
-          if git show-ref --verify --quiet refs/remotes/origin/cloud-state; then
+          # `|| true` sobre el fetch se tragaba CUALQUIER fallo, y entonces el
+          # else creaba una rama HUERFANA (historia nueva) cuyo push se rechaza
+          # por non-fast-forward: un parpadeo de red acababa disfrazado de
+          # problema de historia de git. Ahora se distingue "la rama no existe"
+          # (ls-remote RC=2 -> huerfana, correcto) de "no he podido preguntar"
+          # (cualquier otro RC -> abortar), que es fail-closed.
+          set -e
+          rc=0; git ls-remote --exit-code --heads origin cloud-state >/dev/null 2>&1 || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            git fetch origin cloud-state --depth 1
             git checkout -B cloud-state origin/cloud-state
-          else
+          elif [ "$rc" -eq 2 ]; then
+            echo "cloud-state aun no existe: primera publicacion (rama huerfana)"
             git checkout --orphan cloud-state
             git rm -rf --cached . >/dev/null 2>&1 || true
+          else
+            echo "::error::no se pudo consultar origin/cloud-state (rc=$rc);" \
+                 "abortando en vez de crear una rama huerfana que rompa el historial"
+            exit 1
           fi
           mkdir -p data
           cp "$RUNNER_TEMP/cloud_state.json" data/cloud_state.json
