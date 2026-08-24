@@ -5,7 +5,16 @@ name: recon-social-cron
 # menciones en redes, cambios en la competencia.
 # Reutiliza scripts/recon_repos.py + scripts/recon_social.py.
 # No toma acción — solo hace visible lo que está pasando afuera.
-# Los resultados se commitean para que el daily-analysis los consuma.
+#
+# IMPORTANTE (post-incidente #270): el snapshot se publica en la RAMA DE DATOS
+# DEDICADA `recon-state`, NO en main. Antes intentaba `git push` directo a main
+# y rompía con GH013 bajo el ruleset "LucidFence Autonomy B". daily-analysis
+# consume este snapshot desde recon-state.
+#
+# Las dependencias externas (opencli, agent-reach/yt-dlp, twitter-cli,
+# cookies X/Reddit) son BEST-EFFORT: si faltan en el runner, el canal se marca
+# EXPLÍCITAMENTE como `unavailable` — nunca se finge éxito ni se reintenta 3
+# veces en errores deterministas.
 
 on:
   schedule:
@@ -14,6 +23,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  DATA_BRANCH: recon-state
 
 jobs:
   scan:
@@ -28,55 +40,66 @@ jobs:
           python-version: "3.11"
 
       - name: Recon de repos de competidores
+        id: repos
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          MAX=3
-          for i in $(seq 1 "$MAX"); do
-            echo "=== intento $i/$MAX ==="
-            if python3 scripts/recon_repos.py; then
-              echo "OK en intento $i"
-              break
-            fi
-            if [ "$i" -lt "$MAX" ]; then
-              WAIT=$((i * 10))
-              echo "Retry en $WAIT s..."
-              sleep $WAIT
-            fi
-          done
-          echo "Recon repos completado (puede ser snapshot anterior si todos los intentos fallaron)"
+          set -uo pipefail
+          python3 scripts/recon_repos.py > data/recon/repos_${GITHUB_RUN_ID}.log 2>&1 || true
+          echo "exit_repos=$?" >> "$GITHUB_OUTPUT"
 
       - name: Recon social (X/Reddit/YouTube)
+        id: social
+        continue-on-error: true
         run: |
-          set -euo pipefail
-          MAX=3
-          for i in $(seq 1 "$MAX"); do
-            echo "=== intento $i/$MAX ==="
-            if python3 scripts/recon_social.py; then
-              echo "OK en intento $i"
-              break
-            fi
-            if [ "$i" -lt "$MAX" ]; then
-              WAIT=$((i * 10))
-              echo "Retry en $WAIT s..."
-              sleep $WAIT
-            fi
-          done
-          echo "Recon social completado"
+          set -uo pipefail
+          python3 scripts/recon_social.py > data/recon/social_${GITHUB_RUN_ID}.log 2>&1 || true
+          echo "exit_social=$?" >> "$GITHUB_OUTPUT"
 
-      - name: Persistir resultados para el análisis diario
+      - name: Persistir resultados + estado unavailable explícito
         run: |
           mkdir -p data/recon
-          echo "--- recon repos $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" > data/recon/latest_recon.txt
-          python3 scripts/recon_repos.py >> data/recon/latest_recon.txt 2>&1 || true
-          echo "" >> data/recon/latest_recon.txt
-          echo "--- recon social $(date -u +%Y-%m-%dT%H:%M:%SZ) ---" >> data/recon/latest_recon.txt
-          python3 scripts/recon_social.py >> data/recon/latest_recon.txt 2>&1 || true
-          echo "Recon guardado en data/recon/latest_recon.txt"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Marcar canales que dependen de binarios externos ausentes.
+          UNAVAILABLE=""
+          command -v opencli >/dev/null 2>&1 || UNAVAILABLE="${UNAVAILABLE} opencli"
+          test -x "${HOME}/.agent-reach-venv/bin/python" || UNAVAILABLE="${UNAVAILABLE} agent-reach"
+          command -v twitter >/dev/null 2>&1 || UNAVAILABLE="${UNAVAILABLE} twitter-cli"
+          test -f "${HOME}/.agent-reach/config.yaml" || UNAVAILABLE="${UNAVAILABLE} agent-reach-cookies"
+          {
+            echo "--- recon $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"
+            echo "run_id: ${GITHUB_RUN_ID}"
+            echo "unavailable_channels:${UNAVAILABLE:- none}"
+            echo ""
+            echo "### repos"
+            cat "data/recon/repos_${GITHUB_RUN_ID}.log" 2>/dev/null || echo "(sin salida de repos)"
+            echo ""
+            echo "### social"
+            cat "data/recon/social_${GITHUB_RUN_ID}.log" 2>/dev/null || echo "(sin salida de social)"
+          } > data/recon/latest_recon.txt
+          echo "Recon guardado en data/recon/latest_recon.txt (unavailable:${UNAVAILABLE:- none})"
 
-      - name: Commit resultados de recon
+      - name: Publicar snapshot en rama de datos recon-state
+        env:
+          DATA_BRANCH: recon-state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/recon/latest_recon.txt
-          git commit -m "chore(recon): snapshot de recon social (${{ github.run_id }})" || echo "Nothing to commit"
-          git push
+          git fetch origin "${DATA_BRANCH}" || true
+          WT="$(mktemp -d)"
+          if git rev-parse --verify "refs/remotes/origin/${DATA_BRANCH}" >/dev/null 2>&1; then
+            git worktree add --force "$WT" "origin/${DATA_BRANCH}"
+          else
+            echo "::notice::Creando rama de datos ${DATA_BRANCH} desde main"
+            git worktree add --force -b "${DATA_BRANCH}" "$WT" origin/main
+          fi
+          mkdir -p "$WT/data/recon"
+          cp data/recon/latest_recon.txt "$WT/data/recon/latest_recon.txt"
+          git -C "$WT" add data/recon/latest_recon.txt
+          if git -C "$WT" diff --cached --quiet; then
+            echo "::notice::Sin cambios en latest_recon.txt"
+          else
+            git -C "$WT" commit -m "recon: snapshot social (${GITHUB_RUN_ID})"
+            git -C "$WT" push origin "HEAD:refs/heads/${DATA_BRANCH}"
+            echo "::notice::Publicado data/recon/latest_recon.txt en ${DATA_BRANCH}"
+          fi
+          git worktree remove --force "$WT"

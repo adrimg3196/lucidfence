@@ -2,8 +2,17 @@ name: engine-cron
 
 # Backend serverless de LucidFence en GitHub Actions (gratis, siempre-on vía
 # schedule cada 15 min). Construye la flota demo, corre el engine de geofencing
-# y publica el estado vivo a data/cloud_state.json, que GitHub Pages sirve al
-# dashboard. Soporta workflow_dispatch para forzar un ciclo on-demand.
+# y publica el estado vivo a data/cloud_state.json.
+#
+# IMPORTANTE (post-incidente #270): el estado se publica en la RAMA DE DATOS
+# DEDICADA `cloud-state`, NO en main. main está protegido por el ruleset
+# "LucidFence Autonomy B"; un push directo a main (o a cualquier rama bajo
+# `~ALL`) rompe con GH013 y congela la vitrina. La vitrina static/cloud.html
+# lee data/cloud_state.json desde la rama cloud-state vía raw.githubusercontent.
+#
+# El código se ejecuta sobre el checkout de main (la rama de datos solo tiene
+# data/), y el JSON resultante se vuelca a un worktree de cloud-state y se
+# empuja allí. cloud-state conserva SOLO protección contra borrado.
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -17,47 +26,52 @@ on:
 permissions:
   contents: write
 
+env:
+  DATA_BRANCH: cloud-state
+
 jobs:
   cycle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Instalar deps
         run: python -m pip install -r requirements.txt
-      - name: Correr ciclo y publicar estado
+
+      - name: Correr ciclo y generar estado
         env:
           CLOUD_PUBLISH: "1"
         run: |
           python -m lucidfence.core.cloud_publisher --cycles "${{ github.event.inputs.cycles || '1' }}"
-      - name: Publicar estado a la rama cloud-state (no a main)
-        # El snapshot vivo se publica en una rama dedicada, NO en main: así el
-        # historial de main queda limpio (era ~1 commit cada 15 min). La vitrina
-        # y los health-checks leen el raw de refs/heads/cloud-state. Rama efímera
-        # de datos, estilo gh-pages; su historial no se lee.
+
+      - name: Publicar snapshot en rama de datos cloud-state
+        env:
+          DATA_BRANCH: cloud-state
         run: |
           git config user.name "lucidfence-cloud[bot]"
           git config user.email "cloud@lucidfence.local"
-          cp data/cloud_state.json "$RUNNER_TEMP/cloud_state.json"
-          # El run del publisher deja sucios ficheros trackeados de data/ y el
-          # checkout de rama se niega con el arbol sucio. El runner es efimero
-          # y el snapshot ya esta copiado: descartar todo es seguro.
-          git checkout -- .
-          git fetch origin cloud-state --depth 1 || true
-          if git show-ref --verify --quiet refs/remotes/origin/cloud-state; then
-            git checkout -B cloud-state origin/cloud-state
+          git fetch origin "${DATA_BRANCH}" || true
+          WT="$(mktemp -d)"
+          if git rev-parse --verify "refs/remotes/origin/${DATA_BRANCH}" >/dev/null 2>&1; then
+            git worktree add --force "$WT" "origin/${DATA_BRANCH}"
           else
-            git checkout --orphan cloud-state
-            git rm -rf --cached . >/dev/null 2>&1 || true
+            echo "::notice::Creando rama de datos ${DATA_BRANCH} desde main"
+            git worktree add --force -b "${DATA_BRANCH}" "$WT" origin/main
           fi
-          mkdir -p data
-          cp "$RUNNER_TEMP/cloud_state.json" data/cloud_state.json
-          git add -f data/cloud_state.json
-          if git diff --cached --quiet; then
-            echo "Sin cambios en cloud_state.json"
+          mkdir -p "$WT/data"
+          cp data/cloud_state.json "$WT/data/cloud_state.json"
+          git -C "$WT" add data/cloud_state.json
+          if git -C "$WT" diff --cached --quiet; then
+            echo "::notice::Sin cambios en cloud_state.json"
           else
-            git commit -m "cloud: estado en vivo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
-            git push origin cloud-state
+            git -C "$WT" commit -m "cloud: estado en vivo ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+            git -C "$WT" push origin "HEAD:refs/heads/${DATA_BRANCH}"
+            echo "::notice::Publicado data/cloud_state.json en ${DATA_BRANCH}"
           fi
+          git worktree remove --force "$WT"

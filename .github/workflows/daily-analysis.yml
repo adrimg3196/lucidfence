@@ -5,6 +5,10 @@ name: daily-analysis
 #
 # No ejecuta nada - solo analiza y propone. Buena accion = decide
 # que hacer; mala accion = sugiere algo que el humano decide descartar.
+#
+# IMPORTANTE (post-incidente #270): el snapshot de recon social se consume
+# desde la RAMA DE DATOS `recon-state` (no de main), porque recon-social-cron
+# ya no escribe en main. El SHA/timestamp del snapshot procede de recon-state.
 
 on:
   schedule:
@@ -15,11 +19,17 @@ permissions:
   contents: read
   issues: write
 
+env:
+  DATA_BRANCH: recon-state
+
 jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: recon-state
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -42,12 +52,12 @@ jobs:
           echo "=== PRs abiertos ==="
           gh pr list --repo adrimg3196/lucidfence --state open --json number,title --jq '.[] | "  - #\(.number) \(.title)"' 2>/dev/null || echo "  (no hay PRs)"
           echo ""
-          echo "=== Recon social (último snapshot) ==="
+          echo "=== Recon social (snapshot recon-state) ==="
           if [ -f data/recon/latest_recon.txt ]; then
-            echo "  (disponible, $(wc -l < data/recon/latest_recon.txt) líneas)"
+            echo "  (disponible, $(wc -l < data/recon/latest_recon.txt) lineas)"
             head -30 data/recon/latest_recon.txt
           else
-            echo "  (no disponible — el recon-social-cron aún no ha corrido)"
+            echo "  (no disponible — recon-social-cron aun no ha corrido o fallo)"
           fi
           echo ""
           echo "=== Deps outdated ==="
@@ -61,19 +71,19 @@ jobs:
           TODAY=$(date -u +%Y-%m-%d)
           INCIDENTS_LOG=$(gh issue list --repo adrimg3196/lucidfence --state open --label "monitor-incident" --search "$TODAY" --json title --jq '.[] | "  - " + .title' 2>/dev/null || echo "(no hay incidentes)")
           TOTAL=$(gh issue list --repo adrimg3196/lucidfence --state open --json number --jq 'length' 2>/dev/null || echo "desconocido")
-          PRS_LOG=$(gh pr list --repo adrimg3196/lucidfence --state open --json number,title --jq '.[] | "  - #\(.number) \(.title)"' 2>/dev/null || echo "(no hay PRs)")
+          PRS_LOG=$(gh pr list --repo adrimg3196/lucidfence --state open --json number,title --jq '.[] | "  - NAME #\(.number) \(.title)"' 2>/dev/null || echo "(no hay PRs)")
           DEPS_LOG=$(pip list --outdated --format=columns 2>/dev/null | tail -n +3 | awk '{print "  - " $1 " -> " $3}' || echo "(no disponible)")
           RECON_SNAPSHOT=""
           if [ -f data/recon/latest_recon.txt ]; then
             RECON_SNAPSHOT=$(head -40 data/recon/latest_recon.txt | sed 's/^/    /')
           fi
           N_HOY=$(echo "$INCIDENTS_LOG" | grep -c '  - ' || echo "0")
-          BODY="## Informe diario ${TODAY}\n\nIncidentes hoy: ${N_HOY} detectados\n${INCIDENTS_LOG}\n\nIssues abiertos: ${TOTAL}\n\nPRs abiertos:\n${PRS_LOG}\n\nRecon social (último snapshot):\n${RECON_SNAPSHOT:-(no disponible)}\n\nDependencias:\n${DEPS_LOG}\n\nPropuestas:\n- Revisar y cerrar incidentes resueltos\n- Evaluar PRs listos para merge\n- Planificar update de dependencias criticas\n"
+          BODY="## Informe diario ${TODAY}\n\nIncidentes hoy: ${N_HOY} detectados\n${INCIDENTS_LOG}\n\nIssues abiertos: ${TOTAL}\n\nPRs abiertos:\n${PRS_LOG}\n\nRecon social (snapshot desde recon-state):\n${RECON_SNAPSHOT:-(no disponible)}\n\nDependencias:\n${DEPS_LOG}\n\nPropuestas:\n- Revisar y cerrar incidentes resueltos\n- Evaluar PRs listos para merge\n- Planificar update de dependencias criticas\n"
           EXISTING=$(gh issue list --repo adrimg3196/lucidfence --state open --label "daily-analysis" --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$EXISTING" ]; then
             echo "Actualizando issue #${EXISTING}"
             gh issue comment "${EXISTING}" --repo adrimg3196/lucidfence --body "${BODY}"
           else
             echo "Creando issue diario"
-            gh issue create --repo adrimg3196/lucidfence --title "Informe diario ${TODAY}" --body "${BODY}" --label "daily-analysis,triage"
+            gh issue create --repo adrimg3196/lucidfence --title "Informe diario ${TODAY}" --body "${BODY}" --label "daily-analysis","triage"
           fi
