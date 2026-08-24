@@ -258,6 +258,8 @@ def _reject_unreplaceable_file_flags(path: Path, destination_stat: Any) -> None:
         "SF_IMMUTABLE",
         "UF_APPEND",
         "SF_APPEND",
+        "UF_NOUNLINK",
+        "SF_NOUNLINK",
     )
     active = [
         name

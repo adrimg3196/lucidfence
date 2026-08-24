@@ -671,14 +671,16 @@ def test_unreplaceable_file_flags_are_rejected_before_temp_creation():
         parent = root
         name = "protected-key.json"
 
+        def __init__(self, flag):
+            self.flag = flag
+
         @staticmethod
         def is_symlink():
             return False
 
-        @staticmethod
-        def stat():
+        def stat(self):
             return SimpleNamespace(
-                st_flags=stat.UF_IMMUTABLE,
+                st_flags=self.flag,
                 st_uid=os.getuid() if hasattr(os, "getuid") else 0,
                 st_gid=os.getgid() if hasattr(os, "getgid") else 0,
             )
@@ -694,16 +696,26 @@ def test_unreplaceable_file_flags_are_rejected_before_temp_creation():
     real_tempfile = keys_module.tempfile
     keys_module.tempfile = _MustNotCreateTemporary
     try:
-        try:
-            keys_module._atomic_write_text(
-                _FlaggedPath(),
-                "private-key",
-                default_mode=0o600,
-            )
-        except PermissionError as exc:
-            assert "file flags" in str(exc)
-        else:
-            raise AssertionError("immutable destination was accepted")
+        blocking_names = (
+            "UF_IMMUTABLE",
+            "SF_IMMUTABLE",
+            "UF_APPEND",
+            "SF_APPEND",
+            "UF_NOUNLINK",
+            "SF_NOUNLINK",
+        )
+        for name in blocking_names:
+            try:
+                keys_module._atomic_write_text(
+                    _FlaggedPath(getattr(stat, name)),
+                    "private-key",
+                    default_mode=0o600,
+                )
+            except PermissionError as exc:
+                assert "file flags" in str(exc)
+                assert name in str(exc)
+            else:
+                raise AssertionError(f"{name} destination was accepted")
     finally:
         keys_module.tempfile = real_tempfile
 
