@@ -34,6 +34,12 @@ jobs:
         run: |
           mkdir -p _site
           cp -rL static/* _site/
+          # robots.txt y sitemap.xml (SEO discovery) viven en static/ y deben
+          # publicarse en la raíz del sitio. Copiarlos explícitamente evita el
+          # bug en el que el workflow solo copiaba static/* (t_087de185).
+          for f in robots.txt sitemap.xml; do
+            if [ -f "static/$f" ]; then cp -L "static/$f" _site/; fi
+          done
           # Rutas absolutas /static/... no existen en un project page:
           # se reescriben a relativas (todo vive en la raíz del sitio).
           find _site -maxdepth 1 -name '*.html' -exec sed -i 's#"/static/#"#g' {} +
@@ -41,6 +47,12 @@ jobs:
           # Guardarraíl del P0 #110 también en el artefacto publicado:
           # ninguna cadena de prueba social fabricada puede llegar a Pages.
           ! grep -rlE 'Marina Gómez|Álvaro Rivas|Lucía Castro|166 clones|10 descargas|100% gratis' _site
+      - name: Lint SEO de Pages (reporte, no bloquea)
+        # pages_seo_check.py es la fuente de verdad del guardarraíl de SEO.
+        # No bloquea el despliegue: documenta las carencias de SEO (p.ej. los
+        # canonical /static/ que corrige PR #223) sin romper el build de Pages.
+        continue-on-error: true
+        run: python3 scripts/pages_seo_check.py
       - uses: actions/configure-pages@v5
         with:
           enablement: true
