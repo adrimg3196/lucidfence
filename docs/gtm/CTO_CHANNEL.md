@@ -10,6 +10,17 @@ Canal vivo anclado en kanban: **`t_a8252f28`** (card "standing" del canal).
 Marketing abre **tarjetas hijas de `t_a8252f28`** para cada claim específico;
 el CTO las co-firma (o bloquea) antes de publicar. Red line #110.
 
+> **Estado: ✅ CTO CO-FIRMADO (Gate 0, `docs/gtm/CTO_CO_SIGN.md`) — claim webhook SOAR corregido y verificado.**
+> Co-firmado por `empresa-cto` en kanban `t_c48380ae` (2026-08-24). RED LINE #110 respetada: el webhook NO se vende como "egress RFC1918 bloqueado por defecto".
+> Verificado contra `origin/main` @ `4d89399` (commit evidencia del webhook de salida: `7c0e8d3`):
+> - `SignedWebhookNotifier` (`lucidfence/core/notifier.py:570+`) → firma HMAC-SHA256 por tenant vía `X-LucidFence-Signature` (cuando hay `secret` configurado — modelo BYO).
+> - `_webhook_resolve` (`notifier.py:226`) cierra el DNS-rebinding TOCTOU y bloquea pivotes loopback/link-local/metadata `169.254.0.0/16` en el connect.
+> - `EgressAllowListPolicy` (`notifier.py:76`) es `permissive` por defecto (permite RFC1918/on-prem a propósito); el bloqueo estricto de RFC1918 es opt-in (`mode: "strict"`).
+> - `PublicEgressPolicy` (RFC1918 + DNS-rebind + pinned-IP) vive en `lucidfence/core/oidc.py:153` para el fetch del IdP OIDC, NO para el webhook de salida.
+> - Inbound verify: `_verify_soar_webhook_hmac` en `saas_server.py:361/383/1525`. Test de pinning: `tests/test_webhook_toctou_pinning.py`.
+> - Linter `gtm_claim_linter.py --technical` (sobre `CTO_CHANNEL.md` + `.cto_input_188.md`): **0 BLOCK / 9 INFO, exit 0**. (Nota: `--scope outbox` no escanea estos dos archivos; el escaneo a mano fue sobre los paths explícitos.)
+> **Owner gate (Adri) pendiente** antes de publicar.
+
 ---
 
 ## 1. Punto de entrada (cómo llega una petición al CTO)
