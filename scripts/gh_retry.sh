@@ -3,7 +3,12 @@
 # Source this file, then call: gh_retry api repos/owner/repo
 
 gh_retry_is_retryable() {
-  local error_text="${1,,}"
+  # `${1,,}` es bash 4+; el bash de sistema en macOS es 3.2 (todas las máquinas
+  # de la flota), donde revienta con "bad substitution" y tumbaba los 5 tests de
+  # test_cron_watchdog.py → verify.py nunca podía dar verde en local, sólo en el
+  # runner Ubuntu de CI. `tr` es POSIX y da el mismo resultado en 3.2 y 5.x.
+  local error_text
+  error_text="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
 
   if [[ "$error_text" =~ \(http[[:space:]]+(429|500|502|503|504)\) ]]; then
     return 0
