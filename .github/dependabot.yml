@@ -1,0 +1,33 @@
+# Dependabot: cierra el punto ciego de dependencias (SOC 2026-08-24, t_23367e3c).
+# Dos frentes:
+#   1) pip  -> mantiene pyproject.toml al dia (requirements.lock se regenera
+#      despues via `uv pip compile --generate-hashes` y se audita en CI).
+#   2) github-actions -> dependabot ROLLA los SHA completos de las actions que
+#      este repo fija a commit (no a tags mutables). Asi el pin a SHA no se
+#      queda estancado: sube al commit mas reciente del tag semantico.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    # El producto es local-first; versiones mayores requieren revision humana.
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    # Las actions estan fijadas a SHA de commit (no a tags). Dependabot actualiza
+    # ese SHA al ultimo commit del tag semantico, preservando el pin a commit.
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"

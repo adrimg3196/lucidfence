@@ -15,10 +15,10 @@ jobs:
       matrix:
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -38,10 +38,10 @@ jobs:
     name: Verify (versión + enlaces de docs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0   # provenance check needs full history to prove commit ancestry
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
       # Gate determinista de agentic-ship: coherencia de versión + 0 enlaces
@@ -58,8 +58,8 @@ jobs:
     # clases (F/E9) y mismo .ruff.toml del repo. Falla el CI si ruff encuentra
     # algo.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
       - name: Install ruff
@@ -71,10 +71,10 @@ jobs:
     name: Frontend syntax check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: "20"
 
@@ -92,25 +92,69 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
       - run: python3 -m pip install pip-audit
       - run: pip-audit -r requirements.lock
       - name: Generate CycloneDX SBOM
         run: python3 scripts/generate_sbom.py --out sbom.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: lucidfence-sbom
           path: sbom.cdx.json
+
+  # Cierra el punto ciego del TOOLCHAIN de build (SOC 2026-08-24, t_23367e3c):
+  # el CVE-2026-13346 / PYSEC-2026-3721 (fix en pip 26.2) afecta al instalador
+  # que usa el Dockerfile y engine-cron, no al artefacto de runtime. Este job
+  # audita pip y setuptools (el toolchain de build) y FALLA si hay CVE conocido,
+  # asi el repo no puede quedar con un pip vulnerable sin que CI lo bloquee.
+  toolchain-audit:
+    name: Toolchain audit (pip/setuptools)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+      - name: Audit pip + setuptools (no runtime deps)
+        run: |
+          python3 -m pip install --upgrade pip pip-audit
+          # pip-audit sobre el toolchain instalado (no sobre requirements.lock)
+          pip-audit --require-hashes -r requirements.lock
+          # Auditoria especifica del toolchain de build
+          pip-audit --desc on
+      - name: Gate — pip debe ser >= 26.2 (CVE-2026-13346 closed)
+        run: |
+          PIP_VER=$(python3 -m pip --version | awk '{print $2}')
+          echo "pip instalado: $PIP_VER"
+          python3 - <<'PY'
+          import sys, subprocess
+          v = subprocess.check_output([sys.executable, "-m", "pip", "--version"]).decode().split()[1].split(".")
+          major, minor = int(v[0]), int(v[1])
+          if (major, minor) < (26, 2):
+              print(f"::error::pip {major}.{minor} < 26.2 — CVE-2026-13346 sin cerrar. Fija pip>=26.2 en el Dockerfile/engine-cron.")
+              sys.exit(1)
+          print(f"OK: pip {major}.{minor} >= 26.2 (CVE-2026-13346 cerrado)")
+          PY
+      # Gate estatico del Dockerfile: no requiere construir la imagen. Falla si
+      # el Dockerfile deja de fijar pip>=26.2 (alguien lo borro sin querer).
+      - name: Gate — Dockerfile fija pip>=26.2
+        run: |
+          if grep -Eq 'pip[^|]*"pip>=26\.2"' Dockerfile; then
+            echo "OK: Dockerfile fija pip>=26.2"
+          else
+            echo "::error::El Dockerfile no fija pip>=26.2. El base python:3.11-slim trae pip vulnerable (CVE-2026-13346)."
+            exit 1
+          fi
 
   runtime-artifacts:
     name: No runtime artifacts in PR
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
       # data/cloud_state.json ya NO vive en main (ignorado): lo publica engine-cron
@@ -133,11 +177,11 @@ jobs:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
@@ -152,8 +196,8 @@ jobs:
     name: Runtime validation (claims en vivo)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
       - name: Install dependencies
@@ -170,7 +214,7 @@ jobs:
     # del merge — el bug de arbol sucio de engine-cron se habria visto aqui.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
       - name: Lint de workflows (script único, mismo que en local)
         # scripts/lint_workflows.sh fija actionlint + shellcheck y ABORTA si
         # falta alguno: sin copias inline y sin falsos verdes por herramienta

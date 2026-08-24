@@ -34,6 +34,11 @@ RUN apt-get update \
 
 # Copiar requerimientos primero para aprovechar la cache de capas.
 COPY requirements.txt requirements.lock /app/
+
+# Pinnear pip>=26.2 explicitamente: el base python:3.11-slim trae pip <26.2
+# (CVE-2026-13346 / PYSEC-2026-3721, fix en 26.2). El interpreter no cambia,
+# solo el instalador, asi que no rompe el build del producto.
+RUN pip install --no-cache-dir --upgrade "pip>=26.2"
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Codigo fuente.

@@ -57,6 +57,14 @@ dist/
 build/
 *.tar.gz
 
+# Lockfiles: requirements.lock es la UNICA fuente de verdad (hash-pinned, lo
+# audita CI y lo usa el Dockerfile y engine-cron via --require-hashes). uv.lock
+# es un artefacto local de conveniencia de uv que DIVERGE de requirements.lock
+# (ej. requests 2.33.0->2.34.2, certifi, cffi, charset-normalizer, idna) y no
+# debe commitearse nunca: lo ignoramos para evitar que un `git add` accidental
+# introduzca un segundo manifiesto no auditado en el arbol.
+uv.lock
+
 # OS
 .DS_Store
 .AppleDouble
