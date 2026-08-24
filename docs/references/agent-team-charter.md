@@ -36,10 +36,37 @@ de Coordinador **no se duplica**: dos coordinadores es no tener ninguno.
 
 ## Las cinco reglas
 
-### 1. WIP limit — 2 por implementador, 6 en total
-Si hay 6 o más PRs abiertos, **nadie empieza trabajo nuevo**. El único trabajo
-permitido es drenar: rebasar, mergear o cerrar. Esta es la regla que impide que
-21 PRs se vuelvan a acumular.
+### 1. WIP limit — 2 por implementador, gate de drenaje NO-SANA
+El cuello de botella del repo no es producir PRs sino mergearlos. El gate de
+producción se define por la **métrica NO-SANA** (fuente de verdad: el bloque
+`## MODO DRENAJE` de `docs/internal/STATE.md`), no por un recuento fijo de PRs:
+
+> Con **al menos 1 PR ABIERTA NO-SANA**, **nadie empieza trabajo nuevo**. El único
+> trabajo permitido es drenar: rebasar, mergear o cerrar. Una PR abierta es
+> NO-SANA si cumple CUALQUIERA: STALE (>7 días sin actividad) OR CONFLICTING
+> (estado de merge `conflicting`) OR RED (cualquier check-run completado con
+> conclusión failure/timed_out/canceled). Una PR verde pero `behind` main NO
+> cuenta como NO-SANA (el raíl de auto-merge la drena).
+
+El recuento histórico de «6 o más PRs abiertos» era un proxy aproximado del
+gate NO-SANA y quedó obsoleto: con 1–5 PRs abiertas que incluyan una roja o en
+conflicto, el gate NO-SANA sí bloquea nueva producción, mientras que el proxy de
+«6 PRs» la habría permitido. La métrica de autoridad es NO-SANA, medida por
+`scripts/merge_train.py` (ver Regla 1bis). Mientras haya >=1 PR NO-SANA, las
+Routines productoras (Admin-value, Product Manager, Housekeeper, Tendencias,
+Growth, Roadmap, Deps, Lanzamiento, Centinela) NO abren nuevas PRs; solo el
+Guardián drena. Reanudación: productor vuelve a abrir PRs solo cuando 0 PRs
+NO-SANAS estén abiertas.
+
+### 1bis. El generador de la cola publica el gate NO-SANA de forma fiel
+`scripts/merge_train.py` es la **única fuente de verdad** sobre si se permite
+trabajo nuevo. Su salida (`render`) debe decir «MODO DRENAJE — no se puede
+coger trabajo nuevo» cuando hay >=1 PR NO-SANA, y solo puede decir «se puede
+coger trabajo nuevo» cuando el recuento de NO-SANAS es 0. La función `classify`
+debe marcar `red`/`conflict`/`stale` como NO-SANA, y el render jamás debe
+publicar «se puede coger trabajo nuevo» basándose solo en `over_limit`
+(RecuentoTotal > GLOBAL_WIP_LIMIT). Ver `scripts/merge_train.py` y el bloque
+`## MODO DRENAJE` de `docs/internal/STATE.md`.
 
 ### 2. Claim antes de tocar código
 Antes del primer commit: asignarse la issue en GitHub y ponerle la label
