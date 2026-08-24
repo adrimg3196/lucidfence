@@ -88,7 +88,7 @@ Esta sección es realidad, no marketing. Se actualiza cuando se cierra un gap.
 | **Canales de soporte / issues triage** | Funcional | `CONTRIBUTING.md` con el flujo; issues de terceros triados por la flota (etiquetado + respuesta), autores externos nunca auto-mergeados. |
 | **Seguridad: disclosure policy** | Completo | `SECURITY.md` con el disclosure path; el loop Centinela ataca el propio LucidFence en localhost (método Strix) y registra hallazgos con PoC. |
 
-Onboarding externo (README npm-style, FAQ) es lo que sigue abierto de esta lista.
+El onboarding de terceros está cubierto por [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — guía de arranque externa con los pasos de instalación, comprobación, conexión de tu UEM y FAQ.
 
 ## Lo que sí funciona hoy
 
