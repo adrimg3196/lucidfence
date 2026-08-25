@@ -20,10 +20,7 @@ sits on top of the UEM you already run (Applivery, Intune, Jamf, Fleet, …
 on your own machine. See [README.en.md](../README.en.md) and the root
 [README.md](../README.md).
 
-> ⚠️ **Accuracy note (SEO & Docs Bot, 2026-08-23; pending CTO co-sign like
-> #203).** Two facts on this page are *vendor-side* and come from the SEO &
-> Docs Bot's 2026 evidence review, not from LucidFence source code — they are
-> flagged here so they get the same CTO co-sign pass as the Intune/Jamf pages:
+> ⚠️ **Accuracy note (signed off by CTO, 2026-08-25 — mirrors the Intune/Jamf #203/#267 co-sign).** Two facts on this page are *vendor-side* and come from the SEO & Docs Bot's 2026 evidence review, not from LucidFence source code. The CTO verified both against `origin/main` and co-signed them: the adapter registry (`lucidfence/core/adapters/__init__.py`) has **no `kandji` key** (only `applivery` / `intune` / `jamf` / `fleet`) — so Kandji is reached via `GENERIC_HTTP`; and Kandji's "Lost Mode" is documented vendor recovery-location behavior, **not** geofencing/compliance-by-location. The LucidFence-side claims remain verifiable from code/docs:
 > 1. **Kandji has no native LucidFence adapter today** (the adapter registry
 >    holds Applivery, Intune, Jamf, Fleet). Kandji is reached through the
 >    **GENERIC_HTTP** bring-your-own-UEM connector
