@@ -71,7 +71,7 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
     trails = list(bounded_trails)
 
     if eng is not None and getattr(eng, "risk", None) is not None:
-        risk = _risk_from_engine(eng, devices)
+        risk = _risk_from_engine(eng, devices, int(status.get("interval_seconds") or 900))
     else:
         risk = compute_risk(devices, events, actions, int(status.get("interval_seconds") or 900))
     incidents = derive_incidents(devices, events, actions, risk)
@@ -150,12 +150,16 @@ def build_activation(status: dict[str, Any], devices: list[dict[str, Any]],
 _SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "unknown": 0}
 
 
-def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _risk_from_engine(
+    eng: Any,
+    devices: list[dict[str, Any]],
+    interval_seconds: int = 900,
+) -> list[dict[str, Any]]:
     """Use the Geospatial Risk & Policy Engine as the single source of truth for
     device risk. Each device is scored with composite signals; matched policies
     are attached so the dashboard shows WHY a device is risky.
 
-    Two invariants are enforced here (issue #302):
+    Three invariants are enforced here (issue #302):
 
     1. A crashed evaluator MUST NOT be presented as a healthy device. The old
        `except Exception: r = {risk_score: 0.0, severity: "low"}` masked a
@@ -173,7 +177,30 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
        diverged from the value that fired automation. We still recompute to
        obtain the explicable reasons/signals (the product moat), but the
        headline number follows the persisted, actioning verdict.
+
+    3. The EXPLAIN of the verdict (WHY) is ALSO projected from the persisted
+       verdict when it is still fresh (evaluated within 2*interval_seconds). The
+       GET path no longer recomputes reasons/matched_policies with a fresh
+       context and quietly disagrees with the verdict that fired actions. When
+       the persisted verdict is absent (legacy/brand-new device) or stale, we
+       recompute live and mark the row `stale=True`, preserving the last known
+       `evaluated_at` so the UI can say "evaluated X ago, context may have
+       changed" without inventing a new number. This is the residual of defect 2
+       (the headline was already covered by invariant 2 in the risk-err-sentinel
+       branch).
     """
+    from datetime import datetime, timezone as _tz
+
+    def _iso_age_seconds(iso: str | None) -> float | None:
+        if not iso:
+            return None
+        try:
+            dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        except Exception:
+            return None
+        return (datetime.now(_tz.utc) - dt).total_seconds()
+
+    staleness_threshold = 2 * interval_seconds
     ctx = {
         "hour": eng._ctx_hour(),
         "shift_zones": eng._ctx_shift_zones(),
@@ -185,6 +212,12 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
         # Persisted verdict (written by Engine.run_once) — the actioning source.
         persisted_score = d.get("risk_score", None)
         persisted_sev = d.get("risk_severity", None)
+        # Persisted EXPLAIN (defect 2): reasons/matched timestamped by the cycle.
+        persisted_reasons = d.get("risk_reasons")
+        persisted_matched = d.get("risk_matched_policies")
+        persisted_evaluated_at = d.get("risk_evaluated_at")
+        persisted_provenance = d.get("risk_provenance")
+        persisted_verified = d.get("risk_verified")
         try:
             r = dict(eng.risk.evaluate(d, fence_state, ctx))
             r["verified"] = True
@@ -200,38 +233,71 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
                 "verified": False,
                 "error": "risk_evaluation_failed",
             }
-        # Headline follows the persisted, actioning verdict (defect 2).
-        score = persisted_score if persisted_score is not None else r.get("risk_score")
-        severity = (persisted_sev or r.get("severity") or "unknown")
-        fired = []
-        # Only match policies against a real, verified verdict — never against
-        # the error sentinel, which would fabricate policy hits.
-        if r.get("verified"):
-            try:
-                fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
-            except Exception:
-                fired = []
+
+        # Decide whether the persisted verdict is still authoritative.
+        age = _iso_age_seconds(persisted_evaluated_at)
+        verdict_fresh = (
+            persisted_evaluated_at is not None
+            and age is not None
+            and age >= 0
+            and age <= staleness_threshold
+        )
+
+        if verdict_fresh:
+            # PROJECT the persisted verdict (headline + explain) verbatim — this
+            # is the source of truth that fired actions, never recomputed live.
+            score = persisted_score if persisted_score is not None else r.get("risk_score")
+            severity = (persisted_sev or r.get("severity") or "unknown")
+            reasons = list(persisted_reasons) if persisted_reasons is not None else r.get("reasons", [])
+            matched = list(persisted_matched) if persisted_matched is not None else []
+            evaluated_at = persisted_evaluated_at
+            verified = bool(persisted_verified) if persisted_verified is not None else r.get("verified", False)
+            proved = persisted_provenance or r.get("provenance", "tool")
+            stale = False
+        else:
+            # Absent or stale: recompute live so the dashboard is never blank,
+            # but mark stale=True and keep the last known timestamp honest.
+            # NOTE: the HEADLINE still projects the persisted verdict when it is
+            # present (defect 1 invariant 2) — only the EXPLAIN falls back to a
+            # live recompute here. We never invent a headline from a fresh context.
+            score = persisted_score if persisted_score is not None else r.get("risk_score")
+            severity = (persisted_sev or r.get("severity") or "unknown")
+            reasons = r.get("reasons", [])
+            matched = []
+            if r.get("verified"):
+                try:
+                    matched = [fp["policy_id"] for fp in
+                               eng.risk.match_policies(eng.policies, r, d, fence_state)]
+                except Exception:
+                    matched = []
+            evaluated_at = persisted_evaluated_at
+            verified = r.get("verified", False)
+            proved = r.get("provenance", "tool")
+            stale = True
+
         rows.append({
             "device_id": str(d.get("device_id") or ""),
             "device_name": d.get("name") or str(d.get("device_id") or ""),
             "platform": d.get("platform") or "unknown",
             "score": score,
             "level": severity,
-            "verified": r.get("verified", False),
+            "verified": verified,
+            "provenance": proved,
             "error": r.get("error"),
+            "evaluated_at": evaluated_at,
+            "stale": stale,
             "factors": [{"points": 0, "label": x,
-                         "severity": r.get("severity", "unknown")}
-                        for x in r.get("reasons", [])] or
+                         "severity": severity}
+                        for x in reasons] or
                        [{"points": 0, "label": "Sin senales de riesgo",
                          "severity": "unknown"}],
             "signals": r.get("signals", {}),
-            "matched_policies": [f["policy_id"] for f in fired],
+            "matched_policies": matched,
             "fence_state": fence_state,
             "inside_fence": d.get("inside_fence"),
             "compliant": d.get("compliant"),
             "last_seen": d.get("last_seen"),
             "dwell_seconds": int(d.get("dwell_seconds") or 0),
-            "stale": False,
             "recent_actions": 0,
         })
     return sorted(

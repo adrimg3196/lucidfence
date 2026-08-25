@@ -1260,7 +1260,7 @@ def _api_fleet_federated(ctx: routing.Ctx):
     if provider is not None and not valid_provider_filter(provider):
         return {"error": "provider inválido (nombre de UEM: minúsculas/dígitos/_)"}, 400
     devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
-    risk_rows = _risk_from_engine(ctx.eng, devices)
+    risk_rows = _risk_from_engine(ctx.eng, devices, int(getattr(ctx.eng, "interval", 900) or 900))
     # Del registro del tenant solo viajan nombre + segmento (jamás credenciales).
     providers = [{"name": p.get("name"), "segment": p.get("segment")}
                  for p in _list_providers(_tenants.data_dir(ctx.org))]

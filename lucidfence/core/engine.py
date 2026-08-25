@@ -500,10 +500,36 @@ class Engine:
                 })
                 risk_device.update(posture)
                 risk_device["location_integrity"] = integrity
-                risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
-                ds.risk_score = risk["risk_score"]
-                ds.risk_severity = risk["severity"]
-                fired_policies = self.risk.match_policies(self.policies, risk, ds.to_dict(), fence_state)
+                try:
+                    risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
+                except Exception as _eval_exc:
+                    # Defensive: a crashed evaluator must not break the whole
+                    # cycle. Leave the persisted verdict explaining fields as-is
+                    # (None on first cycle) so the GET path falls back to a live
+                    # recompute + honest sentinel rather than masking the failure.
+                    self.store.log_event({
+                        "ts": now_iso(), "device_id": rep.device_id,
+                        "kind": "risk_eval_error",
+                        "error": f"{type(_eval_exc).__name__}: {_eval_exc}",
+                    })
+                    risk = None
+                if risk is not None:
+                    ds.risk_score = risk["risk_score"]
+                    ds.risk_severity = risk["severity"]
+                    # --- Defect 2: persist the EXPLAIN of the verdict so the
+                    # GET path projects the exact "why" that fired actions. ---
+                    ds.risk_reasons = list(risk.get("reasons") or [])
+                    _fired = self.risk.match_policies(
+                        self.policies, risk, ds.to_dict(), fence_state)
+                    ds.risk_matched_policies = [fp["policy_id"] for fp in _fired]
+                    ds.risk_evaluated_at = now_iso()
+                    ds.risk_provenance = risk.get("provenance")
+                    ds.risk_verified = risk.get("verified")
+                    fired_policies = _fired
+                else:
+                    # Evaluator crashed: keep prior persisted fields so telemetry
+                    # is not clobbered; the GET sentinel covers the display.
+                    fired_policies = []
                 for fp in fired_policies:
                     for act in fp.get("actions", []):
                         self._dedupe_action(ds, act.get("action"), inside_fence,

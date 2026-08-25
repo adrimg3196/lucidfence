@@ -33,6 +33,16 @@ class DeviceState:
     location_source: str = "unknown"  # gps | coarse_ip | simulated
     risk_score: Optional[float] = None  # MOAT: geospatial risk 0-100
     risk_severity: Optional[str] = None  # low|medium|high|critical
+    # --- Defect 2: persisted EXPLAIN of the verdict (issue #302) ---
+    # Written by Engine.run_once alongside risk_score/risk_severity so the GET
+    # path can PROJECT the exact verdict (WHY) that fired actions — instead of
+    # recomputing with a fresh context after a shift change / config edit and
+    # silently disagreeing with itself. All Optional => old JSON loads clean.
+    risk_reasons: Optional[list] = None  # reasons[] from RiskEngine.evaluate
+    risk_matched_policies: Optional[list] = None  # policy ids from match_policies
+    risk_evaluated_at: Optional[str] = None  # ISO timestamp of the cycle verdict
+    risk_provenance: Optional[str] = None  # "tool"|"context"|"none"
+    risk_verified: Optional[bool] = None  # provenance gate (evidence-backed?)
     route_id: Optional[str] = None  # assigned route (if any)
     route_state: Optional[str] = None  # on_route|off_route|unassigned
     route_deviation_m: Optional[float] = None  # meters from route polyline
