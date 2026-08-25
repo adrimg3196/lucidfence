@@ -87,7 +87,18 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    lo habilitó: la postura de osquery **sobrescribía** `encryption_enabled` y
    borraba la afirmación del UEM — la contradicción era indetectable;
    `DeviceState.uem_claimed_encryption` conserva ahora las dos caras.
-   **Nº1 pendiente ahora: #12 panel único multi-UEM con riesgo normalizado.**
+   **#12 panel único multi-UEM — HECHO 2026-08-25** (heartbeat de producto):
+   `lucidfence/core/federated_fleet.py` (función pura stdlib) +
+   `GET /api/fleet/federated` (`device:read`, tenant-scoped, filtro
+   `?provider=` con 400 honesto) + vista "Flota federada" en el dashboard
+   (chip de origen por UEM + segmento, riesgo por nivel, clic → explain-risk)
+   + 11 tests + 3 checks runtime (57/57) + `docs/operations/federated_fleet.md`.
+   La flota de TODOS los UEMs del tenant en una lista con el MISMO veredicto
+   explicable; desconocido = null, jamás inventado ni penalizado; del registro
+   de providers solo viajan nombre y segmento (probado con secret inyectado).
+   **Nº1 pendiente ahora: #16 auditor de mínimo privilegio de credenciales
+   UEM** (el siguiente SÍ limpio de la capa complemento; #14 políticas
+   portables queda detrás por su matiz pendiente).
 8b. ~~**Políticas y geocercas como código (`lucidfence apply`)**~~ — **HECHO
    2026-08-19** (backlog evaluado #1; tendencia GitHub validada: Fleet 4.90
    redobla en GitOps): validar → diff `+/~/-` → **what-if con replay del

@@ -29,6 +29,7 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/fences           -> fence IDs only (geometry comes from /api/status.st.fences)
   GET  /api/risk
   GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
+  GET  /api/fleet/federated  -> flota federada multi-UEM (+ ?provider=)
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -1236,6 +1237,34 @@ def _api_second_opinion(ctx: routing.Ctx):
             return {"error": "stale_claim_after_s fuera de rango (60..2592000)"}, 400
     devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
     return second_opinion_report(devices, stale_claim_after_s=stale_after_s)
+
+
+@api_route("GET", "/api/fleet/federated", cap="device:read")
+def _api_fleet_federated(ctx: routing.Ctx):
+    """Panel único multi-UEM (backlog §12): la flota de TODOS los providers del
+    tenant en una sola lista, con el origen trazado (provider + segmento) y el
+    MISMO veredicto de riesgo explicable para todos.
+
+    Solo lectura sobre estado ya existente: el riesgo es el veredicto que el
+    engine ya produce por dispositivo (la misma vía que /api/risk), nunca un
+    recálculo del panel. Un campo que el UEM no reportó llega como null — jamás
+    se inventa ni penaliza (ver core/federated_fleet.py). Mismo gating que
+    /api/coverage."""
+    from lucidfence.core.federated_fleet import (build_federated_fleet,
+                                                 valid_provider_filter)
+    from lucidfence.core.product import _risk_from_engine
+    # ?provider= filtra por UEM de origen. Un filtro que no puede ser un nombre
+    # de provider -> 400, no silencio: un filtro ignorado devolvería una lista
+    # que miente.
+    provider = (ctx.qs.get("provider") or [None])[0]
+    if provider is not None and not valid_provider_filter(provider):
+        return {"error": "provider inválido (nombre de UEM: minúsculas/dígitos/_)"}, 400
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    risk_rows = _risk_from_engine(ctx.eng, devices)
+    # Del registro del tenant solo viajan nombre + segmento (jamás credenciales).
+    providers = [{"name": p.get("name"), "segment": p.get("segment")}
+                 for p in _list_providers(_tenants.data_dir(ctx.org))]
+    return build_federated_fleet(devices, risk_rows, providers, provider=provider)
 
 
 @api_route("GET", "/api/risk", cap="device:read")
