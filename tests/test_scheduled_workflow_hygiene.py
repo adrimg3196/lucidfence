@@ -154,20 +154,31 @@ def test_cada_workflow_de_pr_cancela_el_run_superado():
             f"run superado se encola en vez de cancelarse y puede seguir "
             f"muriendo contra refs que ya no existen.")
         valor = m.group(1).strip()
-        # `cancel-in-progress: false` tambien satisface un chequeo de mera
-        # presencia — y no cancela nada (lo cazo Codex en #297 con
-        # regen-adapter-index). Solo vale `true` o una expresion que evalua
-        # true en eventos de PR.
-        assert valor == "true" or "pull_request" in valor, (
-            f"{nombre}: `cancel-in-progress: {valor}` nunca cancela el run de "
-            f"una PR superada. Usa `true` o la expresion "
-            f"${{{{ github.event_name == 'pull_request' }}}}.")
+        # LISTA BLANCA, no deteccion por subcadena: `cancel-in-progress: false`
+        # pasaba un chequeo de mera presencia (Codex en #297), y un chequeo de
+        # subcadena lo pasaria `!= 'pull_request'`, que DESACTIVA la
+        # cancelacion justo en PRs (Codex en #299). Un guard que intenta
+        # detectar maldad se evade; uno que prescribe el idioma bueno, no.
+        VALORES_BUENOS = (
+            "true",
+            "${{ github.event_name == 'pull_request' }}",
+        )
+        assert valor in VALORES_BUENOS, (
+            f"{nombre}: `cancel-in-progress: {valor}` no es una de las formas "
+            f"canonicas {VALORES_BUENOS}. Si de verdad necesitas otra "
+            f"expresion, anade la forma nueva aqui con su porque.")
         g = re.search(r"^\s*group:\s*(.+)$", texto, re.M)
-        assert g and re.search(r"pull_request\.number|github\.ref|github\.head_ref",
-                               g.group(1)), (
+        # El grupo debe VARIAR por PR. Exigir el idioma canonico (numero de PR
+        # con fallback a la ref) y no una subcadena: `${{ github.ref && 'x' }}`
+        # contiene github.ref y aun asi mapea TODAS las PRs al mismo grupo.
+        IDIOMA_GRUPO = re.compile(
+            r"\$\{\{\s*github\.event\.pull_request\.number\s*\|\|"
+            r"\s*github\.(ref|head_ref)\s*\}\}")
+        assert g and IDIOMA_GRUPO.search(g.group(1)), (
             f"{nombre}: el grupo de concurrency `{g.group(1).strip() if g else '?'}` "
-            f"no distingue PRs: dos PRs se cancelan/encolan entre si. Incluye "
-            f"github.event.pull_request.number o github.ref en el grupo.")
+            f"no usa el idioma por-PR canonico "
+            f"`${{{{ github.event.pull_request.number || github.ref }}}}`: dos "
+            f"PRs distintas podrian compartir grupo y cancelarse entre si.")
 
 
 def test_ningun_cron_se_traga_el_error_de_una_consulta_remota():
