@@ -148,10 +148,26 @@ def test_cada_workflow_de_pr_cancela_el_run_superado():
             f"{nombre} corre en pull_request sin `concurrency`: un force-push "
             f"deja el run viejo corriendo contra una ref muerta y el fallo "
             f"resultante manda correo al propietario sin decir nada.")
-        assert "cancel-in-progress:" in texto, (
+        m = re.search(r"^\s*cancel-in-progress:\s*(.+)$", texto, re.M)
+        assert m, (
             f"{nombre} declara concurrency pero sin `cancel-in-progress`: el "
             f"run superado se encola en vez de cancelarse y puede seguir "
             f"muriendo contra refs que ya no existen.")
+        valor = m.group(1).strip()
+        # `cancel-in-progress: false` tambien satisface un chequeo de mera
+        # presencia — y no cancela nada (lo cazo Codex en #297 con
+        # regen-adapter-index). Solo vale `true` o una expresion que evalua
+        # true en eventos de PR.
+        assert valor == "true" or "pull_request" in valor, (
+            f"{nombre}: `cancel-in-progress: {valor}` nunca cancela el run de "
+            f"una PR superada. Usa `true` o la expresion "
+            f"${{{{ github.event_name == 'pull_request' }}}}.")
+        g = re.search(r"^\s*group:\s*(.+)$", texto, re.M)
+        assert g and re.search(r"pull_request\.number|github\.ref|github\.head_ref",
+                               g.group(1)), (
+            f"{nombre}: el grupo de concurrency `{g.group(1).strip() if g else '?'}` "
+            f"no distingue PRs: dos PRs se cancelan/encolan entre si. Incluye "
+            f"github.event.pull_request.number o github.ref en el grupo.")
 
 
 def test_ningun_cron_se_traga_el_error_de_una_consulta_remota():
