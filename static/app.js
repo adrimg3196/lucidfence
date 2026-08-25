@@ -208,7 +208,7 @@ async function logout(){
   stopPolling();
   const su = $("#sideUser"); if(su) su.style.display="none";
   $("#orgName").textContent="";
-  ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","intelligence","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
+  ["overview","map","devices","riesgo","inventory","federated","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","intelligence","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
   showAuthModal();
 }
 function startApp(){
@@ -228,6 +228,7 @@ const NAV = [
   {id:"map",        label:"Mapa",        icon:"map"},
   {id:"devices",    label:"Dispositivos",icon:"devices"},
   {id:"inventory",  label:"Inventario",  icon:"box"},
+  {id:"federated",  label:"Flota federada", icon:"sitemap-4"},
   {id:"connectors", label:"Conectores UEM", icon:"link"},
   {id:"riesgo",     label:"Riesgo",       icon:"shield-alert"},
   {id:"ai",         label:"AI opcional",  icon:"cpu"},
@@ -301,6 +302,7 @@ function goView(id){
   if(id==="map") renderMapView();
   if(id==="devices") renderDevices();
   if(id==="inventory") renderInventory();
+  if(id==="federated") renderFederated();
   if(id==="connectors") renderConnectors();
   if(id==="riesgo") renderRisk();
   if(id==="ai") renderAI();
@@ -349,6 +351,7 @@ async function refresh(initial){
     else if(App.view==="map") renderMapView();
     else if(App.view==="devices") renderDevices();
     else if(App.view==="inventory") renderInventory();
+    else if(App.view==="federated") renderFederated();
     else if(App.view==="connectors") renderConnectors();
     else if(App.view==="riesgo") renderRisk();
     else if(App.view==="events") renderEvents();
@@ -1021,6 +1024,82 @@ function renderDeviceRows(){
       <td>${verifiedCell}</td>
       <td><span class="plat" style="cursor:pointer" onclick="openDeviceModal('${esc(d.device_id)}')">${I.act}</span></td>`;
     tr.onclick = ()=>openDeviceModal(d.device_id);
+    tb.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   VISTA: FLOTA FEDERADA (backlog #12) — un panel, N UEMs, mismo veredicto
+   ============================================================ */
+// Origen trazado como chip sobrio: el UEM que reportó el dispositivo + su
+// segmento de flota. Sin origen conocido → "desconocido" en muted (.unk),
+// jamás atribuido a un UEM por conjetura (honestidad del backend).
+function fedOriginChip(row){
+  const provs = row.providers||[];
+  if(!provs.length) return `<span class="tag unk"><span class="d"></span>desconocido</span>`;
+  return provs.map(p=>{
+    const seg = p.segment ? ` <span class="sub">· ${esc(p.segment)}</span>` : "";
+    return `<span class="tag out" title="reportado por ${esc(p.name)}"><span class="d"></span>${esc(p.name)}</span>${seg}`;
+  }).join(" ");
+}
+// Riesgo con color por nivel usando los tokens existentes de las etiquetas
+// de estado. null (el engine aún no tiene veredicto) → muted, nunca un 0
+// inventado.
+function fedRiskBadge(risk){
+  if(!risk || risk.score==null) return `<span class="sub" title="sin veredicto del engine todavía">—</span>`;
+  const cls = ({critical:"nocomp", high:"warn", medium:"out", low:"in"})[risk.level] || "unk";
+  return `<span class="tag ${cls}"><span class="d"></span>${Math.round(risk.score)} · ${esc(severityLabel(risk.level))}</span>`;
+}
+async function renderFederated(){
+  const node = $("#view-federated"); if(!node) return;
+  let data;
+  try{
+    const q = App.fedFilter && App.fedFilter!=="all" ? `?provider=${encodeURIComponent(App.fedFilter)}` : "";
+    data = await api("/api/fleet/federated"+q);
+  }catch(e){
+    node.innerHTML = `<div class="view-head"><div><h2>Flota federada</h2></div></div>
+      ${emptyState("Sin datos", e.message||"No se pudo cargar la flota federada.")}`;
+    return;
+  }
+  const provs = data.providers||[];
+  const chips = [
+    `<button type="button" class="chip ${!App.fedFilter||App.fedFilter==="all"?"active":""}" data-f="all">Todos (${data.fleet_total||0})</button>`,
+  ].concat(provs.map(p=>
+    `<button type="button" class="chip ${App.fedFilter===p.name?"active":""}" data-f="${esc(p.name)}">${esc(p.name)}${p.segment?` · ${esc(p.segment)}`:""} (${p.devices})</button>`));
+  node.innerHTML = `
+    <div class="view-head">
+      <div><h2>Flota federada</h2>
+        <div class="sub">Todos tus UEMs en una vista, con el mismo veredicto de riesgo explicable para cada dispositivo y su origen trazado. Clic en una fila abre el porqué.</div></div>
+      ${data.sin_origen?`<div class="acts"><span class="tag unk"><span class="d"></span>${data.sin_origen} sin origen trazado</span></div>`:""}
+    </div>
+    <div class="toolbar"><div class="filters" id="fedFilters">${chips.join("")}</div></div>
+    <div class="card"><table class="tt"><thead><tr>
+      <th>Dispositivo</th><th>Origen (UEM)</th><th>Plataforma</th>
+      <th>Riesgo</th><th>Por qué</th><th>Visto</th><th></th>
+    </tr></thead><tbody id="fedBody"></tbody></table></div>`;
+  $$("#fedFilters .chip").forEach(c=>c.onclick=()=>{
+    App.fedFilter = c.dataset.f; renderFederated();
+  });
+  const tb = $("#fedBody");
+  const rows = data.fleet||[];
+  if(!rows.length){
+    tb.innerHTML = `<tr><td colspan="7">${emptyState("Sin dispositivos", "Ningún UEM ha reportado dispositivos para este filtro.")}</td></tr>`;
+    return;
+  }
+  rows.forEach(r=>{
+    const reasons = (r.top_reasons||[]);
+    const tr = el("tr");
+    tr.innerHTML = `
+      <td><div class="dev"><div class="av" style="background:${avatarColor(r.device_id)}">${avatarText(r.name||r.device_id)}</div>
+        <div style="min-width:0"><div class="nm">${esc(r.name||r.device_id)}</div>
+        <div class="sub">${esc(r.device_id)}</div></div></div></td>
+      <td>${fedOriginChip(r)}</td>
+      <td><span class="plat">${platformIcon(r.platform)} ${esc(r.platform||"—")}</span></td>
+      <td>${fedRiskBadge(r.risk)}</td>
+      <td>${reasons.length? esc(reasons[0]) + (reasons.length>1?` <span class="sub">· +${reasons.length-1} más</span>`:"") : `<span class="sub">sin señales</span>`}</td>
+      <td class="mono">${fmt.ago(r.last_seen)}</td>
+      <td><span class="plat" style="cursor:pointer" title="Abrir explain-risk">${I.act}</span></td>`;
+    tr.onclick = ()=>openDeviceModal(r.device_id);
     tb.appendChild(tr);
   });
 }

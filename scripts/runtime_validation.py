@@ -478,6 +478,93 @@ def main() -> int:
               f"http={s}, body={pinv}")
         http_req("DELETE", "/api/providers/simulation", cookie=cookie)
 
+        # ============ 3c-bis. Backlog #12: panel único multi-UEM =============
+        # Claim: dos adapters simulados con perfiles distintos aparecen en UNA
+        # flota con riesgo comparable (el veredicto del engine, no un recálculo
+        # del panel) y origen trazado, con filtro por UEM y drill-down.
+        print("\n== Backlog #12 Panel único multi-UEM (GET /api/fleet/federated) ==")
+        # (a) endpoint vivo en el server real: forma federada + honestidad. La
+        # flota demo viene del simulador (sin provider_refs), así que el origen
+        # debe llegar null/"desconocido" — jamás atribuido a un UEM inventado.
+        s, fed0, _ = http_req("GET", "/api/fleet/federated", cookie=cookie)
+        fleet0 = (fed0 or {}).get("fleet") or []
+        shape_ok = s == 200 and all(k in (fed0 or {})
+                                    for k in ("fleet", "providers", "total", "sin_origen"))
+        sin_origen_honesto = bool(fleet0) and all(r.get("provider") is None for r in fleet0)
+        s400, fedbad, _ = http_req("GET", "/api/fleet/federated?provider=NO%20VALIDO",
+                                   cookie=cookie)
+        check("GET /api/fleet/federated vivo: forma federada, origen desconocido "
+              "null (no inventado) y filtro inválido -> 400",
+              shape_ok and sin_origen_honesto and s400 == 400,
+              f"http={s}, flota={len(fleet0)}, sin_origen={(fed0 or {}).get('sin_origen')}, "
+              f"filtro_invalido={s400}")
+
+        # (b) dos adapters simulados (perfiles distintos) -> una sola flota.
+        # El orquestador multi-UEM implementa el contrato de location source
+        # (fetch -> LocationReport con provider_refs), así que un ciclo REAL
+        # del engine ingiere ambas flotas con el origen trazado; la petición
+        # entra por la MISMA ruta registrada que sirve el server (RouteRegistry
+        # de saas_server), con su RBAC — producción, no un atajo de test.
+        import saas_server as _ss
+        from lucidfence.core.multiuem import NormalizedDevice
+        from lucidfence.saas import routing as _routing
+
+        def _fed_binding(name, devices):
+            return ProviderBinding(
+                name=name, capabilities=ProviderCapabilities(),
+                fetch_devices=lambda devices=devices: [d for d in devices])
+
+        eng_fed = Engine({"mode": "simulation", "autostart": False,
+                          "data_dir": str(tmp / "eng-federated"),
+                          "sim_seed_path": "data/fleet_seed.json"})
+        eng_fed.orchestrator = MultiUEMOrchestrator([
+            _fed_binding("intune", [NormalizedDevice(
+                canonical_id="fed-win", provider="intune",
+                provider_device_id="guid-win", name="Portatil RT",
+                platform="windows", compliant=False)]),
+            _fed_binding("jamf", [NormalizedDevice(
+                canonical_id="fed-mac", provider="jamf",
+                provider_device_id="jamf-mac", name="MacBook RT",
+                platform="macos", compliant=True)]),
+        ])
+        eng_fed.source = eng_fed.orchestrator
+        eng_fed.run_once()
+
+        def _fed_call(role="viewer", qs=None):
+            sent = []
+            _ss._api_routes.dispatch(
+                "GET", "/api/fleet/federated",
+                _routing.Ctx(http=None, user={"org_roles": {"org-fed-rt": role} if role else {}},
+                             org="org-fed-rt", eng=eng_fed, qs=qs or {}),
+                send=lambda obj, code=200: sent.append((code, obj)))
+            return sent[0]
+
+        code_fed, fed = _fed_call()
+        by_id = {r["device_id"]: r for r in (fed.get("fleet") or [])} if code_fed == 200 else {}
+        origen_ok = (by_id.get("fed-win", {}).get("provider") == "intune"
+                     and by_id.get("fed-mac", {}).get("provider") == "jamf")
+        riesgos = {i: (by_id.get(i, {}).get("risk") or {}) for i in ("fed-win", "fed-mac")}
+        comparable = all(isinstance(r.get("score"), (int, float))
+                         and r.get("level") in ("low", "medium", "high", "critical")
+                         for r in riesgos.values())
+        discrimina = comparable and riesgos["fed-win"]["score"] > riesgos["fed-mac"]["score"]
+        check("dos adapters simulados con perfiles distintos: UNA flota con "
+              "origen trazado y riesgo comparable del mismo engine",
+              code_fed == 200 and set(by_id) == {"fed-win", "fed-mac"}
+              and origen_ok and discrimina
+              and bool(by_id.get("fed-win", {}).get("top_reasons")),
+              f"http={code_fed}, flota={sorted(by_id)}, "
+              f"origenes={ {i: by_id.get(i, {}).get('provider') for i in by_id} }, "
+              f"scores={ {i: r.get('score') for i, r in riesgos.items()} }")
+
+        code_flt, fed_flt = _fed_call(qs={"provider": ["jamf"]})
+        solo_jamf = [r["device_id"] for r in (fed_flt.get("fleet") or [])] if code_flt == 200 else []
+        code_403, body_403 = _fed_call(role=None)
+        check("filtro por UEM de origen funciona y sin device:read -> 403 canonico",
+              code_flt == 200 and solo_jamf == ["fed-mac"]
+              and (code_403, body_403) == (403, {"error": "sin permiso"}),
+              f"filtro={solo_jamf}, sin_permiso={code_403}/{body_403}")
+
         # ============ 3d. RBAC gestionable: ver miembros y cambiar un rol =====
         # El ciclo Admin-value nº3: el propietario da de alta un miembro, GET
         # /api/members lo lista, POST /api/members/role le cambia el rol en vivo,
