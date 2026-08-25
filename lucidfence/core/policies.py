@@ -80,8 +80,13 @@ def sig_shift_match(device, ctx):
 @register_signal("device_health")
 def sig_device_health(device, ctx):
     encryption = device.get("encryption_enabled")
+    compliant = device.get("compliant")
     return {
-        "compliant": bool(device.get("compliant")),
+        # None = el UEM nunca lo afirmó. bool(None) lo convertía en False y
+        # sumaba +25 con la razón fabricada "dispositivo no conforme" — el
+        # mismo pecado que la línea de encryption ya evita. Desconocido no
+        # es evidencia de incumplimiento.
+        "compliant": True if compliant is None else bool(compliant),
         "rooted": bool(device.get("rooted", False)),
         # Unknown posture is not evidence of disabled encryption.
         "encryption": True if encryption is None else bool(encryption),
