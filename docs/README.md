@@ -65,6 +65,7 @@ Páginas capability-by-capability, citando doc interna, para quien busca
 | --- | --- |
 | [`comparisons/lucidfence-vs-intune.md`](comparisons/lucidfence-vs-intune.md) | LucidFence vs Microsoft Intune (capacidad por capacidad, claims co-firmados CTO) |
 | [`comparisons/lucidfence-vs-jamf.md`](comparisons/lucidfence-vs-jamf.md) | LucidFence vs Jamf Pro (capacidad por capacidad, claims co-firmados CTO) |
+| [`comparisons/lucidfence-vs-kandji.md`](comparisons/lucidfence-vs-kandji.md) | LucidFence vs Kandji / Iru (capacidad por capacidad; entry-point "Kandji geofencing") |
 
 ## Integraciones
 
