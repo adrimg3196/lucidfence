@@ -164,6 +164,13 @@ def serialize(eng: Engine, org_id: str) -> dict:
     devices = []
     for s in snap:
         geo = ios_geofence_compliance(s)
+        # Risk score/severity: emit the REAL persisted verdict. A missing
+        # verdict (evaluator never ran, or crashed) is published as a null
+        # score + "unknown" severity — never as 0/"low". The dashboard renders
+        # null as "Sin senal" so an un-evaluable device is visibly NOT-safe
+        # (issue #302: lo desconocido jamas se presenta como bueno).
+        _rs = getattr(s, "risk_score", None)
+        _rsev = getattr(s, "risk_severity", None)
         devices.append({
             "device_id": getattr(s, "device_id", ""),
             "name": getattr(s, "name", ""),
@@ -173,7 +180,13 @@ def serialize(eng: Engine, org_id: str) -> dict:
             "geofence_compliance_applicable": geo["geofence_compliance_applicable"],
             "geofence_compliant": geo["geofence_compliant"],
             "geofence_compliance_label": geo["geofence_compliance_label"],
-            "risk_score": getattr(s, "risk_score", 0),
+            # Risk score/severity: emit the REAL persisted verdict. A missing
+            # verdict (e.g. evaluator never ran, or crashed) is published as a
+            # null score + "unknown" severity — never as 0/"low". The dashboard
+            # renders null as "Sin senal" so an un-evaluable device is visibly
+            # NOT-safe (issue #302: lo desconocido jamas se presenta como bueno).
+            "risk_score": _rs,
+            "risk_severity": _rsev,
             "battery_level": getattr(s, "battery_level", None),
             "department": getattr(s, "department", ""),
             "os_version": getattr(s, "os_version", ""),

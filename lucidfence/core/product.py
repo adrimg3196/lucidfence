@@ -94,7 +94,7 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
             "fleet_size": len(devices),
             "open_incidents": len([i for i in incidents if i.get("status") == "open"]),
             "critical_incidents": len([i for i in incidents if i.get("severity") == "critical"]),
-            "high_risk_devices": len([r for r in risk if r.get("score", 0) >= 70]),
+            "high_risk_devices": len([r for r in risk if (r.get("score") or 0) >= 70]),
             "policies_enabled": len([p for p in policies if p.get("enabled")]),
             "automation_mode": "dry-run" if status.get("dry_run") else "live",
         },
@@ -144,10 +144,36 @@ def build_activation(status: dict[str, Any], devices: list[dict[str, Any]],
     return {"milestones": milestones, "score": score, "next_step": next_step}
 
 
+# Severity ranking used to sort risk rows. `unknown` (a crashed evaluator /
+# missing signal) sorts BELOW a real `low`, because "we don't know" is not the
+# same — and must never outrank — an explicitly healthy device.
+_SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "unknown": 0}
+
+
 def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Use the Geospatial Risk & Policy Engine as the single source of truth for
     device risk. Each device is scored with composite signals; matched policies
-    are attached so the dashboard shows WHY a device is risky."""
+    are attached so the dashboard shows WHY a device is risky.
+
+    Two invariants are enforced here (issue #302):
+
+    1. A crashed evaluator MUST NOT be presented as a healthy device. The old
+       `except Exception: r = {risk_score: 0.0, severity: "low"}` masked a
+       failure as "safe/low" — indistinguishable from a real low-risk device and
+       a direct violation of "lo desconocido jamas se presenta como senal buena".
+       On any evaluation failure we now emit an honest sentinel
+       (score=None, level="unknown", verified=False) so the device is rendered
+       as "Sin senal" and sorted to the bottom.
+
+    2. The headline score/severity PROJECTS the persisted verdict
+       (DeviceState.risk_score / risk_severity) that the engine itself wrote
+       during run_once — the verdict that actually triggered actions. The GET
+       path used to recompute with a fresh context (hour/shift/zone changed
+       after a shift change or config edit), so the displayed risk silently
+       diverged from the value that fired automation. We still recompute to
+       obtain the explicable reasons/signals (the product moat), but the
+       headline number follows the persisted, actioning verdict.
+    """
     ctx = {
         "hour": eng._ctx_hour(),
         "shift_zones": eng._ctx_shift_zones(),
@@ -156,22 +182,48 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
     rows = []
     for d in devices:
         fence_state = d.get("fence_state", "unknown")
+        # Persisted verdict (written by Engine.run_once) — the actioning source.
+        persisted_score = d.get("risk_score", None)
+        persisted_sev = d.get("risk_severity", None)
         try:
-            r = eng.risk.evaluate(d, fence_state, ctx)
+            r = dict(eng.risk.evaluate(d, fence_state, ctx))
+            r["verified"] = True
         except Exception:
-            r = {"risk_score": 0.0, "severity": "low", "reasons": [], "signals": {}}
+            r = None
+        if r is None:
+            # Honest sentinel: the evaluator failed. Never masquerade as safe.
+            r = {
+                "risk_score": None,
+                "severity": "unknown",
+                "reasons": ["Evaluacion de riesgo no disponible (error del evaluador)"],
+                "signals": {},
+                "verified": False,
+                "error": "risk_evaluation_failed",
+            }
+        # Headline follows the persisted, actioning verdict (defect 2).
+        score = persisted_score if persisted_score is not None else r.get("risk_score")
+        severity = (persisted_sev or r.get("severity") or "unknown")
         fired = []
-        try:
-            fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
-        except Exception:
-            fired = []
+        # Only match policies against a real, verified verdict — never against
+        # the error sentinel, which would fabricate policy hits.
+        if r.get("verified"):
+            try:
+                fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
+            except Exception:
+                fired = []
         rows.append({
             "device_id": str(d.get("device_id") or ""),
             "device_name": d.get("name") or str(d.get("device_id") or ""),
             "platform": d.get("platform") or "unknown",
-            "score": r.get("risk_score", 0.0),
-            "level": r.get("severity", "low"),
-            "factors": [{"points": 0, "label": x, "severity": r.get("severity", "low")} for x in r.get("reasons", [])],
+            "score": score,
+            "level": severity,
+            "verified": r.get("verified", False),
+            "error": r.get("error"),
+            "factors": [{"points": 0, "label": x,
+                         "severity": r.get("severity", "unknown")}
+                        for x in r.get("reasons", [])] or
+                       [{"points": 0, "label": "Sin senales de riesgo",
+                         "severity": "unknown"}],
             "signals": r.get("signals", {}),
             "matched_policies": [f["policy_id"] for f in fired],
             "fence_state": fence_state,
@@ -182,7 +234,11 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
             "stale": False,
             "recent_actions": 0,
         })
-    return sorted(rows, key=lambda r: (r["score"], r["device_name"]), reverse=True)
+    return sorted(
+        rows,
+        key=lambda r: (_SEVERITY_RANK.get(r["level"], 0), r["score"] or 0.0),
+        reverse=True,
+    )
 
 
 def enrich_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -320,7 +376,7 @@ def derive_incidents(
                 count=1,
             ))
         rb = risk_by_device.get(did) or {}
-        if rb.get("score", 0) >= 85:
+        if (rb.get("score") or 0) >= 85:
             incidents.append(_incident(
                 f"inc-critical-risk-{did}", "high_risk_device", "critical",
                 f"{name} concentra riesgo crítico", did, name,
@@ -620,7 +676,7 @@ def build_insights(
     insights: list[dict[str, Any]] = []
     if any(d.get("compliant") is False for d in devices):
         insights.append({"kind": "risk", "severity": "high", "title": "Hay dispositivos non-compliant", "body": "Prioriza remediación antes de permitir acciones sensibles fuera de geovalla."})
-    if any(r.get("score", 0) >= 70 for r in risk):
+    if any((r.get("score") or 0) >= 70 for r in risk):
         insights.append({"kind": "priority", "severity": "high", "title": "Riesgo concentrado en pocos dispositivos", "body": "Abre Risk Center y revisa las razones por dispositivo antes de escalar."})
     if any(e.get("kind") == "exit" for e in events):
         insights.append({"kind": "movement", "severity": "medium", "title": "Se detectaron salidas de perímetro", "body": "Cruza geovalla, compliance y última ubicación para decidir si activar playbook."})
@@ -665,7 +721,7 @@ def build_report(
             "incidents": len(incidents),
             "critical": len(critical),
             "high": len(high),
-            "max_risk_score": top.get("score") if top else 0,
+            "max_risk_score": (top or {}).get("score") or 0,
             "dry_run": bool(status.get("dry_run")),
             "trend": trend,
         },
