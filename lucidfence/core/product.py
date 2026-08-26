@@ -233,7 +233,12 @@ def _risk_from_engine(
         persisted_verified = d.get("risk_verified")
         try:
             r = dict(eng.risk.evaluate(d, fence_state, ctx))
-            r["verified"] = True
+            # Preserve the evaluator's own verification verdict. A legitimate
+            # "no evidence / zero-risk" result may carry verified=False; forcing
+            # True here would falsely present it as backed by a real signal.
+            # Only synthesize True when the key is absent (legacy evaluators).
+            if "verified" not in r:
+                r["verified"] = True
         except Exception:
             r = None
         if r is None:

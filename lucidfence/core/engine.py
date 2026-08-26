@@ -478,6 +478,21 @@ class Engine:
                     osquery_version=posture.get("osquery_version"),
                     osquery_config_valid=posture.get("osquery_config_valid"),
                 )
+                # Carry the prior persisted risk verdict (headline + EXPLAIN)
+                # into the freshly-built state. A transient evaluator crash in
+                # the block below must NOT overwrite a previously-good verdict
+                # with None — the cycle only refreshes these fields when the
+                # evaluator succeeds, so the prior values stay authoritative
+                # until then (the GET path falls back to a live recompute +
+                # honest sentinel if the prior verdict is also absent).
+                if prev is not None:
+                    ds.risk_score = prev.risk_score
+                    ds.risk_severity = prev.risk_severity
+                    ds.risk_reasons = prev.risk_reasons
+                    ds.risk_matched_policies = prev.risk_matched_policies
+                    ds.risk_evaluated_at = prev.risk_evaluated_at
+                    ds.risk_provenance = prev.risk_provenance
+                    ds.risk_verified = prev.risk_verified
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
                     snap = geo_snap(rep, fence_state=fence_state, fence_id=inside_fence)
