@@ -945,7 +945,6 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
-        fence = self.fence_by_id.get(fence_id) if fence_id and fence_id != "none" else None
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -958,6 +957,15 @@ class Engine:
             # first sighting; only act on enter if a fence is known
             if state != "inside":
                 when = None
+        if state == "inside":
+            fence = self.fence_by_id.get(fence_id)
+        else:
+            # Al salir (o perder señal), cur_key es "None:outside": la cerca
+            # cuyo on_exit/on_unknown importa es la que se ABANDONA — la del
+            # estado anterior. Resolver por cur_key hacía que esas acciones
+            # no dispararan JAMAS (el bug que motivó este bloque).
+            prev_fence_id = prev.inside_fence if prev else None
+            fence = self.fence_by_id.get(prev_fence_id) if prev_fence_id else None
         if fence is None:
             return fired
         for act in fence.actions:
@@ -1231,6 +1239,11 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
+        # Hora LOCAL del servidor, a propósito: en un producto local-first el
+        # engine corre donde el admin, y "fuera de horario" significa SU
+        # horario. Caveat asumido: en un despliegue cloud (runner UTC) la
+        # señal off_hours se desplaza por el offset del huso; si eso importa,
+        # la corrección va en config, no aquí en silencio.
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:
