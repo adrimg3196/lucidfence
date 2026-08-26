@@ -29,6 +29,7 @@ from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
+from lucidfence.core.risk_levels import count_high_risk
 from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core.notifier import IncidentFanoutNotifier
@@ -283,7 +284,9 @@ class Engine:
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
             noncompliant = sum(1 for d in devices if d.get("compliant") is False)
-            high_risk = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
+            # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo.
+            high_risk = count_high_risk(devices, 70)
+            unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
             lines = [
                 f"Resumen LucidFence — {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
                 "",
@@ -291,10 +294,13 @@ class Engine:
                 f"Fuera de geocerca: {outside}",
                 f"Non-compliant: {noncompliant}",
                 f"Riesgo alto (>=70): {high_risk}",
+                f"Riesgo desconocido (sin señal): {unknown_risk}",
                 "",
                 "Dispositivos en riesgo:",
             ]
             for d in sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:10]:
+                if d.get("risk_score") is None:
+                    continue  # no inflar lo desconocido en el ranking de riesgo
                 lines.append(
                     f"  - {d.get('name') or d.get('device_id')}: riesgo {d.get('risk_score') or 0} "
                     f"({d.get('fence_state')})"
