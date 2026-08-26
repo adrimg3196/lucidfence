@@ -139,7 +139,13 @@ def test_remove_tenant_rechazado_sin_autorizacion_valida():
                "LUCIDFENCE_API_ROLE")
     _set_env(ACTION="remove_tenant", TENANT_ID="victim", PAYLOAD="{}")
     try:
-        mod.main()  # hoy borra sin más; un control real elevaría/Rechazaría.
+        # Sin autorización válida el control fail-closed debe rechazar y salir
+        # con sys.exit(2) (NO exit 0, que enmascararía la denegación como éxito).
+        mod.main()
+    except SystemExit as exc:
+        assert exc.code == 2, f"denegación debe salir con exit(2), salió {exc.code}"
+    else:
+        raise AssertionError("main() no rechazó la petición sin autorización")
     finally:
         _clear_env("ACTION", "TENANT_ID", "PAYLOAD")
 
@@ -180,12 +186,16 @@ def test_main_valida_action_con_autorizacion_por_rol():
     mod.BASE = tmp
     mod.create_tenant("v2", {"fleet": [{"id": "d1"}], "fences": []})
     tdir = tmp / "v2"
-    # Sin rol de privilegio en la env -> debe rechazarse.
+    # Sin rol de privilegio en la env -> debe rechazarse con sys.exit(2).
     _clear_env("LUCIDFENCE_API_ROLE", "LUCIDFENCE_API_SIGNATURE")
     _set_env(ACTION="remove_tenant", TENANT_ID="v2", PAYLOAD="{}",
              LUCIDFENCE_API_ROLE="")  # rol vacío = sin privilegio
     try:
         mod.main()
+    except SystemExit as exc:
+        assert exc.code == 2, f"denegación por rol debe salir con exit(2), salió {exc.code}"
+    else:
+        raise AssertionError("main() no rechazó remove_tenant sin rol con privilegio")
     finally:
         _clear_env("ACTION", "TENANT_ID", "PAYLOAD", "LUCIDFENCE_API_ROLE")
     assert tdir.exists(), (

@@ -94,7 +94,8 @@ def build_product(status: dict[str, Any], eng: Any = None) -> dict[str, Any]:
             "fleet_size": len(devices),
             "open_incidents": len([i for i in incidents if i.get("status") == "open"]),
             "critical_incidents": len([i for i in incidents if i.get("severity") == "critical"]),
-            "high_risk_devices": len([r for r in risk if r.get("score", 0) >= 70]),
+            # score puede ser None (riesgo desconocido): no se cuenta como alto.
+            "high_risk_devices": len([r for r in risk if (r.get("score") or 0) >= 70]),
             "policies_enabled": len([p for p in policies if p.get("enabled")]),
             "automation_mode": "dry-run" if status.get("dry_run") else "live",
         },
@@ -158,20 +159,33 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
         fence_state = d.get("fence_state", "unknown")
         try:
             r = eng.risk.evaluate(d, fence_state, ctx)
-        except Exception:
-            r = {"risk_score": 0.0, "severity": "low", "reasons": [], "signals": {}}
+        except Exception as exc:
+            # Sentinela honesto: un fallo al evaluar NO debe disfrazarse de
+            # riesgo bajo (false-green). Devolvemos score:None / level:unknown
+            # con reasons poblados, de modo que el dashboard y los consumidores
+            # lo muestren como "riesgo desconocido" (muted), jamás como verde 0.
+            r = {
+                "risk_score": None,
+                "severity": "unknown",
+                "reasons": [f"evaluación de riesgo falló: {type(exc).__name__}: {exc}"],
+                "signals": {},
+            }
         fired = []
         try:
             fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
         except Exception:
             fired = []
+        reasons = r.get("reasons") or []
         rows.append({
             "device_id": str(d.get("device_id") or ""),
             "device_name": d.get("name") or str(d.get("device_id") or ""),
             "platform": d.get("platform") or "unknown",
-            "score": r.get("risk_score", 0.0),
-            "level": r.get("severity", "low"),
-            "factors": [{"points": 0, "label": x, "severity": r.get("severity", "low")} for x in r.get("reasons", [])],
+            "score": r.get("risk_score"),
+            "level": r.get("severity", "unknown"),
+            # verified=False => el badge "Verificado" (verde) NO se activa: una
+            # fila con sentinela desconocido no debe parecer respaldada por señal.
+            "verified": bool(reasons) and r.get("risk_score") is not None,
+            "factors": [{"points": 0, "label": x, "severity": r.get("severity", "unknown")} for x in reasons],
             "signals": r.get("signals", {}),
             "matched_policies": [f["policy_id"] for f in fired],
             "fence_state": fence_state,
@@ -182,7 +196,9 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
             "stale": False,
             "recent_actions": 0,
         })
-    return sorted(rows, key=lambda r: (r["score"], r["device_name"]), reverse=True)
+    # Orden: score None (desconocido) al final, nunca compite con señal real.
+    rows.sort(key=lambda x: (x["score"] is not None, x["score"] or 0, x["device_name"]), reverse=True)
+    return rows
 
 
 def enrich_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -320,7 +336,8 @@ def derive_incidents(
                 count=1,
             ))
         rb = risk_by_device.get(did) or {}
-        if rb.get("score", 0) >= 85:
+        # score None (riesgo desconocido) no dispara incidente crítico.
+        if (rb.get("score") or 0) >= 85:
             incidents.append(_incident(
                 f"inc-critical-risk-{did}", "high_risk_device", "critical",
                 f"{name} concentra riesgo crítico", did, name,
@@ -620,7 +637,8 @@ def build_insights(
     insights: list[dict[str, Any]] = []
     if any(d.get("compliant") is False for d in devices):
         insights.append({"kind": "risk", "severity": "high", "title": "Hay dispositivos non-compliant", "body": "Prioriza remediación antes de permitir acciones sensibles fuera de geovalla."})
-    if any(r.get("score", 0) >= 70 for r in risk):
+    # score None (riesgo desconocido) no cuenta como "riesgo concentrado".
+    if any((r.get("score") or 0) >= 70 for r in risk):
         insights.append({"kind": "priority", "severity": "high", "title": "Riesgo concentrado en pocos dispositivos", "body": "Abre Risk Center y revisa las razones por dispositivo antes de escalar."})
     if any(e.get("kind") == "exit" for e in events):
         insights.append({"kind": "movement", "severity": "medium", "title": "Se detectaron salidas de perímetro", "body": "Cruza geovalla, compliance y última ubicación para decidir si activar playbook."})
@@ -665,7 +683,10 @@ def build_report(
             "incidents": len(incidents),
             "critical": len(critical),
             "high": len(high),
-            "max_risk_score": top.get("score") if top else 0,
+            # score None (desconocido) se reporta como 0 de forma explícita para
+            # no romper el contrato numérico del KPI, pero el origen honesto es
+            # "unknown" (ver top_risk_devices para el veredicto real por fila).
+            "max_risk_score": top.get("score") if (top and top.get("score") is not None) else 0,
             "dry_run": bool(status.get("dry_run")),
             "trend": trend,
         },
