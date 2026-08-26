@@ -8,8 +8,9 @@
 
 ## What each one is
 
-**Kandji** (rebranded "Iru" in 2026, extending beyond Apple to Windows/Android
-MDM) is an Apple-first UEM: device enrollment, inventory, auto-remediation, and
+**Kandji** (rebranded to **Iru** in late 2025, now extending beyond Apple to
+Windows/Android MDM) is an Apple-first UEM: device enrollment, inventory,
+auto-remediation, and
 smart templates for macOS/iOS, with a mature ecosystem and vendor support.
 
 **LucidFence** is a **local-first control plane** that turns fleet geolocation
@@ -20,9 +21,9 @@ sits on top of the UEM you already run (Applivery, Intune, Jamf, Fleet, …
 on your own machine. See [README.en.md](../README.en.md) and the root
 [README.md](../README.md).
 
-> ⚠️ **Accuracy note (signed off by CTO, 2026-08-25 — mirrors the Intune/Jamf #203/#267 co-sign).** Two facts on this page are *vendor-side* and come from the SEO & Docs Bot's 2026 evidence review, not from LucidFence source code. The CTO verified both against `origin/main` and co-signed them: the adapter registry (`lucidfence/core/adapters/__init__.py`) has **no `kandji` key** (only `applivery` / `intune` / `jamf` / `fleet`) — so Kandji is reached via `GENERIC_HTTP`; and Kandji's "Lost Mode" is documented vendor recovery-location behavior, **not** geofencing/compliance-by-location. The LucidFence-side claims remain verifiable from code/docs:
+> ⚠️ **Accuracy note (signed off by CTO, 2026-08-26 — mirrors the Intune/Jamf #203/#267 co-sign).** Two facts on this page are *vendor-side* and come from the SEO & Docs Bot's 2026 evidence review, not from LucidFence source code. The CTO verified both against `origin/main` (@ `1e6bfd3`) and co-signed them: the adapter registry (`lucidfence/core/adapters/__init__.py`, `ADAPTER_REGISTRY`) has **no `kandji` key** (keys: `simulation`, `applivery`, `intune`, `jamf`, `windows_conformidad`, `chromeos`, `workspace_one`, `fleet`) — so Kandji is reached via `GENERIC_HTTP` (and `docs/adapters/GENERIC_HTTP.md` names Kandji as a BYO example); and Kandji/Iru's "Lost Mode" is documented vendor *recovery* location, **not** geofencing/compliance-by-location (consistent with `docs/internal/product/BACKLOG.md` §6). The LucidFence-side claims remain verifiable from code/docs:
 > 1. **Kandji has no native LucidFence adapter today** (the adapter registry
->    holds Applivery, Intune, Jamf, Fleet). Kandji is reached through the
+>    holds Applivery, Intune, Jamf, Fleet + chromeos/workspace_one/windows_conformidad). Kandji is reached through the
 >    **GENERIC_HTTP** bring-your-own-UEM connector
 >    ([adapters/GENERIC_HTTP.md](../adapters/GENERIC_HTTP.md)). This is a real
 >    gap vs Intune/Jamf, stated honestly below.
