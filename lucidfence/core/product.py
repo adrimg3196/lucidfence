@@ -20,6 +20,18 @@ MAX_HISTORY_POINTS = 4096
 MAX_TRAIL_POINTS = 20000
 ALLOWED_CLOCK_SKEW_SECONDS = 300
 
+# How long a persisted cycle verdict stays authoritative for the GET path
+# (issue #302, defect 2). The verdict is PROJECTED verbatim when its
+# `risk_evaluated_at` is within this many cycle intervals; beyond that window
+# the row is recomputed live and flagged `stale=True`.
+#
+# 2 means: the verdict remains authoritative for 2x the cycle interval, so a
+# single missed cycle still projects (no dashboard flicker), while a shift
+# change / config edit within the window does NOT flip the displayed verdict.
+# PM-tunable: lower it to 1 for stricter freshness, raise it to widen the
+# projection window. Rationale: PM_DECISIONS_t_7bb53acb.md §B (Decision B).
+RISK_VERDICT_FRESHNESS_MULTIPLIER = 2
+
 
 def _safe_nonnegative_int(value: Any) -> tuple[int, bool]:
     """Return a non-negative integer and whether sanitization was required."""
@@ -179,7 +191,8 @@ def _risk_from_engine(
        headline number follows the persisted, actioning verdict.
 
     3. The EXPLAIN of the verdict (WHY) is ALSO projected from the persisted
-       verdict when it is still fresh (evaluated within 2*interval_seconds). The
+       verdict when it is still fresh (evaluated within
+       RISK_VERDICT_FRESHNESS_MULTIPLIER * interval_seconds). The
        GET path no longer recomputes reasons/matched_policies with a fresh
        context and quietly disagrees with the verdict that fired actions. When
        the persisted verdict is absent (legacy/brand-new device) or stale, we
@@ -200,7 +213,7 @@ def _risk_from_engine(
             return None
         return (datetime.now(_tz.utc) - dt).total_seconds()
 
-    staleness_threshold = 2 * interval_seconds
+    staleness_threshold = RISK_VERDICT_FRESHNESS_MULTIPLIER * interval_seconds
     ctx = {
         "hour": eng._ctx_hour(),
         "shift_zones": eng._ctx_shift_zones(),

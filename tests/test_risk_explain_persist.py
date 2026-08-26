@@ -3,9 +3,15 @@ persisted verdict EXPLAIN (reasons + matched_policies + evaluated_at) instead of
 recomputing it with a fresh context that may disagree with the verdict that fired
 actions.
 
-Two views of the same dashboard (server.py /api/risk and saas_server.py) both go
-through `_risk_from_engine`, so a single fix covers both — but they must not
-disagree with each other, nor with the verdict the engine wrote during run_once.
+Both /api/risk handlers (server.py for the local engine, saas_server.py for the
+multi-UEM SaaS view) ultimately route through build_product(); when the live
+engine is supplied, build_product delegates to `_risk_from_engine`, which is the
+code path exercised and regression-guarded here. (NOTE: the local server.py
+calls build_product(st) without an engine today, so it falls back to the
+legacy compute_risk path — a separate follow-up. This suite targets the
+engine-backed projection path that the SaaS view and the MCP tool use.) The
+projected verdict must not disagree with the verdict the engine wrote during
+run_once.
 
 Covers (from defect2-technical-design.md):
 - Unit: a device with a RECENT risk_evaluated_at -> GET projects the persisted
