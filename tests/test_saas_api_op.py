@@ -123,11 +123,12 @@ def test_create_tenant_sin_fences_usa_fallback_0_0():
 # --------------------------------------------------------------------------
 
 def test_remove_tenant_rechazado_sin_autorizacion_valida():
-    """GAP: remove_tenant es destructivo y NO requiere autorización ni firma.
+    """SECURE: remove_tenant SIN authz/firma debe ser RECHAZADO (exit 2).
 
     Simula el intento de borrar un tenant SÓLO por haber seteado las env vars
     del workflow (ACTION/TENANT_ID/PAYLOAD) sin ningún token/firma válido.
-    Un SaaS serverless seguro debe RECHAZAR esto. Hoy lo ejecuta -> RED."""
+    Con el control HMAC+RBAC implementado (#310), main() debe rechazar con
+    sys.exit(2) y NO borrar el tenant. El tenant debe sobrevivir."""
     mod = _api_op_module()
     tmp = Path(tempfile.mkdtemp())
     mod.BASE = tmp
@@ -139,16 +140,22 @@ def test_remove_tenant_rechazado_sin_autorizacion_valida():
                "LUCIDFENCE_API_ROLE")
     _set_env(ACTION="remove_tenant", TENANT_ID="victim", PAYLOAD="{}")
     try:
-        mod.main()  # hoy borra sin más; un control real elevaría/Rechazaría.
+        raised = None
+        try:
+            mod.main()  # control presente -> debe rechazar con exit 2
+        except SystemExit as e:
+            raised = e
+        assert raised is not None and raised.code == 2, (
+            "saas_api_op.main() debe RECHAZAR remove_tenant sin authz/firma "
+            "con exit 2 (fail-closed), no ejecutarlo ni salir 0."
+        )
     finally:
         _clear_env("ACTION", "TENANT_ID", "PAYLOAD")
 
     # Expectativa SEGURA: sin autorización válida, el tenant debe seguir existiendo.
     assert tdir.exists(), (
         "SECURITY GAP: saas_api_op.main() ejecutó remove_tenant SIN NINGÚN "
-        "control de autorización ni firma. Cualquiera que pueda setear las env "
-        "vars del workflow puede borrar tenants de la vitrina cloud. "
-        "Implementar RBAC por ACTION + verificación de firma HMAC."
+        "control de autorización ni firma."
     )
 
 
@@ -171,24 +178,33 @@ def test_saas_api_op_no_tiene_verificacion_de_firma():
 
 
 def test_main_valida_action_con_autorizacion_por_rol():
-    """GAP: ACTION se admite si es conocido, pero no se vincula a un rol/authz.
+    """SECURE: remove_tenant SIN rol de privilegio debe ser RECHAZADO (exit 2).
 
-    Un remove_tenant no debería poder ejecutarse solo porque ACTION es una
-    cadena conocida; debe requerir un rol con privilegio (p.ej. org:delete)."""
+    Un remove_tenant no puede ejecutarse solo porque ACTION es una cadena
+    conocida; debe exigir un rol con privilegio (scope org:delete) firmado.
+    Con el control RBAC (#310), sin el scope correcto main() sale con exit 2."""
     mod = _api_op_module()
     tmp = Path(tempfile.mkdtemp())
     mod.BASE = tmp
     mod.create_tenant("v2", {"fleet": [{"id": "d1"}], "fences": []})
     tdir = tmp / "v2"
-    # Sin rol de privilegio en la env -> debe rechazarse.
-    _clear_env("LUCIDFENCE_API_ROLE", "LUCIDFENCE_API_SIGNATURE")
+    # Sin rol de privilegio (vacío) ni firma -> debe rechazarse con exit 2.
+    _clear_env("LUCIDFENCE_API_ROLE", "LUCIDFENCE_API_SIGNATURE",
+               "LUCIDFENCE_API_SECRET")
     _set_env(ACTION="remove_tenant", TENANT_ID="v2", PAYLOAD="{}",
              LUCIDFENCE_API_ROLE="")  # rol vacío = sin privilegio
     try:
-        mod.main()
+        raised = None
+        try:
+            mod.main()
+        except SystemExit as e:
+            raised = e
+        assert raised is not None and raised.code == 2, (
+            "remove_tenant sin rol con privilegio debe rechazarse (exit 2), "
+            "no ejecutarse."
+        )
     finally:
         _clear_env("ACTION", "TENANT_ID", "PAYLOAD", "LUCIDFENCE_API_ROLE")
     assert tdir.exists(), (
-        "SECURITY GAP: remove_tenant se ejecutó sin un rol con privilegio. "
-        "Vincular ACTION=remove_tenant a RBAC (p.ej. scope org:delete) firmado."
+        "SECURITY GAP: remove_tenant se ejecutó sin un rol con privilegio."
     )
