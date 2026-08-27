@@ -96,9 +96,22 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    La flota de TODOS los UEMs del tenant en una lista con el MISMO veredicto
    explicable; desconocido = null, jamás inventado ni penalizado; del registro
    de providers solo viajan nombre y segmento (probado con secret inyectado).
-   **Nº1 pendiente ahora: #16 auditor de mínimo privilegio de credenciales
-   UEM** (el siguiente SÍ limpio de la capa complemento; #14 políticas
-   portables queda detrás por su matiz pendiente).
+   **#16 auditor de mínimo privilegio UEM — HECHO 2026-08-27** (heartbeat de
+   producto): `lucidfence/core/least_privilege.py` (función pura stdlib) +
+   `GET /api/least-privilege` (cap `engine:config`, tenant-scoped) + 18 tests
+   + 3 checks runtime (60/60) + `docs/operations/least_privilege.md`. Compara
+   lo que el token de cada adapter PUEDE hacer contra lo que el modo actual
+   NECESITA: en `observe` sobra todo permiso de escritura (el engine fuerza
+   dry_run), y `wipe` solo deja de ser exceso con la doble llave. Honestidad:
+   un scope que no sabemos clasificar es `no_auditable`, jamás "correcto" —
+   con recuento de providers auditables para que "0 excesos" no se lea como
+   "todo bien". Los scopes son dato DECLARADO por el operador al conectar
+   (nunca una tabla de scopes inventada por la IA). De paso cerró la fuga que
+   la propia feature abría: los nombres de scope ya no salen por
+   `GET /api/providers` (sin cap), donde el veredicto se derivaría trivialmente.
+   **Nº1 pendiente ahora: #17 eventos normalizados (OCSF) hacia SIEM/ITSM**
+   (los veredictos salen en el esquema que Splunk/Sentinel/Chronicle ingieren
+   sin parsers a medida; #14 políticas portables sigue detrás por su matiz).
 8b. ~~**Políticas y geocercas como código (`lucidfence apply`)**~~ — **HECHO
    2026-08-19** (backlog evaluado #1; tendencia GitHub validada: Fleet 4.90
    redobla en GitOps): validar → diff `+/~/-` → **what-if con replay del
