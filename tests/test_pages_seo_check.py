@@ -9,7 +9,18 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "pages_seo_check.py"
 SITE_ROOT = "https://example.github.io/lucidfence"
-PUBLIC_FILES = ("index.html", "cloud.html", "manual.html", "web.html", "whitelabel.html")
+PUBLIC_FILES = (
+    "index.html",
+    "cloud.html",
+    "dashboard.html",
+    "manual.html",
+    "web.html",
+    "whitelabel.html",
+)
+COMPARISON_FILES = (
+    "comparisons/lucidfence-vs-intune.html",
+    "comparisons/lucidfence-vs-jamf.html",
+)
 
 
 def _html(name: str) -> str:
@@ -35,14 +46,19 @@ def _sitemap(paths: list[str]) -> str:
 def _fixture(root: Path, paths: list[str] | None = None) -> Path:
     static_dir = root / "static"
     static_dir.mkdir()
-    for name in PUBLIC_FILES + ("dashboard.html",):
-        (static_dir / name).write_text(_html(name), encoding="utf-8")
+    for name in PUBLIC_FILES + COMPARISON_FILES:
+        target = static_dir / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_html(name), encoding="utf-8")
     sitemap_paths = paths or [
         "/",
         "/cloud.html",
+        "/dashboard.html",
         "/manual.html",
         "/web.html",
         "/whitelabel.html",
+        "/comparisons/lucidfence-vs-intune.html",
+        "/comparisons/lucidfence-vs-jamf.html",
     ]
     (static_dir / "sitemap.xml").write_text(_sitemap(sitemap_paths), encoding="utf-8")
     return static_dir
@@ -71,9 +87,11 @@ def test_pages_seo_check_accepts_public_sitemap_without_origin_root_robots():
     assert "APTO" in result.stdout
 
 
-def test_pages_seo_check_rejects_dashboard_in_public_sitemap():
-    """The backend-dependent dashboard must not be advertised as a search landing."""
-    with tempfile.TemporaryDirectory(prefix="pages-seo-dashboard-") as tmp:
+def test_pages_seo_check_accepts_dashboard_and_comparisons_in_public_sitemap():
+    """The static vitrina dashboard and comparison pages ARE intentionally public
+    (dashboard.html is a serverless vitrina page, comparisons are pre-existing
+    honest docs published to Pages). The gate must accept them. See t_4a5d2f29."""
+    with tempfile.TemporaryDirectory(prefix="pages-seo-dashboard-ok-") as tmp:
         static_dir = _fixture(
             Path(tmp),
             [
@@ -83,12 +101,14 @@ def test_pages_seo_check_rejects_dashboard_in_public_sitemap():
                 "/manual.html",
                 "/web.html",
                 "/whitelabel.html",
+                "/comparisons/lucidfence-vs-intune.html",
+                "/comparisons/lucidfence-vs-jamf.html",
             ],
         )
         result = _check(static_dir)
 
-    assert result.returncode == 1
-    assert "dashboard.html" in result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "APTO" in result.stdout
 
 
 def test_pages_seo_check_rejects_site_root_prefix_collision():

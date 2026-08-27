@@ -23,9 +23,12 @@ DEFAULT_SITE_ROOT = "https://adrimg3196.github.io/lucidfence"
 PUBLIC_ROUTES = {
     "/": "index.html",
     "/cloud.html": "cloud.html",
+    "/dashboard.html": "dashboard.html",
     "/manual.html": "manual.html",
     "/web.html": "web.html",
     "/whitelabel.html": "whitelabel.html",
+    "/comparisons/lucidfence-vs-intune.html": "comparisons/lucidfence-vs-intune.html",
+    "/comparisons/lucidfence-vs-jamf.html": "comparisons/lucidfence-vs-jamf.html",
 }
 
 
