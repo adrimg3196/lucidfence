@@ -1061,14 +1061,19 @@ def _send_html(handler, html_text: str):
 
 
 def _summary(devices: list[dict]) -> dict:
+    from lucidfence.core.risk_levels import count_high_risk
+
     total = len(devices)
     compliant = sum(1 for d in devices if d.get("compliant") is True)
     noncompliant = sum(1 for d in devices if d.get("compliant") is False)
     outside = sum(1 for d in devices if d.get("fence_state") == "outside")
-    high_risk = sum(1 for d in devices if (float(d.get("risk_score") or 0)) >= 70)
+    # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo
+    # (anti falso-verde #302 / t_0de7c223).
+    high_risk = count_high_risk(devices, 70)
+    unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
     return {
         "total": total, "compliant": compliant, "noncompliant": noncompliant,
-        "outside": outside, "high_risk": high_risk,
+        "outside": outside, "high_risk": high_risk, "unknown_risk": unknown_risk,
     }
 
 

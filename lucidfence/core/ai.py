@@ -88,9 +88,12 @@ def available() -> bool:
 
 def incident_narrative(device: dict, *, dry: bool = True) -> str:
     """Human narrative for a geofence/incident event (used by AtomicMailNotifier)."""
+    from lucidfence.core.risk_levels import is_unknown_risk
+
     name = device.get("name") or device.get("device_id") or "dispositivo"
     state = device.get("fence_state") or device.get("state") or "desconocido"
-    risk = device.get("risk_score") or 0
+    raw_risk = device.get("risk_score")
+    risk = "desconocido" if is_unknown_risk(raw_risk) else raw_risk
     compliant = device.get("compliant")
     plain = (
         f"Incidente de geocerca: {name} está {state}. "
@@ -113,19 +116,21 @@ def incident_narrative(device: dict, *, dry: bool = True) -> str:
 
 def digest_summary(stats: dict, devices: list, *, dry: bool = True) -> str:
     """Executive summary paragraph for the fleet digest email."""
+    from lucidfence.core.risk_levels import count_high_risk, is_unknown_risk, sortable_risk
+
     total = len(devices)
     outside = sum(1 for d in devices if d.get("fence_state") == "outside")
     noncompliant = sum(1 for d in devices if d.get("compliant") is False)
-    high = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
+    high = count_high_risk(devices, 70)
     plain = (
         f"Resumen: {total} dispositivos, {outside} fuera de geocerca, "
         f"{noncompliant} non-compliant, {high} en riesgo alto."
     )
     if not available():
         return plain
-    top = sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:5]
+    top = sorted(devices, key=lambda x: -sortable_risk(x.get("risk_score")))[:5]
     ctx = "; ".join(
-        f"{d.get('name') or d.get('device_id')} (riesgo {d.get('risk_score') or 0}, {d.get('fence_state')})"
+        f"{d.get('name') or d.get('device_id')} (riesgo {('desconocido' if is_unknown_risk(d.get('risk_score')) else d.get('risk_score'))}, {d.get('fence_state')})"
         for d in top
     )
     msg = (
