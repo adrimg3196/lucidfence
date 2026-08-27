@@ -30,6 +30,7 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/risk
   GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
   GET  /api/fleet/federated  -> flota federada multi-UEM (+ ?provider=)
+  GET  /api/least-privilege  -> auditoría de privilegios de las credenciales UEM
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -332,6 +333,13 @@ def _masked_provider(p: dict) -> dict:
     # ChromeOS guardan client_secret/refresh_token). `segment` (la etiqueta de
     # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
     out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
+    # `scopes` NO es secreto (son permisos declarados, no credenciales), pero
+    # sale aparte: el veredicto del auditor de mínimo privilegio está tras
+    # `engine:config` porque dice en voz alta qué tokens pueden wipear — y de
+    # los nombres de scope ese veredicto se deriva trivialmente. Dejarlos en
+    # este GET (sin cap propia) convertiría ese gating en teatro. Se sirven en
+    # GET /api/least-privilege, con su cap.
+    out.pop("scopes", None)
     out["configured"] = bool(p.get("secret") or p.get("api_key")
                              or p.get("api_token") or p.get("password")
                              or p.get("client_secret") or p.get("refresh_token")
@@ -1265,6 +1273,32 @@ def _api_fleet_federated(ctx: routing.Ctx):
     providers = [{"name": p.get("name"), "segment": p.get("segment")}
                  for p in _list_providers(_tenants.data_dir(ctx.org))]
     return build_federated_fleet(devices, risk_rows, providers, provider=provider)
+
+
+@api_route("GET", "/api/least-privilege", cap="engine:config")
+def _api_least_privilege(ctx: routing.Ctx):
+    """Auditor de mínimo privilegio de las credenciales UEM (backlog §16): qué
+    puede el token de cada adapter conectado frente a lo que el modo de
+    enforcement actual necesita (ver core/least_privilege.py).
+
+    Gating `engine:config` (más estricto que /api/coverage) a propósito: el
+    informe dice en voz alta qué credenciales del tenant pueden wipear, y quien
+    puede recortar el token es exactamente quien tiene esta capability.
+
+    Del registro del tenant solo viajan nombre, scopes declarados y si hay
+    credencial: la credencial NUNCA sale de disco."""
+    from lucidfence.core.least_privilege import least_privilege_report
+    from lucidfence.saas.providers import PROVIDER_CATALOG
+    rows = []
+    for p in _list_providers(_tenants.data_dir(ctx.org)):
+        name = p.get("name")
+        rows.append({
+            "name": name,
+            "scopes": p.get("scopes"),
+            "configured": _masked_provider(p).get("configured"),
+            "min_permission": (PROVIDER_CATALOG.get(name) or {}).get("min_permission") or None,
+        })
+    return least_privilege_report(rows, ctx.eng.enforcement_status())
 
 
 @api_route("GET", "/api/risk", cap="device:read")
@@ -2297,6 +2331,14 @@ class Handler(BaseHTTPRequestHandler):
             }
             if segment:
                 provider["segment"] = segment
+            # Scopes que el operador declara para este token (backlog §16). No
+            # son secreto — son permisos, no credenciales — y sin ellos el
+            # auditor de mínimo privilegio no tiene nada que auditar (y lo dice
+            # así, en vez de dar el token por correcto).
+            from lucidfence.core.least_privilege import normalize_declared_scopes
+            declared_scopes = normalize_declared_scopes(body.get("scopes"))
+            if declared_scopes:
+                provider["scopes"] = declared_scopes
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",

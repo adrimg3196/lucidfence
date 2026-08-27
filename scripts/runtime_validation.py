@@ -478,6 +478,60 @@ def main() -> int:
               f"http={s}, body={pinv}")
         http_req("DELETE", "/api/providers/simulation", cookie=cookie)
 
+        # ====== 3c-ter. Backlog #16: auditor de mínimo privilegio ============
+        # Claim: un adapter simulado con scopes de ESCRITURA en modo observe
+        # produce el aviso; con scopes mínimos, silencio. Todo por el flujo real
+        # del producto (POST /api/providers -> GET /api/least-privilege) contra
+        # el server vivo, con la credencial de verdad en el registro del tenant.
+        print("\n== Backlog #16 Mínimo privilegio (GET /api/least-privilege) ==")
+        http_req("POST", "/api/providers", cookie=cookie,
+                 body={"name": "simulation", "api_key": "s3cr3t-runtime-16",
+                       "scopes": [{"id": "uem.devices.read", "grants": ["read"]},
+                                  {"id": "uem.devices.command",
+                                   "grants": ["wipe", "lock"]}]})
+        s, lp0, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row0 = ((lp0 or {}).get("providers") or [{}])[0]
+        exceso0 = (row0.get("exceso") or [{}])[0]
+        sin_fuga = "s3cr3t" not in json.dumps(lp0 or {}, ensure_ascii=False)
+        check("token con scopes de escritura en observe: aviso con el scope que "
+              "sobra, severidad crítica y sin filtrar la credencial",
+              s == 200 and (lp0 or {}).get("enforcement", {}).get("mode") == "observe"
+              and row0.get("veredicto") == "exceso"
+              and exceso0.get("scope") == "uem.devices.command"
+              and "wipe" in (exceso0.get("grants") or [])
+              and exceso0.get("severity") == "critical" and sin_fuga,
+              f"http={s}, modo={(lp0 or {}).get('enforcement', {}).get('mode')}, "
+              f"veredicto={row0.get('veredicto')}, exceso={exceso0.get('grants')}, "
+              f"sev={exceso0.get('severity')}, sin_fuga={sin_fuga}")
+
+        http_req("POST", "/api/providers", cookie=cookie,
+                 body={"name": "simulation", "api_key": "s3cr3t-runtime-16",
+                       "scopes": [{"id": "uem.devices.read", "grants": ["read"]}]})
+        s, lp1, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row1 = ((lp1 or {}).get("providers") or [{}])[0]
+        res1 = (lp1 or {}).get("resumen") or {}
+        check("con scopes mínimos, silencio (auditado correcto, cero excesos)",
+              s == 200 and row1.get("veredicto") == "correcto"
+              and row1.get("exceso") == [] and res1.get("scopes_excesivos") == 0
+              and res1.get("providers_auditables") == 1,
+              f"http={s}, veredicto={row1.get('veredicto')}, resumen={res1}")
+
+        # Honestidad: sin scopes declarados NO es "correcto". "0 excesos" con
+        # 0 auditables no puede leerse como "todo bien".
+        http_req("POST", "/api/providers", cookie=cookie, body={"name": "simulation"})
+        s, lp2, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row2 = ((lp2 or {}).get("providers") or [{}])[0]
+        res2 = (lp2 or {}).get("resumen") or {}
+        check("credencial cuyos scopes nadie expone: no auditable, ni correcta "
+              "ni excesiva",
+              s == 200 and row2.get("veredicto") == "no_auditable"
+              and bool(row2.get("motivo")) and res2.get("providers_con_exceso") == 0
+              and res2.get("providers_auditables") == 0
+              and res2.get("providers_no_auditables") == 1,
+              f"http={s}, veredicto={row2.get('veredicto')}, "
+              f"motivo={row2.get('motivo')}, resumen={res2}")
+        http_req("DELETE", "/api/providers/simulation", cookie=cookie)
+
         # ============ 3c-bis. Backlog #12: panel único multi-UEM =============
         # Claim: dos adapters simulados con perfiles distintos aparecen en UNA
         # flota con riesgo comparable (el veredicto del engine, no un recálculo
