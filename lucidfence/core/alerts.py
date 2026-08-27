@@ -172,7 +172,11 @@ class AlertEngine:
         for dev in devices:
             did = str(dev.get("device_id") or "")
             # normalize helpful fields
-            risk = float(dev.get("risk_score") or 0)
+            # Unknown risk (None) MUST NOT be treated as a perfect-green 0:
+            # pasa como None para que las reglas risk_above no lo cuenten como
+            # señal buena ni como mala (#302 / t_0de7c223).
+            raw_risk = dev.get("risk_score")
+            risk = None if raw_risk is None else float(raw_risk)
             battery = dev.get("battery_level")
             free_gb = dev.get("storage_free_gb")
             last_checkin = dev.get("last_checkin") or dev.get("last_seen")
@@ -200,8 +204,13 @@ class AlertEngine:
                     triggered = outside_min >= rule.threshold
                     detail = f"fuera {outside_min:.0f} min (umbral {rule.threshold:.0f})"
                 elif rule.type == "risk_above":
-                    triggered = risk >= rule.threshold
-                    detail = f"riesgo {risk:.0f} (umbral {rule.threshold:.0f})"
+                    if risk is None:
+                        # Riesgo desconocido: no dispara como señal buena ni mala.
+                        triggered = False
+                        detail = "riesgo desconocido (sin señal)"
+                    else:
+                        triggered = risk >= rule.threshold
+                        detail = f"riesgo {risk:.0f} (umbral {rule.threshold:.0f})"
                 elif rule.type == "noncompliant":
                     triggered = dev.get("compliant") is False
                     detail = "dispositivo non-compliant"
