@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import html
 import re
-import shutil
 from pathlib import Path
 
 BASE_URL = "https://adrimg3196.github.io/lucidfence"
