@@ -13,7 +13,10 @@ on:
     branches: [main]
     paths:
       - "static/**"
+      - "docs/comparisons/**"
       - "scripts/pages_seo_check.py"
+      - "scripts/build_comparison_pages.py"
+      - "scripts/build_sitemap.py"
       - ".github/workflows/publish-pages.yml"
   workflow_dispatch:
 
@@ -39,6 +42,11 @@ jobs:
           # se reescriben a relativas (todo vive en la raíz del sitio).
           find _site -maxdepth 1 -name '*.html' -exec sed -i 's#"/static/#"#g' {} +
           test -f _site/index.html
+          # Publicar comparativas (gap #2): docs/comparisons/*.md -> _site/comparisons/*.html
+          # con canonical absoluto. Genera también el sitemap con todas las URLs
+          # (índice, páginas estáticas y comparativas). Ver tarea t_4a5d2f29.
+          python3.11 scripts/build_comparison_pages.py --src docs/comparisons --out _site/comparisons
+          python3.11 scripts/build_sitemap.py --site _site
           # Guardarraíl del P0 #110 también en el artefacto publicado:
           # ninguna cadena de prueba social fabricada puede llegar a Pages.
           grep_status=0

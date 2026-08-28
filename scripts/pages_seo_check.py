@@ -23,9 +23,12 @@ DEFAULT_SITE_ROOT = "https://adrimg3196.github.io/lucidfence"
 PUBLIC_ROUTES = {
     "/": "index.html",
     "/cloud.html": "cloud.html",
+    "/dashboard.html": "dashboard.html",
     "/manual.html": "manual.html",
     "/web.html": "web.html",
     "/whitelabel.html": "whitelabel.html",
+    "/comparisons/lucidfence-vs-intune.html": "comparisons/lucidfence-vs-intune.html",
+    "/comparisons/lucidfence-vs-jamf.html": "comparisons/lucidfence-vs-jamf.html",
 }
 
 
@@ -94,9 +97,20 @@ def _route_within_project(path: str, root_path: str) -> str | None:
     return relative or "/"
 
 
-def _expected_page_path(html_path: Path, root_path: str) -> str:
-    routes_by_file = {filename: route for route, filename in PUBLIC_ROUTES.items()}
-    route = routes_by_file.get(html_path.name, f"/{html_path.name}")
+def _expected_page_path(rel_html: str, root_path: str) -> str:
+    """Resolve the published route for a page file.
+
+    ``rel_html`` is the path relative to static_dir (e.g.
+    "index.html" or "comparisons/lucidfence-vs-intune.html"). Nested
+    comparison pages are keyed by their full relative path in PUBLIC_ROUTES.
+    """
+    route_by_file = {
+        filename: route for route, filename in PUBLIC_ROUTES.items()
+    }
+    route = route_by_file.get(rel_html)
+    if route is None:
+        # Root-level pages are keyed only by filename.
+        route = route_by_file.get(Path(rel_html).name, f"/{Path(rel_html).name}")
     if route == "/":
         return f"{root_path}/" if root_path else "/"
     return f"{root_path}{route}"
@@ -104,18 +118,18 @@ def _expected_page_path(html_path: Path, root_path: str) -> str:
 
 def _validate_page_url(
     *,
-    html_path: Path,
+    rel_html: str,
     kind: str,
     value: str,
     expected_host: str,
     root_path: str,
 ) -> list[str]:
     """Validate one canonical/og:url against the page that declares it."""
-    expected_path = _expected_page_path(html_path, root_path)
+    expected_path = _expected_page_path(rel_html, root_path)
     document_url = urlunsplit(("https", expected_host, expected_path, "", ""))
     raw_value = value.strip()
     parsed_value = urlsplit(raw_value)
-    prefix = f"{html_path.name}: {kind} {value!r}"
+    prefix = f"{rel_html}: {kind} {value!r}"
 
     if not raw_value:
         return [f"{prefix} está vacío"]
@@ -175,17 +189,30 @@ def validate(static_dir: Path, raw_site_root: str) -> list[str]:
     for missing_route in sorted(set(PUBLIC_ROUTES) - seen_routes):
         errors.append(f"falta URL pública en sitemap: {site_root}{missing_route}")
 
-    for html_path in sorted(static_dir.glob("*.html")):
+    # Validate URL metadata on EVERY published page, including nested
+    # comparison pages under comparisons/ (P2 Codex review thread, #324).
+    # PUBLIC_ROUTES is keyed by route; reverse it to map a file path to the
+    # route it is published at so metadata is checked against the right URL.
+    route_by_file = {
+        filename: route for route, filename in PUBLIC_ROUTES.items()
+    }
+    for html_path in sorted(static_dir.rglob("*.html")):
+        rel_html = str(html_path.relative_to(static_dir))
+        # Metadata only matters for intentionally public routes; skip anything
+        # not in the public contract (e.g. stray or dev-only pages).
+        route = route_by_file.get(rel_html)
+        if route is None:
+            continue
         parser = _UrlMetadataParser()
         try:
             parser.feed(html_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError) as exc:
-            errors.append(f"no se pudo leer {html_path.name}: {exc}")
+            errors.append(f"no se pudo leer {rel_html}: {exc}")
             continue
         for kind, value in parser.values:
             errors.extend(
                 _validate_page_url(
-                    html_path=html_path,
+                    rel_html=rel_html,
                     kind=kind,
                     value=value,
                     expected_host=expected_host,
