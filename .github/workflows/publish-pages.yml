@@ -13,7 +13,10 @@ on:
     branches: [main]
     paths:
       - "static/**"
+      - "docs/comparisons/**"
       - "scripts/pages_seo_check.py"
+      - "scripts/build_comparison_pages.py"
+      - "scripts/build_sitemap.py"
       - ".github/workflows/publish-pages.yml"
   workflow_dispatch:
 

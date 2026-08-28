@@ -55,21 +55,42 @@ def slug_from_name(name: str) -> str:
     return re.sub(r"\.md$", "", name)
 
 
+GITHUB_SOURCE_BASE = "https://github.com/adrimg3196/lucidfence/blob/main"
+
+
 def rewrite_links(md: str) -> str:
-    """Rewrite internal relative .md links to relative page paths within Pages.
-    docs/comparisons/*.md link like ../README.md or lucidfence-vs-jamf.md.
-    We keep them functional but harmless: comparisons/*.md -> ../<slug>.html
-    for sibling comparison; other ../*.md -> repo source on GitHub (absolute)."""
+    """Rewrite internal relative .md links to functional targets on Pages.
+
+    The generated comparison pages are served at /comparisons/<slug>.html
+    (same directory), so:
+
+      - a sibling comparison link like ``lucidfence-vs-jamf.md`` (no ``../``)
+        -> ``lucidfence-vs-jamf.html`` (same dir on Pages, resolves to
+        /comparisons/lucidfence-vs-jamf.html — the real published file).
+
+      - a cross-doc citation like ``../integrations/INTUNE.md``,
+        ``../operations/ENFORCEMENT.md`` or ``../README.md`` points at docs
+        that are NOT published to Pages, so a relative root path would 404.
+        Route it to the actual GitHub source blob on ``main``.
+
+      - absolute http(s) links are preserved verbatim.
+
+    This fixes the prior bug where every ``../*.md`` was flattened into a
+    nonexistent root URL (e.g. ``../INTUNE.html``) while sibling comparisons
+    stayed as .md (Codex review thread P1, #324).
+    """
     def repl(m):
         text, url = m.group(1), m.group(2)
         if url.startswith("http"):
             return f"[{text}]({url})"
         if url.endswith(".md"):
             if url.startswith("../"):
-                # cross-doc link within comparisons (e.g. lucidfence-vs-jamf.md)
-                sib = slug_from_name(url.split("/")[-1])
-                return f"[{text}](../{sib}.html)"
-            return f"[{text}]({url})"
+                # Cross-directory doc not published to Pages -> GitHub source.
+                rel = url[3:]  # strip leading ../
+                return f"[{text}]({GITHUB_SOURCE_BASE}/{rel})"
+            # Same-dir sibling comparison (lucidfence-vs-*.md).
+            sib = slug_from_name(url)
+            return f"[{text}]({sib}.html)"
         return f"[{text}]({url})"
     return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", repl, md)
 
