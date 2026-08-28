@@ -78,15 +78,16 @@ def test_runner_treats_nonzero_and_string_system_exit_as_failures():
 
 
 def test_loop_dry_run_does_not_write_history():
-    old_history, old_cli = loop_improve._HISTORY, loop_improve._CLI
+    old_history, old_provs = loop_improve._HISTORY, loop_improve._available_providers
     with tempfile.TemporaryDirectory() as td:
         loop_improve._HISTORY = Path(td) / "history.jsonl"
-        loop_improve._CLI = ""
+        # Forzar agregador local-heuristico (sin red) para el dry-run honesto.
+        loop_improve._available_providers = lambda: []
         try:
             assert loop_improve.run_loop(feature_id="F1.1", max_iter=1, dry_run=True) == 0
             assert not loop_improve._HISTORY.exists()
         finally:
-            loop_improve._HISTORY, loop_improve._CLI = old_history, old_cli
+            loop_improve._HISTORY, loop_improve._available_providers = old_history, old_provs
 
 
 def test_zero_fleet_offline_map_accessibility_and_monitor_contracts():

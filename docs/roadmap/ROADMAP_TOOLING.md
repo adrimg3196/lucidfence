@@ -58,15 +58,15 @@ El `/loop` usa **Mixture-of-Agents**:
   si su API key está presente en `.env` / `LF_PROVIDER_*`. Sin clave, el proposer
   degrada a **análisis local determinístico** para que el loop sea demostrable
   sin secretos.
-- **Agregador (merge final):** **Claude Opus 4.8**. Se invoca vía `claude` CLI
-  (Claude Code, en `/Users/adri/.local/bin/claude`) si está disponible; si no,
-  merge heurístico local.
+- **Agregador (merge final):** modelo **GRATIS** (`gpt-4o-mini` vía openai/github,
+  en `FREE_PROVIDERS`) si hay API key disponible; si no, merge heurístico local.
+  **Nunca usa modelos de pago** (política free-first de `loop-budget.md`).
 
 > **Nota de honestidad (verificada 2026-07-20):** `opencode` NO está instalado en
 > este entorno, y no hay API keys de LLM en `config.json`/`.env`. Por tanto el
 > `/loop` aquí corre en **modo local determinístico** (proposers + agregador
 > heurístico) salvo que se provean claves. La arquitectura ya está cableada para
-> usar los free tiers reales en cuanto existan las claves. El agregador Opus 4.8
+> usar los free tiers reales en cuanto existan las claves. El agregador gratuito
 > se prueba de verdad vía `claude` CLI cuando responde.
 
 ## El /loop (cómo "mejorar aún más todo")

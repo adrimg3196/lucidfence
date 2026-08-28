@@ -7,9 +7,10 @@ Arquitectura (ver AGENTS.md / docs/roadmap/ROADMAP_TOOLING.md):
     real (OpenRouter/Nous, Groq, NVIDIA, Together, Fireworks, DeepInfra, GitHub,
     OpenAI). Si NO hay clave, el proposer degrada a analisis local deterministico
     para que el loop sea demostrable sin secretos.
-  - AGREGADOR: Claude Opus 4.8. Se invoca via `claude` CLI (Claude Code) si esta
-    presente en el PATH; si no, merge heuristico local. (El server MoA en
-    127.0.0.1:8085 tambien es un agregador valido cuando esta arriba.)
+  - AGREGADOR: modelo GRATIS (gpt-4o-mini via openai/github, en FREE_PROVIDERS) si
+    hay API key disponible; si no, merge heuristico local. NUNCA se usa un modelo de
+    pago (free-first). (El server MoA en 127.0.0.1:8085 tambien es un agregador
+    valido cuando esta arriba.)
   - VERIFY: corre tests/run_tests.py y valida roadmap_tooling.
   - HISTORY: cada iteracion se append-a a data/loop_history.jsonl.
 
@@ -28,7 +29,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -43,7 +43,6 @@ from lucidfence.core import roadmap_tooling as rm
 from lucidfence.core.provider_plugins import discover_provider_plugins, merge_providers
 from lucidfence.core.loop_governance import KillSwitch
 
-_CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI") or shutil.which("claude") or ""
 _HISTORY = _ROOT / "data" / "loop_history.jsonl"
 
 
@@ -149,9 +148,10 @@ def _call_provider(provider, prompt, temperature):
 
 
 def _aggregate(proposals, feature, temperature):
-    """Agrega propuestas con Opus 4.8 (claude CLI) si esta; si no, merge heuristico."""
+    """Agrega propuestas con un modelo GRATIS (free tier) si hay clave disponible;
+    si no, merge heuristico local. NUNCA usa modelos de pago (free-first)."""
     prompt = (
-        "Eres el agregador final (Claude Opus 4.8) de un sistema Mixture-of-Agents "
+        "Eres el agregador final (modelo gratis) de un sistema Mixture-of-Agents "
         "para mejorar la herramienta de geofencing LucidFence.\n"
         f"FEATURE A MEJORAR: {feature['id']} — {feature.get('title')}\n"
         f"Capa={feature.get('capability')} Impacto={feature.get('impact')} Esfuerzo={feature.get('effort')}\n\n"
@@ -160,21 +160,17 @@ def _aggregate(proposals, feature, temperature):
         + "\n\nFusiona en UNA recomendacion coherente y senala conflictos. "
           "Responde en espanol, conciso, con pasos accionables."
     )
-    if Path(_CLI).exists():
-        try:
-            r = subprocess.run(
-                [_CLI, "-p", prompt, "--model", "opus", "--temperature", str(temperature)],
-                capture_output=True, text=True, timeout=120,
-            )
-            if r.returncode == 0 and r.stdout.strip():
-                return r.stdout.strip()
-        except Exception as e:
-            pass  # cae a merge heuristico
-    # Merge heuristico local (sin clave/sin claude)
+    # Agregador gratis: usa el primer provider con clave disponible (gpt-4o-mini
+    # via openai/github ya esta en FREE_PROVIDERS). Sin clave -> merge heuristico local.
+    for provider in _available_providers():
+        out = _call_provider(provider, prompt, temperature)
+        if out:
+            return f"[AGGREGATE:{provider['name']}] {out}"
+    # Merge heuristico local (sin clave/sin providers gratis)
     merged = "\n".join(proposals)
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
-        "Consenso: implementar subtareas en orden, verificar con tests/run_tests.py y "
+        "Consenso: implementar subtasks en orden, verificar con tests/run_tests.py y "
         "python3 -m lucidfence.core.roadmap_tooling --validate. " + merged[:1500]
     )
     return summary
@@ -318,7 +314,7 @@ def run_loop(feature_id=None, max_iter=None, dry_run=False) -> int:
                 "iteration": i,
                 "temperature": round(temp, 2),
                 "providers": [p["name"] for p in _available_providers()],
-                "aggregator": "opus-4.8 (claude)" if _CLI and Path(_CLI).exists() else "local-heuristic",
+                "aggregator": "free (gpt-4o-mini via openai/github)" if _available_providers() else "local-heuristic",
                 "score": score,
                 "merged_len": len(merged),
             })

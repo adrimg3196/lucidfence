@@ -88,15 +88,16 @@ def test_loop_local():
     if feat is None:
         feat = next(f for f in lp.rm.all_features(d) if f["id"] == "F1.1")
     check("loop selecciona o audita una feature", feat is not None)
-    # Forzar CLI local para que el test no cuelgue en una llamada real a claude
-    # (Opus 4.8 via claude CLI) durante la suite honesta del proyecto.
-    saved_cli = lp._CLI
-    lp._CLI = "/nonexistent/claude"
+    # Forzar agregador local-heuristico para que el test no haga llamadas de red
+    # reales (free tier) durante la suite honesta del proyecto. El agregador es
+    # free-first: usa _available_providers(); forzamos [] para aislar el merge local.
+    saved_provs = lp._available_providers
+    lp._available_providers = lambda: []
     local_prop = lp._local_proposer(feat, 0.5)
     check("proposer local produce texto", bool(local_prop))
     merged = lp._aggregate([local_prop], feat, 0.5)
     check("agregador local produce merge", bool(merged))
-    lp._CLI = saved_cli
+    lp._available_providers = saved_provs
     score = lp._quality_score(merged)
     check("quality_score en 0..10", 0 <= score <= 10)
     # run_loop --dry-run no debe romper ni tocar estado
