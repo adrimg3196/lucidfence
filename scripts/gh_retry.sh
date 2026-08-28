@@ -3,7 +3,9 @@
 # Source this file, then call: gh_retry api repos/owner/repo
 
 gh_retry_is_retryable() {
-  local error_text="${1,,}"
+  # bash 3.2 (macOS /bin/sh) has no ${var,,} — lowercase via tr for portability.
+  local error_text
+  error_text=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 
   if [[ "$error_text" =~ \(http[[:space:]]+(429|500|502|503|504)\) ]]; then
     return 0
