@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -77,9 +78,29 @@ FREE_PROVIDERS = [
 ]
 
 
+# Free-first safety net: a plugin (lucidfence/plugins/providers/*.py) may define
+# ANY model, and `_available_providers()` only checks for a present API key — not
+# the price tier. `merge_providers` validates schema but not cost. Without this
+# filter a plugin declaring a paid model (e.g. claude-opus-4 / gpt-4) with its key
+# present would make the /loop aggregator call a PAID model, breaking the fleet's
+# $0 rule. The offline detector lives in scripts/loop_free_guard.py.
+_PAID_MODEL_RE = re.compile(
+    r"(opus|claude[-\s_]?opus|claude[-\s_]?sonnet|claude-3-?opus|gpt-4(?!o-mini)|gpt-5|sonnet)",
+    re.IGNORECASE,
+)
+
+
+def _is_paid_model(model: str) -> bool:
+    """True if a model id looks like a paid tier (free-first guard)."""
+    return bool(model) and bool(_PAID_MODEL_RE.search(model))
+
+
 def _provider_catalog():
     plugins = discover_provider_plugins(_ROOT / "lucidfence" / "plugins" / "providers")
-    return merge_providers(FREE_PROVIDERS, plugins)
+    merged = merge_providers(FREE_PROVIDERS, plugins)
+    # Free-first: drop any provider whose model is a paid tier so it can never
+    # reach the aggregator. See scripts/loop_free_guard.py ($0 rule detector).
+    return [p for p in merged if not _is_paid_model(p.get("model", ""))]
 
 
 def _available_providers():
