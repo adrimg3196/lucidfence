@@ -1,4 +1,4 @@
---- recon repos 2026-08-27T21:57:03Z ---
+--- recon repos 2026-08-28T10:13:27Z ---
 === RECON REPOS (GitHub) — inspiracion video LucidFence ===
 
 1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
@@ -17,13 +17,13 @@
    AI-powered content production studio — 7 generators (trend tracker, card news, short-form video, meme ad, ad copy, ad creative, thumbnail) + browser-side video rendering engine (Canvas + WebCodecs + Remotion 4)
    https://github.com/mochunab/contents-maker
 
-5. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
-   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
-   https://github.com/Divyalakshmiyarram/video-script-generator
-
-6. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
+5. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
    A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
    https://github.com/StephenStepDude/video-script-generator
+
+6. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
+   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
+   https://github.com/Divyalakshmiyarram/video-script-generator
 
 Total referencias traidas: 7 (minimo 3)
 
@@ -41,7 +41,7 @@ Total referencias traidas: 7 (minimo 3)
   X: (no cookies X)
   Reddit: (no cookie Reddit)
 
---- recon social 2026-08-27T21:57:04Z ---
+--- recon social 2026-08-28T10:13:28Z ---
 === RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
 
 >>> YouTube: Applivery UEM
