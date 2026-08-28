@@ -38,6 +38,12 @@ Comprobaciones (solo para tareas de código):
   3. `python3 scripts/verify.py` APTO sobre origin/main (en un worktree efímero
      de main). Por defecto --verify-mode auto: si el único fallo es la batería
      runtime en vivo (flaky en main), cae a --fast.
+  4. NO hay tests sin commitear (untracked) en la rama de entrega. Cierra el
+     patrón false-green recurrente (CTO->CEO t_64c46e34, PR #319, issue #310,
+     defecto #302-1): el agente crea el regression test que prueba el DONE pero
+     lo deja untracked -> CI ciego al cambio y el checkout compartido lo pierde
+     en un hard-reset sin que nadie lo vea. Si existe un test_*.py untracked en
+     el workspace de la rama, el gate BLOQUEA (fail-closed).
 
 Stdlib-only (convención del repo). No requiere dependencias externas.
 """
@@ -253,6 +259,86 @@ def collect_acceptance_tests(task, test_args, body_text):
     return out
 
 
+def collect_untracked_tests(repo, branch):
+    """CTO->CEO t_64c46e34: patrón false-green recurrente.
+
+    Detecta tests de regresión que PRUEBAN el trabajo de la card pero quedaron
+    SIN COMMITEAR (untracked) en la rama de entrega. Si un test_*.py está
+    untracked, CI no lo corre y el checkout compartido lo pierde en un
+    hard-reset sin que nadie lo note -> el control de seguridad o el sentinel
+    puede perderse siendo la card DONE. Devuelve la lista de paths untracked.
+    """
+    # Resolvemos la rama a un ref concreto (local o origin/).
+    ref = None
+    for cand in (branch, f"origin/{branch}" if branch else None):
+        if not cand:
+            continue
+        rc, _ = _run(["git", "-C", repo, "rev-parse", "--verify", cand],
+                     timeout=30)
+        if rc == 0:
+            ref = cand
+            break
+    if ref is None:
+        # Sin rama resoluble: no podemos escanear; lo dejamos para CHECK 1.
+        return []
+    rc, out = _run(
+        ["git", "-C", repo, "ls-files", "--others", "--exclude-standard",
+         f"{ref}:", "--", "tests/"],
+        timeout=30,
+    )
+    if rc != 0:
+        return []
+    untracked = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # ls-files --others <ref>: sobre un ref DIRECTO imprime los untracked
+        # del árbol de trabajo, no del ref; por eso escaneamos el workspace de
+        # la rama (ver collect_untracked_tests_workspace) como fuente de
+        # verdad. Aquí solo capturamos los del path tests/ que git reporta.
+        if line.startswith("tests/") and line.endswith(".py") \
+                and "test_" in line:
+            untracked.append(line)
+    return untracked
+
+
+def collect_untracked_tests_workspace(repo, task):
+    """Escanea el workspace real de la rama (task.workspace_path) por
+    test_*.py sin commitear. Es la fuente de verdad para el patrón
+    false-green: el agente deja el regression test en su workspace y marca
+    DONE sin commitearlo. Returns (list_of_untracked_test_paths, workspace)."""
+    wp = task.get("workspace_path") or ""
+    if not wp or not os.path.isdir(wp):
+        return [], wp
+    # El workspace suele ser un git worktree apuntando a la rama del agente.
+    rc, top = _run(["git", "-C", wp, "rev-parse", "--show-toplevel"],
+                   timeout=30)
+    if rc != 0:
+        return [], wp
+    top = top.strip()
+    rc2, out = _run(
+        ["git", "-C", top, "status", "--porcelain", "--untracked-files=all"],
+        timeout=30,
+    )
+    if rc2 != 0:
+        return [], wp
+    untracked = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # formato: '?? path' o ' A path' (no tracked = ??)
+        if not line.startswith("??"):
+            continue
+        path = line[2:].strip()
+        if "/tests/" in path or path.startswith("tests/") \
+                or "/test_" in path or path.endswith(".py") and "test_" in path:
+            if path.endswith(".py") and "test_" in os.path.basename(path):
+                untracked.append(path)
+    return untracked, wp
+
+
 def verdict_fail(args, task, evidence_text):
     if not (args.enforce and not args.dry_run):
         return
@@ -413,6 +499,37 @@ def main(argv):
                f"(untracked en rama del agente = CI no los corre = no cuenta)")
     checks.append(("tests-tracked-en-main", ok2, detail2))
     log(f"[{'OK' if ok2 else 'FALLO'}] 2. {detail2}")
+
+    # CHECK 4 (CTO->CEO t_64c46e34): NO hay tests sin commitear (untracked) en
+    # la rama de entrega / workspace del agente. Cierra el patrón false-green
+    # recurrente donde el agente crea el regression test que prueba el DONE
+    # pero lo deja untracked -> CI ciego y el checkout compartido lo pierde en
+    # un hard-reset. Fail-closed: si hay test_*.py untracked, BLOQUEAR DONE.
+    untracked_tests = []
+    ut_ws = []
+    if primary_branch:
+        untracked_tests = collect_untracked_tests(repo, primary_branch)
+    # Fuente de verdad del workspace del agente (captura el regression test
+    # que el agente dejó sin commitear en su propio checkout).
+    ut_ws, ws_path = collect_untracked_tests_workspace(repo, task)
+    all_untracked = sorted(set(untracked_tests) | set(ut_ws))
+    ok4 = (len(all_untracked) == 0)
+    detail4 = (
+        "no hay tests de regresión sin commitear (untracked) en la rama/workspace"
+        if ok4 else
+        f"tests SIN COMMITEAR (untracked) que prueban el trabajo: "
+        f"{', '.join(all_untracked)} — CI no los corre y el checkout "
+        f"compartido los pierde en un hard-reset (falso verde). Commitear y "
+        f"mergear antes de cerrar DONE."
+    )
+    checks.append(("no-untracked-proof-tests", ok4, detail4))
+    if ok4:
+        log(f"[OK] 4. {detail4}")
+    else:
+        log(f"[FALLO] 4. {detail4}")
+        for u in all_untracked:
+            log(f"    - untracked: {u}")
+
 
     # CHECK 3: verify.py APTO sobre origin/main. Solo si ya pasamos 1 y 2
     # (ahorra tiempo cuando ya sabemos que bloqueamos).
