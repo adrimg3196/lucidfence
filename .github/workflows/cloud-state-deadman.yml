@@ -83,8 +83,14 @@ jobs:
             echo "::warning::cloud-state estancado (dead-man activado)"
           fi
 
+      # NOTA (resuelve review thread P2 de #322): este paso es INDEPENDIENTE del
+      # auto-heal. Si la API de Issues falla (label inexistente, rate-limit,
+      # permisos), `continue-on-error` evita que el job se detenga y el paso de
+      # auto-heal (que viene después) SIEMPRE se ejecuta cuando status==stale.
+      # Sin esto, un fallo de reporte de incidente silenciaba la auto-recuperación.
       - name: Abrir/actualizar incidente si está STALE
         if: steps.alive.outputs.status == 'stale'
+        continue-on-error: true
         uses: actions/github-script@v7
         env:
           # El umbral que este run uso de verdad (input o default), para que el
@@ -139,6 +145,9 @@ jobs:
         # "clearly_fresh" del PRÓXIMO run (no este), respetando la histéresis.
         # engine-cron usa `concurrency: group: engine-cron, cancel-in-progress: false`,
         # así que dispararlo mientras otro corre solo encola — es seguro.
+        # Orden intencional: viene DESPUÉS del reporte de incidente, pero como
+        # ese paso lleva `continue-on-error: true`, un fallo allí NO impide que
+        # este dispare engine-cron. El auto-heal es la garantía de último recurso.
         if: steps.alive.outputs.status == 'stale'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
