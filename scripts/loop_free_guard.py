@@ -4,112 +4,96 @@
 WHY THIS EXISTS
 ---------------
 The /loop self-improvement aggregator used to call a PAID model (Claude Opus 4.8).
-FINANCE removed that dependency (commit 2026-08-2x) and the fleet rule is now
-100% free-tier. BUT the aggregator's provider catalog is built by::
+FINANCE removed that dependency and the fleet rule is now 100% free-tier. BUT the
+aggregator's provider catalog is built by::
 
-    _provider_catalog() = merge_providers(FREE_PROVIDERS, plugins)
-    _available_providers() -> providers in that catalog whose API key is present
+    _provider_catalog() = [p for p in merge_providers(FREE_PROVIDERS, plugins)
+                           if is_free_model(p["model"])]   # DEFAULT-DENY
 
 where ``plugins`` are ANY ``*.py`` files dropped into
 ``lucidfence/plugins/providers/`` (the README actively invites users to add them).
 ``merge_providers`` only validates the provider *schema* (via ``validate_provider``)
-— it does NOT enforce a free price tier. So a plugin defining a PAID model
-(e.g. ``gpt-4`` / ``claude-opus-4``) with a real key present would make the
-aggregator call a paid model at runtime, silently breaking the $0 rule.
+— it does NOT enforce a free price tier. So a plugin defining a NON-free model
+(e.g. ``gpt-4`` / ``claude-opus-4`` / ``gemini-2.5-pro`` / ``o1``) with a real key
+present would make the aggregator call a paid/unknown model at runtime, silently
+breaking the $0 rule.
 
-The static ``paid_model_scanner.py`` (in ~/.hermes/scripts) scans source *text* and
-only DETECTS — it cannot prevent the runtime call, nor catch a model name that
-doesn't match its denylist.
+This guard is the DETECTION layer that mirrors the PREVENTION layer in
+``loop_improve._provider_catalog()``. Both import the ONLY source of truth for what
+is free: ``lucidfence.core.free_tier.is_free_model`` / ``FREE_ALLOWLIST``. Because
+they share the exact same logic, detection and prevention can never diverge.
 
-This guard closes that gap by inspecting the REAL merged catalog ``loop_improve``
-will actually use, OFFLINE and WITHOUT secrets, and failing (exit 1) if any
-reachable provider resolves to a paid model.
+DEFAULT-DENY MODEL (the fix for the PR #331 gap Finance found)
+-------------------------------------------------------------
+The original guard used a PAID *denylist* that FAILED OPEN on unlisted models
+(``gemini-2.5-pro``, ``o1``, ``claude-3-5-haiku``, ``claude-2`` all classified
+"unknown" and only WARNed). We now invert it:
 
-CLASSIFICATION (fail-open on unknown, fail-closed on known-paid)
----------------------------------------------------------------
-A model is classified:
-  * paid    -> matches PAID_PATTERNS (opus, claude-opus, gpt-4 non-mini, gpt-5,
-               sonnet, claude-3-opus, ...).  => BLOCK (the $0 violation).
-  * free    -> contains ":free", or matches a known-free family marker
-               (llama, mixtral, hermes, gpt-4o-mini, mistral, deepseek, qwen,
-               phi, gemma, grok, yi-, command-r, ministral, ...), or is exactly
-               one of the blessed FREE_PROVIDERS models.  => OK.
-  * unknown -> neither.  => WARN (informational, exit 0). The official example
-               plugin ships ``model: "example-model"`` which is unknown-but-not-paid;
-               blocking it would be a false positive, so unknowns only warn.
-               Use --strict to treat unknown as a BLOCK.
+  * FREE    -> matches ``FREE_ALLOWLIST`` (the known free providers/placeholders).
+               => OK.
+  * NON-free-> anything that does NOT match the allowlist, INCLUDING models we have
+               never seen (``gemini-2.5-pro``, ``o1``, ``o3-mini``, ``haiku``...).
+               => BLOCK (exit 1) by DEFAULT. This is fail-closed.
+
+So adding a brand-new paid model to the catalog can never silently pass — it is
+blocked until it is explicitly added to the free allowlist.
 
 USAGE
 -----
-  python3 scripts/loop_free_guard.py            # scan the real merged catalog
+  python3 scripts/loop_free_guard.py            # scan the real merged catalog (default)
   python3 scripts/loop_free_guard.py --selftest # offline unit tests (no import needed)
   python3 scripts/loop_free_guard.py --json     # machine-readable report
-  python3 scripts/loop_free_guard.py --strict   # unknown models also block
 
 EXIT CODES
 ----------
-  0  PASS  (no paid model reachable by the aggregator)
-  1  BLOCK (a paid model is reachable — $0 rule violated)
+  0  PASS  (every reachable provider in the catalog is on the free allowlist)
+  1  BLOCK (a non-free provider is reachable by the /loop aggregator)
   2  ERROR (could not import loop_improve / build catalog)
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
 import sys
 from pathlib import Path
 
-# --- paid-model denylist (regex, case-insensitive) ---------------------------
-# Precise (not broad) so we never false-positive on the team's free inventory
-# (gpt-4o-mini, llama*, mixtral, hermes-3, :free). Mirrors the philosophy of
-# paid_model_scanner.py but focused on the aggregator's runtime selection.
-PAID_PATTERNS = [
-    (r"\bopus\b", "anthropic-opus"),
-    (r"claude[-\s_]?opus", "anthropic-opus"),
-    (r"claude[-\s_]?sonnet", "anthropic-sonnet"),
-    (r"claude-3-?opus", "anthropic-opus"),
-    (r"\bgpt-4(?!o-mini)", "openai-gpt4"),   # gpt-4, gpt-4-turbo, gpt-4o (non-mini), gpt-4.5
-    (r"\bgpt-5", "openai-gpt5"),
-    (r"\bsonnet\b", "anthropic-sonnet"),
-    (r"\bdeepseek-(?:v3|r1|reasoner)\b", "deepseek-paid"),  # only the paid tiers
-]
+# Make sure the repo root is importable before we touch the project package, so
+# the detection layer imports the SAME source of truth as the prevention layer.
+_HERE = Path(__file__).resolve().parent
+_REPO_ROOT = _HERE.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-# --- known-free family markers (substring, lowercased) -----------------------
-FREE_FAMILY = [
-    ":free",
-    "gpt-4o-mini",
-    "llama",
-    "mixtral",
-    "hermes",
-    "mistral",
-    "deepseek",
-    "qwen",
-    "phi-",
-    "gemma",
-    "grok",
-    "yi-",
-    "command-r",
-    "ministral",
-    "cohere",
-    "falcon",
-    "stablelm",
-]
+# --- free allowlist (DEFAULT-DENY) -------------------------------------------
+# Re-exported from the single source of truth so detection and prevention match.
+# If the project package is unavailable (e.g. the file is copied elsewhere) we
+# fall back to an identical inline copy so the guard still fails closed.
+try:
+    from lucidfence.core.free_tier import FREE_ALLOWLIST, is_free_model
+except Exception:  # pragma: no cover - allow standalone offline run
+    sys.stderr.write(
+        "WARN: cannot import lucidfence.core.free_tier; using inline copy.\n"
+    )
+    FREE_ALLOWLIST = [
+        ":free", "gpt-4o-mini", "llama", "mixtral", "mistral", "hermes",
+        "deepseek", "qwen", "phi-", "gemma", "grok", "yi-", "command-r",
+        "ministral", "cohere", "falcon", "stablelm",
+    ]
+
+    def is_free_model(model) -> bool:  # type: ignore[no-redef]
+        if not isinstance(model, str) or not model:
+            return False
+        m = model.lower()
+        return any(tok in m for tok in FREE_ALLOWLIST)
 
 
 def classify(model: str) -> str:
-    """Return 'paid', 'free', or 'unknown' for a model identifier."""
-    if not model:
-        return "unknown"
-    m = model.lower()
-    for pat, _fam in PAID_PATTERNS:
-        if re.search(pat, m):
-            return "paid"
-    for fam in FREE_FAMILY:
-        if fam in m:
-            return "free"
-    return "unknown"
+    """Return 'free' or 'nonfree' for a model identifier (default-deny).
+
+    Unlike the old denylist design there is no 'unknown' verdict: anything that
+    is not explicitly free is NON-free, and the default scan BLOCKS it.
+    """
+    return "free" if is_free_model(model) else "nonfree"
 
 
 def _load_loop_improve():
@@ -127,88 +111,84 @@ def _load_loop_improve():
 
 
 def real_catalog():
-    """Return the merged provider catalog loop_improve will actually use.
+    """Return the RAW merged provider catalog loop_improve builds (prevention off).
 
-    Tolerates a missing loop_improve (returns []) so the guard degrades to a
+    We replicate the merge here (not loop_improve._provider_catalog, which already
+    DROPS non-free models) so the detector can SEE every plugin that tried to enter
+    the catalog and flag it — otherwise a prevented (dropped) plugin would be
+    invisible and the guard would always report a clean catalog even if a paid
+    plugin existed.
+
+    Tolerates a missing loop_improve (returns None) so the guard degrades to a
     clear ERROR exit rather than a crash.
     """
     lp = _load_loop_improve()
     if lp is None:
         return None
     try:
-        return lp._provider_catalog()
+        from lucidfence.core.provider_plugins import (
+            discover_provider_plugins,
+            merge_providers,
+        )
+    except Exception as e:  # noqa: BLE001
+        sys.stderr.write(f"ERROR: cannot import provider_plugins: {e!r}\n")
+        return None
+    try:
+        plugins = discover_provider_plugins(Path(lp.__file__).resolve().parent
+                                            / "lucidfence" / "plugins" / "providers")
+        return merge_providers(lp.FREE_PROVIDERS, plugins)
     except Exception as e:  # noqa: BLE001
         sys.stderr.write(f"ERROR: cannot build provider catalog: {e!r}\n")
         return None
 
 
-def scan_providers(providers, strict: bool = False):
-    """Scan a list of provider dicts. Returns (blocks, warns, details)."""
+def scan_providers(providers):
+    """Scan a list of provider dicts. Returns (blocks, ok) where blocks is a list
+    of (name, model) for every NON-free provider."""
     blocks = []
-    warns = []
     for p in providers or []:
         model = (p.get("model") or "").strip()
         name = p.get("name", "?")
-        verdict = classify(model)
-        if verdict == "paid":
+        if not is_free_model(model):
             blocks.append((name, model))
-        elif verdict == "unknown":
-            if strict:
-                blocks.append((name, model))
-            else:
-                warns.append((name, model))
-    return blocks, warns
+    return blocks
 
 
-def run_scan(strict: bool = False, as_json: bool = False) -> int:
+def run_scan(as_json: bool = False) -> int:
     catalog = real_catalog()
     if catalog is None:
         if as_json:
             print(json.dumps({"ok": False, "error": "catalog_unavailable"}, indent=2))
         return 2
-    blocks, warns = scan_providers(catalog, strict=strict)
+    blocks = scan_providers(catalog)
     if as_json:
         print(json.dumps({
             "ok": not blocks,
             "providers_scanned": len(catalog),
             "blocks": [{"name": n, "model": m} for n, m in blocks],
-            "warns": [{"name": n, "model": m} for n, m in warns],
-            "strict": strict,
         }, indent=2))
     else:
         print(f"Scanned {len(catalog)} providers in the merged /loop catalog:")
         for p in catalog:
             v = classify(p.get("model", ""))
-            mark = {"paid": "BLOCK", "free": "ok", "unknown": "warn"}[v]
+            mark = "ok" if v == "free" else "BLOCK"
             print(f"  [{mark:5}] {p.get('name', '?'):24} {p.get('model', '')}")
-        if warns:
-            print(f"\nWARN: {len(warns)} provider(s) have unknown (non-paid) models; "
-                  f"not blocked. Use --strict to block them.")
         if blocks:
-            print(f"\nBLOCK: {len(blocks)} paid model(s) reachable by the /loop aggregator:")
+            print(f"\nBLOCK: {len(blocks)} NON-free model(s) reachable by the "
+                  f"/loop aggregator:")
             for n, m in blocks:
                 print(f"  - {n}: {m}")
-            print("\n$0 rule VIOLATED — the aggregator could call a paid model at runtime.")
+            print("\n$0 rule VIOLATED — a non-free model could be called at runtime.")
         else:
-            print("\nPASS: no paid model is reachable by the /loop aggregator.")
+            print("\nPASS: every reachable provider is on the free allowlist "
+                  "(default-deny $0 rule OK).")
     return 1 if blocks else 0
 
 
 def selftest() -> int:
     """Offline unit tests — no import of loop_improve, no network, no secrets."""
-    cases = [
-        # (model, expected_verdict)
-        ("claude-opus-4", "paid"),
-        ("claude opus 4.8", "paid"),
-        ("anthropic/claude-3-opus", "paid"),
-        ("gpt-4", "paid"),
-        ("gpt-4-turbo", "paid"),
-        ("gpt-4o", "paid"),          # non-mini gpt-4o is paid
-        ("gpt-5", "paid"),
-        ("gpt-5-turbo", "paid"),
-        ("claude-sonnet-4", "paid"),
-        ("sonnet-4", "paid"),
-        # ---- free (must NOT be flagged) ----
+    # (model, expected_verdict) with default-deny semantics.
+    free_cases = [
         ("gpt-4o-mini", "free"),
         ("nousresearch/hermes-3-llama-3.1-405b:free", "free"),
         ("llama-3.3-70b-versatile", "free"),
@@ -216,71 +196,99 @@ def selftest() -> int:
         ("mistralai/Mixtral-8x22B-Instruct-v0.1", "free"),
         ("deepseek/deepseek-chat", "free"),
         ("accounts/fireworks/models/llama-v3p3-70b-instruct", "free"),
-        # ---- unknown (placeholder / new free model) ----
-        ("example-model", "unknown"),
-        ("my-custom-free-endpoint", "unknown"),
+    ]
+    nonfree_cases = [
+        # the original gap: unlisted paid/unknown models that the old denylist
+        # only WARNed on. Now they MUST block.
+        ("gemini-2.5-pro", "nonfree"),
+        ("o1", "nonfree"),
+        ("o3-mini", "nonfree"),
+        ("o4-mini", "nonfree"),
+        ("claude-3-5-haiku", "nonfree"),
+        ("claude-2", "nonfree"),
+        ("claude-opus-4", "nonfree"),
+        ("claude opus 4.8", "nonfree"),
+        ("anthropic/claude-3-opus", "nonfree"),
+        ("gpt-4", "nonfree"),
+        ("gpt-4-turbo", "nonfree"),
+        ("gpt-4o", "nonfree"),   # non-mini gpt-4o is paid
+        ("gpt-5", "nonfree"),
+        ("claude-sonnet-4", "nonfree"),
+        ("sonnet-4", "nonfree"),
+        # a brand-new unknown free-looking name that is NOT on the allowlist must
+        # still block — that is the whole point of default-deny.
+        ("my-custom-free-endpoint", "nonfree"),
     ]
     failures = []
-    for model, expected in cases:
+    for model, expected in free_cases + nonfree_cases:
         got = classify(model)
         status = "OK " if got == expected else "BAD"
         if got != expected:
             failures.append((model, expected, got))
         print(f"  {status} classify({model!r}) = {got} (expected {expected})")
 
-    # Catalog scan logic on synthetic data (does NOT need loop_improve).
+    # Catalog scan logic on synthetic data (does NOT need loop_improve). Every
+    # non-free entry must be flagged; the free + example placeholder must pass.
     synth = [
         {"name": "nous_openrouter", "model": "nousresearch/hermes-3-llama-3.1-405b:free"},
         {"name": "groq", "model": "llama-3.3-70b-versatile"},
-        {"name": "evil_plugin", "model": "claude-opus-4"},   # the real gap
-        {"name": "placeholder", "model": "example-model"},   # unknown -> warn
+        {"name": "evil_opus", "model": "claude-opus-4"},          # MUST block
+        {"name": "evil_gemini", "model": "gemini-2.5-pro"},       # MUST block
+        {"name": "evil_haiku", "model": "claude-3-5-haiku"},      # MUST block
+        {"name": "placeholder", "model": "gpt-4o-mini"},          # free -> must pass
     ]
-    blocks, warns = scan_providers(synth, strict=False)
-    ok_scan = (len(blocks) == 1 and blocks[0][0] == "evil_plugin" and len(warns) == 1)
+    blocks = scan_providers(synth)
+    blocked_names = {n for n, _m in blocks}
+    ok_scan = (blocked_names == {"evil_opus", "evil_gemini", "evil_haiku"})
     print(f"  {'OK ' if ok_scan else 'BAD'} scan synthetic catalog: "
-          f"blocks={[b[0] for b in blocks]} warns={[w[0] for w in warns]}")
+          f"blocks={sorted(blocked_names)}")
     if not ok_scan:
-        failures.append(("scan_synthetic", "1 block(evil_plugin)+1 warn", f"blocks={blocks} warns={warns}"))
+        failures.append(("scan_synthetic",
+                         "blocks evil_opus/evil_gemini/evil_haiku",
+                         f"blocks={sorted(blocked_names)}"))
 
-    # In strict mode, the unknown placeholder must also block.
-    blocks_s, _ = scan_providers(synth, strict=True)
-    ok_strict = len(blocks_s) == 2
-    print(f"  {'OK ' if ok_strict else 'BAD'} strict mode blocks unknown: "
-          f"blocks={[b[0] for b in blocks_s]}")
-    if not ok_strict:
-        failures.append(("scan_strict", "2 blocks", f"blocks={blocks_s}"))
-
-    # End-to-end proof against loop_improve's REAL merge path: inject a paid
-    # plugin and assert the guard catches it via loop_improve._provider_catalog().
+    # End-to-end proof against loop_improve's REAL prevention path: drop a real
+    # NON-free plugin file into the providers dir (the exact models Finance flagged
+    # in PR #331) and assert BOTH layers behave correctly:
+    #   * _provider_catalog() DROPS it (prevention, fail-closed) — the PR #331 leak fix
+    #   * the guard's real_catalog() DETECTS it and would exit 1 (detection)
+    # The temp file is removed in a finally block so selftest never pollutes the repo.
     lp = _load_loop_improve()
     if lp is not None:
         try:
-            from unittest import mock
-            paid_plugin = {"name": "rogue", "env": "LF_PROVIDER_ROGUE_API_KEY",
-                           "base": "https://api.invalid/v1", "model": "claude-opus-4"}
-            with mock.patch.object(lp, "discover_provider_plugins",
-                                   return_value=[paid_plugin]):
-                cat = lp._provider_catalog()
-            rogue_present = any(p.get("name") == "rogue" for p in cat)
-            b2, _ = scan_providers(cat, strict=False)
-            if rogue_present:
-                # Detection path: the scanner must flag the leak (and the CI
-                # gate would exit 1). The guard is *working*; a found violation
-                # is correct behavior, not a selftest failure.
-                ok_e2e = any(n == "rogue" for n, _m in b2)
-                print(f"  {'OK ' if ok_e2e else 'BAD'} e2e: paid plugin present in "
-                      f"catalog -> scanner catches it (detection path correct)")
-                if not ok_e2e:
-                    failures.append(("e2e_detection", "rogue detected", f"blocks={b2}"))
-            else:
-                # Prevention path: the source hardens the catalog and filters
-                # the paid plugin out before it can reach the aggregator, so the
-                # scanner finds nothing. Again correct behavior.
-                ok_e2e = (len(b2) == 0)
-                print(f"  {'OK ' if ok_e2e else 'BAD'} e2e: paid plugin filtered out "
-                      f"by source (prevention path correct)")
-                if not ok_e2e:
-                    failures.append(("e2e_prevention", "catalog clean", f"blocks={b2}"))
+            prov_dir = (Path(lp.__file__).resolve().parent
+                        / "lucidfence" / "plugins" / "providers")
+            inject_models = ["gemini-2.5-pro", "o1", "claude-3-5-haiku"]
+            for inj in inject_models:
+                rogue_file = prov_dir / f"selftest_rogue_{inj.replace('-', '_').replace('.', '_')}.py"
+                rogue_file.write_text(
+                    'PROVIDER = {\n'
+                    '    "name": "rogue",\n'
+                    '    "env": "LF_PROVIDER_ROGUE_API_KEY",\n'
+                    '    "base": "https://api.invalid/v1",\n'
+                    f'    "model": "{inj}",\n'
+                    '}\n'
+                )
+                try:
+                    cat = lp._provider_catalog()
+                    rogue_present = any(p.get("name") == "rogue" for p in cat)
+                    ok_drop = not rogue_present
+                    print(f"  {'OK ' if ok_drop else 'BAD'} e2e: injected {inj!r} plugin is "
+                          f"DROPPED by _provider_catalog() (prevention fail-closed)")
+                    if not ok_drop:
+                        failures.append((f"e2e_prevention:{inj}",
+                                         "rogue plugin dropped", "rogue still present"))
+
+                    raw = real_catalog()
+                    raw_rogue = any(p.get("name") == "rogue" for p in (raw or []))
+                    ok_detect = raw_rogue and bool(scan_providers(raw))
+                    print(f"  {'OK ' if ok_detect else 'BAD'} e2e: injected {inj!r} plugin is "
+                          f"DETECTED by the guard (detection path)")
+                    if not ok_detect:
+                        failures.append((f"e2e_detection:{inj}",
+                                         "rogue detected", f"raw_rogue={raw_rogue}"))
+                finally:
+                    rogue_file.unlink(missing_ok=True)
         except Exception as e:  # noqa: BLE001
             print(f"  SKIP e2e injection test: {e!r}")
     else:
@@ -299,12 +307,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Guard the /loop $0 (free-first) rule.")
     ap.add_argument("--selftest", action="store_true", help="offline unit tests")
     ap.add_argument("--json", action="store_true", help="machine-readable report")
-    ap.add_argument("--strict", action="store_true",
-                    help="treat unknown (non-paid) models as blocks too")
     args = ap.parse_args(argv)
     if args.selftest:
         return selftest()
-    return run_scan(strict=args.strict, as_json=args.json)
+    return run_scan(as_json=args.json)
 
 
 if __name__ == "__main__":

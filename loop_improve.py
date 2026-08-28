@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -78,29 +77,27 @@ FREE_PROVIDERS = [
 ]
 
 
-# Free-first safety net: a plugin (lucidfence/plugins/providers/*.py) may define
-# ANY model, and `_available_providers()` only checks for a present API key — not
-# the price tier. `merge_providers` validates schema but not cost. Without this
-# filter a plugin declaring a paid model (e.g. claude-opus-4 / gpt-4) with its key
-# present would make the /loop aggregator call a PAID model, breaking the fleet's
-# $0 rule. The offline detector lives in scripts/loop_free_guard.py.
-_PAID_MODEL_RE = re.compile(
-    r"(opus|claude[-\s_]?opus|claude[-\s_]?sonnet|claude-3-?opus|gpt-4(?!o-mini)|gpt-5|sonnet)",
-    re.IGNORECASE,
-)
-
-
-def _is_paid_model(model: str) -> bool:
-    """True if a model id looks like a paid tier (free-first guard)."""
-    return bool(model) and bool(_PAID_MODEL_RE.search(model))
+# Free-first safety net (DEFAULT-DENY). A plugin (lucidfence/plugins/providers/*.py)
+# may define ANY model, and `_available_providers()` only checks for a present API
+# key — not the price tier. `merge_providers` validates schema but not cost. Without
+# this filter a plugin declaring a paid/unknown model (e.g. claude-opus-4, gpt-4,
+# gemini-2.5-pro, o1, claude-3-5-haiku) with its key present would make the /loop
+# aggregator call a NON-free model, breaking the fleet's $0 rule.
+#
+# We do NOT maintain a PAID denylist (it fails open on unlisted models — the gap
+# Finance found in PR #331). Instead we keep a single curated FREE allowlist in
+# lucidfence.core.free_tier and DROP anything not on it, so the catalog can never
+# reach a paid/unknown model. The offline detector (scripts/loop_free_guard.py)
+# imports the SAME allowlist, so detection and prevention cannot diverge.
+from lucidfence.core.free_tier import is_free_model  # noqa: E402  (after sys.path insert above)
 
 
 def _provider_catalog():
     plugins = discover_provider_plugins(_ROOT / "lucidfence" / "plugins" / "providers")
     merged = merge_providers(FREE_PROVIDERS, plugins)
-    # Free-first: drop any provider whose model is a paid tier so it can never
-    # reach the aggregator. See scripts/loop_free_guard.py ($0 rule detector).
-    return [p for p in merged if not _is_paid_model(p.get("model", ""))]
+    # Free-first: drop any provider whose model is NOT on the free allowlist, so
+    # it can never reach the aggregator. Default-deny — see lucidfence.core.free_tier.
+    return [p for p in merged if is_free_model(p.get("model", ""))]
 
 
 def _available_providers():
