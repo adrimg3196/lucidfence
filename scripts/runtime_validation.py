@@ -191,6 +191,49 @@ def main() -> int:
               rutas == ["/hook", "/t"] and firma_e2e,
               f"rutas={rutas}, firma_generic_valida={firma_e2e}")
 
+        # ============ 1b. Backlog #17: el MISMO webhook, en OCSF ============
+        # Claim: un incidente simulado sale por el webhook ya existente como
+        # Detection Finding válido (obligatorios de la clase presentes) y sin
+        # una sola coordenada. Camino real completo: config del tenant ->
+        # Engine -> IncidentStore.merge -> HTTP al receptor vivo.
+        print("\n== Backlog #17 Eventos OCSF (webhook generic format=ocsf) ==")
+        eng_ocsf = Engine({"mode": "simulation", "dry_run": True,
+                           "data_dir": str(tmp / "eng-ocsf"),
+                           "sim_seed_path": "data/fleet_seed.json",
+                           "incident_webhooks": [{"type": "generic",
+                                                  "url": "http://127.0.0.1:9099/siem",
+                                                  "format": "ocsf"}]})
+        before = len(CAPTURED)
+        eng_ocsf.incidents.merge([{
+            "id": "inc-rt-ocsf", "type": "geofence_exit",
+            "title": "Salida de geocerca (runtime OCSF)", "severity": "high",
+            "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq",
+            "first_seen": "2026-08-29T09:00:00+00:00",
+            "last_seen": "2026-08-29T09:30:00+00:00",
+            # Incidente envenenado con coordenadas reconocibles: el webhook
+            # nativo no las publica y OCSF no puede ampliar esa superficie.
+            "lat": 41.403629, "lng": 2.174356}])
+        ocsf_body = next((c["body"] for c in CAPTURED[before:] if c["path"] == "/siem"), b"")
+        ev = json.loads(ocsf_body) if ocsf_body else {}
+        faltan = [k for k in ("activity_id", "category_uid", "class_uid", "type_uid",
+                              "severity_id", "time", "metadata", "finding_info")
+                  if k not in ev]
+        clase_ok = (ev.get("category_uid") == 2 and ev.get("class_uid") == 2004
+                    and ev.get("type_uid") == 200401 and ev.get("severity_id") == 4
+                    and ev.get("metadata", {}).get("product", {}).get("vendor_name") == "LucidFence"
+                    and ev.get("finding_info", {}).get("uid") == "inc-rt-ocsf")
+        check("incidente simulado entregado como OCSF Detection Finding válido",
+              not faltan and clase_ok,
+              f"obligatorios_ausentes={faltan}, class_uid={ev.get('class_uid')}, "
+              f"type_uid={ev.get('type_uid')}, severity_id={ev.get('severity_id')}, "
+              f"schema={ev.get('metadata', {}).get('version')}")
+
+        fugas = [t for t in ("41.403629", "2.174356", '"lat"', '"lng"')
+                 if t.encode("utf-8") in ocsf_body]
+        check("el evento OCSF no lleva ni una coordenada",
+              bool(ocsf_body) and not fugas,
+              f"bytes={len(ocsf_body)}, fugas={fugas}")
+
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
         eng.run_once()

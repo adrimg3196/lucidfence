@@ -18,6 +18,7 @@ Config (tenant config / config.json):
     incident_webhooks:                                     # multi-canal
       - {"type": "slack",   "url": "https://hooks.slack.com/..."}
       - {"type": "generic", "url": "https://mi-endpoint/hook", "secret": "s3cr3t"}
+      - {"type": "generic", "url": "https://mi-siem/hec", "format": "ocsf"}
       - {"type": "ntfy",    "url": "https://ntfy.sh/mi-topic", "token": "tk_..."}
 """
 from __future__ import annotations
@@ -32,6 +33,8 @@ import ssl
 import time
 from typing import Any, Callable, Optional
 from urllib.parse import urlparse
+
+from lucidfence.core.ocsf import detection_finding
 
 # Severity -> Slack attachment color
 _SEVERITY_COLOR = {
@@ -575,12 +578,20 @@ class SignedWebhookNotifier:
     With `secret` set, adds header:
         X-LucidFence-Signature: sha256=<hex hmac of the exact request body>
     so the receiver can verify origin and integrity offline — no shared infra.
+
+    `fmt="ocsf"` (opt-in del tenant, backlog §17) sustituye ese payload por un
+    evento OCSF Detection Finding para que el SIEM que la organización ya tiene
+    lo ingiera sin parser a medida. Por defecto sigue siendo `native`: quien no
+    lo active no nota ningún cambio.
     """
 
     def __init__(self, url: str, secret: str = "", http_post: Optional[Callable] = None,
-                 egress: Optional[EgressAllowListPolicy] = None):
+                 egress: Optional[EgressAllowListPolicy] = None, fmt: str = "native"):
         self.url = (url or "").strip()
         self.secret = (secret or "").strip()
+        # Un formato desconocido cae a nativo (fail-soft): una errata en la
+        # config no puede dejar al tenant sin alertas.
+        self.fmt = "ocsf" if str(fmt or "").strip().lower() == "ocsf" else "native"
         self._post = http_post or _default_http_post
         self.egress = egress
         self.last_result: Optional[dict] = None
@@ -611,12 +622,19 @@ class SignedWebhookNotifier:
                                     "result": denied})
             return False
         try:
-            payload = {
-                "event": "lucidfence.incident",
-                "transition": transition,
-                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "incident": incident,
-            }
+            ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            if self.fmt == "ocsf":
+                # El evento OCSF va desnudo: envolverlo en el sobre nativo
+                # obligaría al SIEM a escribir el parser a medida que OCSF
+                # existe precisamente para ahorrarle.
+                payload = detection_finding(transition, incident)
+            else:
+                payload = {
+                    "event": "lucidfence.incident",
+                    "transition": transition,
+                    "ts": ts,
+                    "incident": incident,
+                }
             # Firmamos los bytes exactos que se envían: el body va como bytes
             # para que la firma no dependa de re-serializaciones del receptor.
             body = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -626,7 +644,7 @@ class SignedWebhookNotifier:
             res = self._post(self.url, body, headers)
             self.last_result = res
             self.deliveries.append({"transition": transition,
-                                    "ts": payload["ts"], "result": res})
+                                    "ts": ts, "result": res})
             return bool(res.get("ok")) if isinstance(res, dict) else False
         except Exception:  # noqa: BLE001 - never propagate
             return False
@@ -731,6 +749,7 @@ def build_incident_notifiers(config: dict, http_post: Optional[Callable] = None)
                                           http_post=http_post, egress=egress))
         elif kind == "generic":
             notifiers.append(SignedWebhookNotifier(url, secret=entry.get("secret") or "",
-                                                   http_post=http_post, egress=egress))
+                                                   http_post=http_post, egress=egress,
+                                                   fmt=entry.get("format") or "native"))
         # tipos desconocidos: se ignoran (fail-soft)
     return notifiers
