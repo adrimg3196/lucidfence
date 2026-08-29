@@ -27,6 +27,7 @@ PUBLIC_ROUTES = {
     "/manual.html": "manual.html",
     "/web.html": "web.html",
     "/whitelabel.html": "whitelabel.html",
+    "/compare.html": "compare.html",
     "/comparisons/lucidfence-vs-intune.html": "comparisons/lucidfence-vs-intune.html",
     "/comparisons/lucidfence-vs-jamf.html": "comparisons/lucidfence-vs-jamf.html",
 }

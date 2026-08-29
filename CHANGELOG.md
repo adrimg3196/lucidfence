@@ -34,6 +34,16 @@ All notable changes to LucidFence are documented here.
   driver custom `regen-adapter-index` (ver CONTRIBUTING.md → "Setup del repo").
   Antes producía conflictos y hashes obsoletos que rompían `test_adapter_marketplace_manifest_is_hash_verified`.
 - feat(gitops): `lucidfence apply` — políticas y geocercas como código (GitOps sin servidor) (#186)
+- feat(seo/pages): landing de comparación `compare.html` (issue #326) — capa de
+  geofencing y riesgo explicable sobre UEM de pago (Intune/Jamf/Kandji) y sobre
+  MDM open-source (Fleet/NanoMDM/MicroMDM). Dos ejes de adquisición: vs UEM de
+  pago y "capa sobre tu MDM open-source" (keywords de long-tail sin competencia).
+  Incluye `og:*`/`twitter:*`/`canonical` absolutos (landmine del subpath de Pages)
+  con el `og:description` aprobado por Product (#110-safe) y la guarda de
+  honestidad (NanoMDM/MicroMDM vía plugin index, no adapter nativo; sin "score
+  siempre disponible"). Registrada en `sitemap.xml` + `build_sitemap.py` +
+  `pages_seo_check.py` (PUBLIC_ROUTES) y enlazada desde `index.html`. PR #326
+  como DRAFT: merge solo tras `robots.txt` 200 en Pages (#334).
 - feat(coverage): informe de puntos ciegos del tenant (`GET /api/coverage`) (#184)
 
 ## [1.6.0] - 2026-08-18

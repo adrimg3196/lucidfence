@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LucidFence vs Intune, Jamf &amp; Kandji — y como capa sobre tu MDM open-source</title>
+  <meta name="description" content="LucidFence vs Kandji, Intune &amp; Jamf — a free, local-first geofencing and explainable-risk layer that runs on top of the UEM you already use. Not another UEM. No telemetry, no accounts. Apache-2.0." />
+  <link rel="canonical" href="https://adrimg3196.github.io/lucidfence/compare.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/compare.html" />
+  <meta property="og:site_name" content="LucidFence" />
+  <meta property="og:title" content="LucidFence vs Intune, Jamf &amp; Kandji — y como capa sobre tu MDM open-source" />
+  <meta property="og:description" content="LucidFence vs Kandji, Intune &amp; Jamf — a free, local-first geofencing and explainable-risk layer that runs on top of the UEM you already use. Not another UEM. No telemetry, no accounts. Apache-2.0." />
+  <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="LucidFence vs Intune, Jamf &amp; Kandji — y como capa sobre tu MDM open-source" />
+  <meta name="twitter:description" content="LucidFence vs Kandji, Intune &amp; Jamf — a free, local-first geofencing and explainable-risk layer that runs on top of the UEM you already use. Not another UEM. No telemetry, no accounts. Apache-2.0." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235e6ad5'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23fff' stroke-width='2.5' stroke-dasharray='4 3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fff'/%3E%3C/svg%3E" />
+  <style>
+    /* Mismo tema oscuro único y sistema de radios que index.html (Page Theme
+       Lock + Color Consistency Lock). Un solo acento indigo, sin fuentes
+       externas. */
+    :root{
+      --bg:#08090a; --bg-2:#0c0d0f; --panel:#111214; --panel-2:#16181b; --panel-3:#1c1f23;
+      --border:#26282c; --border-strong:#34373d;
+      --fg:#f7f8f8; --fg-2:#d4d6d9; --muted:#8a8f98; --muted-2:#6e737b;
+      --accent:#5e6ad5; --accent-h:#7d87e6; --accent-soft:rgba(94,106,213,.14); --accent-soft-2:rgba(94,106,213,.28);
+      --green:#4cc38a; --red:#ff6b6b; --amber:#f5a623;
+      --radius:8px; --radius-lg:12px;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(94,86,175,.12);
+      --font:-apple-system,BlinkMacSystemFont,'Segoe UI Variable Display','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+      --mono:ui-monospace,'SF Mono','Cascadia Code',Menlo,monospace;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.55;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    code{font-family:var(--mono);font-size:.92em}
+    :focus-visible{outline:2px solid var(--accent-h);outline-offset:3px;border-radius:4px}
+    .skip-link{position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;z-index:99;border-radius:0 0 var(--radius) 0}
+    .skip-link:focus{left:0}
+    .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+    header{position:sticky;top:0;z-index:10;background:rgba(8,9,10,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+    .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.02em}
+    .mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:grid;place-items:center;flex:none}
+    .mark svg{display:block}
+    .nav-links{display:flex;gap:26px;font-size:14px;color:var(--muted)}
+    .nav-links a{transition:color .2s}
+    .nav-links a:hover{color:var(--fg)}
+    .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:14px;font-weight:600;transition:background .2s,transform .15s,border-color .2s}
+    .btn:hover{background:var(--accent-h);transform:translateY(-1px)}
+    .btn:active{transform:translateY(1px) scale(.98)}
+    .btn.ghost{background:var(--panel-2);border:1px solid var(--border);color:var(--fg)}
+    .btn.ghost:hover{background:var(--panel-3);border-color:var(--border-strong)}
+    .btn.lg{padding:14px 26px;font-size:15px}
+
+    section{padding:76px 0}
+    .sec-head{margin-bottom:40px;max-width:680px}
+    .sec-head h2{font-size:clamp(26px,4vw,34px);letter-spacing:-.02em;font-weight:800;text-wrap:balance}
+    .sec-head p{margin-top:12px;color:var(--muted);font-size:16px;max-width:64ch;text-wrap:pretty}
+
+    .hero{padding:84px 0 40px;text-align:center}
+    h1{font-size:clamp(34px,5.4vw,50px);line-height:1.06;letter-spacing:-.03em;font-weight:800;max-width:900px;margin:0 auto 20px;text-wrap:balance}
+    h1 em{font-style:normal;color:var(--accent-h)}
+    .lede{font-size:19px;color:var(--muted);max-width:760px;margin:0 auto 32px;text-wrap:pretty}
+    .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+    .axis-tag{display:inline-block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-h);background:var(--accent-soft);border:1px solid rgba(94,106,213,.3);padding:5px 12px;border-radius:999px;margin-bottom:14px}
+    .eyebrow{font-size:13px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+
+    /* comparativa: tabla de soporte declarativo */
+    .table-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+    .cmp{width:100%;border-collapse:collapse;font-size:14px}
+    .cmp th,.cmp td{border:1px solid var(--border);padding:14px 16px;vertical-align:top;text-align:left}
+    .cmp thead th{background:var(--panel-2);font-weight:700;font-size:13px;letter-spacing:-.01em}
+    .cmp thead th.col-lf{color:var(--fg)}
+    .cmp thead th.col-other{color:var(--muted)}
+    .cmp tbody tr:nth-child(even) td{background:var(--panel-2)}
+    .cmp td.feat{color:var(--fg-2)}
+    .cmp td .yes{color:var(--green);font-weight:600}
+    .cmp td .no{color:var(--muted-2)}
+    .cmp td .partial{color:var(--amber);font-weight:600}
+    .cmp td code{background:var(--panel-3);padding:2px 6px;border-radius:4px}
+
+    .callout{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 var(--radius-lg) var(--radius-lg) 0;padding:20px 22px;margin:24px 0;color:var(--fg-2);font-size:14px;line-height:1.65}
+    .callout strong{color:var(--fg)}
+
+    .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border);color:var(--fg-2)}
+    .pill.green{color:var(--green);border-color:rgba(76,195,138,.3)}
+    .pill.amber{color:var(--amber);border-color:rgba(245,166,35,.3)}
+    .pill.grey{color:var(--muted)}
+
+    .bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .cell{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;transition:border-color .2s,transform .2s,box-shadow .2s}
+    .cell:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:var(--shadow)}
+    .cell h3{font-size:16px;margin-bottom:8px;letter-spacing:-.01em}
+    .cell p{font-size:14px;color:var(--muted);line-height:1.6;text-wrap:pretty}
+    .cell.tint{background:linear-gradient(160deg,var(--accent-soft),var(--panel) 70%)}
+    .cell.wide{grid-column:span 2}
+
+    .cta{background:linear-gradient(160deg,var(--accent-soft-2),var(--accent-soft) 60%,transparent);border:1px solid rgba(94,106,213,.3);border-radius:var(--radius-lg);padding:52px;text-align:center}
+    .cta h2{font-size:clamp(26px,4vw,34px);letter-spacing:-.02em;margin-bottom:14px;text-wrap:balance}
+    .cta p{color:var(--muted);font-size:16px;margin:0 auto 28px;max-width:60ch;text-wrap:pretty}
+
+    .faq-list{display:grid;grid-template-columns:1fr 1fr;gap:36px 48px;max-width:960px}
+    .faq-list h3{font-size:16px;margin-bottom:8px;letter-spacing:-.01em}
+    .faq-list p{font-size:14px;color:var(--muted);line-height:1.65;text-wrap:pretty}
+
+    footer{border-top:1px solid var(--border);padding:36px 0;color:var(--muted-2);font-size:13px}
+    .foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+    .foot a{color:var(--muted);transition:color .2s}
+    .foot a:hover{color:var(--fg)}
+
+    ul.plain{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:14px;color:var(--fg-2)}
+    ul.plain li{display:flex;gap:10px;align-items:flex-start}
+    ul.plain li::before{content:"✓";color:var(--green);font-weight:700;flex:none}
+    ul.warn li::before{content:"·";color:var(--amber);font-weight:700;flex:none}
+
+    @media(max-width:860px){
+      .bento,.faq-list{grid-template-columns:1fr}
+      .cell.wide{grid-column:auto}
+      .nav-links{display:none}
+      .cmp{font-size:12.5px}
+      .cmp th,.cmp td{padding:10px 10px}
+      section{padding:52px 0}
+      .cta{padding:36px 22px}
+    }
+    @media (prefers-reduced-motion: reduce){
+      html{scroll-behavior:auto}
+      *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+    }
+  </style>
+</head>
+<body>
+  <a href="#contenido" class="skip-link">Saltar al contenido</a>
+  <header>
+    <div class="wrap nav">
+      <div class="logo">
+        <span class="mark" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 2.2"/><circle cx="7" cy="7" r="1.8" fill="#fff"/></svg></span>
+        LucidFence
+      </div>
+      <nav class="nav-links" aria-label="Secciones">
+        <a href="index.html">Inicio</a>
+        <a href="cloud.html">Vitrina</a>
+        <a href="web.html#company">App web</a>
+        <a href="whitelabel.html">Whitelabel</a>
+        <a href="comparisons/lucidfence-vs-intune.html">vs Intune</a>
+        <a href="comparisons/lucidfence-vs-jamf.html">vs Jamf</a>
+        <a href="https://github.com/adrimg3196/lucidfence">GitHub</a>
+      </nav>
+      <a class="btn" href="web.html#company">Abrir la app web</a>
+    </div>
+  </header>
+
+  <main class="wrap" id="contenido">
+    <section class="hero">
+      <h1>Geofencing y riesgo explicable <em>encima del UEM que ya usas</em></h1>
+      <p class="lede">LucidFence no es otro UEM. Es la capa local-first de geocercas y riesgo explicable que corre sobre Intune, Jamf, Kandji o tu MDM open-source (Fleet, NanoMDM, MicroMDM). Gratis. Sin telemetría. Sin cuentas. Apache-2.0.</p>
+      <div class="hero-cta">
+        <a class="btn lg" href="web.html#company">Abrir la app web</a>
+        <a class="btn ghost lg" href="https://github.com/adrimg3196/lucidfence">Ver el código</a>
+      </div>
+      <div class="trust-band" role="note" style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:18px 0;margin-top:40px;font-size:13px;color:var(--muted)">
+        <div class="wrap" style="display:flex;gap:12px 36px;justify-content:center;flex-wrap:wrap">
+          <span><strong>Local-first:</strong> tus datos no salen de tu máquina</span>
+          <span><strong>Agnóstico de UEM:</strong> orquesta, no reemplaza</span>
+          <span><strong>Apache-2.0:</strong> código abierto y auditable</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== EJE A ===================== -->
+    <section id="eje-a">
+      <span class="axis-tag">Eje A · vs UEM de pago</span>
+      <div class="sec-head">
+        <h2>LucidFence vs Intune, Jamf &amp; Kandji</h2>
+        <p>Cada uno es un silo de gestión de dispositivos de pago. LucidFence es una capa gratuita y open-source que se conecta a ellos para aportar geofencing y riesgo explicable, y usa su propio canal para actuar. No compites con su factura: los complementas.</p>
+      </div>
+
+      <div class="table-card">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th class="col-lf">Dimensión</th>
+              <th class="col-other">Intune</th>
+              <th class="col-other">Jamf</th>
+              <th class="col-other">Kandji</th>
+              <th class="col-lf">LucidFence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="feat"><strong>Modelo</strong></td>
+              <td>SaaS de pago por dispositivo</td>
+              <td>SaaS de pago por dispositivo</td>
+              <td>SaaS de pago por dispositivo</td>
+              <td><span class="yes">Gratis · Apache-2.0</span></td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Código</strong></td>
+              <td>Closed-source</td>
+              <td>Closed-source</td>
+              <td>Closed-source</td>
+              <td><span class="yes">Open-source auditable</span></td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Geofencing</strong></td>
+              <td><span class="partial">Limitado</span> — <code>locateDevice</code> es puntual (dispositivos perdidos), no stream de flota</td>
+              <td><span class="no">No por API</span> — inventario y postura, sin ubicación continua</td>
+              <td><span class="partial">Parcial</span> — lo documentado fuente por fuente</td>
+              <td><span class="yes">Núcleo</span> — geocercas por ruta/polígono, exit/entry y duración</td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Riesgo explicable</strong></td>
+              <td>Score de riesgo de Entra, no centrado en geo</td>
+              <td>Postura de compliance, no geofencing</td>
+              <td>Compliance de dispositivo, no geo</td>
+              <td><span class="yes">Score 0–100</span> con cada señal que lo causó — y <code>Riesgo desconocido (sin señal)</code> cuando no hay datos</td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Agnóstico de UEM</strong></td>
+              <td><span class="no">Su silo</span></td>
+              <td><span class="no">Su silo</span></td>
+              <td><span class="no">Su silo</span></td>
+              <td><span class="yes">Habla con todos</span> — los orquesta</td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Residencia de datos</strong></td>
+              <td>Telemetría cloud del vendor</td>
+              <td>Telemetría cloud del vendor</td>
+              <td>Telemetría cloud del vendor</td>
+              <td><span class="yes">100% en tu máquina</span> — sin backend propio</td>
+            </tr>
+            <tr>
+              <td class="feat"><strong>Extensibilidad</strong></td>
+              <td>Ecosistema cerrado</td>
+              <td>Ecosistema cerrado</td>
+              <td>Ecosistema cerrado</td>
+              <td><span class="yes">MCP server read-only + plugin index</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <strong>Sin exagerar:</strong> Intune, Jamf y Kandji son UEM completos; LucidFence no reemplaza su gestión de parches, inventario ni MDM. Lo que aporta — y ellos no dan como núcleo — es geofencing y un riesgo explicable que correlaciona postura con ubicación, y lo hace <strong>en local</strong>. La señal de ubicación real depende del UEM conectado (ver <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/integrations/LOCATION_MATRIX.md">matriz de ubicación</a>): Intune/Jamf no exponen un stream de flota en vivo, así que no prometemos geofencing continuo solo con ellos.
+      </div>
+    </section>
+
+    <!-- ===================== EJE B ===================== -->
+    <section id="eje-b">
+      <span class="axis-tag">Eje B · capa sobre tu MDM open-source</span>
+      <div class="sec-head">
+        <h2>No somos otro MDM. Somos la capa que le falta al tuyo.</h2>
+        <p>Si ya auto-alojas Fleet, NanoMDM o MicroMDM (o estás evaluando Headwind/Entgra), ya eres gratis, ya auditas el código y ya no puedes comprar geofencing en ningún sitio. LucidFence es la capa de geofencing y riesgo explicable que se suma a tu MDM — no un cuarto silo que mantener.</p>
+      </div>
+
+      <div class="bento">
+        <div class="cell tint wide">
+          <h3>Fleet — adapter incluido</h3>
+          <p>LucidFence ya habla con Fleet vía su adapter oficial. Fleet aporta telemetría osquery (postura, cifrado, red); LucidFence correlaciona eso con geocercas <em>lógicas</em> por señal de red (IP/SSID/BSSID → sede) y devuelve acciones de remediación. Sin GPS: honesto para "¿está en la oficina / en qué país?", no para radios de 200 m. <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/integrations/FLEET.md">Onboarding Fleet →</a></p>
+        </div>
+        <div class="cell">
+          <h3>NanoMDM / MicroMDM</h3>
+          <p>Sin adapter dedicado hoy. El camino honesto: conéctalos vía el <strong>plugin index</strong> (conector genérico) y usa el adapter iOS o geofencing lógico para actuar. No afirmamos integración nativa que no existe.</p>
+        </div>
+        <div class="cell">
+          <h3>Multi-UEM</h3>
+          <p>Registra cada UEM como un <em>provider</em> del tenant (móviles en uno, portátiles en otro) y el orquestrador correlaciona todo en el mismo mapa de riesgo. Un wipe de iPhone va por su UEM; un lock de MacBook por el suyo. Nunca se cruzan.</p>
+        </div>
+        <div class="cell">
+          <h3>100% self-host</h3>
+          <p>El motor y los datos viven en tu infraestructura. Sin backend de LucidFence, sin telemetría hacia nosotros, sin cuenta. Lo que los listicles open-source de 2026 no ofrecen: geofencing + riesgo explicable bajo tu control.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Keywords sin competencia hoy:</strong> <code>geofencing for Fleet MDM</code>, <code>NanoMDM geofencing</code>, <code>open source MDM geofencing</code>, <code>self-hosted device risk engine</code>. Ningún MDM open-source conocido cubre geofencing ni riesgo explicable como núcleo — y el claim de integración con NanoMDM/MicroMDM es vía plugin index, no adapter nativo.
+      </div>
+    </section>
+
+    <!-- ===================== CÓMO CONECTAR ===================== -->
+    <section id="conectar">
+      <div class="sec-head">
+        <h2>Cómo se conecta (mínimo privilegio)</h2>
+        <p>LucidFence se registra como un provider por UEM, lee con el rol mínimo y jamás re-emite tu secreto. Empieza en <code>observe</code>: los comandos de enforce siguen en dry-run hasta que subes a <code>enforce</code> a propósito.</p>
+      </div>
+      <div class="table-card">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th class="col-lf">UEM</th>
+              <th class="col-lf">Credencial que pides</th>
+              <th class="col-lf">Alcance mínimo para el piloto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="feat">Applivery <span class="pill green">live GPS</span></td><td>API token</td><td>Lectura de dispositivos; acción solo en enforce</td></tr>
+            <tr><td class="feat">Fleet <span class="pill green">adapter</span></td><td>Usuario API-only + token</td><td>Rol <code>observer</code> (lectura); <code>maintainer</code> solo en enforce</td></tr>
+            <tr><td class="feat">Intune</td><td><code>tenant_id</code> + <code>client_id</code> + <code>client_secret</code></td><td>App registration con <code>DeviceManagementManagedDevices.Read.All</code></td></tr>
+            <tr><td class="feat">Jamf</td><td><code>client_id</code> + <code>client_secret</code></td><td>API role de solo lectura de inventario</td></tr>
+            <tr><td class="feat">NanoMDM / MicroMDM <span class="pill amber">vía plugin index</span></td><td>Conector genérico</td><td>El que tu despliegue exponga; ver abajo</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="callout">El secreto de cada provider se guarda aislado por tenant con permisos <code>0600</code>, nunca se re-emite al cliente, nunca se escribe en <code>cloud_state.json</code> ni en logs. El dato geoespacial no sale de tu máquina: el multi-UEM correlaciona en local. Detalle por plataforma en <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/integrations/MULTI_UEM.md">Multi-UEM</a>.</p>
+    </section>
+
+    <!-- ===================== RIESGO HONESTO ===================== -->
+    <section id="riesgo">
+      <div class="sec-head">
+        <h2>Riesgo explicable, no un falso verde</h2>
+        <p>Cada dispositivo recibe un score 0–100 con las señales que lo causaron. Sin señal que lo respalde, el dispositivo queda como <strong>Riesgo desconocido (sin señal)</strong> — nunca un verde inventado.</p>
+      </div>
+      <ul class="plain">
+        <li>Un dispositivo sin ubicación es <code>unknown</code>; nunca se inventa una posición.</li>
+        <li>El anti-spoofing usa el reloj de observación de LucidFence, no el <code>last_seen</code> que declara el dispositivo.</li>
+        <li>Precisión ≠ verdad: <code>accuracy_m</code> viaja con cada report y las políticas pueden exigir precisión mínima antes de disparar acciones.</li>
+        <li>Un dato ausente es <code>None</code> y nunca suma riesgo.</li>
+      </ul>
+    </section>
+
+    <!-- ===================== FAQ ===================== -->
+    <section id="faq">
+      <div class="sec-head">
+        <h2>Preguntas frecuentes</h2>
+      </div>
+      <div class="faq-list">
+        <div>
+          <h3>¿Reemplaza a Intune/Jamf/Kandji?</h3>
+          <p>No. LucidFence es una capa que se conecta a tu UEM para aportar geofencing y riesgo explicable, y usa el canal de tu UEM para actuar. No gestiona parches ni inventario por ti.</p>
+        </div>
+        <div>
+          <h3>¿Tengo que pagar o crear una cuenta?</h3>
+          <p>No. LucidFence es Apache-2.0 y local-first: corre en tu infraestructura, sin backend propio, sin telemetría hacia nosotros, sin signup.</p>
+        </div>
+        <div>
+          <h3>¿Funciona con mi MDM open-source?</h3>
+          <p>Fleet tiene adapter incluido. NanoMDM/MicroMDM se conectan hoy vía el plugin index (conector genérico) y geofencing lógico; no afirmamos adapter nativo donde no existe.</p>
+        </div>
+        <div>
+          <h3>¿El score siempre está disponible?</h3>
+          <p>No. Sin señal que lo respalde, el dispositivo queda como <em>Riesgo desconocido (sin señal)</em>. La ubicación real depende del UEM conectado: Intune/Jamf no exponen stream de flota en vivo.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CTA ===================== -->
+    <section id="deploy">
+      <div class="cta">
+        <h2>Corre LucidFence en tu infraestructura</h2>
+        <p>Sin tenant cloud, sin espera comercial. Conéctalo a tu UEM actual y empieza en modo observe. La demo pública solo muestra datos de ejemplo.</p>
+        <div class="hero-cta">
+          <a class="btn lg" href="https://github.com/adrimg3196/lucidfence/releases/latest">Descargar release</a>
+          <a class="btn ghost lg" href="cloud.html">Ver la vitrina demo</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <div>© 2026 LucidFence. Geocercas UEM/MDM 100% locales.</div>
+      <div><a href="https://github.com/adrimg3196/lucidfence">GitHub</a> · <a href="https://github.com/adrimg3196/lucidfence/blob/main/LICENSE">Apache-2.0</a> · <a href="comparisons/lucidfence-vs-intune.html">vs Intune</a> · <a href="comparisons/lucidfence-vs-jamf.html">vs Jamf</a></div>
+    </div>
+  </footer>
+</body>
+</html>

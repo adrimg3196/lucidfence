@@ -27,6 +27,7 @@ STATIC_ROUTES = [
     "/manual.html",
     "/web.html",
     "/whitelabel.html",
+    "/compare.html",
 ]
 
 
