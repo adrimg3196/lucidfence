@@ -102,7 +102,7 @@ TECHNICAL_RULES: list[tuple[str, str, str, bool]] = [
 NEGATION_TOKENS = [
     "eliminado", "fue", "reconciliado", "reconcil", "superseded", "supersede",
     "descartado", "remov", "removed", "was ", "ya no", "no ", "sin ", "nunca",
-    "prohibido", "banner", "reemplaz", "sustituy", "corregido",
+    "prohibido", "banner", "corregido",
 ]
 
 DEFAULT_SKIP_GLOBS = ["*README.md", "**/SUPERSEDED*", "**/*SUPERSEDED*"]
