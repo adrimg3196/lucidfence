@@ -1,0 +1,70 @@
+# Branch-freshness pre-flight — anti-falsos-positivos por staleness (t_13ea01ab).
+#
+# Context: scripts/branch_freshness_check.py is the documented PM/CTO pre-flight
+# cited in the empresa-product SOUL staleness clause (and the kanban_close freshness
+# gate, t_00880970). It was MISSING from origin/main (only lived in the Hermes-global
+# scripts dir and imported kanban_done_audit, which is also absent from the repo) —
+# so the PM had to fall back to a manual `git rev-list --left-right --count` and the
+# pre-flight could not run from the repo tree (t_c5eb69ad "Gate-0 scripts missing from
+# main"). This task vendors a self-contained, stdlib-only copy into the repo.
+#
+# This workflow's job is to GUARANTEE the script exists in origin/main and is runnable
+# in CI on every PR (the "shared verification surface" requested alongside the
+# gtm_claim_linter Gate-0 effort, t_8b1ef4a2). It is intentionally NON-blocking on
+# staleness: a PR branch being behind origin/main is normal and is rebased before
+# merge, so failing merges on STALE would be a false-positive of the gate itself.
+# The check only FAILS (exit 1) when the script errors out — i.e. when the script is
+# missing/broken or the repo can't be resolved, which is exactly the regression this
+# task fixes.
+#
+# FRESH/ADVISORY/STALE emit the BRANCH_FRESHNESS: block as a build log so reviewers
+# can see the behind-count; anyone emitting a staleness-sensitive flag from a branch
+# can copy that block into their flag body (regla t_00880970, N=10).
+
+name: branch-freshness
+
+on:
+  pull_request:
+
+# Un force-push sobre un run de PR en vuelo lo deja corriendo contra una ref
+# que ya no existe: el run muere en `failure` y GitHub manda correo al dueño
+# por un fallo que no dice nada (run 32757168118). Con cancel-in-progress el
+# run superado se CANCELA, y los cancelados no generan correo. (Igual que ci.yml.)
+concurrency:
+  group: branch-freshness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  branch-freshness:
+    name: branch-freshness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history so origin/main resolves)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run branch-freshness pre-flight
+        run: |
+          git fetch origin main --quiet || true
+          # Run the vendored pre-flight against the checked-out tree.
+          #   exit 0 -> FRESH / ADVISORY (ok; embed numbers if emitting a flag)
+          #   exit 2 -> STALE (POSIBLE STALENESS; informational here, does NOT block)
+          #   exit 1 -> ERROR (script missing/broken or repo unresolvable) -> FAIL
+          python3.11 scripts/branch_freshness_check.py --repo . --threshold 10 \
+              --flag-template && rc=$? || rc=$?
+          echo "branch-freshness exit code: $rc"
+          if [ "$rc" -eq 1 ]; then
+            echo "::error::branch_freshness_check.py errored (script missing/broken or repo unresolvable) — failing the check."
+            exit 1
+          fi
+          echo "Pre-flight completed (FRESH/ADVISORY/STALE are non-blocking; see BRANCH_FRESHNESS block above)."
