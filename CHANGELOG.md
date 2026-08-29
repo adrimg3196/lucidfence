@@ -16,6 +16,15 @@ All notable changes to LucidFence are documented here.
   promete su docstring. Con test de regresión que bloquea los terceros en un
   subproceso y exige que el checker arranque igual — el test de contrato anterior
   comprobaba que el workflow *llama* al checker, no que pueda *ejecutarlo*.
+- fix(seo/pages): publicar `robots.txt` en la raíz de GitHub Pages (t_087de185 / t_b5902025).
+  `publish-pages.yml` solo copiaba `static/*` y `cp -rL` **no copia ficheros que no
+  existen**, así que la superficie pública se publicaba sin `robots.txt` (y el
+  `Sitemap:` del mismo apuntaba a un 404). Se añade `static/robots.txt` (con
+  `Sitemap: https://adrimg3196.github.io/lucidfence/sitemap.xml`) y el workflow lo
+  publica explícitamente a `_site/` con un guardarraíl que rompe el build si falta.
+  Nota: el `sitemap.xml` YA se genera dinámicamente en Pages vía `build_sitemap.py`
+  (incluye las comparativas de `comparisons/`); no se copia uno estático para no
+  perder esas URLs.
 - gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
   de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
   `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta
