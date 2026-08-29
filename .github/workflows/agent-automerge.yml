@@ -5,7 +5,8 @@
 # docs/internal/LOOP.md §Coordinación regla 6): squash-merge automático.
 #
 # Guardarraíles (innegociables):
-#   - solo ramas claude/** del PROPIO repo (jamás forks/terceros);
+#   - solo ramas de la flota (prefijos en FLEET_PREFIXES) del PROPIO repo
+#     (jamás forks/terceros);
 #   - ni drafts (autonomía total 2026-08-18: outreach y release también
 #     auto-mergean en verde; no queda gate humano);
 #   - todos los checks del head completados y en verde; se ignora únicamente
@@ -40,7 +41,18 @@ jobs:
             const {owner, repo} = context.repo;
             const run = context.payload.workflow_run;
             const branch = run.head_branch || '';
-            if (!branch.startsWith('claude/')) { core.info(`rama fuera de la flota: ${branch}`); return; }
+            // La flota dejó de usar sólo `claude/**` (cada loop publica con su
+            // propio prefijo: cto/, devops/, soc/, qa/...). Mientras el guardarraíl
+            // exigió `claude/**`, este raíl fue un no-op silencioso: el workflow
+            // terminaba en success sin mergear nada y la cola se drenaba a mano.
+            // Allowlist explícita (no "cualquier rama"): añadir un loop = una línea.
+            const FLEET_PREFIXES = [
+              'cto/', 'devops/', 'soc/', 'qa/', 'fix/', 'kit/', 'seo/', 'pm/',
+              'selfimprove/', 'bootstrap/',
+            ];
+            if (!FLEET_PREFIXES.some(p => branch.startsWith(p))) {
+              core.info(`rama fuera de la flota: ${branch}`); return;
+            }
             if (run.head_repository && run.head_repository.full_name !== `${owner}/${repo}`) {
               core.info('head en fork: jamás auto-merge de terceros'); return;
             }
@@ -51,8 +63,8 @@ jobs:
             // Autonomía total (propietario 2026-08-18: "todo lo decide la IA,
             // nada los humanos"): sin gate humano. Se auto-mergea todo lo verde,
             // incluido outreach: y release. Guardarraíles que quedan (NO son
-            // aprobación humana, son anti-daño): solo ramas claude/** del propio
-            // repo, jamás forks/terceros ni drafts.
+            // aprobación humana, son anti-daño): solo ramas de la flota
+            // (FLEET_PREFIXES) del propio repo, jamás forks/terceros ni drafts.
             const IGNORED = new Set(['train']);
             const {data: checks} = await github.rest.checks.listForRef({owner, repo, ref: pr.head.sha, per_page: 100});
             const relevant = checks.check_runs.filter(c => !IGNORED.has(c.name));
