@@ -20,6 +20,7 @@ PUBLIC_FILES = (
 COMPARISON_FILES = (
     "comparisons/lucidfence-vs-intune.html",
     "comparisons/lucidfence-vs-jamf.html",
+    "comparisons/lucidfence-vs-kandji.html",
 )
 
 
@@ -59,6 +60,7 @@ def _fixture(root: Path, paths: list[str] | None = None) -> Path:
         "/whitelabel.html",
         "/comparisons/lucidfence-vs-intune.html",
         "/comparisons/lucidfence-vs-jamf.html",
+        "/comparisons/lucidfence-vs-kandji.html",
     ]
     (static_dir / "sitemap.xml").write_text(_sitemap(sitemap_paths), encoding="utf-8")
     return static_dir
@@ -103,6 +105,7 @@ def test_pages_seo_check_accepts_dashboard_and_comparisons_in_public_sitemap():
                 "/whitelabel.html",
                 "/comparisons/lucidfence-vs-intune.html",
                 "/comparisons/lucidfence-vs-jamf.html",
+                "/comparisons/lucidfence-vs-kandji.html",
             ],
         )
         result = _check(static_dir)
