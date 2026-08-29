@@ -1,0 +1,47 @@
+name: loop-free-guard
+
+# Guard the /loop $0 (free-first) rule. This is the CI enforcement layer that
+# mirrors loop_improve._provider_catalog()'s default-deny prevention: it runs the
+# offline detector (scripts/loop_free_guard.py) over the REAL merged provider
+# catalog and FAILS the build (exit 1) if any reachable provider is not on the
+# free allowlist (lucidfence/core/free_tier.py). See PR #331 / task t_416e7c5c.
+#
+# Runs on every push/PR that touches the aggregator or its provider plugins, so a
+# paid/unknown model can never be merged into the catalog. Mark this as a required
+# status check in branch protection for the relevant branches.
+on:
+  push:
+    paths:
+      - "loop_improve.py"
+      - "lucidfence/core/free_tier.py"
+      - "lucidfence/plugins/providers/**"
+      - "scripts/loop_free_guard.py"
+  pull_request:
+    paths:
+      - "loop_improve.py"
+      - "lucidfence/core/free_tier.py"
+      - "lucidfence/plugins/providers/**"
+      - "scripts/loop_free_guard.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loop-free-guard-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  free-tier-check:
+    name: Free-tier ($0) guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run loop free-tier guard (default-deny)
+        run: python3 scripts/loop_free_guard.py --json
+
+      - name: Guard selftest
+        run: python3 scripts/loop_free_guard.py --selftest
