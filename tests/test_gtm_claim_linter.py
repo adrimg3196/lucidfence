@@ -231,3 +231,25 @@ def test_explicit_paths_scan_canonical_independently_of_scope():
         )
         assert any(t.name == "CTO_CHANNEL.md" for t in targets), \
             "ruta explícita de canónico debe escanearse aunque include_canonical=False"
+
+
+def test_affirmative_reemplaza_uem_blocks():
+    """Una claim AFIRMATIVA 'capa cerrada que reemplaza a tu UEM' debe BLOQUEAR.
+
+    REGRESION (t_8b1ef4a2 / #355): 'reemplaz' estaba en NEGATION_TOKENS, asi que
+    copy vivo 'LucidFence es una CAPA CERRADA que compra tu UEM y reemplaza a Intune'
+    se downgradeaba a INFO y escapaba del gate (fue auto-mergeado a main). Un verbo
+    afirmativo ('reemplaza' sin 'no ' / 'nunca') NO es negación: debe bloquear. Las
+    negaciones legitimas ('no reemplaza', 'nunca sustituye') siguen cubiertas por
+    'no ' / 'nunca'.
+    """
+    findings = _scan_pos(
+        "# Copy\nLucidFence es una CAPA CERRADA que compra tu UEM y reemplaza a Intune.\n"
+    )
+    blocks = [x for x in findings if x["rule"] == "POS-LAYER-CLOSED" and x["severity"] == "BLOCK"]
+    assert blocks, "claim afirmativa 'capa cerrada que reemplaza a Intune' debe BLOQUEAR (no INFO)"
+
+    # La negación legitima sigue siendo INFO, no BLOCK.
+    neg = _scan_pos("# Copy\nLucidFence no reemplaza a tu MDM, se integra con el.\n")
+    neg_blocks = [x for x in neg if x["severity"] == "BLOCK"]
+    assert not neg_blocks, "la negación 'no reemplaza' debe seguir siendo INFO, no BLOCK"
