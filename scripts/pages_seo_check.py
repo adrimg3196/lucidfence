@@ -29,7 +29,25 @@ PUBLIC_ROUTES = {
     "/whitelabel.html": "whitelabel.html",
     "/comparisons/lucidfence-vs-intune.html": "comparisons/lucidfence-vs-intune.html",
     "/comparisons/lucidfence-vs-jamf.html": "comparisons/lucidfence-vs-jamf.html",
+    "/comparisons/lucidfence-vs-kandji.html": "comparisons/lucidfence-vs-kandji.html",
 }
+
+# Comparison pages are generated from docs/comparisons/*.md into
+# _site/comparisons/*.html. The static allowlist above is the contract for the
+# known/co-signed pages; every OTHER comparisons/*.html that exists on disk is
+# also a public route (the sitemap generator discovers them dynamically). This
+# keeps the gate in sync when a new comparison page lands, instead of silently
+# breaking the Pages deploy because PUBLIC_ROUTES was not hand-edited.
+def _comparison_routes_from_dir(static_dir: Path) -> dict[str, str]:
+    routes: dict[str, str] = {}
+    comp_dir = static_dir / "comparisons"
+    if comp_dir.is_dir():
+        for html in sorted(comp_dir.glob("*.html")):
+            if html.name in ("index.html",):
+                continue
+            rel = f"comparisons/{html.name}"
+            routes[f"/{rel}"] = rel
+    return routes
 
 
 class _UrlMetadataParser(HTMLParser):
@@ -160,6 +178,12 @@ def validate(static_dir: Path, raw_site_root: str) -> list[str]:
     except ValueError as exc:
         return [str(exc)]
 
+    # Public contract = the curated allowlist PLUS any comparison page that was
+    # actually generated into comparisons/. This prevents the gate from rejecting
+    # legitimate pages the sitemap generator already discovered (e.g. Kandji).
+    public_routes = dict(PUBLIC_ROUTES)
+    public_routes.update(_comparison_routes_from_dir(static_dir))
+
     locations = _read_sitemap(static_dir, errors)
     duplicates = sorted(url for url, count in Counter(locations).items() if count > 1)
     for duplicate in duplicates:
@@ -178,15 +202,15 @@ def validate(static_dir: Path, raw_site_root: str) -> list[str]:
         if parsed.query or parsed.fragment:
             errors.append(f"URL con query o fragmento en sitemap: {location}")
             continue
-        if route not in PUBLIC_ROUTES:
+        if route not in public_routes:
             errors.append(f"ruta no pública en sitemap: {route}")
             continue
         seen_routes.add(route)
-        public_file = static_dir / PUBLIC_ROUTES[route]
+        public_file = static_dir / public_routes[route]
         if not public_file.is_file():
-            errors.append(f"falta la página pública {PUBLIC_ROUTES[route]}")
+            errors.append(f"falta la página pública {public_routes[route]}")
 
-    for missing_route in sorted(set(PUBLIC_ROUTES) - seen_routes):
+    for missing_route in sorted(set(public_routes) - seen_routes):
         errors.append(f"falta URL pública en sitemap: {site_root}{missing_route}")
 
     # Validate URL metadata on EVERY published page, including nested
@@ -194,7 +218,7 @@ def validate(static_dir: Path, raw_site_root: str) -> list[str]:
     # PUBLIC_ROUTES is keyed by route; reverse it to map a file path to the
     # route it is published at so metadata is checked against the right URL.
     route_by_file = {
-        filename: route for route, filename in PUBLIC_ROUTES.items()
+        filename: route for route, filename in public_routes.items()
     }
     for html_path in sorted(static_dir.rglob("*.html")):
         rel_html = str(html_path.relative_to(static_dir))
