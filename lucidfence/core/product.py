@@ -156,22 +156,39 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
     rows = []
     for d in devices:
         fence_state = d.get("fence_state", "unknown")
+        eval_error: str | None = None
         try:
             r = eng.risk.evaluate(d, fence_state, ctx)
-        except Exception:
-            r = {"risk_score": 0.0, "severity": "low", "reasons": [], "signals": {}}
+        except Exception as exc:  # #302 Defect 1: NEVER present a crash as 0/low.
+            # Un fallo del evaluador es "desconocido", no "sano". Devolver
+            # risk_score=0/low lo hacía indistinguible de un dispositivo sano
+            # (falso verde) — patrón que el repo prohíbe: lo desconocido jamás
+            # se presenta como señal buena. Emitimos un sentinela honesto y
+            # guardamos el tipo de error para que viaje como telemetry.
+            eval_error = type(exc).__name__
+            r = {
+                "risk_score": None,
+                "severity": "unknown",
+                "reasons": [f"evaluación fallida: {eval_error}"],
+                "signals": {},
+                "verified": False,
+                "provenance": "error",
+            }
         fired = []
         try:
             fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
         except Exception:
             fired = []
+        # score crudo para orden: None (unknown) se maneja en el sort (centinela
+        # -1.0) para que nunca se confunda con un 0 legítimo en las agregaciones.
+        raw_score = r.get("risk_score", None)
         rows.append({
             "device_id": str(d.get("device_id") or ""),
             "device_name": d.get("name") or str(d.get("device_id") or ""),
             "platform": d.get("platform") or "unknown",
-            "score": r.get("risk_score", 0.0),
-            "level": r.get("severity", "low"),
-            "factors": [{"points": 0, "label": x, "severity": r.get("severity", "low")} for x in r.get("reasons", [])],
+            "score": raw_score,
+            "level": r.get("severity", "unknown"),
+            "factors": [{"points": 0, "label": x, "severity": r.get("severity", "unknown")} for x in r.get("reasons", [])],
             "signals": r.get("signals", {}),
             "matched_policies": [f["policy_id"] for f in fired],
             "fence_state": fence_state,
@@ -181,8 +198,9 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
             "dwell_seconds": int(d.get("dwell_seconds") or 0),
             "stale": False,
             "recent_actions": 0,
+            "eval_error": eval_error,
         })
-    return sorted(rows, key=lambda r: (r["score"], r["device_name"]), reverse=True)
+    return sorted(rows, key=lambda r: (r["score"] if r["score"] is not None else -1.0, r["device_name"]), reverse=True)
 
 
 def enrich_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -26,6 +26,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: write      # NUEVO: necesario para `gh workflow run` (auto-heal)
 
 concurrency:
   group: cloud-state-deadman
@@ -82,8 +83,14 @@ jobs:
             echo "::warning::cloud-state estancado (dead-man activado)"
           fi
 
+      # NOTA (resuelve review thread P2 de #322): este paso es INDEPENDIENTE del
+      # auto-heal. Si la API de Issues falla (label inexistente, rate-limit,
+      # permisos), `continue-on-error` evita que el job se detenga y el paso de
+      # auto-heal (que viene después) SIEMPRE se ejecuta cuando status==stale.
+      # Sin esto, un fallo de reporte de incidente silenciaba la auto-recuperación.
       - name: Abrir/actualizar incidente si está STALE
         if: steps.alive.outputs.status == 'stale'
+        continue-on-error: true
         uses: actions/github-script@v7
         env:
           # El umbral que este run uso de verdad (input o default), para que el
@@ -129,6 +136,26 @@ jobs:
               });
               console.log(`Issue creado: #${created.data.number}`);
             }
+
+      - name: Reanimar engine-cron si está STALE (auto-heal)
+        # Si el schedule de 15 min está siendo throttleado (fallo #270 / incidente
+        # 2026-08-27), el dead-man ya solo abría el issue y esperaba 9h a que alguien
+        # pinchara engine-cron. Ahora, al confirmar STALE, disparamos engine-cron para
+        # que publique un snapshot fresco; el cierre de #315 lo hace el paso de
+        # "clearly_fresh" del PRÓXIMO run (no este), respetando la histéresis.
+        # engine-cron usa `concurrency: group: engine-cron, cancel-in-progress: false`,
+        # así que dispararlo mientras otro corre solo encola — es seguro.
+        # Orden intencional: viene DESPUÉS del reporte de incidente, pero como
+        # ese paso lleva `continue-on-error: true`, un fallo allí NO impide que
+        # este dispare engine-cron. El auto-heal es la garantía de último recurso.
+        if: steps.alive.outputs.status == 'stale'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "::warning::cloud-state stale — disparando engine-cron para auto-recuperar"
+          gh workflow run engine-cron.yml --ref main -f cycles=1
+          echo "engine-cron disparado; el próximo ciclo publicará snapshot fresco y #315 se cerrará solo."
 
       - name: Cerrar incidente si volvió a estar CLARAMENTE fresco
         if: steps.alive.outputs.clearly_fresh == 'true'

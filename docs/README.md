@@ -51,6 +51,8 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
 | [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
 | [`operations/second_opinion.md`](operations/second_opinion.md) | Segunda opinión: lo que el UEM afirma vs lo que se observa, con evidencia de ambos lados |
+| [`operations/least_privilege.md`](operations/least_privilege.md) | Auditor de mínimo privilegio: qué puede de verdad el token de cada UEM conectado |
+| [`operations/ocsf_events.md`](operations/ocsf_events.md) | Eventos OCSF: los incidentes hacia el SIEM que ya tienes, sin parser a medida |
 | [`operations/federated_fleet.md`](operations/federated_fleet.md) | Flota federada multi-UEM: un panel, N consolas, el mismo veredicto de riesgo |
 | [`operations/config_as_code.md`](operations/config_as_code.md) | Políticas y geocercas como código: `lucidfence apply` (valida, diff, what-if) |
 | [`operations/apple_ddm.md`](operations/apple_ddm.md) | Apple DDM: enforcement declarativo de geocercas |

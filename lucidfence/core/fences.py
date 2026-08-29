@@ -56,6 +56,10 @@ class Fence:
         )
 
     def contains(self, p: Point) -> bool:
+        """Borde EXACTO: en círculo es inclusivo (distancia == radio cuenta
+        como dentro, por el <=). En polígono el borde queda a merced del
+        ray-casting de geo.point_in_polygon: indefinido por diseño — con GPS
+        real el borde exacto es medida cero y no merece más código."""
         if self.type == "circle" and self.center is not None:
             return haversine_m(p, self.center) <= self.radius_m
         if self.type == "polygon" and self.coordinates:

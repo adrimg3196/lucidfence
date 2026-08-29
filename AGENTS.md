@@ -116,6 +116,21 @@ re-corre las mismas comprobaciones como autoridad final.
 - NEVER: hardcode secrets; expose a token in the Pages client; use `flyctl auth
   login` headless (fails silently); leave zombie processes between sessions.
 
+## Disciplina Karpathy (obligatoria al escribir o revisar código)
+La skill `.claude/skills/karpathy-guidelines/SKILL.md` (MIT, de
+multica-ai/andrej-karpathy-skills) es disciplina de la flota, no documentación.
+Sus cuatro principios atacan los errores típicos de un equipo de IA y este repo
+ya pagó cada uno al menos una vez:
+1. **Piensa antes de codificar** — asunciones explícitas; ante ambigüedad,
+   presenta interpretaciones en la PR en vez de elegir en silencio.
+2. **Simplicidad primero** — el diff mínimo que resuelve; nada especulativo
+   (la review de #284 creció de 3 líneas a 939 defendiendo escenarios
+   imposibles: eso es lo prohibido).
+3. **Cambios quirúrgicos** — cada línea tocada debe trazar a la petición; el
+   código muerto ajeno se menciona, no se borra de paso.
+4. **Ejecución dirigida a objetivo** — todo claim con criterio verificable:
+   test que reproduce antes de arreglar, batería runtime para claims nuevos.
+
 ## Flota autónoma de loops (el modelo de operación hoy)
 Este repo lo mantiene una flota de 9 loops agénticos coordinados por un
 contrato escrito. Léelo antes de tocar nada estructural:

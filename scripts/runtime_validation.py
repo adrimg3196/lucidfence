@@ -191,6 +191,49 @@ def main() -> int:
               rutas == ["/hook", "/t"] and firma_e2e,
               f"rutas={rutas}, firma_generic_valida={firma_e2e}")
 
+        # ============ 1b. Backlog #17: el MISMO webhook, en OCSF ============
+        # Claim: un incidente simulado sale por el webhook ya existente como
+        # Detection Finding válido (obligatorios de la clase presentes) y sin
+        # una sola coordenada. Camino real completo: config del tenant ->
+        # Engine -> IncidentStore.merge -> HTTP al receptor vivo.
+        print("\n== Backlog #17 Eventos OCSF (webhook generic format=ocsf) ==")
+        eng_ocsf = Engine({"mode": "simulation", "dry_run": True,
+                           "data_dir": str(tmp / "eng-ocsf"),
+                           "sim_seed_path": "data/fleet_seed.json",
+                           "incident_webhooks": [{"type": "generic",
+                                                  "url": "http://127.0.0.1:9099/siem",
+                                                  "format": "ocsf"}]})
+        before = len(CAPTURED)
+        eng_ocsf.incidents.merge([{
+            "id": "inc-rt-ocsf", "type": "geofence_exit",
+            "title": "Salida de geocerca (runtime OCSF)", "severity": "high",
+            "device_id": "dev-rt", "device_name": "Runtime QA", "fence_id": "hq",
+            "first_seen": "2026-08-29T09:00:00+00:00",
+            "last_seen": "2026-08-29T09:30:00+00:00",
+            # Incidente envenenado con coordenadas reconocibles: el webhook
+            # nativo no las publica y OCSF no puede ampliar esa superficie.
+            "lat": 41.403629, "lng": 2.174356}])
+        ocsf_body = next((c["body"] for c in CAPTURED[before:] if c["path"] == "/siem"), b"")
+        ev = json.loads(ocsf_body) if ocsf_body else {}
+        faltan = [k for k in ("activity_id", "category_uid", "class_uid", "type_uid",
+                              "severity_id", "time", "metadata", "finding_info")
+                  if k not in ev]
+        clase_ok = (ev.get("category_uid") == 2 and ev.get("class_uid") == 2004
+                    and ev.get("type_uid") == 200401 and ev.get("severity_id") == 4
+                    and ev.get("metadata", {}).get("product", {}).get("vendor_name") == "LucidFence"
+                    and ev.get("finding_info", {}).get("uid") == "inc-rt-ocsf")
+        check("incidente simulado entregado como OCSF Detection Finding válido",
+              not faltan and clase_ok,
+              f"obligatorios_ausentes={faltan}, class_uid={ev.get('class_uid')}, "
+              f"type_uid={ev.get('type_uid')}, severity_id={ev.get('severity_id')}, "
+              f"schema={ev.get('metadata', {}).get('version')}")
+
+        fugas = [t for t in ("41.403629", "2.174356", '"lat"', '"lng"')
+                 if t.encode("utf-8") in ocsf_body]
+        check("el evento OCSF no lleva ni una coordenada",
+              bool(ocsf_body) and not fugas,
+              f"bytes={len(ocsf_body)}, fugas={fugas}")
+
         # ============ 2. Anti-spoofing: ciclo real + teletransporte =========
         print("\n== P0.2 Anti-spoofing (ciclos reales del engine) ==")
         eng.run_once()
@@ -476,6 +519,60 @@ def main() -> int:
                              body={"name": "no_tal_uem"})
         check("provider no soportado rechazado con 400", s == 400,
               f"http={s}, body={pinv}")
+        http_req("DELETE", "/api/providers/simulation", cookie=cookie)
+
+        # ====== 3c-ter. Backlog #16: auditor de mínimo privilegio ============
+        # Claim: un adapter simulado con scopes de ESCRITURA en modo observe
+        # produce el aviso; con scopes mínimos, silencio. Todo por el flujo real
+        # del producto (POST /api/providers -> GET /api/least-privilege) contra
+        # el server vivo, con la credencial de verdad en el registro del tenant.
+        print("\n== Backlog #16 Mínimo privilegio (GET /api/least-privilege) ==")
+        http_req("POST", "/api/providers", cookie=cookie,
+                 body={"name": "simulation", "api_key": "s3cr3t-runtime-16",
+                       "scopes": [{"id": "uem.devices.read", "grants": ["read"]},
+                                  {"id": "uem.devices.command",
+                                   "grants": ["wipe", "lock"]}]})
+        s, lp0, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row0 = ((lp0 or {}).get("providers") or [{}])[0]
+        exceso0 = (row0.get("exceso") or [{}])[0]
+        sin_fuga = "s3cr3t" not in json.dumps(lp0 or {}, ensure_ascii=False)
+        check("token con scopes de escritura en observe: aviso con el scope que "
+              "sobra, severidad crítica y sin filtrar la credencial",
+              s == 200 and (lp0 or {}).get("enforcement", {}).get("mode") == "observe"
+              and row0.get("veredicto") == "exceso"
+              and exceso0.get("scope") == "uem.devices.command"
+              and "wipe" in (exceso0.get("grants") or [])
+              and exceso0.get("severity") == "critical" and sin_fuga,
+              f"http={s}, modo={(lp0 or {}).get('enforcement', {}).get('mode')}, "
+              f"veredicto={row0.get('veredicto')}, exceso={exceso0.get('grants')}, "
+              f"sev={exceso0.get('severity')}, sin_fuga={sin_fuga}")
+
+        http_req("POST", "/api/providers", cookie=cookie,
+                 body={"name": "simulation", "api_key": "s3cr3t-runtime-16",
+                       "scopes": [{"id": "uem.devices.read", "grants": ["read"]}]})
+        s, lp1, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row1 = ((lp1 or {}).get("providers") or [{}])[0]
+        res1 = (lp1 or {}).get("resumen") or {}
+        check("con scopes mínimos, silencio (auditado correcto, cero excesos)",
+              s == 200 and row1.get("veredicto") == "correcto"
+              and row1.get("exceso") == [] and res1.get("scopes_excesivos") == 0
+              and res1.get("providers_auditables") == 1,
+              f"http={s}, veredicto={row1.get('veredicto')}, resumen={res1}")
+
+        # Honestidad: sin scopes declarados NO es "correcto". "0 excesos" con
+        # 0 auditables no puede leerse como "todo bien".
+        http_req("POST", "/api/providers", cookie=cookie, body={"name": "simulation"})
+        s, lp2, _ = http_req("GET", "/api/least-privilege", cookie=cookie)
+        row2 = ((lp2 or {}).get("providers") or [{}])[0]
+        res2 = (lp2 or {}).get("resumen") or {}
+        check("credencial cuyos scopes nadie expone: no auditable, ni correcta "
+              "ni excesiva",
+              s == 200 and row2.get("veredicto") == "no_auditable"
+              and bool(row2.get("motivo")) and res2.get("providers_con_exceso") == 0
+              and res2.get("providers_auditables") == 0
+              and res2.get("providers_no_auditables") == 1,
+              f"http={s}, veredicto={row2.get('veredicto')}, "
+              f"motivo={row2.get('motivo')}, resumen={res2}")
         http_req("DELETE", "/api/providers/simulation", cookie=cookie)
 
         # ============ 3c-bis. Backlog #12: panel único multi-UEM =============

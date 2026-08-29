@@ -29,6 +29,7 @@ from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
+from lucidfence.core.risk_levels import count_high_risk
 from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core.notifier import IncidentFanoutNotifier
@@ -283,7 +284,9 @@ class Engine:
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
             noncompliant = sum(1 for d in devices if d.get("compliant") is False)
-            high_risk = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
+            # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo.
+            high_risk = count_high_risk(devices, 70)
+            unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
             lines = [
                 f"Resumen LucidFence — {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
                 "",
@@ -291,10 +294,13 @@ class Engine:
                 f"Fuera de geocerca: {outside}",
                 f"Non-compliant: {noncompliant}",
                 f"Riesgo alto (>=70): {high_risk}",
+                f"Riesgo desconocido (sin señal): {unknown_risk}",
                 "",
                 "Dispositivos en riesgo:",
             ]
             for d in sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:10]:
+                if d.get("risk_score") is None:
+                    continue  # no inflar lo desconocido en el ranking de riesgo
                 lines.append(
                     f"  - {d.get('name') or d.get('device_id')}: riesgo {d.get('risk_score') or 0} "
                     f"({d.get('fence_state')})"
@@ -919,7 +925,6 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
-        fence = self.fence_by_id.get(fence_id) if fence_id and fence_id != "none" else None
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -932,6 +937,15 @@ class Engine:
             # first sighting; only act on enter if a fence is known
             if state != "inside":
                 when = None
+        if state == "inside":
+            fence = self.fence_by_id.get(fence_id)
+        else:
+            # Al salir (o perder señal), cur_key es "None:outside": la cerca
+            # cuyo on_exit/on_unknown importa es la que se ABANDONA — la del
+            # estado anterior. Resolver por cur_key hacía que esas acciones
+            # no dispararan JAMAS (el bug que motivó este bloque).
+            prev_fence_id = prev.inside_fence if prev else None
+            fence = self.fence_by_id.get(prev_fence_id) if prev_fence_id else None
         if fence is None:
             return fired
         for act in fence.actions:
@@ -1205,6 +1219,11 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
+        # Hora LOCAL del servidor, a propósito: en un producto local-first el
+        # engine corre donde el admin, y "fuera de horario" significa SU
+        # horario. Caveat asumido: en un despliegue cloud (runner UTC) la
+        # señal off_hours se desplaza por el offset del huso; si eso importa,
+        # la corrección va en config, no aquí en silencio.
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:

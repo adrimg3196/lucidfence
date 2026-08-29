@@ -235,16 +235,21 @@ def evaluate_soar(device: dict, playbooks: list[SOARPlaybook], ctx: dict) -> lis
 
 
 def _max_severity(device: dict) -> str:
-    """Mayor severidad relevante (CVEs de apps o nivel de riesgo)."""
-    order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-    best = "low"
+    """Mayor severidad relevante (CVEs de apps o nivel de riesgo).
+
+    Un nivel de riesgo desconocido (None / 'unknown') NO se trata como 'low'
+    (#302 / t_0de7c223): si el dispositivo tiene señal CVE real, esa manda; si
+    no hay nada, el resultado es 'unknown' (jamás un falso verde 'low')."""
+    order = {"unknown": -1, "low": 0, "medium": 1, "high": 2, "critical": 3}
+    best = "unknown"
     for a in (device.get("apps") or []):
         s = (a.get("max_cve_severity") or "low")
         if order.get(s, 0) > order.get(best, 0):
             best = s
-    lvl = (device.get("risk_level") or device.get("level") or "low")
-    if order.get(lvl, 0) > order.get(best, 0):
-        best = lvl
+    lvl = device.get("risk_level") or device.get("level")
+    if lvl is not None and str(lvl).strip().lower() not in ("", "unknown", "none"):
+        if order.get(lvl, 0) > order.get(best, 0):
+            best = lvl
     return best
 
 

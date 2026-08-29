@@ -53,6 +53,8 @@ autónomo; el enforcement sobre dispositivos reales lo decide siempre el admin
 - `alerts.py` / `notifier.py` — alertas por umbral y salidas Slack/Teams/webhook firmado/ntfy/email.
 - `predictive.py` / `poi.py` / `routes.py` — forecasting local explicable, POIs, adherencia a ruta.
 - `coverage.py` — informe de puntos ciegos: qué NO cubre la config actual (`docs/operations/coverage.md`).
+- `least_privilege.py` — auditoría de privilegios de las credenciales UEM conectadas (`docs/operations/least_privilege.md`).
+- `ocsf.py` — serialización de incidentes a OCSF Detection Finding para el SIEM del tenant (`docs/operations/ocsf_events.md`).
 - `compliance_controls.py` — mapeo CIS/ISO basado en evidencia, no certificación.
 - `policy_replay.py` — simulador what-if de políticas ("terraform plan" del geofencing).
 - `evidence_export.py` / `export.py` — evidencia con cadena de hashes verificable offline; export/audit masivo.
