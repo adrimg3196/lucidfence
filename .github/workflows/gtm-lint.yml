@@ -21,6 +21,12 @@
 
 name: gtm-claim-lint
 
+# Cancel a superseded run when a PR is force-pushed, so stale runs don't keep
+# going against a dead ref (repo hygiene rule — tests/test_scheduled_workflow_hygiene.py).
+concurrency:
+  group: gtm-claim-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   pull_request:
 
