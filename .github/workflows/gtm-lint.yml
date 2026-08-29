@@ -3,29 +3,26 @@
 # Problem this closes (t_8b1ef4a2 / t_c5eb69ad): the Marketing/SEO bot has no
 # shell, so it can't run scripts/gtm_claim_linter.py, and the script was not in
 # origin/main — technical copy from ANY bot could land in docs/gtm/outbox/ without
-# being gate-checked. This workflow runs the linter in CI on every PR that touches
-# the GTM co-sign scope, so the gate is enforced at merge time regardless of which
-# agent produced the copy.
+# being gate-checked. This workflow runs the linter in CI on every PR, so the gate
+# is enforced at merge time regardless of which agent produced the copy.
 #
-# DESIGN NOTE (important): we lint ONLY the PR's *changed* files in scope, not the
-# whole docs/gtm/outbox/ archive. origin/main's own outbox already carries a
-# historical BLOCK (2026-08-20-linkedin-diferente.md — TEC-WEBHOOK-SSRF), so a full
-# `--scope outbox` scan would fail EVERY PR permanently and never satisfy a clean-PR
-# pass. The gate's job is to block the copy a PR is *about to publish*, not to
-# re-litigate the committed archive — so we diff the PR against main and lint the
-# outbox/co-sign docs that actually changed.
+# IMPORTANT — always runs, skips neutrally: this workflow fires on EVERY pull_request
+# (no `paths:` filter at the `on:` level) and exits 0 when no Gate-0-scope file
+# changed. That is REQUIRED so the status check exists (and passes) for PRs that do
+# NOT touch outbox/, otherwise making it a required check would block every normal
+# fleet PR. The gate only FAILS (exit 1) when a changed co-sign doc has a BLOCK.
+#
+# DESIGN NOTE (scope): we lint ONLY the PR's *changed* co-sign docs, not the whole
+# docs/gtm/outbox/ archive. origin/main's own outbox already carries a historical
+# BLOCK (2026-08-20-linkedin-diferente.md — TEC-WEBHOOK-SSRF), so a full `--scope
+# outbox` scan would fail EVERY PR permanently and never satisfy a clean-PR pass.
+# The gate's job is to block the copy a PR is about to publish, not to re-litigate
+# the committed archive.
 
 name: gtm-claim-lint
 
 on:
   pull_request:
-    paths:
-      - 'docs/gtm/outbox/**'
-      - 'docs/gtm/CTO_CHANNEL.md'
-      - '.cto_input_188.md'
-      - 'scripts/gtm_claim_linter.py'
-      - 'tests/test_gtm_claim_linter.py'
-      - '.github/workflows/gtm-lint.yml'
 
 permissions:
   contents: read
@@ -55,21 +52,19 @@ jobs:
           BASE=$(git merge-base origin/main "$HEAD_SHA" 2>/dev/null || echo "$HEAD_SHA^")
           echo "Diff base: $BASE"
 
-          # All files the PR would add on top of main.
           mapfile -t FILES < <(git diff --name-only "$BASE" "$HEAD_SHA" || true)
 
-          # Keep only the Gate-0 scope: outbox/ + canonical co-sign files.
           KEEP=()
           for f in "${FILES[@]}"; do
             case "$f" in
-              docs/gtm/outbox/*)     KEEP+=("$f") ;;
+              docs/gtm/outbox/*)       KEEP+=("$f") ;;
               docs/gtm/CTO_CHANNEL.md) KEEP+=("$f") ;;
-              .cto_input_188.md)     KEEP+=("$f") ;;
+              .cto_input_188.md)       KEEP+=("$f") ;;
             esac
           done
 
           if [ "${#KEEP[@]}" -eq 0 ]; then
-            echo "No GTM co-sign docs changed in this PR — Gate-0 skipped."
+            echo "No GTM co-sign docs changed in this PR — Gate-0 passes (neutral)."
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -85,5 +80,6 @@ jobs:
           mapfile -t TARGETS < /tmp/gtm_changed.txt
           echo "== Linting ${#TARGETS[@]} changed file(s) =="
           # --technical applies the #188 technical-nuance rules (TEC-*). Runs the
-          # linter on the PR's changed files only. Exits 1 on any BLOCK.
+          # linter on the PR's changed files only. Exits 1 on any BLOCK, which fails
+          # this required status check and blocks the merge.
           python3.11 scripts/gtm_claim_linter.py --technical "${TARGETS[@]}"
