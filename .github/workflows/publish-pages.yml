@@ -13,6 +13,7 @@ on:
     branches: [main]
     paths:
       - "static/**"
+      - "static/robots.txt"
       - "docs/comparisons/**"
       - "scripts/pages_seo_check.py"
       - "scripts/build_comparison_pages.py"
@@ -47,6 +48,13 @@ jobs:
           # (índice, páginas estáticas y comparativas). Ver tarea t_4a5d2f29.
           python3.11 scripts/build_comparison_pages.py --src docs/comparisons --out _site/comparisons
           python3.11 scripts/build_sitemap.py --site _site
+          # Descubrimiento SEO (t_087de185 / t_b5902025): robots.txt de la raíz
+          # del repo NO llega a Pages vía `cp -rL static/*` solo si no existe.
+          # Lo publicamos explícitamente y lo verificamos como guardarraíl para
+          # que un futuro regreso a no-tener-robots.txt rompa el build en lugar
+          # de publicar una superficie sin robots.txt.
+          if [ -f "static/robots.txt" ]; then cp -L static/robots.txt _site/; fi
+          test -f _site/robots.txt || { echo "::error::static/robots.txt no se publicó a Pages"; exit 1; }
           # Guardarraíl del P0 #110 también en el artefacto publicado:
           # ninguna cadena de prueba social fabricada puede llegar a Pages.
           grep_status=0
