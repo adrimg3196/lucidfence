@@ -1,0 +1,85 @@
+# GTM claim linter — Gate-0 (CTO co-sign) as a PR status check.
+#
+# Problem this closes (t_8b1ef4a2 / t_c5eb69ad): the Marketing/SEO bot has no
+# shell, so it can't run scripts/gtm_claim_linter.py, and the script was not in
+# origin/main — technical copy from ANY bot could land in docs/gtm/outbox/ without
+# being gate-checked. This workflow runs the linter in CI on every PR, so the gate
+# is enforced at merge time regardless of which agent produced the copy.
+#
+# IMPORTANT — always runs, skips neutrally: this workflow fires on EVERY pull_request
+# (no `paths:` filter at the `on:` level) and exits 0 when no Gate-0-scope file
+# changed. That is REQUIRED so the status check exists (and passes) for PRs that do
+# NOT touch outbox/, otherwise making it a required check would block every normal
+# fleet PR. The gate only FAILS (exit 1) when a changed co-sign doc has a BLOCK.
+#
+# DESIGN NOTE (scope): we lint ONLY the PR's *changed* co-sign docs, not the whole
+# docs/gtm/outbox/ archive. origin/main's own outbox already carries a historical
+# BLOCK (2026-08-20-linkedin-diferente.md — TEC-WEBHOOK-SSRF), so a full `--scope
+# outbox` scan would fail EVERY PR permanently and never satisfy a clean-PR pass.
+# The gate's job is to block the copy a PR is about to publish, not to re-litigate
+# the committed archive.
+
+name: gtm-claim-lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gtm-claim-lint:
+    name: gtm-claim-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for merge-base diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Detect changed GTM co-sign docs
+        id: changed
+        env:
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin main --quiet || true
+          BASE=$(git merge-base origin/main "$HEAD_SHA" 2>/dev/null || echo "$HEAD_SHA^")
+          echo "Diff base: $BASE"
+
+          mapfile -t FILES < <(git diff --name-only "$BASE" "$HEAD_SHA" || true)
+
+          KEEP=()
+          for f in "${FILES[@]}"; do
+            case "$f" in
+              docs/gtm/outbox/*)       KEEP+=("$f") ;;
+              docs/gtm/CTO_CHANNEL.md) KEEP+=("$f") ;;
+              .cto_input_188.md)       KEEP+=("$f") ;;
+            esac
+          done
+
+          if [ "${#KEEP[@]}" -eq 0 ]; then
+            echo "No GTM co-sign docs changed in this PR — Gate-0 passes (neutral)."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s\n' "${KEEP[@]}" > /tmp/gtm_changed.txt
+          echo "Gate-0 scope changed files:"
+          cat /tmp/gtm_changed.txt
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run GTM claim linter (Gate-0 co-sign)
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          mapfile -t TARGETS < /tmp/gtm_changed.txt
+          echo "== Linting ${#TARGETS[@]} changed file(s) =="
+          # --technical applies the #188 technical-nuance rules (TEC-*). Runs the
+          # linter on the PR's changed files only. Exits 1 on any BLOCK, which fails
+          # this required status check and blocks the merge.
+          python3.11 scripts/gtm_claim_linter.py --technical "${TARGETS[@]}"
