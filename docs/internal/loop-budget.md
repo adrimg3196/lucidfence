@@ -3,32 +3,40 @@
 Token/cost caps and the emergency stop for LucidFence improvement loops.
 Enforced manually by the maintainer and (where possible) by CI.
 
-## Aggregator policy (2026-08-22, decision t_bae7f2e4)
-
-The `/loop` MoA improvement loop MUST stay 100%-free, consistent with the
-SOAR/Multi-UEM claim (#188/#110) and the 100%-free posture of 2026-08-16.
-
-- **Default aggregator ($0):** the local MoA server at `127.0.0.1:8085`, called
-  with `moa_dry=true` (free local synthesis, no API keys, no cost). Same server
-  already consumed by `lucidfence/core/ai.py`.
-- **Fallback ($0):** deterministic local heuristic merge when MoA is down.
-- **Opus 4.8 (PAID, opt-in ONLY):** used solely when an operator sets
-  `LUCIDFENCE_CLAUDE_CLI=<absolute path to the claude binary>`. Auto-discovery
-  of `claude` in PATH is intentionally DISABLED so the loop can never silently
-  incur Opus spend. Enabling Opus requires explicit Product sign-off (business-
-  model impact) recorded here; it breaks 100%-free.
-
-This resolves the Finance & Ops alert of 2026-08-22: `loop_improve.py` previously
-auto-selected `claude` (Opus 4.8, paid) as the aggregator, the only paid component
-in the fleet. It is now the free local MoA by default.
-
 ## Caps
 
-- **Per-loop-run token cap:** 200k tokens (report-only triage).
-- **Per-day token cap:** 500k tokens across all loops.
+- **Per-loop-run prompt-token budget: ~500k tokens (MEASURED + ALERTED).**
+  This is the *achieved product floor*, not an aspirational target: over the
+  last 10 days of fleet operation, runs spanned ~507k–961k prompt tok/run and
+  97.6% of all fleet tokens were INPUT (context). 81 of 124 recorded runs
+  exceeded 500k. The number is treated as the current ceiling: any run above it
+  is flagged in `~/.hermes/cron/usage_audit.jsonl` (kind=`budget_flag`) and
+  alerted to Product + Finance by the `TOKEN-BUDGET-WATCHDOG-*` cron jobs
+  (see `~/.hermes/scripts/token_budget_watchdog.py`, kanban t_9926eb60).
+- **Per-run prompt-token STRETCH GOAL: 200k tokens (NOT enforced).**
+  The original 200k/run figure was a design target that was never met and was
+  documented as "report-only triage" with nothing measuring it. It remains a
+  stretch goal to drive context discipline (diff-directed reading via the
+  `context-efficiency` skill), but it is NOT a hard cap and runs are not blocked
+  at 200k. Treat 200k as the efficiency target the fleet is working toward.
+- **Per-day token cap: 500k tokens across all loops** (reporting only).
 - **Max PRs reviewed per run:** 10.
 - **Max attempts per fix:** 3 — after 3 failed verifier runs, escalate to human
   (do NOT keep retrying the same failing action).
+
+## Measurement & alerting (since t_9926eb60)
+
+- Source of truth: `~/.hermes/cron/usage_audit.jsonl`, written per fire by the
+  Hermes cron scheduler.
+- Post-run check: `token_budget_watchdog.py` runs hourly (no_agent), scans the
+  audit log, and flags every run whose `prompt_tokens` exceed the 500k budget.
+  Flags are durable (`kind=budget_flag`) and queryable forever.
+- Alerting: over-budget runs are delivered to the Product and Finance bots via
+  `bot-chat` (jobs `TOKEN-BUDGET-WATCHDOG-product` / `-finance`).
+- The 500k budget is also the single source for the fleet diff-directed-reading
+  rule (`~/.hermes/scripts/context_efficiency_rule.py`, `context-efficiency`
+  skill): context discipline is the only cost lever that scales with bot count
+  (23 jobs). Worst-case exposure if discipline is lost: ~$5.7k/mo (claude-opus-4).
 
 ## Kill switch
 
