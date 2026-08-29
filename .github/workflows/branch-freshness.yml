@@ -26,6 +26,14 @@ name: branch-freshness
 on:
   pull_request:
 
+# Un force-push sobre un run de PR en vuelo lo deja corriendo contra una ref
+# que ya no existe: el run muere en `failure` y GitHub manda correo al dueño
+# por un fallo que no dice nada (run 32757168118). Con cancel-in-progress el
+# run superado se CANCELA, y los cancelados no generan correo. (Igual que ci.yml.)
+concurrency:
+  group: branch-freshness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   pull-requests: read
