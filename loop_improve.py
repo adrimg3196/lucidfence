@@ -49,6 +49,18 @@ sys.path.insert(0, str(_ROOT))
 from lucidfence.core import roadmap_tooling as rm
 from lucidfence.core.provider_plugins import discover_provider_plugins, merge_providers
 from lucidfence.core.loop_governance import KillSwitch
+# Free-first safety net (DEFAULT-DENY). A plugin (lucidfence/plugins/providers/*.py)
+# may define ANY model, and `_available_providers()` only checks for a present API
+# key — not the price tier. `merge_providers` validates schema but not cost. Without
+# this filter a plugin declaring a paid/unknown model (e.g. claude-opus-4, gpt-4,
+# gemini-2.5-pro, o1, claude-3-5-haiku) with its key present would make the /loop
+# aggregator call a NON-free model, breaking the fleet's $0 rule.
+# We keep a single curated FREE allowlist in lucidfence.core.free_tier and DROP
+# anything not on it, so the catalog can never reach a paid/unknown model (the gap
+# Finance found in PR #331, fixed default-deny in t_416e7c5c / t_c902d16a). The
+# offline detector (scripts/loop_free_guard.py) imports the SAME allowlist, so
+# detection and prevention cannot diverge.
+from lucidfence.core.free_tier import is_free_model  # noqa: E402 (after sys.path insert above)
 
 # Agregador Opus 4.8 (DE PAGA). SOLO se usa si el operador lo habilita
 # EXPLICITAMENTE apuntando a un binario `claude` concreto. Por defecto vacio
@@ -101,7 +113,12 @@ FREE_PROVIDERS = [
 
 def _provider_catalog():
     plugins = discover_provider_plugins(_ROOT / "lucidfence" / "plugins" / "providers")
-    return merge_providers(FREE_PROVIDERS, plugins)
+    merged = merge_providers(FREE_PROVIDERS, plugins)
+    # Free-first: drop any provider whose model is NOT on the free allowlist, so
+    # it can never reach the aggregator. Default-deny — see lucidfence.core.free_tier.
+    # This is the PREVENTION layer; scripts/loop_free_guard.py is the matching
+    # DETECTION layer (both import the same is_free_model, so they cannot diverge).
+    return [p for p in merged if is_free_model(p.get("model", ""))]
 
 
 def _available_providers():
