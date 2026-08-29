@@ -35,6 +35,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Construir sitio estático desde static/
         run: |
           mkdir -p _site
@@ -46,8 +49,8 @@ jobs:
           # Publicar comparativas (gap #2): docs/comparisons/*.md -> _site/comparisons/*.html
           # con canonical absoluto. Genera también el sitemap con todas las URLs
           # (índice, páginas estáticas y comparativas). Ver tarea t_4a5d2f29.
-          python3.11 scripts/build_comparison_pages.py --src docs/comparisons --out _site/comparisons
-          python3.11 scripts/build_sitemap.py --site _site
+          python3 scripts/build_comparison_pages.py --src docs/comparisons --out _site/comparisons
+          python3 scripts/build_sitemap.py --site _site
           # Descubrimiento SEO (t_087de185 / t_b5902025): robots.txt de la raíz
           # del repo NO llega a Pages vía `cp -rL static/*` solo si no existe.
           # Lo publicamos explícitamente y lo verificamos como guardarraíl para
