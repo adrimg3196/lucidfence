@@ -76,14 +76,27 @@ except Exception:  # pragma: no cover - allow standalone offline run
     )
     FREE_ALLOWLIST = [
         ":free", "gpt-4o-mini", "llama", "mixtral", "mistral", "hermes",
-        "deepseek", "qwen", "phi-", "gemma", "grok", "yi-", "command-r",
+        "deepseek", "qwen", "phi-", "gemma", "yi-", "command-r",
         "ministral", "cohere", "falcon", "stablelm",
+        # NOTE: "grok" intentionally absent — free Grok needs ":free".
+    ]
+    PAID_EXCLUSIONS = [
+        "grok-4", "grok-3", "grok-2", "grok-beta", "grok-1",
+        "deepseek-r1", "deepseek-v3", "deepseek-reasoner", "deepseek-coder-v2",
+        "mistral-large", "mistral-medium", "mistral-next",
+        "command-r-plus", "command-r-08", "command-r-03", "command-nightfall",
+        "qwen-max", "qwen-plus", "qwen-turbo-max", "qwen2.5-max", "qwen2.5-plus",
+        "minimax", "abab", "step-", "glm-4-plus", "glm-4-air",
     ]
 
     def is_free_model(model) -> bool:  # type: ignore[no-redef]
         if not isinstance(model, str) or not model:
             return False
         m = model.lower()
+        if ":free" in m:
+            return True
+        if any(tok in m for tok in PAID_EXCLUSIONS):
+            return False
         return any(tok in m for tok in FREE_ALLOWLIST)
 
 
@@ -196,6 +209,17 @@ def selftest() -> int:
         ("mistralai/Mixtral-8x22B-Instruct-v0.1", "free"),
         ("deepseek/deepseek-chat", "free"),
         ("accounts/fireworks/models/llama-v3p3-70b-instruct", "free"),
+        # Free Grok MUST carry the explicit :free suffix — that is the only
+        # blessed free marker for that family (the bare "grok" token was removed
+        # in the t_bdcf0cad fix to close the grok-4 false-negative).
+        ("x-ai/grok-3-mini:free", "free"),
+        ("xai/grok-2-latest:free", "free"),
+        # Paid-sibling exclusions must NOT swallow the genuinely-free SKU of a
+        # family that shares a substring prefix.
+        ("deepseek/deepseek-chat", "free"),          # deepseek-r1 is paid, chat is free
+        ("mistralai/Mixtral-8x22B-Instruct-v0.1", "free"),  # mistral-large is paid
+        ("cohere/command-r", "free"),                # command-r-plus is paid
+        ("qwen/qwen2.5-7b-instruct", "free"),        # qwen-max is paid
     ]
     nonfree_cases = [
         # the original gap: unlisted paid/unknown models that the old denylist
@@ -218,6 +242,25 @@ def selftest() -> int:
         # a brand-new unknown free-looking name that is NOT on the allowlist must
         # still block — that is the whole point of default-deny.
         ("my-custom-free-endpoint", "nonfree"),
+        # --- t_bdcf0cad: the grok-4 false-negative regression ---
+        # "grok" was a bare free-family token, so "grok-4" (PAID) was wrongly
+        # classified as free. Bare grok-* must now be NON-free; free Grok needs
+        # the ":free" suffix (covered in free_cases above).
+        ("grok-4", "nonfree"),
+        ("x-ai/grok-4-latest", "nonfree"),
+        ("grok-3", "nonfree"),
+        ("grok-2", "nonfree"),
+        ("grok-beta", "nonfree"),
+        # --- same paid-sibling pattern across other families (Finance flag) ---
+        ("deepseek/deepseek-r1", "nonfree"),
+        ("deepseek-r1", "nonfree"),
+        ("deepseek/deepseek-reasoner", "nonfree"),
+        ("mistral-large-latest", "nonfree"),
+        ("mistral/mistral-medium", "nonfree"),
+        ("cohere/command-r-plus", "nonfree"),
+        ("command-r-plus", "nonfree"),
+        ("qwen/qwen-max", "nonfree"),
+        ("qwen2.5-max", "nonfree"),
     ]
     failures = []
     for model, expected in free_cases + nonfree_cases:
@@ -258,7 +301,10 @@ def selftest() -> int:
         try:
             prov_dir = (Path(lp.__file__).resolve().parent
                         / "lucidfence" / "plugins" / "providers")
-            inject_models = ["gemini-2.5-pro", "o1", "claude-3-5-haiku"]
+            # t_bdcf0cad: grok-4 is included so both layers prove they reject a
+            # paid Grok plugin (the regression Finance found on the bare "grok"
+            # family token).
+            inject_models = ["gemini-2.5-pro", "o1", "claude-3-5-haiku", "grok-4"]
             for inj in inject_models:
                 rogue_file = prov_dir / f"selftest_rogue_{inj.replace('-', '_').replace('.', '_')}.py"
                 rogue_file.write_text(
