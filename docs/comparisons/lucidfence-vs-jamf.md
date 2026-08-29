@@ -96,10 +96,24 @@ Recycled from [README.en.md § Why](../README.en.md) with the adapter claim
 | MDM-agnostic | ❌ Apple-centric | ✅ via adapters |
 | SOAR + live CVE + on-demand commands | partial | ✅ |
 
+## 2026 evidence addendum (SEO refresh, 2026-08-23)
+
+To keep the "No continuous location by API" row precise for 2026 searchers
+landing here for "Jamf geofencing":
+
+- **Jamf has no native GPS/location tracking API** — confirmed by the admin
+  community; Jamf's strength is inventory & posture, not device geolocation.
+  Continuous geofencing on Jamf must pair an external source (Applivery GPS,
+  the iOS on-device adapter, or network/osquery logical geo)
+  ([LOCATION_MATRIX.md](../integrations/LOCATION_MATRIX.md),
+  [JAMF.md](../integrations/JAMF.md)).
+- The Jamf row above ("no continuous location by API") reflects this; this
+  addendum confirms it with the 2026 community consensus for searchers.
+
 ## Deep links
 
 - Jamf onboarding: [integrations/JAMF.md](../integrations/JAMF.md)
 - Location reality per UEM: [integrations/LOCATION_MATRIX.md](../integrations/LOCATION_MATRIX.md)
 - Mixed fleet: [integrations/MULTI_UEM.md](../integrations/MULTI_UEM.md)
 - Safe rollout: [operations/ENFORCEMENT.md](../operations/ENFORCEMENT.md)
-- Other vendor: [LucidFence vs Intune](lucidfence-vs-intune.md)
+- Other vendors: [LucidFence vs Intune](lucidfence-vs-intune.md), [LucidFence vs Kandji](lucidfence-vs-kandji.md)

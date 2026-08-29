@@ -96,10 +96,26 @@ Recycled from [README.en.md § Why](../README.en.md) with the adapter claim
 | MDM-agnostic | ❌ locked to yours | ✅ via adapters |
 | SOAR + live CVE + on-demand commands | partial | ✅ |
 
+## 2026 evidence addendum (SEO refresh, 2026-08-23)
+
+Where Microsoft's *own* geofencing lives, to keep the "Commodity inside/outside
+only" row precise for 2026:
+
+- **Microsoft geofencing = Dynamics 365 Field Service + Entra Conditional
+  Access (named/trusted IP & network locations).** Entra CA "named locations"
+  gate *access* by IP/network, not device GPS; Field Service adds
+  location-aware field ops. Neither is a continuous fleet GPS geofence engine —
+  LucidFence's geofence + explainable-risk layer still sits on top
+  ([INTUNE.md](../integrations/INTUNE.md),
+  [LOCATION_MATRIX.md](../integrations/LOCATION_MATRIX.md)).
+- The Intune row above ("Commodity inside/outside only") reflects Intune's
+  device-location primitives; this addendum clarifies the *Microsoft-native*
+  geofencing surface for searchers landing here for "Intune geofencing".
+
 ## Deep links
 
 - Intune onboarding: [integrations/INTUNE.md](../integrations/INTUNE.md)
 - Location reality per UEM: [integrations/LOCATION_MATRIX.md](../integrations/LOCATION_MATRIX.md)
 - Mixed fleet: [integrations/MULTI_UEM.md](../integrations/MULTI_UEM.md)
 - Safe rollout: [operations/ENFORCEMENT.md](../operations/ENFORCEMENT.md)
-- Other vendor: [LucidFence vs Jamf](lucidfence-vs-jamf.md)
+- Other vendors: [LucidFence vs Jamf](lucidfence-vs-jamf.md), [LucidFence vs Kandji](lucidfence-vs-kandji.md)
