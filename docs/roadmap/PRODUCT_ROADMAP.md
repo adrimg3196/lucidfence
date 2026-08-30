@@ -2,9 +2,9 @@
 
 > **Canónico y vivo.** Mantenido por el loop Roadmap (`docs/internal/roadmap/README.md`),
 > dueño `product-roadmap-strategist`. Horizonte deslizante: **Ahora / Próximo /
-> Después**. Cada ítem cita su origen — sin señal real no entra.
+> Después / Explore**. Cada ítem cita su origen — sin señal real no entra.
 >
-> Estado: v1.5.0 en producción · main verde · última pasada 2026-08-16 (ciclo 1).
+> Estado: v1.5.0 en producción · main verde · última pasada 2026-08-21 (ciclo Discovery NOVA).
 > Los roadmaps `ROADMAP_Q3*.md`, `ROADMAP_2026-2027.md` y `roadmap.json` son
 > **históricos/archivados** (ver más abajo).
 
@@ -42,14 +42,18 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | 6 | **Retirar `ZERO-BACKLOG.md` (raíz)** si el análisis confirma que es rancio (solo referenciado por el exclude de `build.sh`) | p2 | Housekeeper `deferred-candidates.md` |
 | 7 | **Ampliar cobertura de adaptadores UEM** más allá de Applivery/Intune/Jamf/Fleet según demanda inbound real | p2 | README §"Lo que sí funciona" + inbound de Growth |
 
-> Los ítems de "Después" suben a "Próximo" cuando un ciclo aporta señal fresca
-> (demanda inbound, finding de seguridad, decisión del propietario). Los findings
-> de Centinela con severidad entran directos en "Próximo" del ciclo siguiente.
+## Explore (Horizonte Discovery — Hipótesis & Oportunidades NOVA ✨)
+
+| # | Oportunidad | Confianza | Tipo de Apuesta | Origen & Documento de Oportunidad |
+|---|-------------|-----------|-----------------|-----------------------------------|
+| E1 | **✨ LucidFence FlightDeck: Engine de Radio de Impacto Espacial y Contención Adaptativa Multi-UEM** (Evaluación de radio de explosión físico/lógico, auditoría *Trust Gap* UEM vs osquery, y playbooks de contención quirúrgica/reversible) | Alta | Adyacente / Plataforma | `docs/product/opportunity-flightdeck-spatial-blast-radius.md` — Señal de industria Hacker News (incidentes Stryker/Handala 2026) + `.jules/nova.md` |
+
+> Los ítems de "Explore" permanecen en evaluación documental/prototipado hasta que el responsable humano del producto apruebe expresamente su paso a "Próximo" o "Ahora".
 
 ## Bitácora de reconciliación
 
-- **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca
-  seremos un UEM, somos el complemento"** — sube a principio no negociable.
+- **2026-08-21 (Discovery NOVA ✨).** Creada la oportunidad de producto **LucidFence FlightDeck** (`docs/product/opportunity-flightdeck-spatial-blast-radius.md`) en estado `EXPLORE`. Documenta el motor de radio de impacto espacial y contención adaptativa multi-UEM tras analizar las señales de riesgo de la industria (incidentes Stryker/Intune) y el posicionamiento soberano local-first de LucidFence.
+- **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca seremos un UEM, somos el complemento"** — sube a principio no negociable.
   El loop PM lo aterrizó en `docs/internal/product/BACKLOG.md` (§Posicionamiento
   + 6 ítems nuevos de capa-complemento, #12–#17: panel multi-UEM, segunda
   opinión UEM vs observado, políticas portables, puntos ciegos, auditor de
