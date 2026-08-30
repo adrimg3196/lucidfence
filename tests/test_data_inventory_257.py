@@ -12,7 +12,6 @@ from lucidfence.core.data_inventory import (
     FieldMetadata,
     FieldCategory,
     RetentionClass,
-    DataInventoryPolicy,
     ingest,
     purge,
     inventory_export,
