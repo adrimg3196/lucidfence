@@ -282,18 +282,20 @@
       const groups = new Map();
       (devices||[]).forEach(d=>{
         const dept = d.department || "Sin departamento";
-        if(!groups.has(dept)) groups.set(dept, {dept, count:0, inside:0, outside:0, nonCompliant:0, risk:0, lat:0, lng:0, geo:0});
+        if(!groups.has(dept)) groups.set(dept, {dept, count:0, inside:0, outside:0, nonCompliant:0, risk:0, riskN:0, lat:0, lng:0, geo:0});
         const g = groups.get(dept);
         g.count += 1;
         if(d.fence_state === "inside") g.inside += 1;
         if(d.fence_state === "outside") g.outside += 1;
         if(d.compliant === false) g.nonCompliant += 1;
-        g.risk += Number(d.risk_score||0);
+        // Un device con riesgo null (Sin senal) NO se promedia como 0: se
+        // cuenta aparte para no enmascarar un dispositivo no evaluable.
+        if(d.risk_score != null){ g.risk += Number(d.risk_score); g.riskN += 1; }
         if(d.lat != null && d.lng != null){ g.lat += Number(d.lat); g.lng += Number(d.lng); g.geo += 1; }
       });
       return Array.from(groups.values()).map(g=>({
         ...g,
-        avgRisk: g.count ? Math.round(g.risk/g.count) : 0,
+        avgRisk: g.riskN ? Math.round(g.risk/g.riskN) : null,
         lat: g.geo ? g.lat/g.geo : null,
         lng: g.geo ? g.lng/g.geo : null,
       })).sort((a,b)=>b.count-a.count || b.avgRisk-a.avgRisk || a.dept.localeCompare(b.dept));
@@ -369,7 +371,7 @@
         c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6");
         c.setAttribute("fill",color); c.setAttribute("stroke","#08090a"); c.setAttribute("stroke-width","1.5");
         const t2 = document.createElementNS(NS,"title");
-        t2.textContent = `${d.name} · ${d.department||"Sin departamento"} · ${d.fence_state} · riesgo ${d.risk_score||0}`;
+        t2.textContent = `${d.name} · ${d.department||"Sin departamento"} · ${d.fence_state} · ${d.risk_score!=null?("riesgo "+d.risk_score):"sin señal de riesgo"}`;
         c.appendChild(t2);
         svg.appendChild(c);
       });
@@ -383,13 +385,15 @@
         const geoApplicable = d.geofence_compliance_applicable===true;
         const geoClass = !geoApplicable || d.geofence_compliant==null ? "unk" : (d.geofence_compliant ? "comp-yes" : "comp-no");
         const geoText = !geoApplicable ? "-" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
+        const sev = d.risk_severity || (d.risk_score!=null ? "" : "sin señal");
+        const riskLabel = d.risk_score!=null ? d.risk_score : "—";
         tb.insertAdjacentHTML("beforeend",
           `<tr><td class="tag">${esc(d.device_id)}</td><td>${esc(d.name||"")}</td>`+
           `<td><span class="pill ${esc(platformClass(d.platform))}">${esc(platformLabel(d.platform))}</span></td>`+
           `<td><span class="pill ${st}">${stxt}</span></td>`+
           `<td><span class="pill ${comp}">${ctxt}</span></td>`+
           `<td><span class="pill ${geoClass}" title="${esc(d.geofence_compliance_label||"")}">${geoText}</span></td>`+
-          `<td>${d.risk_score||0}</td><td>${esc(d.department||"")}</td></tr>`);
+          `<td>${riskLabel}${sev?` <span class="pill unk">${esc(sev)}</span>`:""}</td><td>${esc(d.department||"")}</td></tr>`);
       });
       const cve = s.cve_summary||{};
       if(cve.demo || cve.apps_total!=null){

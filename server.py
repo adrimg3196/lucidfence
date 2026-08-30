@@ -103,7 +103,7 @@ class Handler(BaseHTTPRequestHandler):
             eng = get_engine()
             st = eng.status()
             st["stats_history"] = eng.store.stats_history(120)
-            product = build_product(st)
+            product = build_product(st, eng)
             if route == "/api/product":
                 self._send_json(product)
             elif route == "/api/analytics":
