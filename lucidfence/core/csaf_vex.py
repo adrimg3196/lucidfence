@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -322,7 +321,6 @@ def ingest_csaf(doc: dict, source: str = "csaf") -> list[VexStatement]:
                 validation_error="vulnerability entry is not an object",
             ))
             continue
-        cve = v.get("cve") or v.get("ids")
         pid = (v.get("product_id") or (v.get("product_ids") or [None])[0] or "?")
         purl = _norm_purl(v.get("purl"))
         cpe = _norm_cpe(v.get("cpe"))
