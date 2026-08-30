@@ -242,12 +242,6 @@ def _risk_from_engine(
                 "verified": False,
                 "provenance": "error",
             }
-        fired = []
-        try:
-            fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
-        except Exception:
-            fired = []
-
         # Decide whether the persisted verdict is still authoritative.
         age = _iso_age_seconds(persisted_evaluated_at)
         verdict_fresh = (
@@ -289,9 +283,6 @@ def _risk_from_engine(
             proved = r.get("provenance", "tool")
             stale = True
 
-        # raw score for sorting: None (unknown) -> -1.0 so it ranks below a real
-        # 0-score device and never confuses with a legit 0 in aggregations.
-        raw_score = score if isinstance(score, (int, float)) else -1.0
         rows.append({
             "device_id": str(d.get("device_id") or ""),
             "device_name": d.get("name") or str(d.get("device_id") or ""),
