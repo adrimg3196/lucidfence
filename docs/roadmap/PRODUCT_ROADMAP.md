@@ -46,6 +46,18 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 > (demanda inbound, finding de seguridad, decisión del propietario). Los findings
 > de Centinela con severidad entran directos en "Próximo" del ciclo siguiente.
 
+## EXPLORE (Horizonte NOVA / Visión Soñadora para Hermes)
+
+Propuestas de descubrimiento de producto para que el agente de ingeniería (Hermes) evalúe e implemente en futuros ciclos. Documentación completa en `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md`.
+
+| # | Propuesta Visionaria | Impacto | Esfuerzo | Fichero de Especificación |
+|---|----------------------|---------|----------|---------------------------|
+| E1 | **Dynamic Swarm & Moving-Anchor Geofencing** (Geocercas móviles relativas para convoyes y escoltas) | Visionario (P1) | M-L | `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md` |
+| E2 | **Peer-Assisted Zero-Cloud Mesh Consensus** (Atestiguamiento P2P BLE/mDNS para ubicación soberana sin GPS/nube) | Visionario (P1) | L | `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md` |
+| E3 | **Local Edge Spatial-Drift Intelligence** (Predicción cinemática on-device de desvío espacial cero-telemetría) | Visionario (P2) | M | `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md` |
+| E4 | **Immutable Black-Box Flight Recorder** (Registro forense inmutable hash-chained firmado por TPM/Enclave) | Visionario (P1) | M | `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md` |
+| E5 | **Universal Declarative UEM Compiler (`lucidfence compile`)** (Compilador universal de políticas a Intune/Jamf/Fleet/AMAPI) | Visionario (P1) | L | `docs/product/NOVA_VISIONARY_ROADMAP_HERMES.md` |
+
 ## Bitácora de reconciliación
 
 - **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca
