@@ -9,7 +9,6 @@ Acceptance criteria exercised:
   * The report links advisory -> product -> installed evidence -> decision.
   * Everything runs offline, stdlib-only.
 """
-from datetime import datetime, timezone
 
 from lucidfence.core.csaf_vex import (
     FIXTURES,
