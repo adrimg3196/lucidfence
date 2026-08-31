@@ -1,4 +1,4 @@
---- recon repos 2026-08-31T04:25:59Z ---
+--- recon repos 2026-08-31T13:01:44Z ---
 === RECON REPOS (GitHub) — inspiracion video LucidFence ===
 
 1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
@@ -9,23 +9,7 @@
    MobileIron — independent third-party profile of a public API surface, by API Evangelist. MobileIron was a pioneer in mobile device management (MDM) and enterprise mobility management (EMM), later unified endpoint management (UEM), securing mobile devices, applications, and content for enterprises with capabilities such as Zero Sign-On, Mobile Threa
    https://github.com/api-evangelist/mobileiron
 
-3. kaushik-shridhar/LakshmanRekha  ★0  [CSS] #geofence
-   IoT based geofencing system to help monitor COVID-19 patients and ensure compliance with quarantine boundaries. Pairs a web dashboard with a wearable device powered by ESP12 to track movement and detect geofence breaches. Built during the peak of pandemic, it aimed to protect frontline workers by enabling real-time alerts for boundary violations.
-   https://github.com/kaushik-shridhar/LakshmanRekha
-
-4. mochunab/contents-maker  ★4  [TypeScript] #video
-   AI-powered content production studio — 7 generators (trend tracker, card news, short-form video, meme ad, ad copy, ad creative, thumbnail) + browser-side video rendering engine (Canvas + WebCodecs + Remotion 4)
-   https://github.com/mochunab/contents-maker
-
-5. Divyalakshmiyarram/video-script-generator  ★0  [JavaScript] #video
-   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
-   https://github.com/Divyalakshmiyarram/video-script-generator
-
-6. StephenStepDude/video-script-generator  ★0  [JavaScript] #video
-   A React-based web app that helps users generate structured video scripts quickly and efficiently. Enter details like topic, scenes, and narration style to create formatted scripts for YouTube, tutorials, and marketing videos.
-   https://github.com/StephenStepDude/video-script-generator
-
-Total referencias traidas: 7 (minimo 3)
+Total referencias traidas: 2 (minimo 3)
 
 === PULSO SOCIAL (agent-reach: X + Reddit) ===
 >>> UEM MDM mobile device management
@@ -41,7 +25,7 @@ Total referencias traidas: 7 (minimo 3)
   X: (no cookies X)
   Reddit: (no cookie Reddit)
 
---- recon social 2026-08-31T04:26:00Z ---
+--- recon social 2026-08-31T13:01:46Z ---
 === RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
 
 >>> YouTube: Applivery UEM
