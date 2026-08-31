@@ -1,0 +1,2 @@
+[console_scripts]
+lucidfence = lucidfence.cli:main

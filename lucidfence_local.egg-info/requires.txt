@@ -1,0 +1,6 @@
+requests<3,>=2.31
+PyJWT[crypto]==2.13.0
+cryptography==50.0.0
+
+[:python_version < "3.11"]
+tomli>=1.1.0

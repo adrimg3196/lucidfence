@@ -28,7 +28,28 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
+
+# Compatible con Python 3.9 (macOS system) y 3.11+ (venv del proyecto).
+# tomllib llegó en 3.11; en 3.9 usamos tomli (fallback) si está disponible.
+try:
+    import tomllib
+    # Stdlib tomllib: load desde archivo binario
+    def _load_toml(path: str) -> dict:
+        with open(path, "rb") as fh:
+            return tomllib.load(fh)
+except ImportError:
+    try:
+        import tomli as _toml_lib
+        # tomli: loads desde string
+        def _load_toml(path: str) -> dict:
+            with open(path, encoding="utf-8") as fh:
+                return _toml_lib.loads(fh.read())
+    except ImportError:
+        import toml as _toml_lib  # type: ignore[no-redef]
+        # toml: loads desde string
+        def _load_toml(path: str) -> dict:
+            with open(path, encoding="utf-8") as fh:
+                return _toml_lib.loads(fh.read())
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -43,8 +64,7 @@ def _run(cmd: list[str]) -> tuple[int, str]:
 
 
 def check_version_consistency() -> tuple[bool, str]:
-    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as fh:
-        pyproject = tomllib.load(fh)["project"]["version"]
+    pyproject = _load_toml(os.path.join(ROOT, "pyproject.toml"))["project"]["version"]
     sys.path.insert(0, ROOT)
     from lucidfence.cli import VERSION as cli_version  # noqa: E402
     rv_path = os.path.join(ROOT, ".release-version")

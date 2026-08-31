@@ -531,6 +531,11 @@ def main() -> int:
         (fake / "lucidfence" / "core").mkdir(parents=True)
         shutil.copytree(REPO / "lucidfence" / "core" / "adapters", fake / "lucidfence" / "core" / "adapters",
                         ignore=shutil.ignore_patterns("__pycache__"))
+        # multiuem es importado por el adapter generado (NormalizedDevice); copiarlo también.
+        shutil.copy2(REPO / "lucidfence" / "core" / "multiuem.py",
+                     fake / "lucidfence" / "core" / "multiuem.py")
+        shutil.copy2(REPO / "lucidfence" / "core" / "declarative.py",
+                     fake / "lucidfence" / "core" / "declarative.py")
         # __init__ vacíos: el árbol falso no incluye todo el paquete, y los
         # __init__ reales importan módulos que aquí no existen (bug del arnés
         # detectado en la primera pasada, no del producto).
