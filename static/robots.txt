@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /lucidfence/
+Allow: /lucidfence/index.html
+Allow: /lucidfence/cloud.html
+Allow: /lucidfence/compare.html
+Allow: /lucidfence/sitemap.xml
+Disallow: /lucidfence/dashboard.html
+Disallow: /lucidfence/static/
+Disallow: /lucidfence/api/
+Disallow: /lucidfence/data/
+
+Sitemap: https://adrimg3196.github.io/lucidfence/sitemap.xml
