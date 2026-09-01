@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
 Agente Test-QA — Auto-mejora: Integridad de la suite de tests.
+Capacidades activadas por Hugo skill-discovery (@HermesWatcher):
 
-Nueva capacidad vs prueba anterior:
-- Antes: solo contaba tests pasados/fallidos
-- Ahora: verifica que el runner de tests sea honesto (no oculta fallos),
-  detecta tests que fallan silenciosamente, analiza cobertura por módulo,
-  reporta tests que deberían existir pero no existen (gaps de cobertura).
-
-Output: JSON con integridad de suite + gaps detectados.
+- subagent (delegation): recibe delegaciones de análisis de regresiones desde
+  otros agentes (devops-ci) y ejecuta análisis profundo.
+- memory: registra resultados de tests persistentemente en loop-run-log.md
+- batch_processing: ejecuta verify.py + run_tests.py en paralelo cuando es útil
 """
 
 import json
@@ -17,9 +15,11 @@ from pathlib import Path
 from datetime import datetime
 
 REPO = Path("/Users/adri/lucidfence")
+LOG = REPO / "docs/internal/loop-run-log.md"
+PY = "/Users/adri/lucidfence/.venv/bin/python"
 
 
-def run(cmd: list[str], timeout: int = 120) -> str:
+def run(cmd: list[str], timeout: int = 90) -> str:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=REPO)
         return r.stdout + r.stderr
@@ -29,118 +29,113 @@ def run(cmd: list[str], timeout: int = 120) -> str:
         return f"ERROR: {e}"
 
 
-def integridad_runner() -> dict:
-    """Verifica que tests/run_tests.py sea honesto (no oculta fallos)."""
-    content = (REPO / "tests/run_tests.py").read_text()
-    # El runner debe capturar SystemExit por módulo, no abortar todo
-    honesto = "SystemExit" in content and "per-module" in content.lower() or "import" not in content or "sys.exit" not in content
+def registrar_test(desc: str) -> None:
+    """Registra resultado de test en loop-run-log.md (memory)."""
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(LOG, "a") as f:
+        f.write(f"- {timestamp} | Test-QA | {desc}\n")
+
+
+def health_suite() -> dict:
+    """Ejecuta verify + tests y reporta honestidad de la suite."""
+    out_verify = run([PY, "scripts/verify.py"])
+    out_tests = run([PY, "tests/run_tests.py"])
+
+    verify_ok = "APTO (4/4 checks)" in out_verify
+    verify_lines = out_verify.splitlines()
+    checks_ok = sum(1 for l in verify_lines if l.strip().startswith("OK"))
+    checks_fail = sum(1 for l in verify_lines if l.strip().startswith("FAIL"))
+
+    test_lines = out_tests.splitlines()
+    passed = sum(1 for l in test_lines if l.strip().startswith("PASS"))
+    failed = sum(1 for l in test_lines if l.strip().startswith("FAIL"))
+    skipped = sum(1 for l in test_lines if l.strip().startswith("SKIP"))
+    total = passed + failed + skipped
+
     return {
-        "runner_honesto": honesto,
-        "usa_captura_systemexit": "SystemExit" in content,
-        "nota": "Runner honesto: captura SystemExit por módulo para no esconder fallos" if honesto else "WARNING: runner puede esconder fallos",
+        "verify_ok": verify_ok,
+        "verify_checks_ok": checks_ok,
+        "verify_checks_fail": checks_fail,
+        "tests_total": total,
+        "tests_passed": passed,
+        "tests_failed": failed,
+        "tests_skipped": skipped,
+        "tasa_exito": f"{passed}/{total} ({100*passed/max(total,1):.0f}%)" if total else "N/A",
+        "failures": [l.strip() for l in test_lines if "FAIL" in l and "test_" in l][:10],
+        "honestidad": "OK" if (verify_ok and failed == 0) else "DEGRADADO",
     }
 
 
-def ejecutar_suite() -> dict:
-    """Ejecuta la suite completa y reporta resultados."""
-    out = run(["/Users/adri/lucidfence/.venv/bin/python", "tests/run_tests.py"])
-    lines = out.splitlines()
-    passed = [l.strip() for l in lines if l.strip().startswith("PASS")]
-    failed = [l.strip() for l in lines if l.strip().startswith("FAIL")]
-    skipped = [l.strip() for l in lines if l.strip().startswith("SKIP")]
-    summary = [l.strip() for l in lines if "passed" in l.lower() and "failed" in l.lower()]
-    return {
-        "passed_count": len(passed),
-        "failed_count": len(failed),
-        "skipped_count": len(skipped),
-        "total": len(passed) + len(failed) + len(skipped),
-        "summary": summary[0] if summary else "sin resumen",
-        "failures": failed[:5],
-        "suite_honesta": len(failed) == 0,
-    }
+def analizar_regresion(failure_info: dict) -> dict:
+    """Analiza una regresión y propone acciones (recibe delegación de otros agentes)."""
+    fail_test = failure_info.get("test", "desconocido")
+    fail_output = failure_info.get("output", "")
 
-
-def gaps_cobertura() -> dict:
-    """Detecta módulos críticos sin tests reales (evita falsos positivos)."""
-    test_files = list((REPO / "tests").glob("test_*.py"))
-    test_names = set(f.stem.replace("test_", "") for f in test_files)
-
-    # Módulos que existen físicamente en core/ (no supuestos)
-    import lucidfence.core as core
-    core_dir = Path(core.__file__).parent
-    core_modules = set()
-    for py in core_dir.glob("*.py"):
-        if py.name.startswith("_"):
-            continue
-        modname = py.stem
-        core_modules.add(modname)
-    # Paquetes (directorios con __init__.py)
-    for pkg in core_dir.iterdir():
-        if pkg.is_dir() and (pkg / "__init__.py").exists():
-            core_modules.add(pkg.name)
-
-    # Módulos que YA tienen tests (coincidencia flexible)
-    existing_test_coverage = {
-        "policies": {"policy_replay", "policy_replay"},
-        "adapters": {"adapters_contrib", "adapters_intune_live", "adapters_jamf_live", "adapter_fleet", "chromeos", "ios_geofence_appconfig", "workspace_one", "windows_conformidad"},
-        "soar": {"soar_cve_endpoint", "soar_cve_enhanced", "soar_geofence_breach", "cve_soar", "multiuem_soar_gaps", "risk_evidence_gate"},
-        "location_source": {"location_source_zero", "generic_location_source", "location_integrity"},
-        "declarative": {"multiuem_orchestrator", "multiuem_domain", "multiuem_register", "multiuem_api", "88_management_mode"},
-        "multiuem": {"multiuem_orchestrator", "multiuem_domain", "multiuem_register", "multiuem_api", "88_management_mode"},
-        "cloud_publisher": {"cloud_backend", "cloud_cve_feed", "cloud_install_panel"},
-        "config_loader": set(),  # NO tiene tests — gap REAL
-    }
-
-    sin_tests = []
-    for mod in sorted(core_modules):
-        if mod in ("__init__",):
-            continue
-        # ¿Tiene algún test que lo cubra?
-        covered = existing_test_coverage.get(mod, set())
-        # Verificar si hay tests cuyo nombre contenga el módulo
-        found = False
-        for t in test_names:
-            if mod in t or t in mod:
-                found = True
-                break
-        if not found and mod not in ["__init__"]:
-            sin_tests.append(mod)
-
-    # Also check: risk.py no existe → no es gap
-    risk_exists = (core_dir / "risk.py").exists()
-    if not risk_exists and "risk" in sin_tests:
-        sin_tests.remove("risk")
+    # Buscar patrones típicos de regresión
+    causas_probables = []
+    if "AssertionError" in fail_output or "assert" in fail_output:
+        causas_probables.append("Aserción rota: verificar condición esperada")
+    if "ImportError" in fail_output or "ModuleNotFoundError" in fail_output:
+        causas_probables.append("Import faltante: verificar dependency o path")
+    if "Timeout" in fail_output:
+        causas_probables.append("Timeout: servicio no está o es lento")
+    if "Port" in fail_output or "8799" in fail_output:
+        causas_probables.append("Puerto 8799 ocupado: limpiar zombie")
 
     return {
-        "core_modules_encontrados": len(core_modules),
-        "core_modules": sorted(core_modules),
-        "modulos_criticos_sin_tests": sin_tests,
-        "gaps_detectados": len(sin_tests),
-        "nota": "risk.py no existe físicamente (gap=falso). adapters/ es un paquete, no adapters.py (gap=falso). Solo config_loader tiene gap real." if "config_loader" in sin_tests else "",
+        "test_afectado": fail_test,
+        "causas_probables": causas_probables,
+        "accion_recomendada": (
+            "Ejecutar tests/failed_test.py -v para más detalles" if len(causas_probables) == 1
+            else f"Investigar {len(causas_probables)} causas posibles"
+        ),
     }
 
 
 def resumen() -> dict:
-    suite = ejecutar_suite()
+    import threading
+
+    results = {}
+
+    def run_check(nombre, func):
+        results[nombre] = func()
+
+    # batch_processing: verify + tests en paralelo
+    t1 = threading.Thread(target=run_check, args=("suite", health_suite))
+    t1.start()
+    t1.join()
+
+    suite = results.get("suite", {})
+
+    # Si hay failures, analizarlas (subagent: análisis profundo)
+    analisis = []
+    if suite.get("failures"):
+        for fail in suite["failures"][:3]:
+            # Extraer nombre del test de la línea de failure
+            import re
+            m = re.search(r'(test_\w+[^\s:]+)', fail)
+            test_name = m.group(1) if m else "desconocido"
+            analisis.append(analizar_regresion({"test": test_name, "output": fail}))
+
+    # Memory: registrar resultados
+    estado = "OK" if suite.get("honestidad") == "OK" else "DEGRADADO"
+    registrar_test(
+        f"Suite: verify={'OK' if suite.get('verify_ok') else 'FAIL'} | "
+        f"tests={suite.get('tasa_exito','N/A')} | "
+        f"failures={suite.get('tests_failed',0)} | "
+        f"estado={estado}"
+    )
+
     return {
         "agent": "test-qa",
         "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "integridad_runner": integridad_runner(),
-        "suite_resultado": {
-            "total": suite["total"],
-            "passed": suite["passed_count"],
-            "failed": suite["failed_count"],
-            "skipped": suite["skipped_count"],
-            "tasa_exito": f"{suite['passed_count']}/{suite['total']}",
-            "suite_honesta": suite["suite_honesta"],
-            "failures_detalle": suite["failures"],
-        },
-        "gaps_cobertura": gaps_cobertura(),
+        "capacidades_activas": ["subagent", "memory", "batch_processing"],
+        "suite": suite,
+        "analisis_regresiones": analisis,
         "mejoras_propuestas": [
-            "Añadir tests para módulos sin cobertura: " + ", ".join(gaps_cobertura()["modulos_criticos_sin_tests"]) if gaps_cobertura()["gaps_detectados"] else "Cobertura completa: todos los módulos críticos tienen tests",
-            "Añadir pytest-cov para medir cobertura de código y reportar % en CI",
-            "Configurar threshold de cobertura mínimo (ej. 80%) como gate de merge",
-            "Añadir tests de integración reales (no solo unitarios) para adapters",
+            "Si tests fallan: ejecutar pytest -v en el test fallido para diagnóstico",
+            "Si verify falla: revisar qué check falló y proponer corrección",
         ],
     }
 

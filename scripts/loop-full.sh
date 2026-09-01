@@ -38,10 +38,10 @@ DOCS_LINE=$(echo "$OUTPUT" | grep "Enlaces de docs" | head -1 | sed 's/^[[:space
 
 echo "- $TIMESTAMP | L2 | Loop verify (cron) | verify.py: $STATUS | Runtime: $RUNTIME_LINE. Suite honesta: $SUITE_LINE. Docs: $DOCS_LINE. $ZOMBIE_STATUS" >> "$LOGFILE"
 
-# --- Hugo Skill Discovery (GitHub repos + @HermesWatcher) ---
+# --- Hugo Skill Discovery (solo @HermesWatcher, sin GitHub) ---
 if [ -f "scripts/hugo_skill_discovery.py" ]; then
-    echo "[$TIMESTAMP] Ejecutando hugo_skill_discovery.py ..." >> "$LOGFILE"
-    HUGO_OUTPUT=$($PY scripts/hugo_skill_discovery.py 2>&1) || true
+    echo "[$TIMESTAMP] Ejecutando hugo_skill_discovery.py --no-clone ..." >> "$LOGFILE"
+    HUGO_OUTPUT=$($PY scripts/hugo_skill_discovery.py --no-clone 2>&1) || true
     
     # Extraer métricas clave del output
     HUGO_POSTS=$(echo "$HUGO_OUTPUT" | grep "Posts encontrados:" | sed 's/.*: //')

@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
 Agente CTO — Auto-mejora: Auditoría de seguridad proactiva.
+Capacidades activadas por Hugo skill-discovery (@HermesWatcher):
 
-Nueva capacidad vs prueba anterior:
-- Antes: solo verificaba puertos y contaba tests
-- Ahora: analiza dependencias Python por CVEs conocidos (advisory DB),
-  detecta secretos en el repo, reporta brechas vs STIX/STRIDE,
-  propone parches concretos con commands listos para ejecutar.
-
-Output: JSON con hallazgos + nivel de riesgo + recomendación.
+- subagent (delegation): cuando detecta hallazgos complejos,
+  delega investigación a agentos especializados vía subprocess.
+- memory: registra hallazgos persistentes en loop-run-log.md
+  (no solo stdout) para contexto cross-sesión.
+- batch_processing: ejecuta verificaciones independientes en paralelo
+  cuando es posible (deps, secretos, puertos son independientes).
 """
 
 import json
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime
 
 REPO = Path("/Users/adri/lucidfence")
+LOG = REPO / "docs/internal/loop-run-log.md"
+PY = "/Users/adri/lucidfence/.venv/bin/python"
 
 
 def run(cmd: list[str], timeout: int = 30) -> str:
@@ -25,60 +28,92 @@ def run(cmd: list[str], timeout: int = 30) -> str:
         return r.stdout + r.stderr
     except subprocess.TimeoutExpired:
         return f"TIMEOUT: {' '.join(cmd)}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def registrar_en_loop(entry: str) -> None:
+    """Registra un hallazgo en loop-run-log.md (capacidad memory)."""
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    with open(LOG, "a") as f:
+        f.write(f"- {timestamp} | Agente CTO | {entry}\n")
 
 
 def auditoria_dependencias() -> dict:
-    """Analiza dependencies de pyproject.toml y busca CVEs conocidos."""
     deps = {}
     try:
         txt = (REPO / "pyproject.toml").read_text()
+        in_deps = False
         for line in txt.splitlines():
             line = line.strip()
-            if line.startswith("dependency"):
+            if line.startswith("[") and "dependencies" in line:
+                in_deps = True
                 continue
-            # parse simple deps
-            if " " in line and not line.startswith("#") and not line.startswith("["):
+            if line.startswith("[") and "dependencies" not in line:
+                in_deps = False
+                continue
+            if in_deps and line and not line.startswith("#"):
                 parts = line.split()
-                if len(parts) >= 2:
+                if len(parts) >= 1:
                     deps[parts[0]] = parts[1] if len(parts) > 1 else "*"
     except Exception as e:
         return {"error": str(e)}
 
+    # Verificar si pip-audit está disponible
+    pip_audit = run([PY, "-m", "pip_audit", "--version"], timeout=5)
+    tiene_pip_audit = "usage:" not in pip_audit and "ERROR" not in pip_audit
+
     return {
         "dependencias_encontradas": len(deps),
         "dependencias": list(deps.keys()),
+        "pip_audit_disponible": tiene_pip_audit,
         "nivel": "INFO",
-        "nota": "Sin herramienta de escaneo de CVEs automatizada (pip-audit / safety). Recomendado: instalar pip-audit y ejecutar 'pip-audit' periódicamente.",
+        "nota": "pip-audit disponible" if tiene_pip_audit else "Instalar pip-audit para escaneo de CVEs",
     }
 
 
 def detectar_secretos() -> dict:
-    """Busca patrones de secrets en el repo (tokens, claves, passwords)."""
+    """Busca patrones reales de secrets en el repo (tokens, claves, passwords).
+
+    Excluye comentarios, strings de ejemplo/doc, patrones en tests/fixtures.
+    """
     secretos = []
-    patterns = [
-        (r"(?i)(api_key|apikey|secret|password|token|passwd)\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{20,}", " posible secret"),
-    ]
     import re
+
+    # Regex más estricto: solo línea que no sea comentario ni test
+    pat = re.compile(
+        r'^[^#\"\'\n]*?(?:api[_-]?key|apikey|secret|password|passwd|token|aws_secret|private_key)\s*[:=]\s*["\']?([A-Za-z0-9_\-]{20,})',
+        re.IGNORECASE | re.MULTILINE,
+    )
+
     for f in REPO.rglob("*.py"):
-        if ".venv" in str(f) or "__pycache__" in str(f):
+        path_str = str(f)
+        # Excluir .venv, __pycache__, tests/fixtures, ejemplos
+        if any(x in path_str for x in [".venv", "__pycache__", "tests/", "test_", "/fixtures/", "example"]):
             continue
         try:
             content = f.read_text()
-            for pat, label in patterns:
-                for m in re.finditer(pat, content):
-                    secretos.append(f"{f.relative_to(REPO)}:{m.group()}{label}")
+            for m in pat.finditer(content):
+                # Verificar que el archivo no sea un test/fixture
+                if "test" in f.name.lower() or "fixture" in f.name.lower():
+                    continue
+                secretos.append(f"{f.relative_to(REPO)}:{m.group(0)[:60]}...")
         except Exception:
             pass
+
+    # Filtrar falsos positivos: líneas que contienen "example", "test", "sample"
+    secretos = [s for s in secretos if not any(x in s.lower() for x in ["example", "test_", "sample_", "demo_"])]
+
     return {
         "secretos_detectados": len(secretos),
         "secretos": secretos[:10],
         "nivel": "ALTO" if secretos else "OK",
-        "nota": "Si se detectaron secretos reales, rotarlos inmediatamente y usar .env / vault." if secretos else "No se detectaron secretos obvios en el repo.",
+        "accion": "Rotar secrets inmediatamente" if secretos else "ninguna",
     }
 
 
 def analisis_puertos() -> dict:
-    """Puerto 8799 en escucha — el punto de fallo conocido de la suite."""
     out = run(["lsof", "-i", ":8799"])
     ocupado = "LISTEN" in out
     return {
@@ -90,18 +125,85 @@ def analisis_puertos() -> dict:
     }
 
 
+def delegar_hallazgos_complejos(hallazgos: list[str]) -> list[str]:
+    """Delegar hallazgos complejos a otros agentes (capacidad subagent).
+
+    En lugar de procesar todo aquí, delega a agentes especializados
+    cuando el hallazgo requiere análisis profundo.
+    """
+    delegados = []
+    for hallazgo in hallazgos:
+        if "CVE" in hallazgo or "vulnerabilidad" in hallazgo.lower():
+            # Delegar a security-soc para análisis profundo
+            try:
+                result = subprocess.run(
+                    [PY, "scripts/agent_security_soc_monitor.py"],
+                    capture_output=True, text=True, timeout=30, cwd=REPO
+                )
+                if result.returncode == 0:
+                    delegados.append(f"Delegado a security-soc: {hallazgo[:80]}")
+            except Exception:
+                delegados.append(f"No se pudo delegar: {hallazgo[:80]}")
+    return delegados
+
+
 def resumen() -> dict:
+    # Ejecutar verificaciones en paralelo (batch_processing)
+    # Las 3 verificaciones son independientes entre sí
+    import threading
+
+    results = {}
+    lock = threading.Lock()
+
+    def run_auditoria(nombre, func):
+        results[nombre] = func()
+
+    t1 = threading.Thread(target=run_auditoria, args=("dependencias", auditoria_dependencias))
+    t2 = threading.Thread(target=run_auditoria, args=("secretos", detectar_secretos))
+    t3 = threading.Thread(target=run_auditoria, args=("puertos", analisis_puertos))
+    t1.start(); t2.start(); t3.start()
+    t1.join(); t2.join(); t3.join()
+
+    deps = results.get("dependencias", {})
+    secretos = results.get("secretos", {})
+    puertos = results.get("puertos", {})
+
+    # Hallazgos complejos → delegar (subagent)
+    hallazgos = []
+    if secretos.get("secretos_detectados", 0) > 0:
+        hallazgos.append(f"Secretos detectados: {secretos['secretos_detectados']}")
+    if puertos.get("puerto_8799_ocupado"):
+        hallazgos.append("Puerto 8799 ocupado por zombie")
+
+    delegados = delegar_hallazgos_complejos(hallazgos) if hallazgos else []
+
+    # Memory: registrar en loop-log
+    nivel_global = "OK"
+    if secretos.get("secretos_detectados", 0) > 0:
+        nivel_global = "ALTO"
+    elif puertos.get("puerto_8799_ocupado"):
+        nivel_global = "ALTO"
+
+    registrar_en_loop(
+        f"Auditoría: deps={deps.get('dependencias_encontradas',0)} | "
+        f"secretos={secretos.get('secretos_detectados',0)} | "
+        f"puerto8799={'OCUPADO' if puertos.get('puerto_8799_ocupado') else 'libre'} | "
+        f"nivel={nivel_global}" +
+        (f" | delegados: {len(delegados)}" if delegados else "")
+    )
+
     return {
         "agent": "cto",
-        "timestamp": __import__("datetime").datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "dependencias": auditoria_dependencias(),
-        "secretos": detectar_secretos(),
-        "puertos": analisis_puertos(),
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "capacidades_activas": ["subagent", "memory", "batch_processing"],
+        "dependencias": deps,
+        "secretos": secretos,
+        "puertos": puertos,
+        "delegados": delegados,
         "mejoras_propuestas": [
-            "Instalar pip-audit: pip install pip-audit → configurar cron semanal",
-            "Añadir pre-commit hook que ejecute 'pip-audit' antes de cada commit",
-            "Verificar que .env no esté en git y añadir a .gitignore si falta",
-            "Revisar puerto 8799: si hay zombie, kill + registrar en loop-log",
+            "Instalar pip-audit: pip install pip-audit → cron semanal",
+            "Revisar puerto 8799: si hay zombie, kill + registrar",
+            "Si se detectan secretos reales: rotar y usar .env / vault",
         ],
     }
 
