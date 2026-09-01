@@ -2,25 +2,33 @@
 """
 Script para Hugo (v0.15+): buscar skills/plugins nuevos en GitHub
 relevantes para los agentes de LucidFence, extraerlos desde @HermesWatcher,
-y registrarlos en loop-run-log.md.
+y registrarlos en loop-run-log.md
 
-Uso: hugo skill-discovery
-       hugo skill-discovery --perfiles="empresa-cto,empresa-test-qa"
-       hugo skill-discovery --feed-only
+El script también clona repos interesantes para que los agentes los revisen.
 
-Dependencias: Python 3.11+ (stdlib-only: urllib, gzip, re, html)
-El script descarga y parsea el feed de @HermesWatcher para detectar
-menciones de skills/plugins nuevos, luego los instala en los perfiles
-especificados (o en todos los perfiles de LucidFence si no se especifican).
+Uso en loop:
+  python3 scripts/hugo_skill_discovery.py
+
+Con argumento para perfiles específicos:
+  python3 scripts/hugo_skill_discovery.py --perfiles empresa-test-qa,empresa-cto
+
+Solo extracción de feed (sin instalar):
+  python3 scripts/hugo_skill_discovery.py --feed-only
+
+Skills específicos:
+  python3 scripts/hugo_skill_discovery.py --skills playwright-cli,playwright-component-testing
 """
 
 import os
 import sys
 import re
+import json
 import html
 import gzip
 import io
 import shutil
+import urllib.parse
+import subprocess
 import argparse
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -29,11 +37,17 @@ from datetime import datetime
 
 # --- Configuración ---
 HERMES_WATCHER_URL = "https://x.com/HermesWatcher?s=11"
+GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
+GITHUB_API_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # opcional, para rate limit más alto
 PROFILES_DIR = Path("/Users/adri/.hermes/profiles")
 HERMES_SKILLS_DIR = Path("/Users/adri/.hermes")
 LUCIDFENCE_DIR = Path("/Users/adri/lucidfence")
+REPO_DISCOVERY_DIR = LUCIDFENCE_DIR / "data" / "repo-discoveries"
 LOG_FILE = LUCIDFENCE_DIR / "docs/internal/loop-run-log.md"
 TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+# Directorio donde se clonan repos descubiertos para revisión por agentes
+REPO_DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
 
 # Perfiles por defecto donde instalar skills relevantes
 DEFAULT_PROFILES = [
@@ -64,372 +78,631 @@ SKILL_CATEGORIES = [
     "lucidfence-contrib",
 ]
 
+# Palabras clave para detectar repos de GitHub relevantes en posts de X
+GITHUB_REPO_KEYWORDS = [
+    # Agent frameworks / autonomía
+    "agent", "autonomous", "subagent", "delegation", "multi-agent", "swarm",
+    # Skill/plugin systems
+    "skill", "plugin", "extension", "middleware",
+    # LLM/Model tooling
+    "llm", "model", "gpt", "claude", "gemini", "llm-app", "inference",
+    # Testing & QA
+    "testing", "test", "e2e", "pytest", "playwright", "cypress",
+    # DevOps & infra
+    "devops", "ci", "cd", "deploy", "pipeline", "kubernetes", "docker",
+    # Observability & monitoring
+    "monitor", "observe", "trace", "log", "metric", "alert",
+    # Security
+    "security", "audit", "scan", "vulnerability", "secrets", "cve",
+    # Code quality
+    "lint", "format", "review", "quality", "static analysis",
+    # Git & collaboration
+    "git", "github", "pr", "merge", "branch", "workflow",
+    # LLMs for code
+    "codegen", "codestral", "starCoder", "code-Llama", "starcoder",
+    # Python tooling
+    "python", "pip", "poetry", "uv", "pyenv",
+    # Hermes-related
+    "hermes", "nous", "openclaw",
+]
+
+
+# ============================================================
+# 1. Descarga de feed
+# ============================================================
 
 def fetch_feed(url: str) -> str | None:
-    """Descargar el feed de @HermesWatcher y extraer el texto limpio.
-
-    Retorna el texto plano de la página o None si falla.
-    """
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,*/*;q=0.8"
-        ),
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Dest": "empty",
-        "Referer": "https://x.com/",
-    }
-
-    req = Request(url, headers=headers)
+    """Descargar feed de HermesWatcher con manejo de gzip."""
     try:
-        with urlopen(req, timeout=20) as resp:
-            raw = resp.read()
-
-            if resp.headers.get("Content-Encoding") == "gzip":
-                with gzip.GzipFile(fileobj=io.BytesIO(raw)) as f:
-                    raw = f.read()
-
-            text = raw.decode("utf-8", errors="replace")
-
-            # Limpiar HTML para obtener texto plano
-            text = re.sub(
-                r'<script[^>]*>.*?</script>',
-                '',
-                text,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            text = re.sub(
-                r'<style[^>]*>.*?</style>',
-                '',
-                text,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-            text = re.sub(r'<[^>]+>', ' ', text)
-            text = html.unescape(text)
-            text = re.sub(r'\s+', ' ', text).strip()
-
+        req = Request(url, headers={"User-Agent": "HermesAgent/1.0"})
+        with urlopen(req, timeout=15) as response:
+            data = response.read()
+            if response.headers.get("Content-Encoding") == "gzip":
+                data = gzip.decompress(data)
+            text = data.decode("utf-8", errors="replace")
             return text
-
-    except HTTPError as e:
-        print(f"Error HTTP al descargar feed: {e.code} {e.reason}", file=sys.stderr)
-        return None
-    except URLError as e:
-        print(f"Error de red al descargar feed: {e.reason}", file=sys.stderr)
-        return None
     except Exception as e:
-        print(f"Error inesperado al descargar feed: {e}", file=sys.stderr)
+        print(f"  Error descargando feed: {e}")
         return None
+
+
+def fetch_tweet_text(tweet_id: str) -> str | None:
+    """Extraer texto de un tweet específico por su ID."""
+    url = f"https://x.com/i/api/graphql/.../TweetResultByRestId?variables={{\"rawData\":{{\"tweetId\":\"{tweet_id}\"}}}}"
+    try:
+        req = Request(url, headers={"User-Agent": "HermesAgent/1.0"})
+        with urlopen(req, timeout=15) as response:
+            data = response.read()
+            if response.headers.get("Content-Encoding") == "gzip":
+                data = gzip.decompress(data)
+            text = data.decode("utf-8", errors="replace")
+            match = re.search(r'"fullText":"([^"]+)"', text)
+            if match:
+                return html.unescape(match.group(1))
+            return None
+    except Exception as e:
+        print(f"  Error obteniendo tweet {tweet_id}: {e}")
+        return None
+
+
+# ============================================================
+# 2. Extracción de posts (parseo HTML real de X.com)
+# ============================================================
+
+def clean_html_for_tweets(raw_html: str) -> str:
+    """Limpiar el HTML eliminando bloques no visibles (script, style, meta, etc.).
+
+    Retorna el HTML limpio listo para extraer texto de tweets.
+    """
+    # Eliminar bloques de script y style (incluye contenido interior)
+    cleaned = re.sub(
+        r'<script[^>]*>.*?</script>',
+        '',
+        raw_html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r'<style[^>]*>.*?</style>',
+        '',
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    # Eliminar meta tags y link tags
+    cleaned = re.sub(r'<meta[^>]*/?>', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<link[^>]*/?>', '', cleaned, flags=re.IGNORECASE)
+    # Eliminar atributos nonce (solo el atributo, no el contenido)
+    cleaned = re.sub(r'\snonce="[^"]*"', '', cleaned, flags=re.IGNORECASE)
+    # Eliminar scripts específicos de X.com que inyectan ruido
+    cleaned = re.sub(
+        r'<script[^>]*id="_R_"[^>]*>.*?</script>',
+        '',
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    return cleaned
+
+
+def extract_tweets_from_html(raw_html: str) -> list[dict]:
+    """Extraer tweets del HTML de X.com buscando patrones de tweet text.
+
+    Primero limpia el HTML eliminando script/style/meta/link/nonce
+    para evitar extraer contenido no visible.
+    """
+    cleaned = clean_html_for_tweets(raw_html)
+    tweets: list[dict] = []
+
+    # Patrón 1: tweets en data-testid="tweetText" (el más específico)
+    # Usamos triple-quoted raw string para poder incluir " y ' sin escaping
+    tweet_text_re = re.compile(
+        r"""data-testid=["'][^"']*tweetText[^"']*["'][^>]*>([^<]+)<""",
+        re.IGNORECASE,
+    )
+    for match in tweet_text_re.finditer(cleaned):
+        text = html.unescape(match.group(1).strip())
+        if text and len(text) > 15 and not text.startswith("{") and not text.startswith("<"):
+            tweets.append({"text": text})
+        if len(tweets) >= 10:
+            return tweets[:10]
+
+    # Patrón 2: div con clase tweet-text-content
+    if len(tweets) < 3:
+        tweet_div_re = re.compile(
+            r"""<div[^>]*class=["'][^"']*tweet-text[^"']*["'][^>]*>(.*?)</div>""",
+            re.DOTALL | re.IGNORECASE,
+        )
+        for match in tweet_div_re.finditer(cleaned):
+            raw = match.group(1)
+            clean = re.sub(r"<[^>]+>", " ", raw)
+            clean = html.unescape(clean).strip()
+            clean = re.sub(r"\s+", " ", clean)
+            if clean and len(clean) > 15 and not clean.startswith("{") and not clean.startswith("<"):
+                tweets.append({"text": clean})
+            if len(tweets) >= 10:
+                return tweets[:10]
+
+    # Patrón 3: meta description (último recurso)
+    if len(tweets) < 1:
+        meta_desc_re = re.compile(
+            r"""<meta[^>]*name=["']twitter:description["'][^>]*content=["']([^"']+)["']""",
+            re.IGNORECASE,
+        )
+        for match in meta_desc_re.finditer(raw_html):
+            text = html.unescape(match.group(1).strip())
+            if text and len(text) > 15:
+                tweets.append({"text": text})
+                break  # Solo el primero
+
+    # Patrón 4: bloques data-testid con tweet (amplio)
+    if len(tweets) < 3:
+        content_re = re.compile(
+            r"""<div[^>]*data-testid=["'][^"']*tweet[^"']*["'][^>]*>(.*?)</div>""",
+            re.DOTALL | re.IGNORECASE,
+        )
+        for match in content_re.finditer(cleaned):
+            clean = re.sub(r"<[^>]+>", " ", match.group(1))
+            clean = html.unescape(clean).strip()
+            clean = re.sub(r"\s+", " ", clean)
+            if clean and len(clean) > 20 and not clean.startswith("{") and not clean.startswith("<"):
+                tweets.append({"text": clean})
+            if len(tweets) >= 10:
+                return tweets[:10]
+
+    return tweets[:10]
+
+
+def extract_posts_fallback(raw_text: str) -> list[dict]:
+    """Heurística fallback: extraer fragmentos de texto que parezcan posts.
+
+    Exclusión estricta de líneas que parezcan código/CSS/JS/meta tags.
+    """
+    posts: list[dict] = []
+    seen_texts: set[str] = set()
+
+    # Prefixos que indican que no es un tweet real
+    skip_prefixes = (
+        '<', '{', '[', ' ', ';', '}', ')', '(',
+        'Chrome', 'Mozilla', 'Safari', 'AppleWebKit',
+        'href', 'src', 'import', 'script', 'style',
+        'meta', 'link', 'div', 'class', 'id',
+        'data-', 'nonce', 'cookie', 'window',
+        'document', 'var ', 'function', 'const ', 'let ',
+        'body', 'head', 'html', 'title', 'lang',
+        'utf', 'viewport', 'robots', 'description',
+    )
+
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if len(line) <= 30:
+            continue
+        # Omitir líneas que parezcan código o etiquetas
+        if line.startswith(skip_prefixes):
+            continue
+        if re.match(r'^\s*$', line):
+            continue
+        if re.match(r'^[\w]+:[;,{}$\'"\']', line):
+            continue
+        clean = re.sub(r'\s+', ' ', line).strip()
+        clean = html.unescape(clean)
+        if clean and clean not in seen_texts and len(clean) > 45:
+            seen_texts.add(clean)
+            posts.append({"text": clean})
+
+    return posts[:10]
 
 
 def extract_posts(feed_text: str) -> list[dict]:
     """Extraer los posts más recientes del feed de HermesWatcher.
 
-    Retorna lista de diccionarios con 'text' (fragmento del post).
+    El feed viene como HTML de X.com (no JSON API).
+    Parsea el HTML buscando elementos de tweet y extrayendo su texto.
     """
-    posts = []
+    posts: list[dict] = []
 
-    # Buscar fragmentos que parezcan posts individuales
-    # El feed tiene texto mezclado: header del perfil + posts + UI
-    # Los posts suelen aparecer después de '@HermesWatcher' o como
-    # textos que empiezan con tiempo relativo (4h, 7h, 16 ago, etc.)
+    html_posts = extract_tweets_from_html(feed_text)
+    for hp in html_posts:
+        if hp["text"] and hp["text"] not in [p["text"] for p in posts]:
+            posts.append(hp)
 
-    # Patrón 1: texto después de @HermesWatcher
-    sections = text.split("@HermesWatcher")
-    for section in sections[1:]:
-        # Quitar el header del perfil que aparece al principio
-        section = re.sub(
-            r'^[^\n]*Iniciar sesión[^\n]*\n',
-            '',
-            section,
-            flags=re.IGNORECASE,
-        )
-        section = re.sub(
-            r'^[^\n]*Regístrate[^\n]*\n',
-            '',
-            section,
-            flags=re.IGNORECASE,
-        )
-        section = section.strip()
-        if len(section) > 20:
-            posts.append({"text": section[:500]})
+    if len(posts) < 3:
+        fb_posts = extract_posts_fallback(feed_text)
+        for fp in fb_posts:
+            if fp["text"] and fp["text"] not in [p["text"] for p in posts]:
+                posts.append(fp)
 
-    # Patrón 2: buscar tiempo relativo como marcador de posts
-    time_pattern = re.compile(
-        r'(\d+[hjd]+\s+(?:hace|ago|fontal|antes|Después de))',
-        re.IGNORECASE,
-    )
-    for match in time_pattern.finditer(text):
-        start = match.start()
-        end = min(len(text), start + 400)
-        fragment = text[start:end].strip()
-        if fragment and fragment not in [p["text"] for p in posts]:
-            posts.append({"text": fragment})
+    return posts[:10]
 
-    # Deduplicar por primeras 80 chars
-    seen = set()
-    unique_posts = []
-    for post in posts:
-        key = post["text"][:80]
-        if key not in seen:
-            seen.add(key)
-            unique_posts.append(post)
 
-    return unique_posts[:10]
-
+# ============================================================
+# 3. Detección de skills en posts
+# ============================================================
 
 def detect_skills_from_posts(posts: list[dict]) -> list[dict]:
-    """De una lista de posts, detectar menciones de skills/plugins/capacidades.
+    """Buscar menciones de skills/plugins/capacidades en los posts.
 
-    Retorna lista de dicts con 'name' (nombre de skill/capacidad) y
-    'source' (fuente del descubrimiento).
+    Retorna lista de dicts con:
+        name: nombre normalizado de la skill/capacidad
+        description: fragmento del post donde aparece
+        source: 'post' (detectado en feed)
     """
-    detected = []
+    detected: list[dict] = []
+    seen: set[str] = set()
 
     for post in posts:
         text = post.get("text", "")
+        lower_text = text.lower()
 
-        # Detectar menciones de "skill" o "skill" como palabra clave
-        if re.search(r'\bskill[s]?\b', text, re.IGNORECASE):
-            # Buscar qué skill específico se menciona
-            skill_refs = re.findall(
-                r'skill[s]?\s+(?:de|para|is|are|can|can be|adds?)\s+([a-zA-Z][a-zA-Z0-9_-]{2,40})',
-                text,
-                re.IGNORECASE,
-            )
-            for ref in skill_refs:
-                ref_lower = ref.lower().strip()
-                if ref_lower not in [d["name"] for d in detected]:
-                    detected.append({"name": ref_lower, "source": "HermesWatcher"})
-
-        # Detectar menciones de "plugin"
-        if re.search(r'\bplugin[s]?\b', text, re.IGNORECASE):
-            plugin_refs = re.findall(
-                r'plugin[s]?\s+(?:de|para|is|are|adds?|allows?)\s+([a-zA-Z][a-zA-Z0-9_-]{2,40})',
-                text,
-                re.IGNORECASE,
-            )
-            for ref in plugin_refs:
-                ref_lower = ref.lower().strip()
-                if ref_lower not in [d["name"] for d in detected]:
-                    detected.append({"name": ref_lower, "source": "HermesWatcher"})
-
-        # Detectar capacidades específicas mencionadas en el feed
-        if re.search(r'\bbatch\s+processing\b', text, re.IGNORECASE):
-            if "batch_processing" not in [d["name"] for d in detected]:
-                detected.append({
-                    "name": "batch_processing",
-                    "source": "HermesWatcher",
-                    "description": "Procesamiento por lotes de jobs",
-                })
-
-        if re.search(r'autonomous\s+delegation', text, re.IGNORECASE):
-            if "autonomous_delegation" not in [d["name"] for d in detected]:
-                detected.append({
-                    "name": "autonomous_delegation",
-                    "source": "HermesWatcher",
-                    "description": "Delegación autónoma más confiable",
-                })
-
-        if re.search(r'\bsubagent[s]?\b', text, re.IGNORECASE):
-            if "subagent" not in [d["name"] for d in detected]:
-                detected.append({
-                    "name": "subagent",
-                    "source": "HermesWatcher",
-                    "description": "Mejoras en manejo de subagents",
-                })
-
-        if re.search(r'\bkanban\b', text, re.IGNORECASE):
-            if "kanban_plugin" not in [d["name"] for d in detected]:
-                detected.append({
-                    "name": "kanban_plugin",
-                    "source": "HermesWatcher",
-                    "description": "Plugin de kanban para Hermes Desktop",
-                })
-
-        if re.search(r'\bGPT-5\b|\bGTP-5\b|GPT5', text, re.IGNORECASE):
-            if "gpt5_model" not in [d["name"] for d in detected]:
-                detected.append({
-                    "name": "gpt5_model",
-                    "source": "HermesWatcher",
-                    "description": "Nuevo modelo GPT-5 disponible",
-                })
+        for keyword in SKILL_KEYWORDS:
+            if keyword in lower_text:
+                name = keyword.lower().replace("-", "_").replace(" ", "_")
+                if name not in seen:
+                    seen.add(name)
+                    detected.append({
+                        "name": name,
+                        "description": text[:200],
+                        "source": "post",
+                    })
 
     return detected
 
 
-def find_skill_path(skill_name: str) -> str | None:
-    """Buscar un skill en ~/.hermes por nombre.
+# Palabras clave para detectar skills/capacidades mencionadas en X
+SKILL_KEYWORDS = [
+    # Skills de Hermes
+    "playwright-cli",
+    "playwright-component-testing",
+    "playwrighttrace",
+    "playwright-test-runner",
+    # Capacidades de Hermes
+    "batch_processing",
+    "autonomous_delegation",
+    "subagent",
+    "kanban_plugin",
+    "gpt5_model",
+    "web-search",
+    "web-extract",
+    "image-generate",
+    "text-to-speech",
+    "browser-exec",
+    "cronjob",
+    "delegate-task",
+    "skill-view",
+    "skill-manage",
+    "clarify",
+    "computer-use",
+    "memory",
+    "session-search",
+    "lucidfence",
+    "hermestool",
+    "telegram",
+    "apple-notes",
+    "apple-reminders",
+    "find-my",
+    "imessage",
+    "openai-whisper",
+    "whisper",
+    "qdrant",
+    "milvus",
+    "chromadb",
+    "knowledge-graph",
+    "graphify",
+    "llm-wiki",
+    "arxiv",
+    "google-workspace",
+    "notion",
+    "airtable",
+    "box",
+    "himalaya",
+    "xurl",
+    "open-hue",
+    "obsidian",
+    "meeting-action-items",
+    "document-to-action-items",
+    "weekly-review-planning",
+    "session-librarian",
+    "product-price-monitor",
+    "ocr-and-documents",
+    "nano-pdf",
+    "pdf",
+    "docx",
+    "xlsx",
+    "powerpoint",
+    "maps",
+    "blocked-page-recovery",
+    "grill-me",
+    "test-driven-development",
+    "systematic-debugging",
+    "codebase-inspection",
+]
 
-    Recorre todas las categorías y subcarpetas buscando un SKILL.md
-    cuyo nombre de carpeta coincida con skill_name.
 
-    Retorna la ruta relativa al skill o None si no se encuentra.
-    """
-    for category in SKILL_CATEGORIES:
-        category_dir = HERMES_SKILLS_DIR / category
-        if not category_dir.exists():
+# ============================================================
+# 4. Encontrar skills relevantes para LucidFence
+# ============================================================
+
+def find_skill_path(skill_name: str) -> Path | None:
+    """Buscar la ruta de un skill en ~/.hermes."""
+    for category_dir in HERMES_SKILLS_DIR.iterdir():
+        if not category_dir.is_dir():
             continue
-
-        for item in category_dir.iterdir():
-            if item.is_dir():
-                # Verificar si este directorio o sus subdirectorios
-                # contienen el skill buscado
-                if item.name == skill_name and (item / "SKILL.md").exists():
-                    return f"{category}/{skill_name}"
-                # Buscar en subdirectorios (ej: playwright-cli puede estar
-                # en optional-skills/web-development/playwright-cli/)
-                for subitem in item.rglob("SKILL.md"):
-                    rel = subitem.relative_to(item)
-                    if rel.parts and rel.parts[0] == skill_name:
-                        return f"{category}/{rel}"
-
-    # Búsqueda directa en cualquier lugar de ~/.hermes
-    for skill_file in HERMES_SKILLS_DIR.rglob("SKILL.md"):
-        rel = skill_file.relative_to(HERMES_SKILLS_DIR)
-        parts = rel.parts
-        if len(parts) >= 2:
-            if parts[-1] == "SKILL.md" and parts[-2] == skill_name:
-                return "/".join(parts[:-1])
-        elif len(parts) == 1 and parts[0] == skill_name and skill_file.name == "SKILL.md":
-            # Skill de una sola carpeta (raro pero posible)
-            return skill_name
-
+        for skill_dir in category_dir.iterdir():
+            if skill_dir.is_dir() and skill_dir.name == skill_name:
+                return skill_dir
+            # También buscar con guion bajo
+            if skill_dir.is_dir() and skill_dir.name.replace("_", "-") == skill_name:
+                return skill_dir
     return None
 
 
-def install_skill_in_profile(skill_path: str, profile: str) -> bool:
-    """Instalar un skill en un perfil específico.
-
-    skill_path: ruta relativa dentro de ~/.hermes (ej: software-development/playwright-cli)
-    profile: nombre del perfil (ej: empresa-cto)
-
-    Retorna True si la instalación fue exitosa.
-    """
-    src_skill_dir = HERMES_SKILLS_DIR / skill_path
-    src_skill_file = src_skill_dir / "SKILL.md"
-
-    if not src_skill_file.exists():
-        return False
-
-    # Determinar destination
-    if skill_path.startswith("hermes-agent/optional-skills/"):
-        rel = skill_path.replace("hermes-agent/optional-skills/", "")
-        parts = rel.split("/", 1)
-        if len(parts) > 1:
-            dst_dir = (
-                PROFILES_DIR
-                / profile
-                / "skills"
-                / parts[0]
-                / parts[1]
-            )
-        else:
-            dst_dir = PROFILES_DIR / profile / "skills" / rel
-    else:
-        parts = skill_path.split("/", 1)
-        if len(parts) > 1:
-            dst_dir = (
-                PROFILES_DIR
-                / profile
-                / "skills"
-                / parts[0]
-                / parts[1]
-            )
-        else:
-            dst_dir = PROFILES_DIR / profile / "skills" / skill_path
-
-    dst_file = dst_dir / "SKILL.md"
-
-    try:
-        dst_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src_skill_file, dst_file)
-        return True
-    except Exception as e:
-        print(f"Error instalando {skill_path} en {profile}: {e}", file=sys.stderr)
-        return False
-
-
-def get_installed_skills_in_profile(profile: str) -> set[str]:
-    """Obtener conjunto de nombres de skills instalados en un perfil."""
+def get_installed_skills_in_profile(profile: str) -> list[str]:
+    """Listar skills instalados en un perfil."""
     profile_dir = PROFILES_DIR / profile / "skills"
     if not profile_dir.exists():
-        return set()
+        return []
+    return [d.name for d in profile_dir.iterdir() if d.is_dir()]
 
-    installed = set()
-    for skill_file in profile_dir.rglob("SKILL.md"):
-        rel = skill_file.relative_to(profile_dir)
-        parts = rel.parts
-        if len(parts) >= 2:
-            installed.add(f"{parts[0]}/{parts[1]}")
-        else:
-            installed.add(rel.stem)
-    return installed
+
+def install_skill_in_profile(skill_path: Path, profile: str) -> bool:
+    """Copiar un skill a la carpeta de skills de un perfil."""
+    dest_dir = PROFILES_DIR / profile / "skills" / skill_path.name
+    try:
+        if dest_dir.exists():
+            shutil.rmtree(dest_dir)
+        shutil.copytree(skill_path, dest_dir)
+        print(f"      Instalado: {skill_path.name} → {profile}")
+        return True
+    except Exception as e:
+        print(f"      Error instalando {skill_path.name} en {profile}: {e}")
+        return False
+
+
+def get_installed_skills_per_profile() -> dict[str, list[str]]:
+    """Retornar dict {profile: [skills]} para todos los perfiles."""
+    result: dict[str, list[str]] = {}
+    for profile_dir in PROFILES_DIR.iterdir():
+        if profile_dir.is_dir():
+            profile_name = profile_dir.name
+            skills = get_installed_skills_in_profile(profile_name)
+            result[profile_name] = skills
+    return result
 
 
 def find_relevant_skills_for_lucidfence(
     detected_skills: list[dict],
 ) -> list[dict]:
-    """Filtrar las skills detectadas para encontrar las relevantes para LucidFence.
+    """Filtrar skills detectadas para los que son relevantes para LucidFence.
 
-    LucidFence es un producto de geofencing/UEM multi-agente. Skills relevantes:
-    - Testing/E2E (playwright, pruebas)
-    - DevOps/Deploy (CI, release, version)
-    - Security/Audit (scanning, review)
-    - Code review / quality
-    - Autonomous delegation (para los agentes del equipo)
-    - Batch processing (para procesamiento masivo)
-    - Research/analysis
+    Se enfoca en skills que:
+    - Ayuden a los agentes a trabajar mejor el repo
+    - Sean herramientas de desarrollo/test/QA/security/observabilidad
+    - Sean plugins que los agentes puedan instalar en sus perfiles
     """
-    relevant_keywords = [
-        # Testing & QA
-        "playwright", "testing", "test", "e2e", "quality",
-        # DevOps & Release
-        "deploy", "release", "version", "ci", "cd", "pipeline",
-        # Security & Audit
-        "security", "audit", "scan", "vulnerability", "review",
-        # Code & Quality
-        "code", "review", "linter", "refactor", "debug",
-        # Agent capabilities
-        "agent", "delegation", "subagent", "autonomous", "batch",
-        # Research & Analysis
-        "research", "analysis", "data", "metric",
-        # Documentation
-        "doc", "document", "readme", "wiki",
-        # Web & UI
-        "web", "browser", "page", "ui",
-        # Git & Collaboration
-        "git", "github", "pr", "merge",
+    relevant: list[dict] = []
+    lucifence_keywords = [
+        "playwright", "testing", "test", "e2e", "cypress",
+        "pytest", "python", "lint", "format",
+        "security", "audit", "scan", "vulnerability",
+        "git", "github", "pr", "review", "merge",
+        "ci", "cd", "deploy", "pipeline",
+        "monitor", "observe", "trace", "log", "metric",
+        "agent", "autonomous", "subagent", "delegation",
+        "skill", "plugin", "extension",
+        "llm", "model", "claude", "gpt",
+        "kanban", "planning",
+        "brain", "memory", "context",
+        "hermes", "nous",
     ]
 
-    relevant = []
     for skill in detected_skills:
-        name = skill["name"]
-        # Verificar si el skill existe físicamente
-        if find_skill_path(name):
-            # Verificar relevancia por keyword
-            for keyword in relevant_keywords:
-                if keyword in name.lower():
+        skill_name = skill["name"]
+        # Verificar si existe localmente como skill
+        skill_path = find_skill_path(skill_name.replace("_", "-"))
+
+        for keyword in lucifence_keywords:
+            if keyword in skill_name.lower():
+                if skill_path is not None:
+                    # Skill disponible localmente — relevante
                     relevant.append(skill)
-                    break
-            else:
-                # Si no hay keyword match pero existe el skill,
-                # asumimos que podría ser relevante (no descartamos)
-                relevant.append(skill)
+                else:
+                    # Skill mencionada pero no disponible — aún así la incluimos
+                    # para registro (podría ser algo que vendrán en futuro)
+                    relevant.append(skill)
+                break
         else:
-            # Skill mencionado pero no disponible localmente
-            # Lo incluimos como "no disponible" para registro
-            relevant.append(skill)
+            # Si no hay keyword match pero existe el skill,
+            # asumimos que podría ser relevante (no descartamos)
+            if skill_path is not None:
+                relevant.append(skill)
 
     return relevant
 
+
+# ============================================================
+# 5. Descubrimiento de repos de GitHub
+# ============================================================
+
+def extract_github_urls_from_posts(posts: list[dict]) -> list[dict]:
+    """Extraer URLs de GitHub mencionadas en los posts."""
+    urls: list[dict] = []
+    url_pattern = re.compile(
+        r'https?://(?:www\.)?github\.com/([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+)',
+        re.IGNORECASE,
+    )
+
+    for post in posts:
+        text = post.get("text", "")
+        matches = url_pattern.finditer(text)
+        for match in matches:
+            full_name = match.group(1)
+            start = match.start()
+            context_start = max(0, start - 100)
+            context_end = min(len(text), start + len(match.group(0)) + 100)
+            snippet = text[context_start:context_end].strip()
+            urls.append({
+                "url": f"https://github.com/{full_name}",
+                "full_name": full_name,
+                "description": snippet,
+            })
+
+    return urls
+
+
+def normalize_github_full_name(url: str) -> str | None:
+    """Extraer nombre completo (owner/repo) de una URL de GitHub."""
+    match = re.search(
+        r'github\.com/([a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+)',
+        url,
+        re.IGNORECASE,
+    )
+    return match.group(1) if match else None
+
+
+def search_github_repos(keyword: str) -> list[dict]:
+    """Buscar repos en GitHub API por keyword.
+
+    Retorna lista de repos ordenados por stars (desc).
+    """
+    if not keyword:
+        return []
+
+    query_parts = [
+        f"{keyword}",
+        "stars:>=10",
+        "pushed:>2024-01-01",
+        "-fork",
+    ]
+    query = " ".join(query_parts)
+
+    headers: dict[str, str] = {}
+    if GITHUB_API_TOKEN:
+        headers["Authorization"] = f"token {GITHUB_API_TOKEN}"
+
+    params = urllib.parse.urlencode({
+        "q": query,
+        "sort": "stars",
+        "order": "desc",
+        "per_page": "10",
+    })
+
+    url = f"{GITHUB_SEARCH_API}?{params}"
+
+    try:
+        req = Request(url, headers=headers)
+        with urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        items = data.get("items", [])
+        result: list[dict] = []
+        for item in items:
+            result.append({
+                "full_name": item.get("full_name", ""),
+                "html_url": item.get("html_url", ""),
+                "description": item.get("description", "") or "",
+                "language": item.get("language"),
+                "stargazers_count": item.get("stargazers_count", 0),
+                "forks_count": item.get("forks_count", 0),
+                "topics": item.get("topics", []),
+                "updated_at": item.get("updated_at", ""),
+            })
+        return result
+
+    except Exception as e:
+        print(f"      Error buscando '{keyword}': {e}")
+        return []
+
+
+def discover_github_repos(
+    posts: list[dict],
+    feed_text: str,
+) -> list[dict]:
+    """Buscar repos de GitHub relevantes para los agentes de LucidFence.
+
+    Busca en dos fuentes:
+    1. Menciones de repos en los posts de @HermesWatcher (extrayendo URLs)
+    2. Búsqueda en GitHub API con keywords relevantes
+
+    Retorna lista de dicts con:
+        full_name, description, language, url, stars, fork_count, topic_tags
+    """
+    repos: list[dict] = []
+    seen: set[str] = set()
+
+    # 1. Extraer URLs de GitHub de los posts
+    print("   8a. Extrayendo URLs de GitHub de los posts ...")
+    post_urls = extract_github_urls_from_posts(posts)
+    for url_data in post_urls:
+        full_name = normalize_github_full_name(url_data["url"])
+        if full_name and full_name not in seen:
+            seen.add(full_name)
+            repos.append({
+                "full_name": full_name,
+                "url": url_data["url"],
+                "source": "post_mention",
+                "description": url_data.get("description", ""),
+                "language": None,
+                "stars": 0,
+                "fork_count": 0,
+                "topic_tags": [],
+            })
+
+    # 2. Búsqueda en GitHub API con keywords
+    print("   8b. Buscando en GitHub API con keywords relevantes ...")
+    for keyword in GITHUB_REPO_KEYWORDS[:8]:
+        keyword_repos = search_github_repos(keyword)
+        for repo_data in keyword_repos:
+            full_name = repo_data["full_name"]
+            if full_name not in seen:
+                seen.add(full_name)
+                repos.append({
+                    "full_name": full_name,
+                    "url": repo_data["html_url"],
+                    "source": "github_search",
+                    "description": repo_data.get("description", "") or "",
+                    "language": repo_data.get("language"),
+                    "stars": repo_data.get("stargazers_count", 0),
+                    "fork_count": repo_data.get("forks_count", 0),
+                    "topic_tags": repo_data.get("topics", []),
+                })
+        if len(repos) >= 30:
+            break
+
+    repos.sort(key=lambda r: r.get("stars", 0), reverse=True)
+    return repos
+
+
+def clone_new_repos(repos: list[dict]) -> list[Path]:
+    """Clonar repos nuevos para que los agentes los revisen.
+
+    Solo clona repos que no existan ya en el directorio de descubrimientos.
+    Retorna lista de Paths de los repos clonados.
+    """
+    cloned: list[Path] = []
+
+    for repo in repos:
+        full_name = repo["full_name"]
+        repo_dir = REPO_DISCOVERY_DIR / full_name.replace("/", "_")
+
+        if repo_dir.exists():
+            continue
+
+        print(f"      Clonando {full_name} ...")
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", repo["url"], str(repo_dir)],
+                check=True,
+                capture_output=True,
+                timeout=60,
+            )
+            cloned.append(repo_dir)
+            print(f"      ✓ Clonado en {repo_dir}")
+        except Exception as e:
+            print(f"      ✗ Error clonando {full_name}: {e}")
+
+    return cloned
+
+
+# ============================================================
+# 6. Registro en loop log
+# ============================================================
 
 def register_in_loop_log(
     feed_text: str,
@@ -437,6 +710,8 @@ def register_in_loop_log(
     detected_skills: list[dict],
     installed_skills: list[tuple[str, str]],
     new_capabilities: list[dict],
+    github_repos: list[dict] | None = None,
+    cloned_repos: list[Path] | None = None,
 ) -> None:
     """Registrar la ejecución del skill discovery en loop-run-log.md."""
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -448,6 +723,18 @@ def register_in_loop_log(
 
     cap_names = [c["name"] for c in new_capabilities]
 
+    github_summary = ""
+    if github_repos:
+        top_repos = github_repos[:5]
+        repo_lines = []
+        for r in top_repos:
+            desc = (r.get("description") or "")[:80]
+            repo_lines.append(f"{r['full_name']} ({r.get('language', 'N/A')}) — {desc}")
+        github_summary = "Repos GitHub: " + "; ".join(repo_lines)
+        if cloned_repos:
+            cloned_names = [p.name.replace("_", "/") for p in cloned_repos]
+            github_summary += f" | Clonados: {', '.join(cloned_names)}"
+
     entry = (
         f"- {TIMESTAMP} | L2 | Skill discovery (automejora) | "
         f"Feed @HermesWatcher consultado. "
@@ -455,7 +742,8 @@ def register_in_loop_log(
         f"Skills detectadas: {', '.join(skill_names) if skill_names else 'ninguna'}. "
         f"Skills instalados: {installed_desc}. "
         f"Capacidades nuevas detectadas: {', '.join(cap_names) if cap_names else 'ninguna'}. "
-        f"Acción: instalar skills descubiertos en perfiles clave."
+        f"{github_summary}. "
+        f"Acción: instalar skills descubiertos en perfiles clave + clones para revisión de agentes."
     )
 
     with open(LOG_FILE, "a") as f:
@@ -464,7 +752,11 @@ def register_in_loop_log(
     print(f"Registrado en {LOG_FILE}")
 
 
-def main():
+# ============================================================
+# 7. Main
+# ============================================================
+
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Buscar y instalar skills nuevos desde @HermesWatcher",
     )
@@ -472,7 +764,7 @@ def main():
         "--perfiles",
         type=str,
         default=None,
-        help="Lista comma-separated de perfiles para instalar skills (default: todos los perfiles de LucidFence)",
+        help="Lista comma-separated de perfiles para instalar skills",
     )
     parser.add_argument(
         "--feed-only",
@@ -488,13 +780,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Determinar perfiles objetivo
     if args.perfiles:
         profiles = [p.strip() for p in args.perfiles.split(",")]
     else:
         profiles = DEFAULT_PROFILES
 
-    # Determinar skills específicos si se solicitaron
     if args.skills:
         specific_skills = [s.strip() for s in args.skills.split(",")]
     else:
@@ -558,9 +848,9 @@ def main():
     # 6. Instalar skills (si no es solo feed)
     if not args.feed_only:
         print("\n6. Instalando skills en perfiles objetivo ...")
-        installed_skills = []
-        not_found_skills = []
-        already_installed = []
+        installed_skills: list[tuple[str, str]] = []
+        not_found_skills: list[str] = []
+        already_installed: list[tuple[str, str]] = []
 
         for skill in relevant_skills:
             skill_name = skill["name"]
@@ -572,37 +862,37 @@ def main():
 
             for profile in profiles:
                 profile_dir = PROFILES_DIR / profile / "skills"
-                # Verificar si ya está instalado
                 if skill_name in get_installed_skills_in_profile(profile):
                     already_installed.append((skill_name, profile))
                     continue
 
-                # Instalar
                 success = install_skill_in_profile(skill_path, profile)
                 if success:
                     installed_skills.append((skill_name, profile))
                 else:
                     print(f"   Error instalando {skill_name} en {profile}")
-
-        print(f"\n   Skills instalados: {len(installed_skills)}")
-        for skill, profile in installed_skills:
-            print(f"   ✓ {skill} → {profile}")
-
-        if already_installed:
-            print(f"\n   Skills ya instalados (omitidos): {len(already_installed)}")
-
-        if not_found_skills:
-            print(f"\n   Skills no encontrados en ~/.hermes: {len(not_found_skills)}")
-            for skill in not_found_skills:
-                print(f"   ✗ {skill}: no disponible localmente")
     else:
         installed_skills = []
         not_found_skills = []
         already_installed = []
 
-    # 7. Resumen
+    # 8. Descubrir repos de GitHub relevantes
+    print("\n8. Buscando repos de GitHub relevantes para los agentes ...")
+    github_repos = discover_github_repos(posts, feed_text)
+    print(f"   Repos de GitHub detectados: {len(github_repos)}")
+    for repo in github_repos[:5]:
+        print(f"   - {repo['full_name']} ({repo['language'] or 'N/A'}) — {repo.get('description', 'N/A')[:100]}")
+
+    # 9. Clonar repos nuevos para revisión por agentes
+    print("\n9. Clonando repos nuevos para revisión por agentes ...")
+    cloned_repos = clone_new_repos(github_repos)
+    print(f"   Repos clonados: {len(cloned_repos)}")
+    for repo_path in cloned_repos[:5]:
+        print(f"   ✓ {repo_path}")
+
+    # 10. Resumen
     print("\n" + "=" * 70)
-    print("RESUMEN DE HUGO SKILL DISCOVERY")
+    print("RESUMEN DE HUGO SKILL DISCOVERY (con GitHub repos)")
     print("=" * 70)
     print(f"   Feed @HermesWatcher: {'OK' if feed_text else 'ERROR'}")
     print(f"   Posts extraídos: {len(posts)}")
@@ -612,19 +902,22 @@ def main():
     print(f"   Skills ya instalados: {len(already_installed)}")
     print(f"   Skills no encontrados: {len(not_found_skills)}")
     print(f"   Nuevas capacidades: {len(new_capabilities)}")
+    print(f"   Repos de GitHub detectados: {len(github_repos)}")
+    print(f"   Repos clonados para revisión: {len(cloned_repos)}")
     print("=" * 70)
 
-    # 8. Registrar en loop log
-    print("\n7. Registrando en loop-run-log.md ...")
+    # 11. Registrar en loop log
+    print("\n11. Registrando en loop-run-log.md ...")
     register_in_loop_log(
         feed_text or "",
         posts,
         detected_skills,
         installed_skills,
         new_capabilities,
+        github_repos=github_repos,
+        cloned_repos=cloned_repos,
     )
 
-    # 9. Retornar código de salida
     if feed_text is None:
         return 1
     return 0
