@@ -1,29 +1,42 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 <head>
+    <meta property="og:title" content="LucidFence Cloud — Demo multi-UEM en vivo">
+    <meta property="og:description" content="Demo en vivo de geofencing multi-UEM: dispositivos simulados con Apple DDM, Microsoft Intune y Jamf. Riesgo, compliance y geocercas en un panel.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/cloud.html">
+    <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/static/cloud-icon.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LucidFence Cloud — Demo multi-UEM en vivo">
+    <meta name="twitter:description" content="Demo en vivo de geofencing multi-UEM: dispositivos simulados con Apple DDM, Microsoft Intune y Jamf. Riesgo, compliance y geocercas en un panel.">
+    <meta name="twitter:image" content="https://adrimg3196.github.io/lucidfence/static/cloud-icon.svg">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LucidFence · Geofencing en Vivo (Cloud)</title>
   <meta name="description" content="Vitrina pública multi-tenant de LucidFence: geofencing UEM/MDM en tiempo real con datos de ejemplo." />
-  <link rel="canonical" href="./cloud.html" />
-  <link rel="stylesheet" href="design.css" />
+  <link rel="canonical" href="/static/cloud.html" />
   <style>
-    /* Tokens, tipografia y superficies del navegador: /static/design.css.
-       Esta superficie usa el tema OSCURO del producto; antes llevaba su
-       propio :root con otra paleta y otra familia. */
-    :root{--radius:8px}
-    body{margin:0 auto;max-width:1280px;padding:24px}
-    h1{font-size:var(--t-xl);margin:0 0 4px;text-wrap:balance}
-    .sub{color:var(--muted);font-size:var(--t-sm);margin-bottom:16px;text-wrap:pretty}
+    :root{
+      --bg:#08090a; --bg-2:#0c0d0f; --panel:#111214; --panel-2:#16181b;
+      --border:#26282c; --fg:#f7f8f8; --muted:#8a8f98;
+      --green:#4cc38a; --amber:#f2c94c; --red:#ff6b6b; --blue:#4ea7fc;
+      --accent:#5e6ad5; --radius:8px;
+      --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0 auto;max-width:1280px;font-family:var(--font);background:var(--bg);color:var(--fg);padding:24px;line-height:1.45}
+    h1{font-size:20px;margin:0 0 4px;letter-spacing:-.02em;text-wrap:balance}
+    .sub{color:var(--muted);font-size:13px;margin-bottom:16px;text-wrap:pretty}
+    :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
     .bar{display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
     select,input{background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px}
-    .btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:filter .2s,transform .15s}
+    .btn{background:var(--accent);color:#fff;border:0;border-radius:var(--radius);padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:filter .2s,transform .15s}
     .btn:hover{filter:brightness(1.08)}
     .btn:active,.btn-download:active{transform:translateY(1px) scale(.98)}
     .btn:focus-visible,.btn-download:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
     /* CTA primario (issue #110): sin scroll horizontal a 320px; apila en columnas estrechas */
     .cta-primary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px}
-    .btn-download{display:inline-block;background:var(--accent);color:var(--accent-fg);border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:700;text-decoration:none}
+    .btn-download{display:inline-block;background:var(--accent);color:#fff;border-radius:var(--radius);padding:10px 18px;font-size:14px;font-weight:700;text-decoration:none}
     .btn-download:hover{filter:brightness(1.08)}
     .cta-note{color:var(--muted);font-size:13px}
     input::placeholder{color:var(--muted)}
@@ -117,7 +130,7 @@
     <p class="meta">Tu geofencing corre en <b>tu</b> máquina. Tus dispositivos, geocercas, riesgos y CVE se calculan ahí. Nada se envía a nuestra infra. Instala en un comando:</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
       <code style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-2)">brew install adrimg3196/lucidfence/lucidfence</code>
-      <a href="https://github.com/adrimg3196/lucidfence/releases/download/v1.0.1/lucidfence-1.0.1.tar.gz" style="padding:8px 14px;border:0;border-radius:8px;background:var(--accent);color:var(--accent-fg);font-weight:600;text-decoration:none">Descargar v1.0.1</a>
+      <a href="https://github.com/adrimg3196/lucidfence/releases/download/v1.0.1/lucidfence-1.0.1.tar.gz" style="padding:8px 14px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;text-decoration:none">Descargar v1.0.1</a>
       <a href="https://github.com/adrimg3196/lucidfence" style="padding:8px 14px;border:1px solid var(--border);border-radius:8px;color:var(--fg);text-decoration:none">Ver repo</a>
     </div>
     <p class="meta" style="margin-top:10px">Si tu versión de Homebrew no resuelve el tap implícito de 3 partes, dos lineas: <code style="padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg-2)">brew tap adrimg3196/lucidfence</code> y luego <code style="padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg-2)">brew install lucidfence</code>.</p>
@@ -129,7 +142,7 @@
   </p>
 
   <script>
-    const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/cloud-state/data/cloud_state.json";
+    const STATE_URL = "https://raw.githubusercontent.com/adrimg3196/lucidfence/main/data/cloud_state.json";
 
     const BB = {minLat:40.38, maxLat:40.44, minLng:-3.74, maxLng:-3.68};
     function proj(lat,lng){
@@ -282,20 +295,18 @@
       const groups = new Map();
       (devices||[]).forEach(d=>{
         const dept = d.department || "Sin departamento";
-        if(!groups.has(dept)) groups.set(dept, {dept, count:0, inside:0, outside:0, nonCompliant:0, risk:0, riskN:0, lat:0, lng:0, geo:0});
+        if(!groups.has(dept)) groups.set(dept, {dept, count:0, inside:0, outside:0, nonCompliant:0, risk:0, lat:0, lng:0, geo:0});
         const g = groups.get(dept);
         g.count += 1;
         if(d.fence_state === "inside") g.inside += 1;
         if(d.fence_state === "outside") g.outside += 1;
         if(d.compliant === false) g.nonCompliant += 1;
-        // Un device con riesgo null (Sin senal) NO se promedia como 0: se
-        // cuenta aparte para no enmascarar un dispositivo no evaluable.
-        if(d.risk_score != null){ g.risk += Number(d.risk_score); g.riskN += 1; }
+        g.risk += Number(d.risk_score||0);
         if(d.lat != null && d.lng != null){ g.lat += Number(d.lat); g.lng += Number(d.lng); g.geo += 1; }
       });
       return Array.from(groups.values()).map(g=>({
         ...g,
-        avgRisk: g.riskN ? Math.round(g.risk/g.riskN) : null,
+        avgRisk: g.count ? Math.round(g.risk/g.count) : 0,
         lat: g.geo ? g.lat/g.geo : null,
         lng: g.geo ? g.lng/g.geo : null,
       })).sort((a,b)=>b.count-a.count || b.avgRisk-a.avgRisk || a.dept.localeCompare(b.dept));
@@ -371,7 +382,7 @@
         c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r","6");
         c.setAttribute("fill",color); c.setAttribute("stroke","#08090a"); c.setAttribute("stroke-width","1.5");
         const t2 = document.createElementNS(NS,"title");
-        t2.textContent = `${d.name} · ${d.department||"Sin departamento"} · ${d.fence_state} · ${d.risk_score!=null?("riesgo "+d.risk_score):"sin señal de riesgo"}`;
+        t2.textContent = `${d.name} · ${d.department||"Sin departamento"} · ${d.fence_state} · riesgo ${d.risk_score||0}`;
         c.appendChild(t2);
         svg.appendChild(c);
       });
@@ -385,15 +396,13 @@
         const geoApplicable = d.geofence_compliance_applicable===true;
         const geoClass = !geoApplicable || d.geofence_compliant==null ? "unk" : (d.geofence_compliant ? "comp-yes" : "comp-no");
         const geoText = !geoApplicable ? "-" : (d.geofence_compliant==null ? "sin señal" : (d.geofence_compliant ? "ok" : "fuera"));
-        const sev = d.risk_severity || (d.risk_score!=null ? "" : "sin señal");
-        const riskLabel = d.risk_score!=null ? d.risk_score : "—";
         tb.insertAdjacentHTML("beforeend",
           `<tr><td class="tag">${esc(d.device_id)}</td><td>${esc(d.name||"")}</td>`+
           `<td><span class="pill ${esc(platformClass(d.platform))}">${esc(platformLabel(d.platform))}</span></td>`+
           `<td><span class="pill ${st}">${stxt}</span></td>`+
           `<td><span class="pill ${comp}">${ctxt}</span></td>`+
           `<td><span class="pill ${geoClass}" title="${esc(d.geofence_compliance_label||"")}">${geoText}</span></td>`+
-          `<td>${riskLabel}${sev?` <span class="pill unk">${esc(sev)}</span>`:""}</td><td>${esc(d.department||"")}</td></tr>`);
+          `<td>${d.risk_score||0}</td><td>${esc(d.department||"")}</td></tr>`);
       });
       const cve = s.cve_summary||{};
       if(cve.demo || cve.apps_total!=null){

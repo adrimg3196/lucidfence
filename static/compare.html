@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LucidFence vs Intune vs Jamf vs Kandji — Comparativa 2026</title>
+    <meta name="description" content="Comparativa objetiva de geofencing multi-UEM: LucidFence (gratis, local, multi-UEM) vs Microsoft Intune, Jamf Pro y Kandji. DDM, DSC, AMAPI.">
+    <link rel="canonical" href="https://adrimg3196.github.io/lucidfence/compare.html">
+    <meta property="og:title" content="LucidFence vs Intune vs Jamf vs Kandji — Comparativa 2026">
+    <meta property="og:description" content="Comparativa objetiva de geofencing multi-UEM: LucidFence (gratis, local, multi-UEM) vs Microsoft Intune, Jamf Pro y Kandji. DDM, DSC, AMAPI.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/compare.html">
+    <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/static/compare-icon.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LucidFence vs Intune vs Jamf vs Kandji — Comparativa 2026">
+    <meta name="twitter:description" content="Comparativa objetiva de geofencing multi-UEM: LucidFence (gratis, local, multi-UEM) vs Microsoft Intune, Jamf Pro y Kandji. DDM, DSC, AMAPI.">
+    <meta name="twitter:image" content="https://adrimg3196.github.io/lucidfence/static/compare-icon.svg">
+    <link rel="stylesheet" href="/lucidfence/static/design.css">
+</head>
+<body>
+<h1>LucidFence vs Intune vs Jamf vs Kandji</h1>
+<p>Comparativa objetiva de geofencing multi-UEM (2026).</p>
+
+<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; margin: 1em 0;">
+<thead>
+<tr><th>Criterio</th><th>LucidFence</th><th>Microsoft Intune</th><th>Jamf Pro</th><th>Kandji</th></tr>
+</thead>
+<tbody>
+<tr><td>Licencia</td><td><strong>Apache-2.0, gratis, open-source</strong></td><td>Commercial (incluido en Microsoft 365)</td><td>Commercial ($2.50/dispositivo/mes aprox.)</td><td>Commercial (~$4/dispositivo/mes)</td></tr>
+<tr><td>Despliegue</td><td>Local (on-prem o tu propio servidor)</td><td>Cloud (Microsoft)</td><td>Cloud o on-prem (Jamf Pro Server)</td><td>Cloud (SaaS)</td></tr>
+<tr><td>Telemetría</td><td><strong>Cero — sin envío de datos externos</strong></td><td>Telemetry a Microsoft (solo si usas cloud)</td><td>Telemetry a Jamf (si usas cloud)</td><td>Telemetry a Kandji cloud</td></tr>
+<tr><td>UEMs soportados</td><td><strong>Multi-UEM: Apple DDM, Intune, Jamf, Windows DSC, ChromeOS</strong></td><td>Microsoft ecosystem (Apple, Windows, Android)</td><td>Apple-centric (macOS, iOS, iPadOS, tvOS)</td><td>Apple-only (macOS, iOS, iPadOS)</td></tr>
+<tr><td>Geofencing nativo</td><td><strong>Sí — múltiples cercas, políticas por cerca, soar playbooks</strong></td><td>Limitado (requires third-party/Graph)</td><td>Sí — geofences con Smart Groups + triggers</td><td>Sí — location-based restrictions</td></tr>
+<tr><td>Declarativo (Apple DDM)</td><td><strong>Sí — ruteo declarativo DDM en engine</strong></td><td>Partial (DSC para Windows, limits en Apple)</td><td>Sí (MDM push + DDM declarations)</td><td>Sí (MDM + Apple Configurator)</td></tr>
+<tr><td>Declarativo (Windows DSC)</td><td><strong>Sí — DSC config por dispositivo</strong></td><td>Sí (DSC es nativo de Microsoft)</td><td>No nativo</td><td>No nativo</td></tr>
+<tr><td>Declarativo (Android AMAPI)</td><td><strong>En ruta — gate declarativo diseñado para AMAPI</strong></td><td>Sí (Android Enterprise via Intune)</td><td>No (Apple-only)</td><td>No (Apple-only)</td></tr>
+<tr><td>Riesgo/Postura</td><td><strong>Risk engine propio + score por dispositivo</strong></td><td>Microsoft Defender for Endpoint (esp. costoso)</td><td>Limited (Jamf Protect: add-on)</td><td>Limited (compliance basado en MDM)</td></tr>
+<tr><td>Incidentes</td><td><strong>Incident store + webhooks + SOAR playbooks</strong></td><td>Microsoft Purview + Sentinel (add-on)</td><td>Limited (Jamf Protect)</td><td>None nativo</td></tr>
+<tr><tr>Auditoría de acciones</td><td><strong>Acción log por dispositivo + cooldown + dedupe</strong></td><td>Audit logs (Microsoft 365 audit)</td><td>Jamf Pro audit logs</td><td>Limited</td></tr>
+<tr><td>Onboarding</td><td><strong>CLI + worktrees + tests, paralelizable</strong></td><td>Intune portal + Graph API</td><td>Jamf Pro + API + Remote</td><td>Kandji web admin</td></tr>
+<tr><td>Integraciones</td><td><strong>Applivery, FleetDM, Workspace ONE, ChromeOS</strong></td><td>Microsoft ecosystem vasto</td><td>Apple ecosystem</td><td>Apple ecosystem</td></tr>
+<tr><td>Privacidad</td><td><strong>Datos locales — nunca salen del tenant</strong></td><td>Datos en Microsoft cloud</td><td>Datos en Jamf cloud/on-prem</td><td>Datos en Kandji cloud</td></tr>
+<tr><td>Coste para N dispositivos</td><td><strong>$0 siempre (free/open-source)</strong></td><td>Included in M365 plans o Intune standalone</td><td>~$2.50*N/mes</td><td>~$4*N/mes</td></tr>
+</tbody>
+</table>
+
+<h2>Conclusión</h2>
+<p>LucidFence es la única opción de geofencing multi-UEM que es <strong>100% gratis, open-source, local y sin telemetría</strong>. Para organizaciones que buscan control total de sus datos y cero coste por dispositivo, es la alternativa a los MDM comerciales.</p>
+
+<p>Para más detalles técnicos, ver <a href="/lucidfence/">landing principal</a> y el <a href="/lucidfence/static/dashboard.html">dashboard demo</a>.</p>
+
+</body>
+</html>

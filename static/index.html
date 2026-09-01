@@ -1,49 +1,56 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es">
 <head>
+    <link rel="canonical" href="https://adrimg3196.github.io/lucidfence/">
+    <meta property="og:title" content="LucidFence — Geofencing multi-UEM gratis y local">
+    <meta property="og:description" content="Geofencing multi-UEM 100% gratis, open-source y local. Apple DDM, Microsoft Intune, Jamf, Windows DSC en un solo panel. Sin telemetría, sin pricing.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/index.html">
+    <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/static/dashboard-icon.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LucidFence — Geofencing multi-UEM gratis y local">
+    <meta name="twitter:description" content="Geofencing multi-UEM 100% gratis, open-source y local. Apple DDM, Microsoft Intune, Jamf, Windows DSC en un solo panel. Sin telemetría, sin pricing.">
+    <meta name="twitter:image" content="https://adrimg3196.github.io/lucidfence/static/dashboard-icon.svg">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- SEO / social meta (gap #6, tarea t_4a5d2f29). URLs absolutas de project page. -->
-  <link rel="canonical" href="https://adrimg3196.github.io/lucidfence/" />
-  <link rel="alternate" hreflang="es" href="https://adrimg3196.github.io/lucidfence/" />
-  <link rel="alternate" hreflang="x-default" href="https://adrimg3196.github.io/lucidfence/" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/" />
-  <meta property="og:site_name" content="LucidFence" />
-  <meta property="og:title" content="LucidFence: geofencing UEM/MDM gratis y 100% local" />
-  <meta property="og:description" content="LucidFence: local-first, open-source MDM/UEM geofencing with an explainable risk engine. No account, no telemetry - your fleet data stays on your machine. Apache-2.0." />
-  <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/og-image.png" />
-  <meta name="twitter:card" content="summary_large_image" />
   <title>LucidFence: geofencing UEM/MDM gratis y 100% local</title>
   <meta name="description" content="Geofencing y riesgo explicable para flotas UEM/MDM. Corre en tu navegador o en tu infraestructura: sin cuenta, sin telemetría, sin backend propietario." />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233E7A5E'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23fff' stroke-width='2.5' stroke-dasharray='4 3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fff'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="design.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235e6ad5'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23fff' stroke-width='2.5' stroke-dasharray='4 3'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23fff'/%3E%3C/svg%3E" />
   <style>
-    /* Los tokens (paleta, rampa tipografica, fuentes) viven en
-       /static/design.css. Esta pagina se pinta con el tema OSCURO del
-       producto -- carbon calido + verde valla -- porque hasta hoy vendia
-       LucidFence con una marca distinta (indigo sobre casi negro) de la que
-       el admin se encuentra al entrar. Aqui solo quedan los radios de la
-       superficie de marketing y la elevacion neutra. */
-    :root{--radius:8px; --radius-lg:12px;
-      --shadow:0 6px 18px -6px rgba(0,0,0,.55), 0 2px 4px -1px rgba(0,0,0,.4);}
-    *{margin:0;padding:0}
+    /* Tema oscuro único (Page Theme Lock). Acento indigo de marca: uno solo,
+       usado idéntico en toda la página (Color Consistency Lock). Radios: un
+       sistema (botones 8px, contenedores 12px). Sin fuentes externas: stack
+       de sistema real, no un 'Inter' que nunca carga. */
+    :root{
+      --bg:#08090a; --bg-2:#0c0d0f; --panel:#111214; --panel-2:#16181b; --panel-3:#1c1f23;
+      --border:#26282c; --border-strong:#34373d;
+      --fg:#f7f8f8; --fg-2:#d4d6d9; --muted:#8a8f98; --muted-2:#6e737b;
+      --accent:#5e6ad5; --accent-h:#7d87e6; --accent-soft:rgba(94,106,213,.14); --accent-soft-2:rgba(94,106,213,.28);
+      --green:#4cc38a; --red:#ff6b6b;
+      --radius:8px; --radius-lg:12px;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(94,86,175,.12);
+      --font:-apple-system,BlinkMacSystemFont,'Segoe UI Variable Display','Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+      --mono:ui-monospace,'SF Mono','Cascadia Code',Menlo,monospace;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
-    body{line-height:1.55}
+    body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.55;-webkit-font-smoothing:antialiased}
     a{color:inherit;text-decoration:none}
-    .skip-link{position:absolute;left:-9999px;top:0;background:var(--accent);color:var(--accent-fg);padding:10px 16px;z-index:99;border-radius:0 0 var(--radius) 0}
+    code{font-family:var(--mono);font-size:.92em}
+    :focus-visible{outline:2px solid var(--accent-h);outline-offset:3px;border-radius:4px}
+    .skip-link{position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;z-index:99;border-radius:0 0 var(--radius) 0}
     .skip-link:focus{left:0}
     .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-    header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+    header{position:sticky;top:0;z-index:10;background:rgba(8,9,10,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
     .nav{display:flex;align-items:center;justify-content:space-between;height:60px}
     .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.02em}
-    .mark{width:22px;height:22px;border-radius:6px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;flex:none}
+    .mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:grid;place-items:center;flex:none}
     .mark svg{display:block}
     .nav-links{display:flex;gap:26px;font-size:14px;color:var(--muted)}
     .nav-links a{transition:color .2s}
     .nav-links a:hover{color:var(--fg)}
-    .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:var(--accent-fg);padding:10px 18px;border-radius:var(--radius);font-size:14px;font-weight:600;transition:background .2s,transform .15s,border-color .2s}
-    .btn:hover{background:var(--accent-h);color:var(--accent-fg);transform:translateY(-1px)}
+    .btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:14px;font-weight:600;transition:background .2s,transform .15s,border-color .2s}
+    .btn:hover{background:var(--accent-h);transform:translateY(-1px)}
     .btn:active{transform:translateY(1px) scale(.98)}
     .btn.ghost{background:var(--panel-2);border:1px solid var(--border);color:var(--fg)}
     .btn.ghost:hover{background:var(--panel-3);border-color:var(--border-strong)}
@@ -54,27 +61,27 @@
     .hero{padding:88px 0 64px;text-align:center}
     h1{font-size:clamp(38px,6vw,54px);line-height:1.05;letter-spacing:-.03em;font-weight:800;max-width:820px;margin:0 auto 22px;text-wrap:balance}
     h1 em{font-style:normal;color:var(--accent-h)}
-    .sub{font-size:19px;line-height:1.5;color:var(--muted);max-width:560px;margin:0 auto 36px;text-wrap:pretty}
+    .sub{font-size:19px;color:var(--muted);max-width:560px;margin:0 auto 36px;text-wrap:pretty}
     .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
 
-    .trust-band{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:18px 0;font-size:13px;line-height:1.5;color:var(--muted)}
+    .trust-band{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:18px 0;font-size:13px;color:var(--muted)}
     .trust-band .wrap{display:flex;gap:12px 36px;justify-content:center;flex-wrap:wrap}
     .trust-band strong{color:var(--fg-2);font-weight:600}
 
     section{padding:76px 0}
     .sec-head{margin-bottom:44px;max-width:640px}
     .sec-head h2{font-size:clamp(28px,4vw,36px);letter-spacing:-.02em;font-weight:800;text-wrap:balance}
-    .sec-head p{margin-top:12px;color:var(--muted);font-size:16px;line-height:1.6;max-width:56ch;text-wrap:pretty}
+    .sec-head p{margin-top:12px;color:var(--muted);font-size:16px;max-width:56ch;text-wrap:pretty}
 
     /* bento asimétrico: celdas exactas para el contenido, con variación real
        de fondos (visual de producto + celda tintada), no 6 cards clónicas. */
     .bento{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(150px,auto);gap:16px}
     .cell{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;transition:border-color .2s,transform .2s,box-shadow .2s}
     .cell:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:var(--shadow)}
-    .cell h3{font-size:20px;margin-bottom:8px;letter-spacing:-.01em}
+    .cell h3{font-size:16px;margin-bottom:8px;letter-spacing:-.01em}
     .cell p{font-size:14px;color:var(--muted);line-height:1.6;text-wrap:pretty}
     .cell.wide{grid-column:span 2}
-    .cell.tint{background:var(--accent-soft);border-color:var(--accent-soft-2)}
+    .cell.tint{background:linear-gradient(160deg,var(--accent-soft),var(--panel) 70%)}
     .cell.map{grid-row:span 2;display:flex;flex-direction:column;padding:0;overflow:hidden}
     .cell.map .body{padding:20px 24px 0}
     .cell.map svg{width:100%;height:100%;min-height:180px;display:block;margin-top:auto}
@@ -85,22 +92,21 @@
     .price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:stretch}
     .price{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;display:flex;flex-direction:column}
     .price.feat{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-    .price h3{font-size:20px;letter-spacing:-.01em}
-    .price .via{font-size:13px;color:var(--accent);font-weight:600;margin-top:4px}
-    .price .desc{font-size:14px;line-height:1.55;color:var(--muted);min-height:42px;margin:8px 0 18px;text-wrap:pretty}
+    .price h3{font-size:16px;letter-spacing:-.01em}
+    .price .via{font-size:12px;color:var(--accent-h);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .price .desc{font-size:14px;color:var(--muted);min-height:42px;margin:8px 0 18px;text-wrap:pretty}
     .price ul{list-style:none;font-size:14px;color:var(--fg-2);display:flex;flex-direction:column;gap:10px;flex:1}
     .price li{display:flex;gap:10px;align-items:flex-start}
-    .price li::before{content:"";flex:none;width:6px;height:10px;margin:5px 4px 0 2px;
-      border:solid var(--green);border-width:0 1.8px 1.8px 0;transform:rotate(42deg)}
+    .price li::before{content:"✓";color:var(--green);font-weight:700;flex:none}
     .price .btn{margin-top:22px;justify-content:center}
 
-    .cta{background:var(--accent-soft);border:1px solid var(--accent-soft-2);border-radius:var(--radius-lg);padding:52px;text-align:center}
+    .cta{background:linear-gradient(160deg,var(--accent-soft-2),var(--accent-soft) 60%,transparent);border:1px solid rgba(94,106,213,.3);border-radius:var(--radius-lg);padding:52px;text-align:center}
     .cta h2{font-size:clamp(26px,4vw,34px);letter-spacing:-.02em;margin-bottom:14px;text-wrap:balance}
-    .cta p{color:var(--muted);font-size:16px;line-height:1.6;margin:0 auto 28px;max-width:60ch;text-wrap:pretty}
+    .cta p{color:var(--muted);font-size:16px;margin:0 auto 28px;max-width:60ch;text-wrap:pretty}
 
     /* FAQ: lista lado a lado, no cards clónicas */
     .faq-list{display:grid;grid-template-columns:1fr 1fr;gap:36px 48px;max-width:960px}
-    .faq-list h3{font-size:20px;margin-bottom:8px;letter-spacing:-.01em}
+    .faq-list h3{font-size:16px;margin-bottom:8px;letter-spacing:-.01em}
     .faq-list p{font-size:14px;color:var(--muted);line-height:1.65;text-wrap:pretty}
 
     footer{border-top:1px solid var(--border);padding:36px 0;color:var(--muted-2);font-size:13px}
@@ -116,7 +122,10 @@
       section{padding:52px 0}
       .cta{padding:36px 22px}
     }
-    @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+    @media (prefers-reduced-motion: reduce){
+      html{scroll-behavior:auto}
+      *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+    }
   </style>
 </head>
 <body>
@@ -124,7 +133,7 @@
   <header>
     <div class="wrap nav">
       <div class="logo">
-        <span class="mark" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2.2"/><circle cx="7" cy="7" r="1.8" fill="currentColor"/></svg></span>
+        <span class="mark" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#fff" stroke-width="1.6" stroke-dasharray="3 2.2"/><circle cx="7" cy="7" r="1.8" fill="#fff"/></svg></span>
         LucidFence
       </div>
       <nav class="nav-links" aria-label="Secciones">
@@ -173,8 +182,8 @@
                que la vitrina), dibujada inline: cero assets externos. -->
           <svg viewBox="0 0 560 210" role="img" aria-label="Vista del mapa de geocercas con dispositivos dentro y fuera, datos de ejemplo">
             <rect width="560" height="210" fill="var(--bg-2)"/>
-            <circle cx="170" cy="110" r="72" fill="color-mix(in srgb,var(--accent) 10%,transparent)" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 4"/>
-            <circle cx="400" cy="88" r="52" fill="color-mix(in srgb,var(--accent) 8%,transparent)" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <circle cx="170" cy="110" r="72" fill="rgba(94,106,213,.10)" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <circle cx="400" cy="88" r="52" fill="rgba(94,106,213,.08)" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="5 4"/>
             <path d="M 92 178 Q 170 120 262 138 T 452 78" fill="none" stroke="var(--border-strong)" stroke-width="1.6" stroke-dasharray="2 5"/>
             <circle cx="150" cy="96" r="5.5" fill="var(--green)"/>
             <circle cx="196" cy="132" r="5.5" fill="var(--green)"/>
@@ -191,10 +200,6 @@
         <div class="cell">
           <h3>Cumplimiento UEM/MDM</h3>
           <p>Reglas de non-compliant, batería, almacenaje y riesgo; notificación a SOC y webhook de incidente.</p>
-        </div>
-        <div class="cell tint">
-          <h3>SOAR declarativo</h3>
-          <p>4 playbooks frontline (CVE crítico, CVE + fuera de perímetro, no conforme + fuera, EPSS alto) con auditoría por dispositivo (<code>matched_fields</code>).</p>
         </div>
         <div class="cell">
           <h3>IA local (MoA)</h3>
@@ -249,7 +254,7 @@
           <div class="desc">Para equipos que quieren crear un adapter.</div>
           <ul>
             <li>Apache-2.0</li>
-            <li>Multi-UEM por tenant: <strong>Applivery live por defecto</strong>; Intune (Microsoft Graph) y Jamf Pro en modo live al conectar tu token del tenant (caen a simulación sin token). <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/integrations/MULTI_UEM.md" style="color:var(--accent-h)">Matriz por UEM</a> · <a href="https://github.com/adrimg3196/lucidfence/blob/main/docs/comparisons/lucidfence-vs-kandji.md" style="color:var(--accent-h)">Comparativa: LucidFence vs Kandji</a></li>
+            <li>Adapters: Applivery live; Intune/Jamf mock</li>
             <li>Tests locales con <code>python3 tests/run_tests.py</code></li>
             <li><code>lucidfence adapter new</code> para nuevos MDM</li>
             <li>Fork interno sin pedir permiso</li>
