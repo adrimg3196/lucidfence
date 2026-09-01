@@ -321,7 +321,22 @@ if ! install_verify_health "Python"; then
   echo "   Revisa el log de arranque: lucidfence.log" >&2
   exit 1
 fi
-if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+server_process_alive() {
+  local pid="$1"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 1
+  fi
+  if command -v ps >/dev/null 2>&1; then
+    local state
+    state="$(ps -p "$pid" -o state= 2>/dev/null | tr -d ' ' || true)"
+    case "$state" in
+      Z*|z*) return 1 ;;
+    esac
+  fi
+  return 0
+}
+
+if ! server_process_alive "$server_pid"; then
   wait "$server_pid" >/dev/null 2>&1 || true
   rm -f lucidfence.pid
   echo "ERROR: el proceso Python terminó aunque /api/health respondió; puede existir otro servicio en el puerto ${PORT}." >&2
