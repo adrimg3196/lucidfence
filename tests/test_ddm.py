@@ -10,12 +10,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lucidfence.core.ddm import (  # noqa: E402
     build_declarations,
+    build_mock_status_result,
+    build_mock_sync_result,
     build_status_subscriptions,
     parse_status_report,
     supports_ddm,
 )
 from lucidfence.core.adapters.base import MDMAdapter  # noqa: E402
 from lucidfence.core.adapters.jamf import JamfAdapter  # noqa: E402
+from lucidfence.core.adapters.simulation import SimulationAdapter  # noqa: E402
 
 POLICY = {"id": "geofence-hq", "name": "HQ", "severity": "high"}
 URL = "https://mdm.example.com/profiles/geofence-hq.mobileconfig"
@@ -117,6 +120,93 @@ def test_parse_status_report_tolerates_garbage():
     assert parse_status_report(None) == {}
     assert parse_status_report({}) == {}
     assert parse_status_report({"StatusItems": "not-a-dict"}) == {}
+
+
+def test_build_mock_status_result_returns_declarative_shape():
+    r = build_mock_status_result()
+    assert r == {"status_items": [], "device_state": {}}
+
+
+def test_build_mock_sync_result_returns_declarative_shape():
+    r = build_mock_sync_result()
+    assert r == {"jamf_status": 204, "synced": True}
+
+
+def test_mock_builders_are_idempotent():
+    assert build_mock_status_result() == build_mock_status_result()
+    assert build_mock_sync_result() == build_mock_sync_result()
+
+
+def test_mock_status_result_is_not_the_live_readback_shape():
+    """Regresión: ensure the mock does not pretend to carry real device data.
+
+    build_mock_status_result is the shape the engine reads in simulation mode
+    (issue #71): the two keys the engine merges into DeviceState must be present,
+    but their values are empty so no stale data leaks into the state store.
+    """
+    r = build_mock_status_result()
+    assert set(r) == {"status_items", "device_state"}
+    assert r["status_items"] == []
+    assert r["device_state"] == {}
+
+
+def test_mock_sync_result_is_not_the_live_sync_shape():
+    """Regresión: the mock sync returns 204 + synced, never a real device_id."""
+    r = build_mock_sync_result()
+    assert set(r) == {"jamf_status", "synced"}
+    assert r["jamf_status"] == 204
+    assert r["synced"] is True
+    assert "device_id" not in r
+
+
+def test_jamf_mock_ddm_status_returns_declarative_shape():
+    """Regression: JamfAdapter() (live=False) ddm_status routes to
+    build_mock_status_result, not to the generic _execute_mock stub."""
+    adapter = JamfAdapter()
+    device = {"device_id": "dev-ddm-1", "management_id": "mgmt-7",
+              "platform": "ios", "os_version": "17.4.1"}
+    res = adapter.execute(device, "ddm_status", {})
+    assert res["ok"] is True
+    assert res["adapter"] == "jamf"
+    assert res["mode"] == "mock"
+    assert res["action"] == "ddm_status"
+    assert res["status_items"] == []
+    assert res["device_state"] == {}
+    assert res["device_id"] == "dev-ddm-1"
+
+
+def test_jamf_mock_ddm_sync_returns_declarative_shape():
+    """Regression: JamfAdapter() (live=False) ddm_sync routes to
+    build_mock_sync_result (jamf_status=204 + synced=True)."""
+    adapter = JamfAdapter()
+    device = {"device_id": "dev-ddm-2", "management_id": "mgmt-8",
+              "platform": "ios", "os_version": "17.4.1"}
+    res = adapter.execute(device, "ddm_sync", {})
+    assert res["ok"] is True
+    assert res["adapter"] == "jamf"
+    assert res["mode"] == "mock"
+    assert res["action"] == "ddm_sync"
+    assert res["jamf_status"] == 204
+    assert res["synced"] is True
+    assert res["device_id"] == "dev-ddm-2"
+
+
+def test_jamf_mock_ddm_and_simulation_return_the_same_builder_shape():
+    """Cross-adapter regression: both Jamf (mock) and Simulation route DDM
+    mock actions through build_mock_status_result / build_mock_sync_result,
+    so the engine sees one contract regardless of which mock adapter is used."""
+    sim = SimulationAdapter()
+    jamf = JamfAdapter()
+    device = {"device_id": "dev-x", "management_id": "mgmt-x",
+              "platform": "ios", "os_version": "17.4.1"}
+    sim_status = sim.execute(device, "ddm_status", {})
+    jamf_status = jamf.execute(device, "ddm_status", {})
+    sim_sync = sim.execute(device, "ddm_sync", {})
+    jamf_sync = jamf.execute(device, "ddm_sync", {})
+    assert sim_status["status_items"] == jamf_status["status_items"] == []
+    assert sim_status["device_state"] == jamf_status["device_state"] == {}
+    assert sim_sync["jamf_status"] == jamf_sync["jamf_status"] == 204
+    assert sim_sync["synced"] == jamf_sync["synced"] is True
 
 
 def test_adapter_capability_flag_defaults_off():

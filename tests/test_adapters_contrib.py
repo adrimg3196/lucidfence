@@ -15,6 +15,7 @@ from lucidfence.core.adapters import (
     MDMAdapter, SimulationAdapter, AppliveryAdapter, IntuneAdapter,
     JamfAdapter, VALID_ACTIONS, ADAPTER_REGISTRY, build_adapter,
 )
+from lucidfence.core.ddm import build_mock_status_result, build_mock_sync_result
 from lucidfence.core.actions import LiveAdapter  # alias histórico
 
 
@@ -40,11 +41,54 @@ def test_interface_contract():
         check(r["adapter"] == cls.name, f"{cls.name} refleja su name en el resultado")
 
 
-def test_simulation_adapter():
+def test_simulation_adapter_ddm_status_mock_dispatch():
     a = SimulationAdapter()
-    r = a.execute(_fake_device(), "wipe", {"confirm": True})
-    check(r["ok"] is True and r["adapter"] == "simulation", "SimulationAdapter ok")
-    check("command_id" in r, "SimulationAdapter genera command_id")
+    dev = _fake_device()
+    res = a.execute(dev, "ddm_status", {})
+    assert res["ok"] is True
+    assert res["adapter"] == "simulation"
+    assert res["action"] == "ddm_status"
+    # Mock dispatch routes to build_mock_status_result shape (issue #71).
+    assert res["status_items"] == []
+    assert res["device_state"] == {}
+    assert res["mode"] == "mock"
+    assert "note" in res
+
+
+def test_simulation_adapter_ddm_sync_mock_dispatch():
+    a = SimulationAdapter()
+    dev = _fake_device()
+    res = a.execute(dev, "ddm_sync", {})
+    assert res["ok"] is True
+    assert res["adapter"] == "simulation"
+    assert res["action"] == "ddm_sync"
+    # Mock dispatch routes to build_mock_sync_result shape (issue #71).
+    assert res["jamf_status"] == 204
+    assert res["synced"] is True
+    assert res["mode"] == "mock"
+    assert "note" in res
+
+
+def test_simulation_adapter_ddm_mock_returns_the_same_shape_as_builders():
+    a = SimulationAdapter()
+    dev = _fake_device()
+    status_res = a.execute(dev, "ddm_status", {})
+    sync_res = a.execute(dev, "ddm_sync", {})
+    assert status_res["status_items"] == build_mock_status_result()["status_items"]
+    assert status_res["device_state"] == build_mock_status_result()["device_state"]
+    assert sync_res["jamf_status"] == build_mock_sync_result()["jamf_status"]
+    assert sync_res["synced"] == build_mock_sync_result()["synced"]
+
+
+def test_simulation_adapter_nonzero_action_still_returns_base_shape():
+    """Regression: an action not in {ddm_status, ddm_sync} still works."""
+    a = SimulationAdapter()
+    dev = _fake_device()
+    res = a.execute(dev, "lock", {})
+    assert res["ok"] is True
+    assert res["adapter"] == "simulation"
+    assert "status_items" not in res
+    assert "jamf_status" not in res
 
 
 def test_intune_mock():

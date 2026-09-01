@@ -4,7 +4,7 @@ Genera declarations (configurations + activations) y suscripciones de status
 a partir de una `Policy` de LucidFence, para que el enforcement converja en el
 dispositivo en vez de en bucles imperativos del servidor.
 
-LÍMITE HONESTO - DDM no tiene primitivas de geolocalización. El trigger de
+LÍMITE HONESTO — DDM no tiene primitivas de geolocalización. El trigger de
 geocerca sigue en el engine/adapters de LucidFence: el servidor decide QUÉ
 conjunto de declarations activar en cada transición de estado. DDM es la capa
 de configuración/enforcement, no de detección.
