@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Loop verify automático para LucidFence
-# Este script es ejecutado por el cron cada hora
-# Ejecuta verify.py, registra resultado en loop-run-log.md
+# Ejecutado por cron cada hora. Detecta zombies, ejecuta verify, registra en loop-log.
 
 set -e
 cd /Users/adri/lucidfence
@@ -9,36 +8,41 @@ cd /Users/adri/lucidfence
 LOGFILE="docs/internal/loop-run-log.md"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 PY=/Users/adri/lucidfence/.venv/bin/python
+PUERTO_TEST=8799
 
-# Ejecutar verify
-OUTPUT=$($PY scripts/verify.py 2>&1) || true
-
-# Extraer resultados
-if echo "$OUTPUT" | grep -q "APTO (4/4 checks)"; then
-    STATUS="APTO"
-    CHECKS="4/4 checks 통과"
-elif echo "$OUTPUT" | grep -q "FALLO"; then
-    FAILS=$(echo "$OUTPUT" | grep "FALLO" | wc -l)
-    STATUS="FALLO"
-    CHECKS="$FAILS checks en fallo"
+# --- Health-check: detectar y limpiar zombies en puerto de tests ---
+ZOMBIE_PIDS=$(lsof -t -i :$PUERTO_TEST 2>/dev/null | tr '\n' ' ' || true)
+if [ -n "$ZOMBIE_PIDS" ]; then
+    for pid in $ZOMBIE_PIDS; do
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    sleep 1
+    ZOMBIE_PIDS_AFTER=$(lsof -t -i :$PUERTO_TEST 2>/dev/null | tr '\n' ' ' || true)
+    if [ -n "$ZOMBIE_PIDS_AFTER" ]; then
+        ZOMBIE_STATUS="FALLIDO: puerto sigue ocupado"
+    else
+        ZOMBIE_STATUS="LIMPIADO: $ZOMBIE_PIDS matados"
+    fi
+    echo "- $TIMESTAMP | L2 | Health-check zombie | Puerto $PUERTO_TEST: $ZOMBIE_PIDS detectados → kill -9. Resultado: $ZOMBIE_STATUS" >> "$LOGFILE"
 else
-    STATUS="UNKNOWN"
-    CHECKS="desconocido"
+    ZOMBIE_STATUS="OK: puerto libre"
 fi
 
-# Extraer métricas específicas del output
-RUNTIME_LINE=$(echo "$OUTPUT" | grep "Batería runtime" | head -1 || echo "   OK   Batería runtime (en vivo): sin datos")
-SUITE_LINE=$(echo "$OUTPUT" | grep "Suite honesta:" | head -1 || echo "   OK   Suite honesta: sin datos")
-DOCS_LINE=$(echo "$OUTPUT" | grep "Enlaces de docs" | head -1 || echo "   OK   Enlaces de docs: sin datos")
+# --- Ejecutar verify ---
+OUTPUT=$($PY scripts/verify.py 2>&1) || true
 
-# Crear entrada del log
-ENTRY="- $TIMESTAMP | L2 | Loop verify automático (cron) | verify.py: $STATUS ($CHECKS) | "
-ENTRY+="Runtime: $(echo "$RUNTIME_LINE" | sed 's/^[[:space:]]*//'). "
-ENTRY+="Suite honesta: $(echo "$SUITE_LINE" | sed 's/^[[:space:]]*//'). "
-ENTRY+="Docs: $(echo "$DOCS_LINE" | sed 's/^[[:space:]]*//'). "
-ENTRY+="Loop ejecutado automáticamente por cron."
+if echo "$OUTPUT" | grep -q "APTO (4/4 checks)"; then
+    STATUS="APTO"
+elif echo "$OUTPUT" | grep -q "FALLO"; then
+    STATUS="FALLO"
+else
+    STATUS="UNKNOWN"
+fi
 
-# Append al log
-echo "$ENTRY" >> "$LOGFILE"
+RUNTIME_LINE=$(echo "$OUTPUT" | grep "Batería runtime" | head -1 | sed 's/^[[:space:]]*//' || echo "sin datos")
+SUITE_LINE=$(echo "$OUTPUT" | grep "Suite honesta:" | head -1 | sed 's/^[[:space:]]*//' || echo "sin datos")
+DOCS_LINE=$(echo "$OUTPUT" | grep "Enlaces de docs" | head -1 | sed 's/^[[:space:]]*//' || echo "sin datos")
 
-echo "[$TIMESTAMP] Loop verify completado: $STATUS"
+echo "- $TIMESTAMP | L2 | Loop verify (cron) | verify.py: $STATUS | Runtime: $RUNTIME_LINE. Suite honesta: $SUITE_LINE. Docs: $DOCS_LINE. $ZOMBIE_STATUS" >> "$LOGFILE"
+
+echo "[$TIMESTAMP] Loop verify: $STATUS ($ZOMBIE_STATUS)"
