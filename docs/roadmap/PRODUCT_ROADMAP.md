@@ -46,6 +46,12 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 > (demanda inbound, finding de seguridad, decisión del propietario). Los findings
 > de Centinela con severidad entran directos en "Próximo" del ciclo siguiente.
 
+## Explore (hipótesis por validar)
+
+| # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
+|---|------|---------|---------------------|--------|----------|
+| E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+
 ## Bitácora de reconciliación
 
 - **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca
