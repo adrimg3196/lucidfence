@@ -753,15 +753,17 @@ class Engine:
         # Rutea declarative si el adapter soporta DDM y el device está en modo
         # fully_managed/mdm/configurator. El resto del flujo (cooldown, readback,
         # persist) sigue igual — solo cambia la fuente del action result.
-        if (self.adapter and getattr(self.adapter, "supports_ddm", False) and
-                action in ("lock", "wipe", "clear_passcode", "reboot",
-                           "apply_profile")):
+        if self.adapter and getattr(self.adapter, "supports_ddm", False):
             dev_dict = dev.to_dict() if hasattr(dev, "to_dict") else {}
+            supports_dsc = getattr(self.adapter, "supports_dsc", False)
+            supports_amapi = getattr(self.adapter, "supports_amapi_policy", False)
             path = declarative_path_for(
                 dev_dict,
-                supports_ddm=True,
+                supports_ddm=self.adapter.supports_ddm,
+                supports_dsc=supports_dsc,
+                supports_amapi_policy=supports_amapi,
             )
-            if path == "declarative":
+            if path == "declarative" and action in ("lock",):
                 # Delegate to the declarative builder on the adapter.
                 res = self._execute_action(dev, "apply_ddm", params)
                 res["enforcement"] = "declarative"
