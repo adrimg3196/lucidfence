@@ -158,8 +158,18 @@ def _risk_from_engine(eng: Any, devices: list[dict[str, Any]]) -> list[dict[str,
         fence_state = d.get("fence_state", "unknown")
         try:
             r = eng.risk.evaluate(d, fence_state, ctx)
-        except Exception:
-            r = {"risk_score": 0.0, "severity": "low", "reasons": [], "signals": {}}
+        except Exception as _eval_exc:
+            # Defecto #302 (Closes #302): un crash del evaluador NO se presenta
+            # como riesgo bajo. El patrón honesto es "desconocido", nunca "bueno".
+            eng.store.log_event({
+                "ts": eng._now_iso(),
+                "device_id": d.get("device_id", "?"),
+                "kind": "risk_eval_error",
+                "error": f"{type(_eval_exc).__name__}: {_eval_exc}",
+            })
+            r = {"risk_score": None, "severity": "unknown",
+                 "reasons": [f"evaluacion fallida: {type(_eval_exc).__name__}"],
+                 "signals": {}}
         fired = []
         try:
             fired = eng.risk.match_policies(eng.policies, r, d, fence_state)
