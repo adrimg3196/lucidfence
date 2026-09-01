@@ -18,7 +18,7 @@ import json
 import time as _t
 from pathlib import Path
 
-H, P = "127.0.0.1", 8765
+H, P = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 passed = 0
 fails = []
 

@@ -2,6 +2,7 @@
 """Webapp-testing E2E for LucidFence dashboard."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -19,6 +20,10 @@ def test_dashboard_browser_smoke() -> None:
         print("SKIP test_dashboard_browser_smoke: Playwright no instalado "
               f"(instala: pip install playwright && playwright install chromium): {_PLAYWRIGHT_ERROR}")
         return
+    base_url = (
+        f"http://127.0.0.1:{os.environ.get('LUCIDFENCE_TEST_PORT', '8765')}"
+        "/static/dashboard.html"
+    )
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -29,7 +34,7 @@ def test_dashboard_browser_smoke() -> None:
             page.on("requestfailed", lambda req: request_failures.append(f"{req.method} {req.url}: {req.failure}"))
             page.on("response", lambda response: bad_responses.append(f"{response.status} {response.url}") if response.status >= 400 else None)
 
-            page.goto("http://127.0.0.1:8765/static/dashboard.html", wait_until="domcontentloaded")
+            page.goto(base_url, wait_until="domcontentloaded")
             page.wait_for_load_state("load", timeout=30000)
 
             page.wait_for_timeout(1000)
@@ -106,7 +111,7 @@ def test_dashboard_browser_smoke() -> None:
             assert not bad_responses, f"HTTP errors while traversing views: {bad_responses}"
             assert not new_errors, f"Console errors: {new_errors}"
 
-            page.goto("http://127.0.0.1:8765/static/dashboard.html#company", wait_until="load")
+            page.goto(base_url + "#company", wait_until="load")
             page.wait_for_selector("#view-company >> text=Compañía autónoma de geofencing", timeout=10000)
 
             page.screenshot(path="/tmp/lucidfence-dashboard-e2e.png", full_page=False)

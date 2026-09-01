@@ -5,11 +5,12 @@ Uses http.client (no proxy). No pytest dependency.
 """
 import http.client
 import json
+import os
 import sys
 import time
 import urllib.parse
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def req(method, path, body=None, headers=None, cookie=None):
