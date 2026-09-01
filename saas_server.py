@@ -56,6 +56,7 @@ import threading
 import time
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from typing import Any, Optional
@@ -1361,6 +1362,19 @@ def _api_incidents_analytics(ctx: routing.Ctx):
 @api_route("GET", "/api/fences", cap="fence:read")
 def _api_fences_list(ctx: routing.Ctx):
     return {"fences": ctx.eng.status().get("fences", [])}
+
+
+class LucidFenceHTTPServer(ThreadingHTTPServer):
+    """HTTP server whose local bind never depends on reverse DNS."""
+
+    def server_bind(self) -> None:
+        # http.server.HTTPServer.server_bind calls socket.getfqdn(host). On
+        # macOS that reverse lookup can block indefinitely even for 127.0.0.1.
+        # TCPServer performs the real socket bind without any DNS dependency.
+        TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -3073,7 +3087,7 @@ def main():
         if not _cluster_lease.acquire():
             raise RuntimeError("standby: another LucidFence node holds the writer lease")
         print(f"  cluster=active-passive leader={_cluster_lease.node_id}")
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    httpd = LucidFenceHTTPServer((host, port), Handler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
