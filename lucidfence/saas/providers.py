@@ -31,17 +31,13 @@ def save_providers(tdir: Path, providers: list[dict]) -> None:
     os.chmod(path, 0o600)
 
 
-# Toda clave que porte un secreto de conexión. `api_token` es la credencial de
-# Fleet: sin ella aquí, un provider Fleet guardado echaba el token en el GET.
-_SECRET_KEYS = ("secret", "api_key", "api_token", "client_secret",
-                "refresh_token", "password", "token")
+_SECRET_KEYS = ("secret", "api_key", "client_secret", "refresh_token", "password", "token")
 
 
 def mask_provider(p: dict) -> dict:
     """Return a provider dict safe to send to the client (no secret)."""
     out = {k: v for k, v in p.items() if k not in _SECRET_KEYS}
     out["configured"] = bool(p.get("secret") or p.get("api_key")
-                             or p.get("api_token") or p.get("password")
                              or p.get("client_secret") or p.get("refresh_token")
                              or p.get("endpoint") or p.get("tenant_id"))
     return out
@@ -55,163 +51,42 @@ def _tenant_runtime(tdir: Path) -> dict:
         return {}
 
 
-# Catálogo de conectores UEM. Presentación para el wizard, derivada del
-# contrato REAL de cada adapter: cada `key` es exactamente el kwarg que consume
-# su constructor / build_*_from_config (lucidfence/core/adapters/<uem>.py).
-# tests/test_provider_catalog.py verifica esa correspondencia contra
-# inspect.signature — si un adapter cambia de credenciales, ese test cae.
-#
-# Shape de cada field:
-#   key         -> nombre del kwarg del adapter (viaja tal cual en save/test)
-#   label       -> etiqueta humana del input
-#   type        -> "text" | "secret" | "url"  (secret => en _SECRET_KEYS)
-#   placeholder -> ejemplo del formato esperado ("" si no aplica)
-#   help        -> dónde encontrarlo en la consola real de ese UEM
-#   optional    -> True si el adapter tiene default razonable sin él
-#
-# La capacidad de gestión declarativa (DDM/DSC) NO se escribe aquí: `catalog()`
-# la deriva del adapter real en cada lectura (`declarative_support`), para que
-# no exista una copia que pueda divergir de lo que el adapter soporta.
+# Minimal catalog of supported UEM connectors. Kept here (not in the adapters)
+# because it is presentation metadata for the wizard, not engine contract.
 PROVIDER_CATALOG: dict[str, dict] = {
-    "applivery": {
-        "label": "Applivery",
-        "min_permission": "API key con permiso de solo lectura de dispositivos",
-        "fields": [
-            {"key": "api_key", "label": "API key", "type": "secret", "placeholder": "",
-             "help": "Dashboard → Organization → API keys. La organización va implícita en la key."},
-        ],
-    },
-    "intune": {
-        "label": "Microsoft Intune",
-        "min_permission": "App de Entra con permiso de aplicación DeviceManagementManagedDevices.Read.All",
-        "fields": [
-            {"key": "tenant_id", "label": "Tenant ID", "type": "text",
-             "placeholder": "00000000-0000-0000-0000-000000000000",
-             "help": "Entra ID (entra.microsoft.com) → Overview → Tenant ID"},
-            {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "",
-             "help": "Entra ID → App registrations → tu app → Application (client) ID"},
-            {"key": "client_secret", "label": "Client secret", "type": "secret", "placeholder": "",
-             "help": "Entra ID → App registrations → tu app → Certificates & secrets → New client secret (cópialo al crearlo: no vuelve a mostrarse)"},
-        ],
-    },
-    "jamf": {
-        "label": "Jamf Pro",
-        "min_permission": "API role de solo lectura (Read Computers, Read Mobile Devices)",
-        "fields": [
-            {"key": "base_url", "label": "URL de tu Jamf", "type": "url",
-             "placeholder": "https://tuorg.jamfcloud.com",
-             "help": "La URL con la que entras a Jamf"},
-            {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "",
-             "help": "Settings → API roles and clients → New client"},
-            {"key": "client_secret", "label": "Client secret", "type": "secret", "placeholder": "",
-             "help": "Se muestra una sola vez al crear el client"},
-        ],
-        # Issue #89: declarative capability matrix (single source of truth is
-        # the adapter's supports_* flags; this mirrors them for the UI/catalog).
-        "declarative": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False},
-    },
-    "fleet": {
-        "label": "FleetDM",
-        "min_permission": "Usuario API con rol observer (solo lectura)",
-        "fields": [
-            {"key": "base_url", "label": "URL de tu Fleet", "type": "url",
-             "placeholder": "https://fleet.tuorg.com",
-             "help": "La URL donde sirves Fleet (la misma que usas en el navegador)"},
-            {"key": "api_token", "label": "API token", "type": "secret", "placeholder": "",
-             "help": "fleetctl user create --api-only --global-role observer · o en la UI: tu cuenta → Settings → API token"},
-        ],
-    },
-    "workspace_one": {
-        "label": "Workspace ONE UEM",
-        "min_permission": "Cuenta de servicio de solo lectura + REST API key del tenant",
-        "fields": [
-            {"key": "base_url", "label": "URL del servidor API", "type": "url",
-             "placeholder": "https://asXXXX.awmdm.com",
-             "help": "La URL de tu consola Workspace ONE UEM (servidor REST API)"},
-            {"key": "tenant_code", "label": "Tenant code (aw-tenant-code)", "type": "text",
-             "placeholder": "",
-             "help": "Groups & Settings → All Settings → System → Advanced → API → REST API (API key)"},
-            {"key": "username", "label": "Usuario API", "type": "text", "placeholder": "",
-             "help": "Accounts → Administrators: cuenta de servicio con rol de solo lectura"},
-            {"key": "password", "label": "Contraseña", "type": "secret", "placeholder": "",
-             "help": "La contraseña de esa cuenta de servicio (Basic auth de la REST API)"},
-        ],
-    },
-    "chromeos": {
-        "label": "ChromeOS",
-        "min_permission": "OAuth con scope admin.directory.device.chromeos.readonly (Admin SDK)",
-        "fields": [
-            {"key": "client_id", "label": "OAuth client ID", "type": "text", "placeholder": "",
-             "help": "console.cloud.google.com → APIs & Services → Credentials → OAuth client ID (con la Admin SDK API habilitada)"},
-            {"key": "client_secret", "label": "OAuth client secret", "type": "secret", "placeholder": "",
-             "help": "El secret del mismo OAuth client en console.cloud.google.com"},
-            {"key": "refresh_token", "label": "Refresh token", "type": "secret", "placeholder": "",
-             "help": "Del flujo de consentimiento de ese OAuth client con scope admin.directory.device.chromeos.readonly"},
-            {"key": "customer_id", "label": "Customer ID", "type": "text", "placeholder": "my_customer",
-             "optional": True,
-             "help": "Google Admin → Cuenta → Configuración de la cuenta → ID de cliente. Vacío = my_customer (tu propio dominio)"},
-        ],
-    },
-    "windows_conformidad": {
-        "label": "Windows (conformidad)",
-        "min_permission": "App de Entra con permiso de aplicación DeviceManagementManagedDevices.Read.All",
-        "fields": [
-            {"key": "tenant_id", "label": "Tenant ID", "type": "text",
-             "placeholder": "00000000-0000-0000-0000-000000000000",
-             "help": "Entra ID (entra.microsoft.com) → Overview → Tenant ID"},
-            {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "",
-             "help": "Entra ID → App registrations → tu app → Application (client) ID"},
-            {"key": "client_secret", "label": "Client secret", "type": "secret", "placeholder": "",
-             "help": "Entra ID → App registrations → tu app → Certificates & secrets → New client secret (cópialo al crearlo: no vuelve a mostrarse)"},
-        ],
-        # Issue #89: declarative capability matrix (Windows → DSC).
-        "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False},
-    },
-    "simulation": {
-        "label": "Simulación (demo)",
-        "min_permission": "Sin credenciales · flota de ejemplo local",
-        "fields": [],
-    },
+    "applivery": {"label": "Applivery", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "intune": {"label": "Microsoft Intune", "fields": ["tenant_id", "client_id", "client_secret"],
+     "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": True}},
+    "jamf": {"label": "Jamf", "fields": ["client_id", "client_secret"],
+     "declarative": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False}},
+    "fleet": {"label": "FleetDM", "fields": ["api_key", "endpoint"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "workspace_one": {"label": "Workspace ONE", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": True}},
+    "chromeos": {"label": "ChromeOS", "fields": ["client_id", "client_secret", "refresh_token"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "windows_conformidad": {"label": "Windows (conformidad)", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False}},
+    "simulation": {"label": "Simulación (demo)", "fields": [],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+}
+
+PROVIDER_DECLARATIVE_CAPABILITIES: dict[str, dict] = {
+    "jamf": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False},
+    "intune": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": True},
+    "windows_conformidad": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False},
+    "fleet": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "applivery": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "workspace_one": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": True},
+    "chromeos": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "simulation": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
 }
 
 
-def declarative_support(name: str) -> dict:
-    """Capacidad de gestión declarativa de un UEM, DERIVADA de su adapter real.
-
-    Nunca una lista escrita a mano (derivaría con el tiempo): se lee del adapter
-    registrado en ese momento — `supports_ddm` (Apple Declarative Device
-    Management) y `supports_dsc` (Windows DSC v3). Cambiar la flag de un adapter
-    cambia el catálogo en el mismo commit. Mismo principio que el test-verdad de
-    los fields del wizard (tests/test_provider_catalog.py).
-
-    Un UEM sin adapter registrado devuelve todo False: no se promete capacidad
-    que nadie implementa.
-    """
-    from lucidfence.core.adapters import ADAPTER_REGISTRY
-
-    cls = ADAPTER_REGISTRY.get(name)
-    ddm = bool(getattr(cls, "supports_ddm", False))
-    dsc = bool(getattr(cls, "supports_dsc", False))
-    return {"supported": ddm or dsc, "ddm": ddm, "dsc": dsc}
-
-
 def catalog() -> list[dict]:
-    """Return the list of UEM connectors an admin can connect.
-
-    Each entry: {name, label, min_permission, fields, field_keys, declarative}.
-    `fields` is the rich per-UEM schema (see PROVIDER_CATALOG); `field_keys` is
-    the flat list of key names for consumers that only need the wire keys;
-    `declarative` is derived live from the adapter (see `declarative_support`),
-    so the catalog can never promise a declarative path the adapter lacks.
-    """
+    """Return the list of UEM connectors an admin can connect."""
     return [
-        {
-            "name": name,
-            "label": meta["label"],
-            "min_permission": meta.get("min_permission", ""),
-            "fields": meta["fields"],
-            "field_keys": [f["key"] for f in meta["fields"]],
-            "declarative": declarative_support(name),
-        }
+        {"name": name, "label": meta["label"], "fields": meta["fields"]}
         for name, meta in PROVIDER_CATALOG.items()
     ]

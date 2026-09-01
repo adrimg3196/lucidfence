@@ -27,39 +27,15 @@ from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence,
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
+from lucidfence.core.declarative import declarative_path_for
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
-from lucidfence.core.risk_levels import count_high_risk
-from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
-from lucidfence.core.notifier import IncidentFanoutNotifier
 from lucidfence.core import product as _product_mod
 from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 from lucidfence.core.osquery_posture import OsqueryPostureProvider
 from lucidfence.core.location_integrity import assess as assess_location_integrity
-
-
-def _tag_route(res: Any, action: str, declarative: Optional[str],
-               effective_dry: bool) -> Any:
-    """Marca en el resultado la vía por la que salió la orden (auditable).
-
-    `enforcement` es "declarative" o "imperative" en TODO resultado despachado;
-    en el declarativo se conserva además la acción de política pedida
-    (`requested_action`), porque el adapter devuelve la declarativa.
-    """
-    if not isinstance(res, dict):
-        return res
-    res["enforcement"] = "declarative" if declarative else "imperative"
-    if declarative:
-        res["requested_action"] = action
-        # `apply_ddm` es offline (construye las declarations, no las sube) y no
-        # marca `dry_run`. Sin esto, un lock declarativo en observe quedaría
-        # registrado como ejecutado. La marca viene del gate del engine, que es
-        # quien sabe que la orden no debía salir, no del adapter.
-        if effective_dry:
-            res.setdefault("dry_run", True)
-    return res
 
 
 def _policy_kwargs(d: dict) -> dict:
@@ -108,11 +84,6 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
-        # Playbooks SOAR del tenant (REQ §5): builtin del producto + los del
-        # tenant persistidos en <data_dir>/soar_playbooks.json. El engine los
-        # fusiona en cada ciclo; un playbook roto se salta (auditado).
-        from lucidfence.core.soar_playbook_store import TenantPlaybookStore
-        self.soar_store = TenantPlaybookStore(data_dir=self.data_dir, builtin=DEFAULT_PLAYBOOKS)
         # Wire the incident lifecycle notifiers if configured: Slack/Teams
         # (incident_webhook_url, legacy) plus the multi-channel list
         # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
@@ -284,9 +255,7 @@ class Engine:
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
             noncompliant = sum(1 for d in devices if d.get("compliant") is False)
-            # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo.
-            high_risk = count_high_risk(devices, 70)
-            unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
+            high_risk = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
             lines = [
                 f"Resumen LucidFence — {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
                 "",
@@ -294,13 +263,10 @@ class Engine:
                 f"Fuera de geocerca: {outside}",
                 f"Non-compliant: {noncompliant}",
                 f"Riesgo alto (>=70): {high_risk}",
-                f"Riesgo desconocido (sin señal): {unknown_risk}",
                 "",
                 "Dispositivos en riesgo:",
             ]
             for d in sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:10]:
-                if d.get("risk_score") is None:
-                    continue  # no inflar lo desconocido en el ranking de riesgo
                 lines.append(
                     f"  - {d.get('name') or d.get('device_id')}: riesgo {d.get('risk_score') or 0} "
                     f"({d.get('fence_state')})"
@@ -461,9 +427,6 @@ class Engine:
                     storage_total_gb=posture.get("storage_total_gb", rep.storage_total_gb),
                     storage_free_gb=posture.get("storage_free_gb", rep.storage_free_gb),
                     encryption_enabled=posture.get("encryption_enabled", rep.encryption_enabled),
-                    # La observación gana arriba; aquí se conserva intacto lo que
-                    # el UEM afirmó, para poder contrastarlas (second_opinion.py).
-                    uem_claimed_encryption=rep.encryption_enabled,
                     # DDM/UEM readback: carry None as None (unknown never fabricated).
                     lockdown_mode=rep.lockdown_mode,
                     supervised=rep.supervised,
@@ -475,8 +438,6 @@ class Engine:
                     enrolled_at=rep.enrolled_at,
                     device_tag=rep.device_tag,
                     geofence_compliance=rep.geofence_compliance,
-                    management_mode=rep.management_mode,
-                    ownership=rep.ownership,
                     location_integrity=integrity,
                     provider_refs=dict(rep.raw.get("provider_refs") or {}),
                     posture_source=posture.get("posture_source"),
@@ -489,21 +450,6 @@ class Engine:
                     snap = geo_snap(rep, fence_state=fence_state, fence_id=inside_fence)
                     if isinstance(snap, dict):
                         ds.geofence_compliance = snap
-                # Carry the prior persisted risk verdict (headline + EXPLAIN)
-                # into the freshly-built state. A transient evaluator crash in
-                # the block below must NOT overwrite a previously-good verdict
-                # with None — the cycle only refreshes these fields when the
-                # evaluator succeeds, so the prior values stay authoritative
-                # until then (the GET path falls back to a live recompute +
-                # honest sentinel if the prior verdict is also absent).
-                if prev is not None:
-                    ds.risk_score = prev.risk_score
-                    ds.risk_severity = prev.risk_severity
-                    ds.risk_reasons = prev.risk_reasons
-                    ds.risk_matched_policies = prev.risk_matched_policies
-                    ds.risk_evaluated_at = prev.risk_evaluated_at
-                    ds.risk_provenance = prev.risk_provenance
-                    ds.risk_verified = prev.risk_verified
                 # --- MOAT: riesgo compuesto + políticas ---
                 risk_ctx = {
                     "hour": self._ctx_hour(),
@@ -524,10 +470,8 @@ class Engine:
                 try:
                     risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
                 except Exception as _eval_exc:
-                    # Defensive: a crashed evaluator must not break the whole
-                    # cycle. Leave the persisted verdict explaining fields as-is
-                    # (None on first cycle) so the GET path falls back to a live
-                    # recompute + honest sentinel rather than masking the failure.
+                    # Defecto #302 (Closes #302): un crash del evaluador NO se presenta
+                    # como riesgo bajo. El patrón honesto es "desconocido", nunca "bueno".
                     self.store.log_event({
                         "ts": now_iso(), "device_id": rep.device_id,
                         "kind": "risk_eval_error",
@@ -548,8 +492,17 @@ class Engine:
                     ds.risk_verified = risk.get("verified")
                     fired_policies = _fired
                 else:
-                    # Evaluator crashed: keep prior persisted fields so telemetry
-                    # is not clobbered; the GET sentinel covers the display.
+                    # Crashed evaluator: keep previous persisted verdict if available
+                    # (don't clobber a prior good verdict with None — Defect 2).
+                    prev = states_prev.get(rep.device_id)
+                    if prev is not None and hasattr(prev, "risk_score"):
+                        ds.risk_score = prev.risk_score
+                        ds.risk_severity = prev.risk_severity
+                        ds.risk_reasons = prev.risk_reasons
+                        ds.risk_matched_policies = prev.risk_matched_policies
+                        ds.risk_evaluated_at = prev.risk_evaluated_at
+                        ds.risk_provenance = prev.risk_provenance
+                        ds.risk_verified = prev.risk_verified
                     fired_policies = []
                 for fp in fired_policies:
                     for act in fp.get("actions", []):
@@ -613,18 +566,14 @@ class Engine:
                 continue
         self.last_run = now_iso()
 
-        # ---- SOAR: evaluate orchestration playbooks per device --------------\n        # Combina los playbooks builtin del producto con los del tenant (REQ §5).
-        # Cada playbook matcheado produce acciones UEM. Las acciones destructivas
-        # (lock/wipe/clear_passcode/reboot) son SIEMPRE human-gated: en lugar de
-        # ejecutarlas, se emiten como handoff (diseño §5) y quedan registradas
-        # para aprobación manual en la consola; nunca se ejecutan de forma
-        # autónoma (REQ §5, design §2.3 / §5).
+        # ---- SOAR: evaluate orchestration playbooks per device --------------
+        # Each matched playbook yields UEM actions executed via the same adapter
+        # (and cooldown/dry_run machinery) used for geofence actions.
         soar_ctx = {"cycle": self.cycle_count, "on_error": None}
-        playbooks = self.soar_store.all_playbooks()
         for ds in states_cur.values():
             dev_dict = ds.to_dict()
             try:
-                execs = evaluate_soar(dev_dict, playbooks, soar_ctx)
+                execs = evaluate_soar(dev_dict, DEFAULT_PLAYBOOKS, soar_ctx)
             except Exception:
                 execs = []
             for ex in execs:
@@ -639,46 +588,6 @@ class Engine:
                             "device_id": ds.device_id,
                             "playbook_id": ex.get("playbook_id"),
                             "note": act.get("params", {}).get("reason", ""),
-                        })
-                        continue
-                    if aname in self.DESTRUCTIVE_ACTIONS:
-                        # Human-gate: handoff, no ejecución autónoma.
-                        self.store.log_event({
-                            "ts": now_iso(), "kind": "soar_handoff",
-                            "device_id": ds.device_id,
-                            "playbook_id": ex.get("playbook_id"),
-                            "playbook_name": ex.get("name"),
-                            "action": aname,
-                            "severity": ex.get("severity", "high"),
-                            "matched_fields": ex.get("matched_fields", []),
-                            "params": act.get("params", {}) or {},
-                            "human_gate": True,
-                            "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
-                        })
-                        # Registrar el handoff como su PROPIA entrada en la
-                        # superficie por ciclo del SOC. NO se muta la acción
-                        # previa (eso etiquetaba mal locate/notify como el
-                        # handoff) y NO hay guarda condicional (si el handoff es
-                        # la PRIMERA acción del ciclo — CVE crítico + fuera de
-                        # perímetro —, la guarda `if self._cycle_actions` lo
-                        # descartaba en silencio, dejando cero rastro en la
-                        # lista del ciclo). executed/ok=False: un handoff no
-                        # cuenta como ejecutado en stats ni arma cooldown (al
-                        # aprobar el humano la orden debe poder salir ya).
-                        self._cycle_actions.append({
-                            "ts": now_iso(),
-                            "device_id": ds.device_id,
-                            "action": aname,
-                            "soar": True,
-                            "soar_handoff": True,
-                            "human_gate": True,
-                            "playbook_id": ex.get("playbook_id"),
-                            "playbook_name": ex.get("name"),
-                            "severity": ex.get("severity", "high"),
-                            "executed": False,
-                            "ok": False,
-                            "dry_run": self.dry_run,
-                            "note": "SOAR human-gate: pendiente de aprobacion manual",
                         })
                         continue
                     if self._dedupe_action(
@@ -719,51 +628,6 @@ class Engine:
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
 
-    def _declarative_route(self, dev: Any, action: str, params: dict, *, dry_run: bool = False) -> Optional[dict]:
-        """Issue #89 (single-provider): route an eligible action through the
-        declarative channel before the blind imperative command.
-
-        Consults the adapter's ``supports_ddm``/``supports_dsc``/
-        ``supports_amapi_policy`` flags together with the device's reported
-        ``management_mode``/``ownership`` via the shared gate, and ALSO the
-        DDM-capability gate (#205). When either says declarative we build the
-        declaration through the adapter's builder (``_apply_ddm`` / ``_apply_dsc``
-        / ``_apply_amapi``) and tag the result with ``enforcement="declarative"``,
-        ``declarative_subaction`` and ``original_action``. The imperative
-        command (lock/wipe/...) is NOT issued.
-
-        Returns the declarative result, or ``None`` when the device is not
-        eligible so the caller keeps its imperative fallback. Never raises.
-        """
-        adapter = self.adapter
-        if adapter is None:
-            return None
-        supports = (
-            bool(getattr(adapter, "supports_ddm", False)),
-            bool(getattr(adapter, "supports_dsc", False)),
-            bool(getattr(adapter, "supports_amapi_policy", False)),
-        )
-        if not any(supports):
-            return None
-        sub = resolve_declarative_subaction(
-            dev, action, params or {},
-            supports_ddm=supports[0], supports_dsc=supports[1],
-            supports_amapi_policy=supports[2], adapter=adapter,
-        )
-        if sub is None:
-            return None
-        decl_params = dict(params or {})
-        if "profile_url" not in decl_params:
-            decl_params.setdefault("profile_url", getattr(adapter, "ddm_profile_url", "") or "")
-        res = adapter.execute(dev, sub, decl_params, dry_run=dry_run)
-        if isinstance(res, dict):
-            res["enforcement"] = "declarative"
-            res["declarative_path"] = "declarative"
-            res["declarative_subaction"] = sub
-            res["original_action"] = action
-            res["requested_action"] = action
-        return res
-
     def _execute_action(self, dev: Any, action: str, params: dict) -> dict:
         """Route a remediation command to the right UEM provider.
 
@@ -801,61 +665,22 @@ class Engine:
         if not effective_dry and self.live_actions is not None and action not in self.live_actions:
             effective_dry = True
         refs = getattr(dev, "provider_refs", None)
-        multi = self.orchestrator is not None and isinstance(refs, dict) and bool(refs)
-        # Multi-UEM: el orquestador ejecuta el transporte, pero la DECISIÓN de
-        # ruta declarativa vs imperativa la toma el engine (issue #89) sobre el
-        # dispositivo rico, usando el adapter de la ref (route_adapter) y sus
-        # flags supports_*. El orquestador recibe wire_action = (subacción
-        # declarativa) o action, y el engine etiqueta el resultado con
-        # enforcement vía _tag_route. Se delega el resto del gating (wipe,
-        # observe/enforce, allow-list, cooldown, audit) al orquestador.
-        if multi:
-            first_provider, first_id = next(iter(refs.items()))
-            route_adapter = self.orchestrator._bindings.get(first_provider)
-            route_cls = None
-            if route_adapter is not None:
-                from lucidfence.core.adapters import ADAPTER_REGISTRY
-                route_cls = ADAPTER_REGISTRY.get(route_adapter.name)
-            supports = (
-                bool(getattr(route_cls, "supports_ddm", False)) if route_cls else False,
-                bool(getattr(route_cls, "supports_dsc", False)) if route_cls else False,
-                bool(getattr(route_cls, "supports_amapi_policy", False)) if route_cls else False,
-            )
-            declarative = resolve_declarative_subaction(
-                dev, action, params or {},
-                supports_ddm=supports[0], supports_dsc=supports[1],
-                supports_amapi_policy=supports[2], adapter=route_cls,
-            )
-            wire_action = declarative or action
+        if self.orchestrator is not None and isinstance(refs, dict) and refs:
             # The orchestrator expects a NormalizedDevice-shaped input
             # (provider + provider_device_id + provider_refs); DeviceState only
             # keeps provider_refs, so bridge the first ref into those fields.
+            first_provider, first_id = next(iter(refs.items()))
             bridge = {
                 "provider": first_provider,
                 "provider_device_id": first_id,
                 "provider_refs": refs,
-                "platform": getattr(dev, "platform", None),
-                "os_version": getattr(dev, "os_version", None),
-                "management_mode": getattr(dev, "management_mode", None),
-                "ownership": getattr(dev, "ownership", None),
             }
-            res = self.orchestrator.execute(bridge, wire_action, params or {}, dry_run=effective_dry)
+            res = self.orchestrator.execute(bridge, action, params or {}, dry_run=effective_dry)
             if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
-                return _tag_route(res, action, declarative, effective_dry)
-        # Single-provider (issue #89): ruta declarativa antes de la imperativa.
-        # El gate (core.declarative) consulta management_mode/ownership del
-        # dispositivo y los flags supports_* del adapter. Si dice "declarative"
-        # construye la declaration (DDM/DSC/AMAPI) y etiqueta el resultado; el
-        # comando imperativo de bloqueo no se emite. "unknown"/"imperative" ->
-        # cae al camino de siempre.
+                return res
         if self.adapter is not None:
-            decl = self._declarative_route(dev, action, params or {}, dry_run=effective_dry)
-            if decl is not None:
-                return decl
-            return _tag_route(
-                self.adapter.execute(dev, action, params or {}, dry_run=effective_dry),
-                action, None, effective_dry)
-        return {"ok": True, "dry_run": True, "simulated": True, "enforcement": "imperative",
+            return self.adapter.execute(dev, action, params or {}, dry_run=effective_dry)
+        return {"ok": True, "dry_run": True, "simulated": True,
                 "action": action, "device_id": getattr(dev, "device_id", "")}
 
     def _dedupe_action(self, ds: DeviceState, action: str, fence_id, trigger: str,
@@ -913,10 +738,43 @@ class Engine:
         spammed, but never silently drops the command: if it is still inside the
         cooldown window the result clearly says so (the UI shows a cooldown
         notice). Records the operator + reason for the audit trail.
+
+        Declarative routing gate (issue #89): when the adapter exposes a DDM
+        capability (``supports_ddm``) and the device's management_mode is
+        declarative-eligible, the action is routed through the declarative
+        builder (``_apply_ddm``) instead of the blind imperative execute path.
+        The result is tagged ``enforcement="declarative"`` so the caller can
+        distinguish the path taken.
         """
         if action not in VALID_ACTIONS:
             return {"ok": False, "error": "accion no valida", "valid": sorted(VALID_ACTIONS)}
         now = _time.time()
+        # Declarative routing gate (issue #89): consult DDM capability + device mode.
+        # Rutea declarative si el adapter soporta DDM y el device está en modo
+        # fully_managed/mdm/configurator. El resto del flujo (cooldown, readback,
+        # persist) sigue igual — solo cambia la fuente del action result.
+        if (self.adapter and getattr(self.adapter, "supports_ddm", False) and
+                action in ("lock", "wipe", "clear_passcode", "reboot",
+                           "apply_profile")):
+            dev_dict = dev.to_dict() if hasattr(dev, "to_dict") else {}
+            path = declarative_path_for(
+                dev_dict,
+                supports_ddm=True,
+            )
+            if path == "declarative":
+                # Delegate to the declarative builder on the adapter.
+                res = self._execute_action(dev, "apply_ddm", params)
+                res["enforcement"] = "declarative"
+                res["declarative_subaction"] = "apply_ddm"
+                res["original_action"] = action
+                res["ts"] = now_iso()
+                res["fence_id"] = dev.inside_fence
+                res["trigger"] = "operator"
+                res["policy_name"] = "comando manual (declarativo)"
+                res["operator"] = operator
+                res["manual"] = True
+                self.store.log_action(res)
+                return res
         # Destructive cooldown check (manual commands honor the same guardrail).
         if action in self.DESTRUCTIVE_ACTIONS and self.action_cooldown_seconds > 0:
             last = self.store.last_action_at(dev.device_id, action)
@@ -966,6 +824,7 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
+        fence = self.fence_by_id.get(fence_id) if fence_id and fence_id != "none" else None
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -978,15 +837,6 @@ class Engine:
             # first sighting; only act on enter if a fence is known
             if state != "inside":
                 when = None
-        if state == "inside":
-            fence = self.fence_by_id.get(fence_id)
-        else:
-            # Al salir (o perder señal), cur_key es "None:outside": la cerca
-            # cuyo on_exit/on_unknown importa es la que se ABANDONA — la del
-            # estado anterior. Resolver por cur_key hacía que esas acciones
-            # no dispararan JAMAS (el bug que motivó este bloque).
-            prev_fence_id = prev.inside_fence if prev else None
-            fence = self.fence_by_id.get(prev_fence_id) if prev_fence_id else None
         if fence is None:
             return fired
         for act in fence.actions:
@@ -1190,55 +1040,6 @@ class Engine:
             "wipe_allowlist_size": len(self.wipe_allowlist),
         }
 
-    def _egress_status(self) -> dict:
-        """Summarize the tenant's outbound webhook egress policy for the UI.
-
-        Reads the policy straight from the engine config (which is overlaid from
-        integration.json by _apply_tenant_integration). Defaults to `permissive`
-        so existing deployments are never reported as broken.
-        """
-        raw = (self.config or {}).get("egress_policy") or {}
-        mode = str(raw.get("mode", "permissive")).strip().lower()
-        if mode != "strict":
-            return {"mode": "permissive", "allow": [], "allow_private": False}
-        allow = raw.get("allow") or []
-        if not isinstance(allow, list):
-            allow = []
-        return {
-            "mode": "strict",
-            "allow": [str(a) for a in allow if isinstance(a, str)],
-            "allow_private": bool(raw.get("allow_private", False)),
-        }
-
-    def _webhook_delivery_status(self) -> dict:
-        """Latest outgoing-webhook delivery outcome, including egress denials.
-
-        Surfaces the most recent notifier result so the dashboard can show a
-        `denied_by_egress_policy` outcome explicitly (never silent — criterion
-        #3 of the product decision t_316b8ec5). Best-effort: never raises.
-        """
-        notifier = getattr(self.incidents, "notifier", None)
-        if notifier is None:
-            return {"configured": False, "last_result": None}
-        last = getattr(notifier, "last_result", None)
-        if isinstance(notifier, IncidentFanoutNotifier):
-            # Fan-out: report the most recent per-channel snapshot.
-            results = (last or {}).get("results") if isinstance(last, dict) else None
-            return {
-                "configured": True,
-                "fanout": True,
-                "last_result": last,
-                "channels": [
-                    {
-                        "channel": (r.get("channel") if isinstance(r, dict) else None),
-                        "ok": (r.get("ok") if isinstance(r, dict) else None),
-                        "result": (r.get("last_result") if isinstance(r, dict) else None),
-                    }
-                    for r in (results or [])
-                ],
-            }
-        return {"configured": True, "fanout": False, "last_result": last}
-
     # ---- loop ------------------------------------------------------------
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -1260,11 +1061,6 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
-        # Hora LOCAL del servidor, a propósito: en un producto local-first el
-        # engine corre donde el admin, y "fuera de horario" significa SU
-        # horario. Caveat asumido: en un despliegue cloud (runner UTC) la
-        # señal off_hours se desplaza por el offset del huso; si eso importa,
-        # la corrección va en config, no aquí en silencio.
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:
@@ -1280,8 +1076,6 @@ class Engine:
             "interval_seconds": self.interval,
             "dry_run": self.dry_run,
             "enforcement": self.enforcement_status(),
-            "egress_policy": self._egress_status(),
-            "webhook_delivery": self._webhook_delivery_status(),
             "stats": self.last_stats,
             "fences": [
                 {
