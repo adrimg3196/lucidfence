@@ -1,0 +1,265 @@
+
+## Triaje 2026-09-01 15:21 UTC
+
+- #376 [P1 — crítico] [general] → empresa-dev — failed_to_assign: 🚨 cloud-state dead-man: 2026-09-01
+- #372 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Acceso, no capacidad: la segunda opinión no tiene UI y el wi
+- #326 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO: landing de comparación 'LucidFence vs Intune/Jamf/Kandj
+- #317 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO&Docs: consulta CTO/Product — prioridad #189 + estrategia
+- #310 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: QA: gap ruteo declarativo en engine (#89) + control HMAC saa
+- #307 [P4 — backlog] [general] → empresa-dev — failed_to_assign: karpathy-pass: hallazgos pendientes de verificación adversar
+- #302 [P4 — backlog] [general] → empresa-dev — failed_to_assign: risk: fallo de evaluación se presenta en silencio como 0/low
+- #260 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P2][ux] Línea temporal explicable con confianza y f
+- #259 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][webhooks] Firma, idempotencia y protección anti
+- #258 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Geofencing por estado derivado sin con
+- #257 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Transparencia, retención y minimizació
+- #256 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][byod] Validar límites de datos entre dispositiv
+- #255 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P2][dex] Señales DEX útiles sin vigilancia ni ranki
+- #254 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ocsf] Eventos OCSF versionados para riesgo, geo
+- #253 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][R][ai-governance] Investigación: procedencia y SBOM
+- #252 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ai-governance] Inventario local de capacidades 
+- #251 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][lifecycle] Previsión verificable de fin de sopo
+- #250 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][interop] Emitir y consumir señales CAEP/SSF de 
+- #249 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Postura de salida de datos y ser
+- #248 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][crypto] Inventario de cripto-agilidad y prepara
+- #247 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Simular y exportar restricciones
+- #246 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Ingesta local de CSAF/VEX y aplicabilidad
+- #245 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][remediation] Validar con evidencia si una remed
+- #244 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Priorizar KEV + EPSS + criticidad + expos
+- #243 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][policy] Compilador portátil de políticas con di
+- #242 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][security] Auditor de mínimo privilegio para cre
+- #241 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Panel neutral de riesgo normalizado c
+- #240 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Detectar políticas e intenciones cont
+- #239 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][identity] Reconciliación de identidad y linaje 
+- #238 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Sobre común de atestación Apple, Android
+- #237 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Frescura, nonce y semántica fail-unknown
+- #236 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][reliability] Fixtures offline y replay de fallo
+- #235 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][agents] Política segura de herramientas, trazas
+- #234 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P0][governance] Evidencia nocturna T4 y manifiesto 
+- #233 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][supply-chain] Procedencia verificable de releas
+- #232 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES] Backlog tecnológico anual sin fechas — índice y con
+- #207 [P4 — backlog] [general] → adrimg3196 — already_assigned: 🤖 DevOps/Release bot — estado releases/CI/deploy 2026-08-21 
+- #118 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Merge train — cola compartida del equipo de agentes
+- #112 [P4 — backlog] [general] → empresa-dev — failed_to_assign: daily-analysis: cuerpo del informe con \n literales
+- #111 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Informe diario 2026-08-14
+- #110 [P4 — backlog] [general] → empresa-dev — failed_to_assign: P0: retirar testimonios ficticios y métricas de tracción no 
+- #109 [P4 — backlog] [general] → empresa-dev — failed_to_assign: PM → Director: backlog priorizado tras el triage de las 29 i
+- #90 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Investigar si Intune y Workspace ONE exponen passthrough del
+- #88 [P4 — backlog] [general] → empresa-dev — failed_to_assign: AMAPI: ningún adapter rellena `management_mode`/`ownership`,
+- #79 [P4 — backlog] [general] → empresa-dev — failed_to_assign: data/cloud_tenants/** es estado de runtime versionado: decid
+- #78 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Rebasar los PRs abiertos que quedaron bloqueados por el dead
+- #73 [P4 — backlog] [general] → empresa-dev — failed_to_assign: osquery fase 2: pack de despliegue, ingestión JSONL por lote
+- #72 [P4 — backlog] [general] → empresa-dev — failed_to_assign: docs: matriz de soporte declarativa unificada (DDM + DSC + A
+- #71 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: Las acciones DDM en modo mock devuelven un mock genérico sin
+- #65 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Add support for Apple Business Manager and School Manager fo
+
+## Triaje 2026-09-01 15:21 UTC
+
+- #376 [P1 — crítico] [general] → empresa-dev — failed_to_assign: 🚨 cloud-state dead-man: 2026-09-01
+- #372 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Acceso, no capacidad: la segunda opinión no tiene UI y el wi
+- #326 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO: landing de comparación 'LucidFence vs Intune/Jamf/Kandj
+- #317 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO&Docs: consulta CTO/Product — prioridad #189 + estrategia
+- #310 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: QA: gap ruteo declarativo en engine (#89) + control HMAC saa
+- #307 [P4 — backlog] [general] → empresa-dev — failed_to_assign: karpathy-pass: hallazgos pendientes de verificación adversar
+- #302 [P4 — backlog] [general] → empresa-dev — failed_to_assign: risk: fallo de evaluación se presenta en silencio como 0/low
+- #260 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P2][ux] Línea temporal explicable con confianza y f
+- #259 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][webhooks] Firma, idempotencia y protección anti
+- #258 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Geofencing por estado derivado sin con
+- #257 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Transparencia, retención y minimizació
+- #256 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][byod] Validar límites de datos entre dispositiv
+- #255 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P2][dex] Señales DEX útiles sin vigilancia ni ranki
+- #254 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ocsf] Eventos OCSF versionados para riesgo, geo
+- #253 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][R][ai-governance] Investigación: procedencia y SBOM
+- #252 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ai-governance] Inventario local de capacidades 
+- #251 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][lifecycle] Previsión verificable de fin de sopo
+- #250 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][interop] Emitir y consumir señales CAEP/SSF de 
+- #249 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Postura de salida de datos y ser
+- #248 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][crypto] Inventario de cripto-agilidad y prepara
+- #247 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Simular y exportar restricciones
+- #246 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Ingesta local de CSAF/VEX y aplicabilidad
+- #245 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][remediation] Validar con evidencia si una remed
+- #244 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Priorizar KEV + EPSS + criticidad + expos
+- #243 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][policy] Compilador portátil de políticas con di
+- #242 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][security] Auditor de mínimo privilegio para cre
+- #241 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Panel neutral de riesgo normalizado c
+- #240 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Detectar políticas e intenciones cont
+- #239 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][identity] Reconciliación de identidad y linaje 
+- #238 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Sobre común de atestación Apple, Android
+- #237 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Frescura, nonce y semántica fail-unknown
+- #236 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][reliability] Fixtures offline y replay de fallo
+- #235 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][agents] Política segura de herramientas, trazas
+- #234 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P0][governance] Evidencia nocturna T4 y manifiesto 
+- #233 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][supply-chain] Procedencia verificable de releas
+- #232 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES] Backlog tecnológico anual sin fechas — índice y con
+- #207 [P4 — backlog] [general] → adrimg3196 — already_assigned: 🤖 DevOps/Release bot — estado releases/CI/deploy 2026-08-21 
+- #118 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Merge train — cola compartida del equipo de agentes
+- #112 [P4 — backlog] [general] → empresa-dev — failed_to_assign: daily-analysis: cuerpo del informe con \n literales
+- #111 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Informe diario 2026-08-14
+- #110 [P4 — backlog] [general] → empresa-dev — failed_to_assign: P0: retirar testimonios ficticios y métricas de tracción no 
+- #109 [P4 — backlog] [general] → empresa-dev — failed_to_assign: PM → Director: backlog priorizado tras el triage de las 29 i
+- #90 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Investigar si Intune y Workspace ONE exponen passthrough del
+- #88 [P4 — backlog] [general] → empresa-dev — failed_to_assign: AMAPI: ningún adapter rellena `management_mode`/`ownership`,
+- #79 [P4 — backlog] [general] → empresa-dev — failed_to_assign: data/cloud_tenants/** es estado de runtime versionado: decid
+- #78 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Rebasar los PRs abiertos que quedaron bloqueados por el dead
+- #73 [P4 — backlog] [general] → empresa-dev — failed_to_assign: osquery fase 2: pack de despliegue, ingestión JSONL por lote
+- #72 [P4 — backlog] [general] → empresa-dev — failed_to_assign: docs: matriz de soporte declarativa unificada (DDM + DSC + A
+- #71 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: Las acciones DDM en modo mock devuelven un mock genérico sin
+- #65 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Add support for Apple Business Manager and School Manager fo
+
+## Triaje 2026-09-01 15:22 UTC
+
+- #376 [P1 — crítico] [general] → empresa-dev — failed_to_assign: 🚨 cloud-state dead-man: 2026-09-01
+- #372 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Acceso, no capacidad: la segunda opinión no tiene UI y el wi
+- #326 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO: landing de comparación 'LucidFence vs Intune/Jamf/Kandj
+- #317 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO&Docs: consulta CTO/Product — prioridad #189 + estrategia
+- #310 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: QA: gap ruteo declarativo en engine (#89) + control HMAC saa
+- #307 [P4 — backlog] [general] → empresa-dev — failed_to_assign: karpathy-pass: hallazgos pendientes de verificación adversar
+- #302 [P4 — backlog] [general] → empresa-dev — failed_to_assign: risk: fallo de evaluación se presenta en silencio como 0/low
+- #260 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P2][ux] Línea temporal explicable con confianza y f
+- #259 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][webhooks] Firma, idempotencia y protección anti
+- #258 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Geofencing por estado derivado sin con
+- #257 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Transparencia, retención y minimizació
+- #256 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][byod] Validar límites de datos entre dispositiv
+- #255 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P2][dex] Señales DEX útiles sin vigilancia ni ranki
+- #254 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ocsf] Eventos OCSF versionados para riesgo, geo
+- #253 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][R][ai-governance] Investigación: procedencia y SBOM
+- #252 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ai-governance] Inventario local de capacidades 
+- #251 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][lifecycle] Previsión verificable de fin de sopo
+- #250 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][interop] Emitir y consumir señales CAEP/SSF de 
+- #249 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Postura de salida de datos y ser
+- #248 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][crypto] Inventario de cripto-agilidad y prepara
+- #247 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Simular y exportar restricciones
+- #246 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Ingesta local de CSAF/VEX y aplicabilidad
+- #245 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][remediation] Validar con evidencia si una remed
+- #244 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Priorizar KEV + EPSS + criticidad + expos
+- #243 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][policy] Compilador portátil de políticas con di
+- #242 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][security] Auditor de mínimo privilegio para cre
+- #241 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Panel neutral de riesgo normalizado c
+- #240 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Detectar políticas e intenciones cont
+- #239 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][identity] Reconciliación de identidad y linaje 
+- #238 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Sobre común de atestación Apple, Android
+- #237 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Frescura, nonce y semántica fail-unknown
+- #236 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][reliability] Fixtures offline y replay de fallo
+- #235 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][agents] Política segura de herramientas, trazas
+- #234 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P0][governance] Evidencia nocturna T4 y manifiesto 
+- #233 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][supply-chain] Procedencia verificable de releas
+- #232 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES] Backlog tecnológico anual sin fechas — índice y con
+- #207 [P4 — backlog] [general] → adrimg3196 — already_assigned: 🤖 DevOps/Release bot — estado releases/CI/deploy 2026-08-21 
+- #118 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Merge train — cola compartida del equipo de agentes
+- #112 [P4 — backlog] [general] → empresa-dev — failed_to_assign: daily-analysis: cuerpo del informe con \n literales
+- #111 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Informe diario 2026-08-14
+- #110 [P4 — backlog] [general] → empresa-dev — failed_to_assign: P0: retirar testimonios ficticios y métricas de tracción no 
+- #109 [P4 — backlog] [general] → empresa-dev — failed_to_assign: PM → Director: backlog priorizado tras el triage de las 29 i
+- #90 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Investigar si Intune y Workspace ONE exponen passthrough del
+- #88 [P4 — backlog] [general] → empresa-dev — failed_to_assign: AMAPI: ningún adapter rellena `management_mode`/`ownership`,
+- #79 [P4 — backlog] [general] → empresa-dev — failed_to_assign: data/cloud_tenants/** es estado de runtime versionado: decid
+- #78 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Rebasar los PRs abiertos que quedaron bloqueados por el dead
+- #73 [P4 — backlog] [general] → empresa-dev — failed_to_assign: osquery fase 2: pack de despliegue, ingestión JSONL por lote
+- #72 [P4 — backlog] [general] → empresa-dev — failed_to_assign: docs: matriz de soporte declarativa unificada (DDM + DSC + A
+- #71 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: Las acciones DDM en modo mock devuelven un mock genérico sin
+- #65 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Add support for Apple Business Manager and School Manager fo
+
+## Triaje 2026-09-01 15:37 UTC
+
+- #376 [P1 — crítico] [general] → empresa-dev — failed_to_assign: 🚨 cloud-state dead-man: 2026-09-01
+- #372 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Acceso, no capacidad: la segunda opinión no tiene UI y el wi
+- #326 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO: landing de comparación 'LucidFence vs Intune/Jamf/Kandj
+- #317 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO&Docs: consulta CTO/Product — prioridad #189 + estrategia
+- #310 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: QA: gap ruteo declarativo en engine (#89) + control HMAC saa
+- #307 [P4 — backlog] [general] → empresa-dev — failed_to_assign: karpathy-pass: hallazgos pendientes de verificación adversar
+- #302 [P4 — backlog] [general] → empresa-dev — failed_to_assign: risk: fallo de evaluación se presenta en silencio como 0/low
+- #260 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P2][ux] Línea temporal explicable con confianza y f
+- #259 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][webhooks] Firma, idempotencia y protección anti
+- #258 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Geofencing por estado derivado sin con
+- #257 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Transparencia, retención y minimizació
+- #256 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][byod] Validar límites de datos entre dispositiv
+- #255 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P2][dex] Señales DEX útiles sin vigilancia ni ranki
+- #254 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ocsf] Eventos OCSF versionados para riesgo, geo
+- #253 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][R][ai-governance] Investigación: procedencia y SBOM
+- #252 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ai-governance] Inventario local de capacidades 
+- #251 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][lifecycle] Previsión verificable de fin de sopo
+- #250 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][interop] Emitir y consumir señales CAEP/SSF de 
+- #249 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Postura de salida de datos y ser
+- #248 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][crypto] Inventario de cripto-agilidad y prepara
+- #247 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Simular y exportar restricciones
+- #246 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Ingesta local de CSAF/VEX y aplicabilidad
+- #245 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][remediation] Validar con evidencia si una remed
+- #244 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Priorizar KEV + EPSS + criticidad + expos
+- #243 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][policy] Compilador portátil de políticas con di
+- #242 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][security] Auditor de mínimo privilegio para cre
+- #241 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Panel neutral de riesgo normalizado c
+- #240 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Detectar políticas e intenciones cont
+- #239 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][identity] Reconciliación de identidad y linaje 
+- #238 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Sobre común de atestación Apple, Android
+- #237 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Frescura, nonce y semántica fail-unknown
+- #236 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][reliability] Fixtures offline y replay de fallo
+- #235 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][agents] Política segura de herramientas, trazas
+- #234 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P0][governance] Evidencia nocturna T4 y manifiesto 
+- #233 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][supply-chain] Procedencia verificable de releas
+- #232 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES] Backlog tecnológico anual sin fechas — índice y con
+- #207 [P4 — backlog] [general] → adrimg3196 — already_assigned: 🤖 DevOps/Release bot — estado releases/CI/deploy 2026-08-21 
+- #118 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Merge train — cola compartida del equipo de agentes
+- #112 [P4 — backlog] [general] → empresa-dev — failed_to_assign: daily-analysis: cuerpo del informe con \n literales
+- #111 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Informe diario 2026-08-14
+- #110 [P4 — backlog] [general] → empresa-dev — failed_to_assign: P0: retirar testimonios ficticios y métricas de tracción no 
+- #109 [P4 — backlog] [general] → empresa-dev — failed_to_assign: PM → Director: backlog priorizado tras el triage de las 29 i
+- #90 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Investigar si Intune y Workspace ONE exponen passthrough del
+- #88 [P4 — backlog] [general] → empresa-dev — failed_to_assign: AMAPI: ningún adapter rellena `management_mode`/`ownership`,
+- #79 [P4 — backlog] [general] → empresa-dev — failed_to_assign: data/cloud_tenants/** es estado de runtime versionado: decid
+- #78 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Rebasar los PRs abiertos que quedaron bloqueados por el dead
+- #73 [P4 — backlog] [general] → empresa-dev — failed_to_assign: osquery fase 2: pack de despliegue, ingestión JSONL por lote
+- #72 [P4 — backlog] [general] → empresa-dev — failed_to_assign: docs: matriz de soporte declarativa unificada (DDM + DSC + A
+- #71 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: Las acciones DDM en modo mock devuelven un mock genérico sin
+- #65 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Add support for Apple Business Manager and School Manager fo
+
+## Triaje 2026-09-01 15:39 UTC
+
+- #376 [P1 — crítico] [general] → empresa-dev — failed_to_assign: 🚨 cloud-state dead-man: 2026-09-01
+- #372 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Acceso, no capacidad: la segunda opinión no tiene UI y el wi
+- #326 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO: landing de comparación 'LucidFence vs Intune/Jamf/Kandj
+- #317 [P1 — crítico] [docs] → empresa-seo-docs — failed_to_assign: SEO&Docs: consulta CTO/Product — prioridad #189 + estrategia
+- #310 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: QA: gap ruteo declarativo en engine (#89) + control HMAC saa
+- #307 [P4 — backlog] [general] → empresa-dev — failed_to_assign: karpathy-pass: hallazgos pendientes de verificación adversar
+- #302 [P4 — backlog] [general] → empresa-dev — failed_to_assign: risk: fallo de evaluación se presenta en silencio como 0/low
+- #260 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P2][ux] Línea temporal explicable con confianza y f
+- #259 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][webhooks] Firma, idempotencia y protección anti
+- #258 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Geofencing por estado derivado sin con
+- #257 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][privacy] Transparencia, retención y minimizació
+- #256 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][byod] Validar límites de datos entre dispositiv
+- #255 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P2][dex] Señales DEX útiles sin vigilancia ni ranki
+- #254 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ocsf] Eventos OCSF versionados para riesgo, geo
+- #253 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][R][ai-governance] Investigación: procedencia y SBOM
+- #252 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P1][ai-governance] Inventario local de capacidades 
+- #251 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][lifecycle] Previsión verificable de fin de sopo
+- #250 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][interop] Emitir y consumir señales CAEP/SSF de 
+- #249 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Postura de salida de datos y ser
+- #248 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][crypto] Inventario de cripto-agilidad y prepara
+- #247 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][ai-governance] Simular y exportar restricciones
+- #246 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Ingesta local de CSAF/VEX y aplicabilidad
+- #245 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][remediation] Validar con evidencia si una remed
+- #244 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][vuln] Priorizar KEV + EPSS + criticidad + expos
+- #243 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][policy] Compilador portátil de políticas con di
+- #242 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][security] Auditor de mínimo privilegio para cre
+- #241 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Panel neutral de riesgo normalizado c
+- #240 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P1][multiuem] Detectar políticas e intenciones cont
+- #239 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][identity] Reconciliación de identidad y linaje 
+- #238 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Sobre común de atestación Apple, Android
+- #237 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][trust] Frescura, nonce y semántica fail-unknown
+- #236 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][reliability] Fixtures offline y replay de fallo
+- #235 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][agents] Política segura de herramientas, trazas
+- #234 [P4 — backlog] [general] → adrimg3196 — already_assigned: [HERMES][P0][governance] Evidencia nocturna T4 y manifiesto 
+- #233 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES][P0][supply-chain] Procedencia verificable de releas
+- #232 [P4 — backlog] [general] → empresa-dev — failed_to_assign: [HERMES] Backlog tecnológico anual sin fechas — índice y con
+- #207 [P4 — backlog] [general] → adrimg3196 — already_assigned: 🤖 DevOps/Release bot — estado releases/CI/deploy 2026-08-21 
+- #118 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Merge train — cola compartida del equipo de agentes
+- #112 [P4 — backlog] [general] → empresa-dev — failed_to_assign: daily-analysis: cuerpo del informe con \n literales
+- #111 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Informe diario 2026-08-14
+- #110 [P4 — backlog] [general] → empresa-dev — failed_to_assign: P0: retirar testimonios ficticios y métricas de tracción no 
+- #109 [P4 — backlog] [general] → empresa-dev — failed_to_assign: PM → Director: backlog priorizado tras el triage de las 29 i
+- #90 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Investigar si Intune y Workspace ONE exponen passthrough del
+- #88 [P4 — backlog] [general] → empresa-dev — failed_to_assign: AMAPI: ningún adapter rellena `management_mode`/`ownership`,
+- #79 [P4 — backlog] [general] → empresa-dev — failed_to_assign: data/cloud_tenants/** es estado de runtime versionado: decid
+- #78 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Rebasar los PRs abiertos que quedaron bloqueados por el dead
+- #73 [P4 — backlog] [general] → empresa-dev — failed_to_assign: osquery fase 2: pack de despliegue, ingestión JSONL por lote
+- #72 [P4 — backlog] [general] → empresa-dev — failed_to_assign: docs: matriz de soporte declarativa unificada (DDM + DSC + A
+- #71 [P4 — backlog] [bug] → empresa-test-qa — failed_to_assign: Las acciones DDM en modo mock devuelven un mock genérico sin
+- #65 [P4 — backlog] [general] → empresa-dev — failed_to_assign: Add support for Apple Business Manager and School Manager fo
