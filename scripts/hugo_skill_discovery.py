@@ -49,6 +49,8 @@ TIMESTAMP = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 # Directorio donde se clonan repos descubiertos para revisión por agentes
 REPO_DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
 
+HERMES_WATCHER_JSON_POSTS = LUCIDFENCE_DIR / "data" / "hermeswatcher_posts.json"
+
 # Perfiles por defecto donde instalar skills relevantes
 DEFAULT_PROFILES = [
     "empresa-test-qa",
@@ -111,8 +113,27 @@ GITHUB_REPO_KEYWORDS = [
 # 1. Descarga de feed
 # ============================================================
 
+def load_json_posts() -> list[str] | None:
+    """Cargar tweets cacheados desde JSON (generado por browser_exec)."""
+    if not HERMES_WATCHER_JSON_POSTS.exists():
+        return None
+    try:
+        data = json.loads(HERMES_WATCHER_JSON_POSTS.read_text())
+        tweets = data.get("tweets", [])
+        if tweets:
+            print(f"   Cargados {len(tweets)} tweets desde JSON cacheado")
+            return tweets
+    except Exception as e:
+        print(f"   Error leyendo JSON de tweets: {e}")
+    return None
+
+
 def fetch_feed(url: str) -> str | None:
-    """Descargar feed de HermesWatcher con manejo de gzip."""
+    """Descargar feed de HermesWatcher con manejo de gzip.
+
+    Retorna el HTML crudo. Si hay tweets cacheados en JSON, se usan
+    como fuente primaria en extract_posts.
+    """
     try:
         req = Request(url, headers={"User-Agent": "HermesAgent/1.0"})
         with urlopen(req, timeout=15) as response:
@@ -293,11 +314,24 @@ def extract_posts_fallback(raw_text: str) -> list[dict]:
 def extract_posts(feed_text: str) -> list[dict]:
     """Extraer los posts más recientes del feed de HermesWatcher.
 
-    El feed viene como HTML de X.com (no JSON API).
-    Parsea el HTML buscando elementos de tweet y extrayendo su texto.
+    Prioridad:
+    1. Tweets cacheados desde JSON (browser_exec)
+    2. HTML parsing de X.com (limitado, solo bio + etiquetas)
     """
     posts: list[dict] = []
 
+    # 1. Intentar usar tweets cacheados desde JSON (fuente primaria)
+    json_tweets = load_json_posts()
+    if json_tweets:
+        for tweet_text in json_tweets:
+            if tweet_text and tweet_text not in [p["text"] for p in posts]:
+                posts.append({"text": tweet_text})
+        # Si tenemos tweets del JSON, devolvemos esos (no intentamos HTML)
+        if posts:
+            print(f"   Usando {len(posts)} tweets desde JSON cacheado")
+            return posts[:10]
+
+    # 2. Fallback: parsear HTML de X.com (solo bio, etiquetas, etc.)
     html_posts = extract_tweets_from_html(feed_text)
     for hp in html_posts:
         if hp["text"] and hp["text"] not in [p["text"] for p in posts]:
@@ -690,7 +724,7 @@ def clone_new_repos(repos: list[dict]) -> list[Path]:
                 ["git", "clone", "--depth", "1", repo["url"], str(repo_dir)],
                 check=True,
                 capture_output=True,
-                timeout=60,
+                timeout=30,
             )
             cloned.append(repo_dir)
             print(f"      ✓ Clonado en {repo_dir}")
@@ -776,6 +810,11 @@ def main() -> int:
         type=str,
         default=None,
         help="Lista comma-separated de skills específicos a instalar",
+    )
+    parser.add_argument(
+        "--no-clone",
+        action="store_true",
+        help="Saltar clonado de repos (solo descubrir y mostrar)",
     )
 
     args = parser.parse_args()
@@ -883,12 +922,16 @@ def main() -> int:
     for repo in github_repos[:5]:
         print(f"   - {repo['full_name']} ({repo['language'] or 'N/A'}) — {repo.get('description', 'N/A')[:100]}")
 
-    # 9. Clonar repos nuevos para revisión por agentes
-    print("\n9. Clonando repos nuevos para revisión por agentes ...")
-    cloned_repos = clone_new_repos(github_repos)
-    print(f"   Repos clonados: {len(cloned_repos)}")
-    for repo_path in cloned_repos[:5]:
-        print(f"   ✓ {repo_path}")
+    # 9. Clonar repos nuevos para revisión por agentes (opcional)
+    if not args.no_clone:
+        print("\n9. Clonando repos nuevos para revisión por agentes ...")
+        cloned_repos = clone_new_repos(github_repos)
+        print(f"   Repos clonados: {len(cloned_repos)}")
+        for repo_path in cloned_repos[:5]:
+            print(f"   ✓ {repo_path}")
+    else:
+        cloned_repos = []
+        print("\n9. Clonado skipped (--no-clone)")
 
     # 10. Resumen
     print("\n" + "=" * 70)

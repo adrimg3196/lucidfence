@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-09-01T08:46:16Z",
+  "source": "@HermesWatcher via browser render",
+  "tweets": [
+    "What was the first thing Hermes did that felt genuinely useful to you?",
+    "¿Sabías que Hermes puede tomar una lista completa de trabajos separados y procesarlos como una sola carga de trabajo?\n\nSe llama procesamiento por lotes.\n\nSupongamos que necesitas investigar 5 productos usando exactamente los mismos criterios.\n\nEn lugar de abrir 5 chats, le das a",
+    "Hermes acaba de hacer que la delegación autónoma sea mucho más confiable.\n\nCuando Hermes delega trabajo a un subagente, el agente padre necesita saber si ese trabajo realmente tuvo éxito antes de decidir qué hacer a continuación.\n\nVarias correcciones recientes hacen que esa",
+    "Tracking every Hermes Agent release, changelog & major update — plus what actually matters.\n\nUnofficial. Not affiliated with Nous Research.",
+    "Your AI agent can solve a hard problem today and still make you explain half of it again tomorrow.\nThat is the gap between intelligence and memory.\nA better model can reason more deeply. A larger..."
+  ]
+}
