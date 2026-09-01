@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import re
 import time
 
 
 def _request(method: str, path: str, body=None, cookie: str = ""):
-    conn = http.client.HTTPConnection("127.0.0.1", 8765, timeout=15)
+    conn = http.client.HTTPConnection(
+        "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765")), timeout=15
+    )
     headers = {"Content-Type": "application/json"}
     if cookie: headers["Cookie"] = cookie
     conn.request(method, path, body=json.dumps(body).encode() if body is not None else None, headers=headers)

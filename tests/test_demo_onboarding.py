@@ -1,9 +1,10 @@
 """Regression: local-first onboarding must be one click, no cloud signup."""
 import http.client
 import json
+import os
 from typing import Any
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def req(method, path, body=None, cookie=None):

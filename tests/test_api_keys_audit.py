@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lucidfence.core.api_keys import APIKeyStore, append_audit, verify_audit
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def _request(method, path, body=None, cookie="", bearer=""):
