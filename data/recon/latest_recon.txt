@@ -1,4 +1,4 @@
---- recon repos 2026-09-01T16:15:29Z ---
+--- recon repos 2026-09-01T20:44:05Z ---
 === RECON REPOS (GitHub) — inspiracion video LucidFence ===
 
 1. malam84/UemDeviceManagement  ★0  [] #uem_mdm
@@ -41,7 +41,7 @@ Total referencias traidas: 7 (minimo 3)
   X: (no cookies X)
   Reddit: (no cookie Reddit)
 
---- recon social 2026-09-01T16:15:30Z ---
+--- recon social 2026-09-01T20:44:08Z ---
 === RECON SOCIAL (agent-reach) — LucidFence vs competidores ===
 
 >>> YouTube: Applivery UEM
@@ -50,7 +50,9 @@ Total referencias traidas: 7 (minimo 3)
    (unavailable: agent-reach python no instalado)
 
 >>> Web (Jina): referencia agent-reach
-{"data":null,"code":403,"name":"AbuseAlleviationError","status":40305,"message":"Anonymous access to domain github.com blocked until Tue Sep 01 2026 17:14:04 GMT+0000 (Coordinated Universal Time) due to previous abuse found on https://github.com/ccxt
+Title: GitHub - Panniantong/Agent-Reach: Give your AI agent eyes to see the entire internet. Read & search Twitter, Reddit, YouTube, GitHub, Bilibili, XiaoHongShu — one CLI, zero API fees.
+URL Source: https://github.com/Panniantong/agent-reach
+Markdo
 
 >>> X (twitter-cli + cookies):
 (unavailable: cookies X no configuradas)
