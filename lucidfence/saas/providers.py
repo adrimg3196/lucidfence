@@ -54,14 +54,33 @@ def _tenant_runtime(tdir: Path) -> dict:
 # Minimal catalog of supported UEM connectors. Kept here (not in the adapters)
 # because it is presentation metadata for the wizard, not engine contract.
 PROVIDER_CATALOG: dict[str, dict] = {
-    "applivery": {"label": "Applivery", "fields": ["api_key", "org_id"]},
-    "intune": {"label": "Microsoft Intune", "fields": ["tenant_id", "client_id", "client_secret"]},
-    "jamf": {"label": "Jamf", "fields": ["client_id", "client_secret"]},
-    "fleet": {"label": "FleetDM", "fields": ["api_key", "endpoint"]},
-    "workspace_one": {"label": "Workspace ONE", "fields": ["api_key", "org_id"]},
-    "chromeos": {"label": "ChromeOS", "fields": ["client_id", "client_secret", "refresh_token"]},
-    "windows_conformidad": {"label": "Windows (conformidad)", "fields": ["api_key", "org_id"]},
-    "simulation": {"label": "Simulación (demo)", "fields": []},
+    "applivery": {"label": "Applivery", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "intune": {"label": "Microsoft Intune", "fields": ["tenant_id", "client_id", "client_secret"],
+     "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": True}},
+    "jamf": {"label": "Jamf", "fields": ["client_id", "client_secret"],
+     "declarative": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False}},
+    "fleet": {"label": "FleetDM", "fields": ["api_key", "endpoint"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "workspace_one": {"label": "Workspace ONE", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": True}},
+    "chromeos": {"label": "ChromeOS", "fields": ["client_id", "client_secret", "refresh_token"],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+    "windows_conformidad": {"label": "Windows (conformidad)", "fields": ["api_key", "org_id"],
+     "declarative": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False}},
+    "simulation": {"label": "Simulación (demo)", "fields": [],
+     "declarative": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False}},
+}
+
+PROVIDER_DECLARATIVE_CAPABILITIES: dict[str, dict] = {
+    "jamf": {"supports_ddm": True, "supports_dsc": False, "supports_amapi_policy": False},
+    "intune": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": True},
+    "windows_conformidad": {"supports_ddm": False, "supports_dsc": True, "supports_amapi_policy": False},
+    "fleet": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "applivery": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "workspace_one": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": True},
+    "chromeos": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
+    "simulation": {"supports_ddm": False, "supports_dsc": False, "supports_amapi_policy": False},
 }
 
 

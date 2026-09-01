@@ -27,6 +27,7 @@ from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence,
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
+from lucidfence.core.declarative import declarative_path_for
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
@@ -704,10 +705,43 @@ class Engine:
         spammed, but never silently drops the command: if it is still inside the
         cooldown window the result clearly says so (the UI shows a cooldown
         notice). Records the operator + reason for the audit trail.
+
+        Declarative routing gate (issue #89): when the adapter exposes a DDM
+        capability (``supports_ddm``) and the device's management_mode is
+        declarative-eligible, the action is routed through the declarative
+        builder (``_apply_ddm``) instead of the blind imperative execute path.
+        The result is tagged ``enforcement="declarative"`` so the caller can
+        distinguish the path taken.
         """
         if action not in VALID_ACTIONS:
             return {"ok": False, "error": "accion no valida", "valid": sorted(VALID_ACTIONS)}
         now = _time.time()
+        # Declarative routing gate (issue #89): consult DDM capability + device mode.
+        # Rutea declarative si el adapter soporta DDM y el device está en modo
+        # fully_managed/mdm/configurator. El resto del flujo (cooldown, readback,
+        # persist) sigue igual — solo cambia la fuente del action result.
+        if (self.adapter and getattr(self.adapter, "supports_ddm", False) and
+                action in ("lock", "wipe", "clear_passcode", "reboot",
+                           "apply_profile")):
+            dev_dict = dev.to_dict() if hasattr(dev, "to_dict") else {}
+            path = declarative_path_for(
+                dev_dict,
+                supports_ddm=True,
+            )
+            if path == "declarative":
+                # Delegate to the declarative builder on the adapter.
+                res = self._execute_action(dev, "apply_ddm", params)
+                res["enforcement"] = "declarative"
+                res["declarative_subaction"] = "apply_ddm"
+                res["original_action"] = action
+                res["ts"] = now_iso()
+                res["fence_id"] = dev.inside_fence
+                res["trigger"] = "operator"
+                res["policy_name"] = "comando manual (declarativo)"
+                res["operator"] = operator
+                res["manual"] = True
+                self.store.log_action(res)
+                return res
         # Destructive cooldown check (manual commands honor the same guardrail).
         if action in self.DESTRUCTIVE_ACTIONS and self.action_cooldown_seconds > 0:
             last = self.store.last_action_at(dev.device_id, action)
