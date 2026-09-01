@@ -207,55 +207,98 @@ if __name__ == "__main__":
     for s in relevantes:
         print(f"   - {s['name']}")
     
-    # 5. Instalar skills relevantes en los perfiles
+    # 5. Instalar skills relevantes en los perfiles donde pueden mejorar el trabajo
     print("\n5. Instalando skills en perfiles de agentes ...")
     installed_profiles = get_installed_skills_per_profile()
     profiles_to_update = [
-        "empresa-ceo", "empresa-cto", "empresa-security-soc",
-        "empresa-devops-release", "empresa-test-qa", "empresa-product",
-        "empresa-seo-docs", "empresa-marketing", "empresa-finance",
-        "empresa-kit-bot", "empresa-selfimprove",
+        "empresa-test-qa", "empresa-cto", "empresa-devops-release",
+        "empresa-product", "empresa-seo-docs", "empresa-security-soc",
+        "empresa-marketing", "empresa-finance", "empresa-kit-bot",
+        "empresa-selfimprove",
     ]
-    
+
     installations = []
     for skill in relevantes:
         skill_name = skill["name"]
-        # Buscar el skill_path correspondiente en ~/.hermes
-        for profile, skills in installed_profiles.items():
-            break  # Solo para referencia
+
+        if skill_name in ['batch_processing', 'autonomous_delegation', 'subagent']:
+            # Capacidad detectada en el feed — registrar para evaluación posterior
+            installations.append((skill_name, "CAPACIDAD_NUEVA", "Evaluar implementación en los agentes"))
+            continue
+
+        # Buscar skill real en ~/.hermes
+        skill_path = None
+        search_paths = [
+            f"software-development/{skill_name}",
+            f"devops/{skill_name}",
+            f"research/{skill_name}",
+            f"autonomous-ai-agents/{skill_name}",
+            f"productivity/{skill_name}",
+            f"web-development/{skill_name}",
+            skill_name,
+        ]
+        for candidate in search_paths:
+            if (Path("/Users/adri/.hermes") / candidate / "SKILL.md").exists():
+                skill_path = candidate
+                break
+            if (Path("/Users/adri/.hermes") / "hermes-agent" / "optional-skills" / candidate / "SKILL.md").exists():
+                skill_path = f"hermes-agent/optional-skills/{candidate}"
+                break
         
-        # Para skills que son capacidades (no archivos reales), registrar como mejora
-        if skill_name in ['batch_processing', 'autonomous_delegation', 'subagent', 'kanban_plugin', 'new_model']:
-            installations.append((skill_name, "CAPACIDAD_NUEVA", "Evaluar e implementar capacidad en los agentes"))
+        if skill_path:
+            for profile in profiles_to_update:
+                dst_base = Path("/Users/adri/.hermes/profiles") / profile / "skills"
+                # Determinar dónde instalar según skill_path
+                if skill_path.startswith("hermes-agent/optional-skills/"):
+                    rel = skill_path.replace("hermes-agent/optional-skills/", "")
+                    parts = rel.split("/", 1)
+                    if len(parts) > 1:
+                        dst_dir = dst_base / parts[0] / parts[1]
+                    else:
+                        dst_dir = dst_base / rel
+                else:
+                    parts = skill_path.split("/", 1)
+                    if len(parts) > 1:
+                        dst_dir = dst_base / parts[0] / parts[1]
+                    else:
+                        dst_dir = dst_base / skill_path
+                
+                src_full = Path("/Users/adri/.hermes") / skill_path.replace("/", os.sep) / "SKILL.md"
+                dst_full = dst_dir / "SKILL.md"
+                
+                if dst_full.exists():
+                    continue  # Ya instalado
+                
+                try:
+                    dst_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_full, dst_full)
+                    installations.append((skill_name, profile, f"instalado"))
+                except Exception as e:
+                    installations.append((skill_name, profile, f"error: {e}"))
         else:
-            # Intentar instalar skill real
-            # El skill podría estar en cualquier categoría; buscar
-            skill_path = None
-            for base in ["software-development", "devops", "research", "autonomous-ai-agents", "productivity", "creative"]:
-                candidate = f"{base}/{skill_name}"
-                if (Path("/Users/adri/.hermes") / candidate / "SKILL.md").exists():
-                    skill_path = candidate
-                    break
-                candidate = skill_name
-                if (Path("/Users/adri/.hermes") / candidate / "SKILL.md").exists():
-                    skill_path = candidate
-                    break
-            
-            if skill_path:
-                for profile in profiles_to_update:
-                    success, msg = install_skill(skill_path, profile)
-                    if success:
-                        installations.append((skill_name, profile, msg))
-            else:
-                installations.append((skill_name, "NO_ENCONTRADO", f"No se encontró el skill '{skill_name}' en ~/.hermes"))
+            installations.append((skill_name, "NO_ENCONTRADO", f"No se encontró el skill '{skill_name}' en ~/.hermes"))
     
     # 6. Resumen
-    print("\n6. RESUMEN DE INSTALACIONES/Mejoras:")
+    print("\n6. RESUMEN DE INSTALACIONES:")
+    installed_count = sum(1 for i in installations if len(i) == 3 and i[2] == "instalado")
+    new_caps = sum(1 for i in installations if i[1] == "CAPACIDAD_NUEVA")
+    missing = sum(1 for i in installations if i[1] == "NO_ENCONTRADO")
+    errors = sum(1 for i in installations if len(i) == 3 and i[2].startswith("error"))
+    
+    print(f"   Skills instalados en perfiles: {installed_count}")
+    print(f"   Capacidades nuevas detectadas: {new_caps}")
+    print(f"   Skills no encontrados: {missing}")
+    print(f"   Errores: {errors}")
+    
     for item in installations:
-        if len(item) == 3:
-            print(f"   - {item[0]}: {item[2]}")
+        if len(item) == 3 and item[2] == "instalado":
+            print(f"   ✓ {item[0]} → {item[1]}")
+        elif item[1] == "CAPACIDAD_NUEVA":
+            print(f"   → {item[0]}: capacidad nueva (evaluar implementación)")
+        elif item[1] == "NO_ENCONTRADO":
+            print(f"   ✗ {item[0]}: skill no encontrado")
         else:
-            print(f"   - {item[0]} en {item[1]}: {item[2]}")
+            print(f"   ! {item[0]} → {item[1]}: {item[2]}")
     
     # 7. Registrar en loop-log
     print("\n7. Registrando en loop-run-log.md ...")
