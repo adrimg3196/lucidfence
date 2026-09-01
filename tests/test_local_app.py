@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+from types import SimpleNamespace
+from unittest import mock
 
 from lucidfence.core.app_paths import data_dir
 
@@ -32,6 +34,64 @@ def test_server_uses_portable_data_root_and_dashboard_home():
     assert "TenantStore(DATA_ROOT)" in source
     assert 'if route in ("/", "/app", "/app/", "/dashboard", "/dashboard.html")' in source
     assert 'if route in ("/about", "/index.html", "/landing", "/landing.html")' in source
+
+
+def test_http_server_bind_does_not_depend_on_reverse_dns():
+    import socket as socket_module
+    import saas_server
+
+    with mock.patch.object(socket_module, "getfqdn", side_effect=RuntimeError("DNS bloqueado")):
+        server = saas_server.LucidFenceHTTPServer(("127.0.0.1", 0), saas_server.Handler)
+    try:
+        assert server.server_name == "127.0.0.1"
+        assert server.server_port > 0
+    finally:
+        server.server_close()
+
+
+def test_start_deadline_includes_slow_health_probes():
+    import lucidfence.cli as cli_module
+
+    class FakeClock:
+        def __init__(self):
+            self.now = 0.0
+
+        def monotonic(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += seconds
+
+    class FakeProcess:
+        pid = 4242
+
+        def poll(self):
+            return None
+
+    clock = FakeClock()
+
+    def slow_unhealthy(_host, _port, timeout=0.8):
+        clock.now += timeout
+        return False
+
+    with tempfile.TemporaryDirectory(prefix="lucidfence-deadline-") as tmp:
+        log_path = Path(tmp) / "lucidfence.log"
+        with (
+            mock.patch.object(cli_module.time, "monotonic", side_effect=clock.monotonic),
+            mock.patch.object(cli_module.time, "sleep", side_effect=clock.sleep),
+            mock.patch.object(cli_module, "_healthy", side_effect=slow_unhealthy),
+            mock.patch.object(cli_module, "_runtime_dir", return_value=Path(tmp)),
+            mock.patch.object(cli_module, "_log_file", return_value=log_path),
+            mock.patch.object(cli_module, "_write_pid_record"),
+            mock.patch.object(cli_module, "_rollback_start"),
+            mock.patch.object(cli_module.subprocess, "Popen", return_value=FakeProcess()),
+        ):
+            rc = cli_module.cmd_start(
+                SimpleNamespace(host="127.0.0.1", port=54321, open_browser=False)
+            )
+
+    assert rc == 1
+    assert clock.now <= 16.0, f"startup tardó {clock.now:.2f}s simulados"
 
 
 def test_cli_version_and_managed_lifecycle():
