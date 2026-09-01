@@ -4,7 +4,7 @@ Genera declarations (configurations + activations) y suscripciones de status
 a partir de una `Policy` de LucidFence, para que el enforcement converja en el
 dispositivo en vez de en bucles imperativos del servidor.
 
-LÍMITE HONESTO — DDM no tiene primitivas de geolocalización. El trigger de
+LÍMITE HONESTO - DDM no tiene primitivas de geolocalización. El trigger de
 geocerca sigue en el engine/adapters de LucidFence: el servidor decide QUÉ
 conjunto de declarations activar en cada transición de estado. DDM es la capa
 de configuración/enforcement, no de detección.
@@ -256,6 +256,31 @@ def build_declarations(
     return {"configurations": [legacy, subscriptions], "activations": [activation]}
 
 
+def build_mock_status_result() -> dict:
+    """Mock de readback DDM para ``ddm_status`` en modo simulación (issue #71).
+
+    Devuelve la misma FORMA que la respuesta real de Jamf (``status_items`` +
+    ``device_state``), pero vacía/general, sin datos de dispositivo reales.
+    El engine (#89) puede leer el contrato sin un tenant Jamf real.
+    """
+    return {
+        "status_items": [],
+        "device_state": {},
+    }
+
+
+def build_mock_sync_result() -> dict:
+    """Mock de confirmación DDM para ``ddm_sync`` en modo simulación (issue #71).
+
+    Devuelve la misma FORMA que la respuesta real de Jamf (204 sin cuerpo),
+    expuesta como dict para que el engine pueda leerla sin un tenant Jamf real.
+    """
+    return {
+        "jamf_status": 204,
+        "synced": True,
+    }
+
+
 def parse_status_report(report: Any) -> dict:
     """Traduce un StatusReport de DDM a campos del modelo de estado de dispositivo.
 
@@ -303,5 +328,7 @@ __all__ = [
     "declarative_path_for",  # deprecated alias of ddm_declarative_subaction
     "build_declarations",
     "build_status_subscriptions",
+    "build_mock_status_result",
+    "build_mock_sync_result",
     "parse_status_report",
 ]
