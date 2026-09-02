@@ -11,6 +11,7 @@ Runs locally, forever, on the configured interval (default 15 min).
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -174,9 +175,13 @@ class Engine:
         # correlates the evidence with geofences and UEM policy.
         self.osquery = OsqueryPostureProvider(config.get("osquery"))
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
-        # arranque si la red/cache falla. Por defecto solo carga el cache local;
-        # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
-        # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
+        # --- CVE feed (NVD cache / sync) ----------------------------------
+        # SECURITY (fail-unknown, not fail-open): a broken or unavailable CVE
+        # feed must surface as an explicit, observable error — never silently
+        # degrade to "no vulnerabilities". A fail-open CVE loader would hide
+        # real risk and let the vitrina publish a falsely clean posture. Any
+        # exception here is logged and stored on status() so operators can see
+        # the feed is unhealthy instead of trusting a silent zero. (task t_6479d79a)
         try:
             from lucidfence.core.cve_feed_nvd import load_nvd_feed_into_cve, sync_nvd_feed
             cve_feed_path = config.get("cve_feed_path")
@@ -184,6 +189,7 @@ class Engine:
                 cve_feed_path = os.path.join(
                     self.data_dir, f"cve_feed_{self.org_id}.json"
                 )
+            loaded = 0
             if config.get("cve_feed_sync"):
                 sync_nvd_feed(
                     apps=config.get("cve_feed_apps"),
@@ -192,9 +198,24 @@ class Engine:
                     timeout=int(config.get("cve_feed_timeout", 30)),
                     sleep_s=float(config.get("cve_feed_sleep_s", 0.4)),
                 )
-            load_nvd_feed_into_cve(cve_feed_path)
-        except Exception:
-            pass
+            loaded = load_nvd_feed_into_cve(cve_feed_path)
+            self.cve_feed_load = {
+                "ok": True,
+                "entries": loaded,
+                "path": cve_feed_path,
+                "error": None,
+            }
+        except Exception as exc:  # fail-UNKNOWN: record, do NOT swallow silently
+            logging.getLogger(__name__).error(
+                "CVE feed load failed for org %s (path=%s): %s: %s",
+                self.org_id, config.get("cve_feed_path"), type(exc).__name__, exc,
+            )
+            self.cve_feed_load = {
+                "ok": False,
+                "entries": 0,
+                "path": config.get("cve_feed_path"),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
         pol_path = config.get("policies_path", Path(self.data_dir) / "policies.json")
         self.policies_path = Path(pol_path)
         self.policies = load_policies(self.policies_path)
@@ -1348,6 +1369,7 @@ class Engine:
             ],
             "stats_history": self.store.stats_history(120),
             "cve_summary": self._cve_summary(),
+            "cve_feed_load": getattr(self, "cve_feed_load", None),
             "ios_geofence_summary": self._ios_geofence_summary(),
         }
 
@@ -1367,7 +1389,7 @@ class Engine:
     def _cve_summary(self) -> dict:
         """Fleet-wide CVE posture aggregated from persisted device apps."""
         devices = self.store.snapshot().values()
-        crit_apps = high_apps = vuln_apps = 0
+        crit_apps = high_apps = vuln_apps = unknown_apps = 0
         total_apps = 0
         for ds in devices:
             for a in (ds.apps or []):
@@ -1379,9 +1401,14 @@ class Engine:
                         crit_apps += 1
                     elif sev == "high":
                         high_apps += 1
+                    # "unknown" = no verifiable CVSS score: reported separately,
+                    # never counted as critical/high (attribution integrity).
+                    elif sev in (None, "unknown"):
+                        unknown_apps += 1
         return {
             "apps_total": total_apps,
             "vulnerable_apps": vuln_apps,
             "critical_cve_apps": crit_apps,
             "high_cve_apps": high_apps,
+            "unknown_cve_apps": unknown_apps,
         }

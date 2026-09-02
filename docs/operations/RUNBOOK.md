@@ -197,8 +197,45 @@ curl -sf -X POST http://127.0.0.1:8765/api/actions \
 | Engine returns 500 on any API | `data/logs/engine.log` | traceback in startup |
 | MDM status indicator red | `data/logs/mdm.log` | 401 from UEM (rotate creds) |
 | Fence not detected | `fences.json` | JSON schema mismatch (run `core.fences.load_fences`) |
-| CVE feed empty | `data/cve_cache.json` | NVD API rate-limit (wait 1 h) |
+| CVE feed empty / `cve_feed_load.ok == false` | `data/cve_feed_nvd.json` + engine logs | NVD API rate-limit or bad path (engine reports failure, NOT silently empty — see fail-unknown below) |
 | Tests failing on CI | `tests/run_tests.py` | a `test_*.py` raising `SystemExit` at import — see AGENTS.md "Known landmines" |
+
+---
+
+## R5b — CVE feed (atribución y fail-unknown)
+
+La salida CVE pública (`cloud_state.json`) se construye desde dos fuentes:
+
+1. **`data/cve_feed_nvd.json` (semilla en repo)** — alimentada por la ruta viva
+   `scripts/refresh_cve_feed.py`, que corre en cada ciclo de `engine-cron.yml`
+   **antes** de `cloud_publisher`. Si NVD falla, conserva el último feed bueno
+   (no machaca). La semilla se regenera solo desde CVEs **con score CVSS
+   real** (ver `lucidfence/core/cve.py::classify_cve_severity`).
+2. **`lucidfence/core/cve.py::CVE_DB`** — base curada y puntuada (fuente de
+   verdad para critical/high reales).
+
+Reglas de integridad (task t_6479d79a / roadmap #244/#246):
+
+- Un CVE **sin score CVSS** (match por palabra clave en NVD sin CPE/versión)
+  se marca `"unknown"` y **nunca** se cuenta como critical/high. Esto evita la
+  atribución falsa de CVE-2007-0045 (Acrobat 2007) a Chrome 120.
+- Los conteos `critical_cve_apps` / `high_cve_apps` salen **solo** del score
+  CVSS real, no de strings de severity. `unknown_cve_apps` se reporta aparte.
+- **Fail-UNKNOWN, no fail-open:** si la carga del feed CVE falla, el engine lo
+  registra en `engine.status()["cve_feed_load"]` (`ok:false` + error) y lo
+  loguea. Nunca degrada en silencio a "sin CVEs". Un `cve_feed_load.ok:false`
+  significa: investigar el feed, no confiar en un 0 falso.
+
+Verificar localmente:
+
+```bash
+python3 scripts/refresh_cve_feed.py        # renueva la semilla NVD (best-effort)
+python3 -m lucidfence.core.cloud_publisher # regenera data/cloud_state.json
+python3 - <<'PY'   # sanity: no 2007/2008 CVEs en la semilla
+import json; d=json.load(open('data/cve_feed_nvd.json'))
+assert all((e.get('score') or 0) > 0 for a in d['apps'].values() for e in a)
+PY
+```
 
 ---
 
