@@ -87,3 +87,15 @@ reconfirmar líneas actuales.
   conforme al proceso de arriba; no hubo ninguna `open` que redactar.
 
 (el primer ciclo corre el jueves)
+
+## Reconciliación SOC (2026-08-24, reporte semanal t_9edd3c18)
+
+El ledger estaba desactualizado: la última entrada fechada era 2026-08-16 y no
+reflejaba el trabajo de 08-21/08-22/08-23 ni el gap de authz de #277. Se
+reconcilia aquí. Regla de divulgación: solo se publican PoC de entradas
+`fixed`/`accepted`; las que siguen `open`/en-PR se describen sin pasos.
+
+- 2026-08-21 | alta | A01 Broken Access Control | `scripts/saas_api_op.py`: ACTION `remove_tenant` invocable sin autorización (mutación destructiva) | **fixed** (PR #277, mergeado 2026-08-24 10:33, commit 12dfcde) | `verify_request_signature` (HMAC-SHA256 ACTION|PAYLOAD con `LUCIDFENCE_API_SECRET`) + `check_authz` + gate fail-closed por ACTION (`remove_tenant`⇒`org:delete`, `create_tenant`/`add_fence`⇒`org:write`); +194 líneas de test de regresión. Sin secreto server-side ninguna petición se acepta.
+- 2026-08-22 | media | A09 (gitleaks) + A01 (path traversal) | rama `cto/security-hardening-2026-08-22` declaró "cerrado" 2 hallazgos (gitleaks excluía `docs/`/`README.md`/`reports/`/`tests/` en bloque; `poi.py` sin defang de path traversal) pero NUNCA se mergeó | **open (PR #278)** | recuperados en PR #278 (https://github.com/adrimg3196/lucidfence/pull/278): gitleaks ahora solo excluye `.env.example` y binarios de imagen (no directorios); `poi.py` añade `_safe_seed_path` (basename-only para rutas relativas, igual que `storage.py`). Falta merge + rebase (rama 1 commit por delante / 24 por detrás de main). Requiere regresión: secreto sintético bajo `docs/` debe romper el escaneo.
+- 2026-08-23 | baja/media | supply-chain + escaneo | backlog de hardening 08-23 (LOW-4 SBOM, LOW-5 requirements.txt, MEDIUM-1 gitleaks `.github/`, deriva de manifiestos, cobertura de escaneo) | **fixed/parcial** | SBOM offline leyendo versión de pyproject (PR #261, cierra LOW-4); `requirements.txt` alineado al lock auditado (cierra LOW-5); `.github/` fuera de la allowlist de gitleaks (cierra MEDIUM-1); ver seguimiento en backlog `t_264de077` (pendiente de dueño asignado).
+- 2026-08-24 | medio | credibilidad/datos CVE | la vitrina PÚBLICA publica atribución CVE incorrecta (`cloud_state.json`, `source: engine-cve-feed`): CVE-2007-0045 (XSS del plugin de Adobe Acrobat Reader de 2007) atribuido a "google chrome 120.0.0"; `cve_feed_nvd.json` (semilla, 65 entradas) con `score: 0.0` en las 65, la más reciente de 2022, sin embargo se declaran 2 critical / 5 high derivados de strings `severity`. Además `lucidfence/core/engine.py:175-196` carga el feed CVE en `except Exception: pass` (fail-OPEN) y `scripts/refresh_cve_feed.py` no está cableado a ningún cron/workflow (control fantasma desde 2026-08-09) | **open** | en roadmap #244 (KEV+EPSS+exposición sin score opaco) y #246 (CSAF/VEX + aplicabilidad al software instalado). Matching debe ser por CPE+versión con `score` real de CVSS; sin score ⇒ `unknown`, no critical/high; quitar el fail-open (fail-unknown explícito, coherente con #237); cablear o borrar `refresh_cve_feed.py`.
