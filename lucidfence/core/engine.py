@@ -971,6 +971,16 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
+        # Salto directo cerca A -> cerca B en un mismo ciclo: A se ABANDONA,
+        # así que sus on_exit disparan primero (antes solo salía on_enter(B)
+        # y el "avísame al salir del almacén" se perdía en silencio).
+        if state == "inside" and prev is not None and prev.inside_fence and prev.inside_fence != fence_id:
+            left = self.fence_by_id.get(prev.inside_fence)
+            if left is not None:
+                for act in left.actions:
+                    if act.enabled and act.when == "on_exit" and self._dedupe_action(
+                            ds, act.action, left.id, "on_exit", f"fence:{left.name}", "medium", act.params):
+                        fired.append(self._cycle_actions[-1])
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -998,6 +1008,11 @@ class Engine:
             if not act.enabled:
                 continue
             if act.when != when:
+                continue
+            if when == "on_unknown" and act.action in self.DESTRUCTIVE_ACTIONS:
+                # Desconocido nunca penaliza: perder señal no es evidencia y
+                # jamás justifica lock/wipe/reboot/clear_passcode (defensa en
+                # profundidad; validate_fences ya rechaza esa configuración).
                 continue
             if self._dedupe_action(ds, act.action, fence.id, when, f"fence:{fence.name}", "medium", act.params):
                 fired.append(self._cycle_actions[-1])
