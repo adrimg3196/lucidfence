@@ -449,6 +449,12 @@ class Engine:
                     fence_id=inside_fence,
                     inside_fence=inside_fence,
                     fence_state=fence_state,
+                    # Sin señal se conserva la última cerca conocida; con señal
+                    # (inside/outside) la memoria es el propio veredicto.
+                    last_inside_fence=(
+                        ((prev.inside_fence or prev.last_inside_fence) if prev else None)
+                        if fence_state == "unknown" else inside_fence
+                    ),
                     location_source=rep.location_source,
                     last_report_ts=now_iso(),
                     route_id=(assigned_route.id if assigned_route else None),
@@ -1000,7 +1006,9 @@ class Engine:
             # cuyo on_exit/on_unknown importa es la que se ABANDONA — la del
             # estado anterior. Resolver por cur_key hacía que esas acciones
             # no dispararan JAMAS (el bug que motivó este bloque).
-            prev_fence_id = prev.inside_fence if prev else None
+            # Si el dispositivo estuvo "unknown" entre medias (inside -> unknown
+            # -> outside), la cerca abandonada vive en last_inside_fence.
+            prev_fence_id = (prev.inside_fence or prev.last_inside_fence) if prev else None
             fence = self.fence_by_id.get(prev_fence_id) if prev_fence_id else None
         if fence is None:
             return fired

@@ -292,9 +292,16 @@ class LiveLocationSource:
             lng = LiveLocationSource._coalesce(ll.get("longitude"), ll.get("lng"))
         if lat is None or lng is None:
             return None
+        # Tolerante por dispositivo: una latitud "" / "nan" / 999 de UN
+        # dispositivo es "sin fix" (None), no un ValueError que aborte el
+        # fetch() y con él el ciclo de TODA la flota. (NaN falla el rango.)
+        lat = LiveLocationSource._to_float(lat)
+        lng = LiveLocationSource._to_float(lng)
+        if lat is None or lng is None or not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+            return None
         return {
-            "lat": float(lat),
-            "lng": float(lng),
+            "lat": lat,
+            "lng": lng,
             "ts": ts,
             "address": addr,
         }
