@@ -978,7 +978,7 @@ function renderDevices(){
     <div class="card"><table class="tt"><thead><tr>
       <th class="sort" data-s="name">Dispositivo</th><th class="sort" data-s="platform">Plataforma</th>
       <th class="sort" data-s="fence_state">Estado</th><th class="sort" data-s="compliant">Conformidad</th><th>iOS geocerca</th>
-      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Verif.</th><th></th>
+      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Frescura</th><th>Verif.</th><th></th>
     </tr></thead><tbody id="devBody"></tbody></table></div>`;
   $$("#devFilters .chip").forEach(c=>c.onclick=()=>{
     $$("#devFilters .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active");
@@ -989,6 +989,14 @@ function renderDevices(){
     App.devSort = h.dataset.s; renderDeviceRows();
   });
   renderDeviceRows();
+}
+function evidenceFreshnessBadge(d){
+  const f = ((d.evidence_freshness||{}).location)||{};
+  const status = f.status || "unverifiable";
+  const cls = status==="fresh" ? "in" : (status==="stale"||status==="future"||status==="replayed" ? "warn" : "unk");
+  const label = ({fresh:"Fresca",stale:"Caducada",future:"Futura",replayed:"Replay",unverifiable:"No verificable"})[status] || "No verificable";
+  const detail = [f.source, f.age_seconds==null?null:`edad ${f.age_seconds}s`, f.rule, f.reason].filter(Boolean).join(" · ");
+  return `<span class="tag ${cls}" title="${esc(detail||'evidencia sin reloj/nonce verificable')}"><span class="d"></span>${label}</span>`;
 }
 function renderDeviceRows(){
   const st = App.status; if(!st) return;
@@ -1007,7 +1015,7 @@ function renderDeviceRows(){
   };
   devs.sort(sorters[App.devSort]||sorters.name);
   const tb = $("#devBody");
-  if(!devs.length){ tb.innerHTML = `<tr><td colspan="9">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
+  if(!devs.length){ tb.innerHTML = `<tr><td colspan="10">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
   tb.innerHTML="";
   devs.forEach(d=>{
     const state = d.fence_state||"unknown";
@@ -1030,6 +1038,7 @@ function renderDeviceRows(){
       <td>${iosGeofenceBadge(d, {empty:true})}</td>
       <td class="mono">${esc(d.city||d.country|| (d.lat!=null&&d.lng!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
       <td class="mono">${fmt.ago(d.last_seen)}</td>
+      <td>${evidenceFreshnessBadge(d)}</td>
       <td>${verifiedCell}</td>
       <td><span class="plat" style="cursor:pointer" onclick="openDeviceModal('${esc(d.device_id)}')">${I.act}</span></td>`;
     tr.onclick = ()=>openDeviceModal(d.device_id);
@@ -1150,6 +1159,7 @@ async function openDeviceModal(id){
     ["Ubicación", d.lat!=null&&d.lng!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
+    ["Frescura evidencia", evidenceFreshnessBadge(d)],
     ["Visto", fmt.date(d.last_seen)],
     // Postura DDM (Apple OS 27) + cifrado: campos reales de DeviceState.to_dict().
     ["Lockdown Mode", postureBadge(d.lockdown_mode, "Activado", "Desactivado"), true],
