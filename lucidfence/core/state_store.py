@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -127,9 +127,14 @@ class StateStore:
             # schema-drifted row must be skipped, never wipe the whole fleet's
             # persisted state. (ponytail: no logging infra here; skip silently
             # but keep every good record — add logging if forensics matter.)
+            # Una clave que este build no conoce (fila escrita por un build más
+            # nuevo, luego rollback) se ignora: descartar la fila entera dejaba
+            # al dispositivo como "recién visto" y re-disparaba on_enter en masa.
+            known = {f.name for f in fields(DeviceState)}
             for d in raw:
                 try:
-                    self._states[d["device_id"]] = DeviceState(**d)
+                    self._states[d["device_id"]] = DeviceState(
+                        **{k: v for k, v in d.items() if k in known})
                 except Exception:
                     continue
 

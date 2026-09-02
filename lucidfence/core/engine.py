@@ -24,7 +24,7 @@ from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
 from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
-from lucidfence.core.geo import Point
+from lucidfence.core.geo import point_from
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
@@ -381,7 +381,12 @@ class Engine:
 
         for rep in reports:
             try:
-                loc = Point(lat=rep.lat, lng=rep.lng) if rep.lat is not None and rep.lng is not None else None
+                loc = None
+                if rep.lat is not None and rep.lng is not None:
+                    try:
+                        loc = point_from({"lat": rep.lat, "lng": rep.lng})
+                    except (TypeError, ValueError):
+                        loc = None  # NaN/fuera de rango = desconocido, nunca "outside"
                 inside_fence = None
                 fence_state = "unknown"
                 if loc is not None:
@@ -966,6 +971,16 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
+        # Salto directo cerca A -> cerca B en un mismo ciclo: A se ABANDONA,
+        # así que sus on_exit disparan primero (antes solo salía on_enter(B)
+        # y el "avísame al salir del almacén" se perdía en silencio).
+        if state == "inside" and prev is not None and prev.inside_fence and prev.inside_fence != fence_id:
+            left = self.fence_by_id.get(prev.inside_fence)
+            if left is not None:
+                for act in left.actions:
+                    if act.enabled and act.when == "on_exit" and self._dedupe_action(
+                            ds, act.action, left.id, "on_exit", f"fence:{left.name}", "medium", act.params):
+                        fired.append(self._cycle_actions[-1])
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -993,6 +1008,11 @@ class Engine:
             if not act.enabled:
                 continue
             if act.when != when:
+                continue
+            if when == "on_unknown" and act.action in self.DESTRUCTIVE_ACTIONS:
+                # Desconocido nunca penaliza: perder señal no es evidencia y
+                # jamás justifica lock/wipe/reboot/clear_passcode (defensa en
+                # profundidad; validate_fences ya rechaza esa configuración).
                 continue
             if self._dedupe_action(ds, act.action, fence.id, when, f"fence:{fence.name}", "medium", act.params):
                 fired.append(self._cycle_actions[-1])
@@ -1081,7 +1101,7 @@ class Engine:
         if not waypoint_data:
             raise ValueError("waypoints o fence_ids con centro son obligatorios")
         rid = data.get("id") or f"route-{int(time.time()*1000)}"
-        wps = [Point(lat=float(w["lat"]), lng=float(w["lng"])) for w in waypoint_data]
+        wps = [point_from(w) for w in waypoint_data]  # NaN/fuera de rango -> ValueError (400)
         schedule = data.get("schedule")
         if schedule is None and (data.get("window_start") or data.get("window_end")):
             schedule = {"start": data.get("window_start"), "end": data.get("window_end")}

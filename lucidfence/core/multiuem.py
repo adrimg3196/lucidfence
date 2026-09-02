@@ -486,19 +486,6 @@ class MultiUEMOrchestrator:
         )
         return device
 
-    def _merge_declarative(self, members: list[NormalizedDevice], merged: NormalizedDevice):
-        """Carry management_mode/ownership across consolidated members.
-
-        Same "first non-null wins" rule as inventory: a device reported by two
-        UEMs keeps the first declarative signal it saw. None is never inferred,
-        so if no provider contributed a mode the field stays None.
-        """
-        for item in members:
-            if merged.management_mode is None and item.management_mode is not None:
-                merged.management_mode = item.management_mode
-            if merged.ownership is None and item.ownership is not None:
-                merged.ownership = item.ownership
-
     def _merge(self, members: list[NormalizedDevice], now: datetime) -> NormalizedDevice:
         members = sorted(members, key=lambda item: (item.provider, item.provider_device_id))
         merged = deepcopy(members[0])
