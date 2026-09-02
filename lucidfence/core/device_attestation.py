@@ -18,6 +18,7 @@ from typing import Any
 MODEL_VERSION = "1.0"
 CANONICAL_CLAIMS = ("hardware_backed", "managed", "os_integrity", "encryption")
 SIGNATURE_STATUSES = {"verified", "unverified", "invalid", "unknown"}
+VENDOR_SOURCES = {"apple", "android", "windows"}
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -150,6 +151,9 @@ class AttestationEnvelope:
         source = _str_or_none(self.source, "source")
         if source is None:
             raise AttestationError("source required")
+        source = source.lower()
+        if source not in VENDOR_SOURCES:
+            raise AttestationError("source must be apple, android or windows")
         object.__setattr__(self, "source", source)
         object.__setattr__(self, "subject", _require_subject(self.subject))
         if not isinstance(self.claims, dict):
@@ -254,7 +258,10 @@ def normalize_attestation(source: str, raw: dict, *, observed_at: str) -> Attest
     payload_name, payload, mappings, hash_key = _vendor_payload(source, raw)
     if not isinstance(payload, dict):
         raise AttestationError(f"{payload_name} must be an object")
-    raw_claims = payload.get("claims") or {}
+    if "claims" in payload:
+        raw_claims = payload["claims"]
+    else:
+        raw_claims = {}
     if not isinstance(raw_claims, dict):
         raise AttestationError("claims must be an object")
     claims = {

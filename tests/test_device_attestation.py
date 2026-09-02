@@ -256,6 +256,28 @@ def test_engine_run_once_preserves_persisted_attestation_when_report_omits_it():
     assert stored_after.attestation == envelope.to_dict()
 
 
+def test_present_non_object_claims_are_rejected_instead_of_treated_absent():
+    raw = _fixture("android")
+    raw["device_trust"]["claims"] = []
+    try:
+        normalize_attestation("android", raw, observed_at="2026-09-02T10:01:00Z")
+    except AttestationError as exc:
+        assert "claims must be an object" in str(exc)
+    else:
+        raise AssertionError("present non-object claims accepted")
+
+
+def test_persisted_envelope_source_must_match_vendor_contract():
+    envelope = normalize_attestation("apple", _fixture("apple"), observed_at="2026-09-02T10:01:00Z").to_dict()
+    envelope["source"] = "linux"
+    try:
+        envelope_from_dict(envelope)
+    except AttestationError as exc:
+        assert "source must be apple, android or windows" in str(exc)
+    else:
+        raise AssertionError("persisted envelope source outside contract accepted")
+
+
 if __name__ == "__main__":
     test_three_vendor_fixtures_share_neutral_contract_without_losing_differences()
     test_absent_claim_is_unknown_and_not_false_by_default()
@@ -267,4 +289,6 @@ if __name__ == "__main__":
     test_conflicting_vendor_claim_aliases_are_rejected()
     test_read_only_report_skips_malformed_attestation_without_hiding_valid_rows()
     test_engine_run_once_preserves_persisted_attestation_when_report_omits_it()
+    test_present_non_object_claims_are_rejected_instead_of_treated_absent()
+    test_persisted_envelope_source_must_match_vendor_contract()
     print("device-attestation tests passed")
