@@ -12,18 +12,18 @@ Run with `python3.11 -S` to prove there are no site-packages dependencies:
 
 Optional signature verification:
     --key /path/to/release_signing.pub   # Ed25519 public PEM (operator-held)
-If --key is NOT given, the signature is left UNVERIFIED but the hash-based
-tamper checks (1-4) still run. This is by design: the hash chain alone proves
-the artifact/SBOM/commit were not altered, while the key adds authenticity.
+If --key is NOT given, integrity checks still run but the verdict is FALLO:
+without a trusted public key the verifier cannot authenticate who produced a
+self-consistent artifact/SBOM/provenance set.
 
 Checks (all local):
   1. artifact_intact    sha256(artifact) == subject.digest.sha256
   2. sbom_intact        sha256(sbom)     == predicate.sbom.sha256
   3. commit_linked      predicate.commit is an ancestor of current HEAD
                         (git merge-base --is-ancestor)
-  4. version_consistent predicate.version == pyproject == .release-version
-  5. signature_optional if --key: verify Ed25519 sig over the payload bytes;
-                        else: warn "unverified signature" but do NOT fail
+  4. version_consistent predicate.version == pyproject == .release-version,
+                        artifactVersion matches, versionConsistent is true
+  5. signature_authenticated verifies Ed25519 over the DSSE PAE when --key is supplied
   6. canonical_stable  re-serializing the statement canonically and re-hashing
                         reproduces the recorded payload's sha256
 
@@ -57,6 +57,12 @@ def sha256_bytes(data: bytes) -> str:
 
 def canonical_json(obj) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def dsse_pae(payload_type: str, payload: bytes) -> bytes:
+    pt = payload_type.encode("utf-8")
+    return b" ".join([b"DSSEv1", str(len(pt)).encode("ascii"), pt,
+                      str(len(payload)).encode("ascii"), payload])
 
 
 def blank_volatile(obj: dict) -> dict:
@@ -137,7 +143,7 @@ def read_release_version(repo: Path) -> str:
     return ""
 
 
-def verify_signature(payload_bytes: bytes, env: dict, key_path: Path) -> tuple[bool, str]:
+def verify_signature(payload_type: str, payload_bytes: bytes, env: dict, key_path: Path) -> tuple[bool, str]:
     from cryptography.hazmat.primitives.serialization import load_pem_public_key
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     from cryptography.exceptions import InvalidSignature
@@ -153,7 +159,7 @@ def verify_signature(payload_bytes: bytes, env: dict, key_path: Path) -> tuple[b
             continue  # skip signatures for a different key
         raw_sig = base64.b64decode(sig["sig"])
         try:
-            key.verify(raw_sig, payload_bytes)
+            key.verify(raw_sig, dsse_pae(payload_type, payload_bytes))
             return True, f"verified (keyid {wanted_keyid})"
         except InvalidSignature:
             return False, "Ed25519 signature invalid"
@@ -204,22 +210,32 @@ def run(artifact: Path, sbom: Path, dsse: Path, repo: Path,
 
     # 4. version_consistent
     pred_version = statement["predicate"]["version"]
+    pred_artifact_version = statement["predicate"].get("artifactVersion") or ""
+    pred_version_consistent = statement["predicate"].get("versionConsistent")
     pp_version = read_project_version(repo)
     rv_version = read_release_version(repo)
     versions = {"predicate": pred_version, "pyproject": pp_version}
+    if pred_artifact_version:
+        versions["artifact"] = pred_artifact_version
     if rv_version:
         versions[".release-version"] = rv_version
-    ok = len(set(v for v in versions.values() if v)) <= 1 and bool(pred_version)
-    results["version_consistent"] = {"ok": ok, "versions": versions}
+    ok = (len(set(v for v in versions.values() if v)) <= 1
+          and bool(pred_version)
+          and pred_version_consistent is not False)
+    results["version_consistent"] = {
+        "ok": ok,
+        "versions": versions,
+        "versionConsistent": pred_version_consistent,
+    }
 
-    # 5. signature_optional
+    # 5. signature_authenticated
     if key is not None:
-        ok, detail = verify_signature(payload_bytes, env, key)
-        results["signature_optional"] = {"ok": ok, "detail": detail}
+        ok, detail = verify_signature(env.get("payloadType", ""), payload_bytes, env, key)
+        results["signature_authenticated"] = {"ok": ok, "detail": detail}
     else:
-        results["signature_optional"] = {
-            "ok": True,
-            "detail": "unverified (no --key; hash chain intact covers tamper)",
+        results["signature_authenticated"] = {
+            "ok": False,
+            "detail": "unauthenticated (missing --key; integrity checked but APTO requires trust anchor)",
         }
 
     # 6. canonical_stable

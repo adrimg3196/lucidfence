@@ -46,6 +46,23 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Generate SBOM and provenance for package
+        run: |
+          mkdir -p build/provenance
+          artifact="$(ls dist/*.tar.gz | head -n 1)"
+          python3 scripts/generate_sbom.py --out build/provenance/sbom.cdx.json
+          python3 scripts/provenance_attest.py \
+            --artifact "$artifact" \
+            --sbom build/provenance/sbom.cdx.json \
+            --out build/provenance/provenance.dsse.json \
+            --repo "$GITHUB_WORKSPACE"
+          python3 scripts/release_preflight.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --artifact "$artifact" \
+            --sbom build/provenance/sbom.cdx.json \
+            --dsse build/provenance/provenance.dsse.json \
+            --json
+
       - name: Verify package (twine check)
         run: python -m twine check dist/*
 

@@ -29,7 +29,7 @@ El envelope DSSE tiene este shape (sin dependencias de `in-toto`/`cosign`):
   "payload": "<base64 del in-toto Statement (JSON canónico)>",
   "signatures": [
     { "keyid": "<sha256 de la clave pública del operador>",
-      "sig": "<base64 de la firma Ed25519 sobre los bytes del payload>" }
+      "sig": "<base64 de la firma Ed25519 sobre DSSE PAE>" }
   ]
 }
 ```
@@ -52,10 +52,14 @@ El núcleo del verificador **no importa `cryptography`** salvo que pases
 2. `sbom_intact`       — sha256(sbom) == predicate.sbom.sha256
 3. `commit_linked`     — el commit del predicate es ancestro de HEAD (`git merge-base --is-ancestor`)
 4. `version_consistent`— predicate.version == pyproject == .release-version
-5. `signature_optional`— si `--key`: verifica Ed25519; si no: avisa "unverified" pero NO falla
+5. `signature_authenticated`— verifica Ed25519 con `--key`; sin clave el
+   verificador termina en `FALLO` para no llamar APTO a una procedencia no autenticada
 6. `canonical_stable`  — re-serializar canónicamente reproduce el mismo digest
 
-### Comando copia-pega (offline)
+### Verificación autenticada (offline)
+
+Para obtener `VERIFY PROVENANCE: APTO` debes aportar la clave PÚBLICA Ed25519
+confiable del operador que firmó el release:
 
 ```bash
 # Desde la raíz del repo clonado:
@@ -64,26 +68,19 @@ python3.11 scripts/verify_provenance.py \
     --sbom     sbom.cdx.json \
     --dsse     provenance.dsse.json \
     --repo     . \
+    --key      /ruta/a/release_signing.pub \
     --json
 ```
 
 Salida esperada: `VERIFY PROVENANCE: APTO` y exit 0. Cualquier alteración
-del artefacto, del SBOM o de la cadena de commits produce `FALLO` (exit 1).
+del artefacto, del SBOM, de la cadena de commits o de la firma produce
+`FALLO` (exit 1).
 
-### Comprobar también la firma del operador (opcional)
+### Comprobación de integridad sin clave (no autenticada)
 
-```bash
-# Requiere la clave PÚBLICA Ed25519 del operador (fuera del repo, la da quien hizo el release)
-python3.11 scripts/verify_provenance.py \
-    --artifact dist/lucidfence-1.6.0.tar.gz \
-    --sbom     sbom.cdx.json \
-    --dsse     provenance.dsse.json \
-    --repo     . \
-    --key      /ruta/a/release_signing.pub
-```
-
-Sin `--key` la verificación de hashes sigue cubriendo la *integridad*; la
-clave añade *autenticidad* (sabes qué operador firmó).
+Sin `--key`, el verificador sigue ejecutando los checks de hashes/versiones sin
+red, pero el veredicto final es `FALLO`: una procedencia autoconsistente sin
+ancla externa no prueba quién la produjo.
 
 ------------------------------------------------------------------
 ## Fixture de ejemplo (en el repo, verificable sin red)
@@ -154,10 +151,14 @@ attestation, o si el hash del artefacto / commit / versión no cuadra, el
 verdict es **DO NOT RELEASE** (exit 1):
 
 ```bash
-python3.11 scripts/release_preflight.py --artifact dist/lucidfence-1.6.0.tar.gz
+python3.11 scripts/release_preflight.py \
+    --artifact dist/lucidfence-1.6.0.tar.gz \
+    --sbom sbom.cdx.json \
+    --dsse provenance.dsse.json
 #   [PASS] sbom_present
 #   [PASS] provenance_present
 #   [PASS] prov_artifact_match
+#   [PASS] prov_sbom_match
 #   [PASS] prov_commit_ancestor
 #   [PASS] prov_version_match
 # VERDICT: READY TO RELEASE
