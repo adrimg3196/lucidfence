@@ -31,6 +31,10 @@ _TOOL_CLASSES = {
     "trace.write": REVERSIBLE,
     "comment.write": REVERSIBLE,
     "device.lock": SENSITIVE,
+    "device.message": REVERSIBLE,
+    "device.locate": SENSITIVE,
+    "device.reboot": SENSITIVE,
+    "device.clear_passcode": SENSITIVE,
     "device.wipe": PROHIBITED,
     "secret.read": PROHIBITED,
     "release.publish": PROHIBITED,
@@ -126,7 +130,10 @@ def authorize_tool_call(
     if tool_class == PROHIBITED:
         return _deny(actor_id, stage, tool, clean_params, "permanently_prohibited", "tool is permanently prohibited")
 
-    raw_result = executor() if executor is not None else None
+    try:
+        raw_result = executor() if executor is not None else None
+    except Exception as exc:  # noqa: BLE001
+        raw_result = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     return {
         "allowed": True,
         "actor": str(actor_id),
