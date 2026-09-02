@@ -49,3 +49,24 @@ Only these are auto-mergeable by a loop:
 - `loop-audit` CI workflow and dependabot patches for loop tooling.
 
 Everything else (adapters, engine, desktop, security) requires human merge.
+
+## Co-signed paid opt-in (Opus 4.8) — #188
+
+Product sign-off for the paid aggregator path in `loop_improve.py` (the
+`PAID_OPTIN_APPROVED #188` marker). Co-signed by CTO + PM.
+
+- **Activation gate (unchanged, must stay):** the Opus 4.8 tier is ONLY used when
+  the operator exports an ABSOLUTE path in `LUCIDFENCE_CLAUDE_CLI`. No env var ⇒
+  the aggregator falls back to the 100%-free local MoA. Default fleet config sets
+  nothing ⇒ billed cost is $0.00.
+- **Exposure if the gate IS opened (informed figure, 2026-08-24 audit):** at
+  measured fleet load (11.86M input + 248K output tokens/day over 67 runs / 6
+  days), the Opus 4.8 tier costs **~$196/day ≈ $5,894/month ≈ $71,716/year**.
+  This is authorized exposure, not current spend — billed cost of the fleet today
+  is $0.00 (all 23 cron jobs + 12 profiles on `tencent/hy3:free`).
+- **PM decision:** the co-sign is INFORMED, not nominal. The $0 / free-tier-only
+  posture of LucidFence (AGENTS.md boundary) is NOT relaxed — this remains opt-in
+  only. Any future change to the default (activating paid by default) requires a
+  new ASK-FIRST + co-sign, not a silent flip.
+- **Source of truth for the figure:** this file. `loop_improve.py` carries the
+  same number inline next to the #188 marker.
