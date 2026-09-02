@@ -103,6 +103,28 @@ def test_alias_only_match_stays_separate_with_visible_review_finding():
     )
 
 
+def test_alias_only_candidate_does_not_join_strong_identity_cluster():
+    result = MultiUEMOrchestrator([
+        binding("jamf", [
+            device("jamf", "j-strong", hardware="hw-1", alias="shared-cart"),
+        ]),
+        binding("intune", [
+            device("intune", "i-strong", hardware="hw-1"),
+        ]),
+        binding("applivery", [
+            device("applivery", "a-alias-only", alias="shared-cart"),
+        ]),
+    ]).sync(now=NOW)
+
+    assert len(result.devices) == 2
+    strong = next(item for item in result.devices if item.provider_refs.get("jamf") == "j-strong")
+    alias_only = next(item for item in result.devices if item.provider == "applivery")
+    assert strong.provider_refs == {"intune": "i-strong", "jamf": "j-strong"}
+    assert "applivery" not in strong.provider_refs
+    assert alias_only.identity_conflict is True
+    assert any(finding["reason"] == "ambiguous_alias" for finding in alias_only.identity_findings)
+
+
 def test_engine_temporal_uem_handoff_preserves_prior_identity_lineage():
     with TemporaryDirectory() as tmpdir:
         eng = Engine({"mode": "simulation", "data_dir": tmpdir})
@@ -173,6 +195,7 @@ if __name__ == "__main__":
     test_recycled_serial_keeps_devices_separate_and_marks_visible_ambiguity()
     test_restored_device_and_uem_id_collision_preserve_lineage_without_auto_merging_ambiguous_candidates()
     test_alias_only_match_stays_separate_with_visible_review_finding()
+    test_alias_only_candidate_does_not_join_strong_identity_cluster()
     test_engine_temporal_uem_handoff_preserves_prior_identity_lineage()
     test_identity_identifiers_stay_out_of_cloud_snapshot()
     print("identity-lineage tests passed")

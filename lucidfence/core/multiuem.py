@@ -457,6 +457,25 @@ class MultiUEMOrchestrator:
         output: list[NormalizedDevice] = []
         for component in components:
             members = [records[index] for index in component]
+            strong_groups = self._strong_identity_components(members)
+            if len(strong_groups) > 1 and self._has_alias_bridge_between_groups(members, strong_groups):
+                conflict_reasons = ["ambiguous_alias"]
+                for group in strong_groups:
+                    group_members = [members[index] for index in group]
+                    if len(group_members) == 1:
+                        group_members[0].identity_conflict = True
+                        output.append(
+                            self._finalize_single(
+                                group_members[0], now, members, conflict_reasons
+                            )
+                        )
+                    else:
+                        merged = self._merge(group_members, now)
+                        merged.identity_conflict = True
+                        merged.identity_findings = self._identity_findings(members, conflict_reasons)
+                        output.append(merged)
+                continue
+
             serials = {normalize_identity(item.serial_number) for item in members}
             imeis = {normalize_identity(item.imei) for item in members}
             hardware_ids = {self._hardware_identity(item) for item in members}
@@ -509,6 +528,43 @@ class MultiUEMOrchestrator:
             if serial_matches and imei_matches and serial_matches.isdisjoint(imei_matches):
                 return True
         return False
+
+    @staticmethod
+    def _strong_identity_components(members: list[NormalizedDevice]) -> list[list[int]]:
+        strong_keys = [
+            {key for key in MultiUEMOrchestrator._identity_keys(item) if key[0] != "alias"}
+            for item in members
+        ]
+        pending = set(range(len(members)))
+        groups: list[list[int]] = []
+        while pending:
+            group = {min(pending)}
+            changed = True
+            while changed:
+                changed = False
+                related = {
+                    candidate
+                    for candidate in pending - group
+                    if any(strong_keys[candidate] & strong_keys[current] for current in group)
+                }
+                if related:
+                    group.update(related)
+                    changed = True
+            pending.difference_update(group)
+            groups.append(sorted(group))
+        return groups
+
+    @staticmethod
+    def _has_alias_bridge_between_groups(
+        members: list[NormalizedDevice], groups: list[list[int]]
+    ) -> bool:
+        alias_to_groups: dict[str, set[int]] = {}
+        for group_index, group in enumerate(groups):
+            for member_index in group:
+                alias = MultiUEMOrchestrator._alias_identity(members[member_index])
+                if alias:
+                    alias_to_groups.setdefault(alias, set()).add(group_index)
+        return any(len(group_indexes) > 1 for group_indexes in alias_to_groups.values())
 
     @staticmethod
     def _has_alias_only_bridge(members: list[NormalizedDevice]) -> bool:
