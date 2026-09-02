@@ -537,6 +537,16 @@ class Engine:
                         if isinstance(rep.attestation, dict)
                         else (prev.attestation if prev is not None else None)
                     ),
+                    identity_lineage=(
+                        dict(rep.raw.get("identity_graph") or {})
+                        if isinstance(rep.raw, dict) and isinstance(rep.raw.get("identity_graph"), dict)
+                        else None
+                    ),
+                    identity_findings=(
+                        list(rep.raw.get("identity_findings") or [])
+                        if isinstance(rep.raw, dict) and isinstance(rep.raw.get("identity_findings"), list)
+                        else []
+                    ),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
