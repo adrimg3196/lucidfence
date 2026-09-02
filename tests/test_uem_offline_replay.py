@@ -138,6 +138,11 @@ def test_replay_matrix_marks_unknowns_and_fails_uncovered_inventory_adapters():
         assert covered[adapter_name]["scenarios"]["rate_limit_retry_after"]["virtual_sleeps"] == [2.0]
         assert covered[adapter_name]["scenarios"]["rate_limit_retry_after"]["replay_calls"] == 2
         assert covered[adapter_name]["scenarios"]["pagination"]["adapter_result"]["count"] == 2
+        duplicate_cursor = covered[adapter_name]["scenarios"]["duplicate_cursor"]
+        assert duplicate_cursor["status"] == "degraded", (adapter_name, duplicate_cursor)
+        assert duplicate_cursor["adapter_result"]["error_type"] == "duplicate_cursor", (adapter_name, duplicate_cursor)
+        assert duplicate_cursor["adapter_result"]["replay"]["partial_count"] == 2, (adapter_name, duplicate_cursor)
+        assert duplicate_cursor["replay_calls"] == 2, (adapter_name, duplicate_cursor)
         assert covered[adapter_name]["scenarios"]["partial_json"]["status"] == "unknown"
         assert covered[adapter_name]["scenarios"]["auth_errors"]["adapter_result"]["error_type"] == "auth_error"
         for scenario_name, scenario in covered[adapter_name]["scenarios"].items():
