@@ -160,6 +160,13 @@ def test_provenance_verifier_with_key_works_without_site_packages():
     assert "VERIFY PROVENANCE: APTO" in result.stdout
 
 
+def test_ci_python_job_fetches_history_for_provenance_fixture():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    python_job = workflow[workflow.index("  python:"):workflow.index("  verify-docs:")]
+
+    assert "fetch-depth: 0" in python_job
+
+
 def test_release_workflow_publishes_sbom_and_provenance_assets():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
     build_idx = workflow.index("name: Construir tarball versionado")
