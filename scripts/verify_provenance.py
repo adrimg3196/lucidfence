@@ -92,15 +92,10 @@ def git_commit_linked(repo: Path, commit: str):
     Returns one of:
       "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok)
       "not_ancestor"— commit resolves but is provably NOT an ancestor (AC1c: FALLO)
-      "unknown"     — commit object is NOT in the local repository (e.g. a
-                      shallow/partial checkout), so we cannot prove ancestry one
-                      way or the other. We do NOT fail on this: the hash chain
-                      already covers tampering, and a shallow clone simply lacks
-                      the history to adjudicate. The signature/hash checks still
-                      run. (If the commit were passed as a literal 40-zero fake,
-                      it also lands here — not a hard failure, since we can't
-                      prove it's absent either; that's why the envelope is also
-                      expected to be signed in trustworthy contexts.)
+      "unknown"     — commit object is NOT in the local repository. A verifier
+                      cannot prove provenance for a commit it cannot resolve, so
+                      this is a hard failure (use a full checkout/fetch-depth: 0
+                      for release verification).
     """
     if not commit:
         return "not_ancestor"
@@ -357,10 +352,7 @@ def run(artifact: Path, sbom: Path, dsse: Path, repo: Path,
     # 3. commit_linked (ancestor of HEAD)
     commit = statement["predicate"]["invocation"]["configSource"]["commit"]
     status = git_commit_linked(repo, commit)
-    # Only "not_ancestor" is a hard failure. "unknown" (commit absent from a
-    # shallow/partial checkout) does not block: we lack the history to prove
-    # non-ancestry, and the hash chain already covers tamper. "ancestor" passes.
-    ok = status != "not_ancestor"
+    ok = status == "ancestor"
     head_out = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
                               capture_output=True, text=True).stdout.strip()
     results["commit_linked"] = {

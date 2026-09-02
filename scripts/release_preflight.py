@@ -318,6 +318,28 @@ def check_prov_version_match(repo, artifact=None, sbom=None, dsse=None):
     return ok, {"versions": versions, "versionConsistent": version_consistent}
 
 
+def check_prov_signature_authenticated(repo, artifact=None, sbom=None, dsse=None, key=None):
+    if not key:
+        return False, {"error": "need --key to authenticate release provenance"}
+    if not artifact or not sbom or not dsse:
+        return False, {"error": "need --artifact, --sbom, --dsse and --key to authenticate"}
+    verifier = os.path.join(repo, "scripts", "verify_provenance.py")
+    if not os.path.isfile(verifier):
+        return False, {"error": f"verify_provenance.py missing: {verifier}"}
+    res = subprocess.run([
+        sys.executable, verifier,
+        "--artifact", artifact,
+        "--sbom", sbom,
+        "--dsse", dsse,
+        "--repo", repo,
+        "--key", key,
+        "--json",
+    ], capture_output=True, text=True)
+    ok = res.returncode == 0
+    last = (res.stdout.strip().splitlines() or [""])[-1]
+    return ok, {"returncode": res.returncode, "verdict": last[:500]}
+
+
 CHECKS = [
     ("version_consistency", check_version_consistency, True),
     ("changelog_unreleased", check_changelog_unreleased, True),
@@ -365,6 +387,9 @@ def main():
     ap.add_argument("--dsse", default=None,
                     help="DSSE provenance envelope (default: "
                          "<repo>/provenance.dsse.json)")
+    ap.add_argument("--key", default=None,
+                    help="Ed25519 public PEM used to authenticate release DSSE "
+                         "when --artifact enables release mode")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo) if args.repo else _autodetect_repo()
@@ -385,6 +410,7 @@ def main():
             ("prov_sbom_match", check_prov_sbom_match, True),
             ("prov_commit_ancestor", check_prov_commit_ancestor, True),
             ("prov_version_match", check_prov_version_match, True),
+            ("prov_signature_authenticated", check_prov_signature_authenticated, True),
         ]
     else:
         # Avoid a misleading "PASS" on provenance checks that have no input.
@@ -402,9 +428,14 @@ def main():
             elif release_mode and name in (
                 "sbom_present", "provenance_present", "prov_artifact_match",
                 "prov_sbom_match", "prov_commit_ancestor", "prov_version_match",
+                "prov_signature_authenticated",
             ):
-                ok, detail = fn(repo, artifact=args.artifact,
-                                sbom=args.sbom, dsse=args.dsse)
+                if name == "prov_signature_authenticated":
+                    ok, detail = fn(repo, artifact=args.artifact,
+                                    sbom=args.sbom, dsse=args.dsse, key=args.key)
+                else:
+                    ok, detail = fn(repo, artifact=args.artifact,
+                                    sbom=args.sbom, dsse=args.dsse)
                 is_hard = hard
             else:
                 ok, detail = fn(repo)

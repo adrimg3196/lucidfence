@@ -45,8 +45,9 @@ El *in-toto Statement* declara:
 ## Verificación mínima (stdlib, sin red)
 ------------------------------------------------------------------
 
-El núcleo del verificador **no importa `cryptography`** salvo que pases
-`--key`. Detecta alteración solo con `hashlib` + `json` + `git`:
+El núcleo del verificador **no importa `cryptography`**: incluso con `--key`
+puede autenticar la firma Ed25519 con Python 3.11 stdlib (y recurre a
+`openssl` si está disponible). Detecta alteración con `hashlib` + `json` + `git`:
 
 1. `artifact_intact`   — sha256(artefacto) == subject.digest.sha256
 2. `sbom_intact`       — sha256(sbom) == predicate.sbom.sha256
@@ -154,13 +155,15 @@ verdict es **DO NOT RELEASE** (exit 1):
 python3.11 scripts/release_preflight.py \
     --artifact dist/lucidfence-1.6.0.tar.gz \
     --sbom sbom.cdx.json \
-    --dsse provenance.dsse.json
+    --dsse provenance.dsse.json \
+    --key release_signing.pub
 #   [PASS] sbom_present
 #   [PASS] provenance_present
 #   [PASS] prov_artifact_match
 #   [PASS] prov_sbom_match
 #   [PASS] prov_commit_ancestor
 #   [PASS] prov_version_match
+#   [PASS] prov_signature_authenticated
 # VERDICT: READY TO RELEASE
 ```
 
@@ -199,10 +202,9 @@ El verificador distingue tres estados para el commit del predicate:
 - `not_ancestor` — el commit **existe en el repo** pero NO es ancestro →
   **FALLO** (AC1c: commit no-ancestro detectado).
 - `unknown` — el objeto commit **no está en el repo local** (p. ej. un
-  checkout `fetch-depth: 1`). En ese caso NO se bloquea: no hay historial
-  para probar no-ancestría, y la cadena de hashes ya cubre la alteración.
-  En CI, el job `verify-docs` usa `fetch-depth: 0` para adjudicar la
-  antcestría real.
+  checkout `fetch-depth: 1`). En release verification esto es **FALLO**: no se
+  puede llamar APTO a una procedencia cuyo commit no se puede resolver. Usa un
+  checkout completo (`fetch-depth: 0`) antes de verificar releases.
 
 ------------------------------------------------------------------
 ## No-objetivos (qué NO prometemos)
@@ -211,4 +213,4 @@ El verificador distingue tres estados para el commit del predicate:
 - **No** reproducibilidad bit-a-bit del build (`metadata.reproducible=false`).
 - **No** exigimos cuenta cloud ni clave de LucidFence (clave del operador).
 - **No** usamos `slsa-verifier` ni el paquete PyPI `in-toto`/`cosign`.
-- La firma es **opcional**: la integridad siempre se cubre con hashes.
+- La firma Sigstore es **opcional**; la firma Ed25519 offline es obligatoria para un veredicto `APTO`.

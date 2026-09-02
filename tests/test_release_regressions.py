@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import importlib.machinery
 import json
 import os
@@ -262,3 +263,94 @@ def test_dsse_signature_uses_pae_not_raw_payload():
     assert pa.dsse_pae("application/vnd.in-toto+json", payload) == (
         b"DSSEv1 28 application/vnd.in-toto+json 17 " + payload
     )
+
+
+def test_provenance_verifier_rejects_absent_commit_even_when_signed():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption
+
+    vp = _load_script("verify_provenance.py")
+    fixture = ROOT / "docs" / "supply-chain" / "fixture"
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        key = Ed25519PrivateKey.generate()
+        pub_raw = key.public_key().public_bytes_raw()
+        private_key = tmp_path / "release.key"
+        public_key = tmp_path / "release.pub"
+        private_key.write_bytes(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+        public_key.write_bytes(key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo))
+        dsse = tmp_path / "fake-commit.dsse.json"
+        statement, _payload, env = vp.parse_dsse((fixture / "provenance.dsse.json").read_bytes())
+        statement["predicate"]["invocation"]["configSource"]["commit"] = "0" * 40
+        payload = vp.canonical_json(statement)
+        env["payload"] = base64.b64encode(payload).decode("ascii")
+        env["signatures"] = [{
+            "keyid": hashlib.sha256(pub_raw).hexdigest()[:32],
+            "sig": base64.b64encode(key.sign(vp.dsse_pae(vp.DSSE_PAYLOAD_TYPE, payload))).decode("ascii"),
+        }]
+        dsse.write_text(json.dumps(env), encoding="utf-8")
+
+        results = vp.run(
+            fixture / "lucidfence-1.6.0.tar.gz",
+            fixture / "sbom.cdx.json",
+            dsse,
+            ROOT,
+            public_key,
+        )
+
+    assert results["signature_authenticated"]["ok"] is True
+    assert results["commit_linked"]["ok"] is False
+    assert results["commit_linked"]["status"] == "unknown"
+
+
+def test_release_preflight_requires_authenticated_provenance_when_releasing():
+    rp = _load_script("release_preflight.py")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        artifact = root / "lucidfence-1.6.0.tar.gz"
+        sbom = root / "sbom.cdx.json"
+        dsse = root / "provenance.dsse.json"
+        artifact.write_bytes(b"artifact")
+        sbom.write_text('{"bomFormat":"CycloneDX","specVersion":"1.5"}', encoding="utf-8")
+        statement = {
+            "subject": [{"name": artifact.name, "digest": {"sha256": _load_script("verify_provenance.py").sha256_bytes(artifact.read_bytes())}}],
+            "predicate": {
+                "version": "1.6.0",
+                "artifactVersion": "1.6.0",
+                "versionConsistent": True,
+                "sbom": {"sha256": _load_script("verify_provenance.py").sha256_bytes(sbom.read_bytes())},
+                "invocation": {"configSource": {"commit": ""}},
+                "metadata": {},
+            },
+        }
+        dsse.write_text(json.dumps(_dsse_with_statement(statement)), encoding="utf-8")
+
+        ok, detail = rp.check_prov_signature_authenticated(
+            str(root), artifact=str(artifact), sbom=str(sbom), dsse=str(dsse), key=None
+        )
+
+    assert ok is False
+    assert "--key" in detail["error"]
+
+
+def test_release_workflow_signs_and_preflights_authenticated_provenance_at_release_commit():
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    assert "git checkout --detach \"${{ github.sha }}\"" in workflow
+    assert "openssl genpkey -algorithm Ed25519 -out dist/release_signing.key" in workflow
+    assert "openssl pkey -in dist/release_signing.key -pubout -out dist/release_signing.pub" in workflow
+    assert "--key dist/release_signing.key" in workflow
+    assert "--key dist/release_signing.pub" in workflow
+    release_block = workflow[workflow.index("name: Crear GitHub Release con el asset"):]
+    assert "dist/release_signing.pub" in release_block
+
+
+def test_pypi_workflow_signs_preflights_and_uploads_provenance_artifacts():
+    workflow = (ROOT / ".github" / "workflows" / "publish-pypi.yml").read_text()
+    assert "openssl genpkey -algorithm Ed25519 -out build/provenance/release_signing.key" in workflow
+    assert "openssl pkey -in build/provenance/release_signing.key -pubout -out build/provenance/release_signing.pub" in workflow
+    assert "--key build/provenance/release_signing.key" in workflow
+    assert "--key build/provenance/release_signing.pub" in workflow
+    assert "actions/upload-artifact@v4" in workflow
+    assert "build/provenance/sbom.cdx.json" in workflow
+    assert "build/provenance/provenance.dsse.json" in workflow
+    assert "build/provenance/release_signing.pub" in workflow

@@ -269,9 +269,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--artifact", required=True, help="path to the release artifact")
     ap.add_argument("--sbom", required=True, help="path to the CycloneDX SBOM (sbom.cdx.json)")
     ap.add_argument("--key", default=None,
-                    help="operator-held Ed25519 PEM private key (optional; if omitted, "
-                         "the envelope is produced unsigned and verify runs in "
-                         "signature-optional mode)")
+                    help="operator-held Ed25519 PEM private key. Required for "
+                         "release APTO; if omitted, the envelope is unsigned "
+                         "and offline verification remains FALLO")
     ap.add_argument("--out", default="provenance.dsse.json", help="output envelope path")
     ap.add_argument("--builder-id", default="local:lucidfence-release")
     ap.add_argument("--build-type", default="manual")
