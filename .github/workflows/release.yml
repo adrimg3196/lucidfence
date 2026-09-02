@@ -174,6 +174,10 @@ jobs:
                "release re-publicaría estas notas"
           exit 1
 
+      - name: Volver al commit exacto de release
+        if: steps.guard.outputs.skip == 'false'
+        run: git checkout --detach "${{ github.sha }}"
+
       - name: Construir tarball versionado
         if: steps.guard.outputs.skip == 'false'
         run: |
@@ -181,6 +185,36 @@ jobs:
           LUCIDFENCE_BUILD_VERSION="$VERSION" bash scripts/build.sh
           cd dist
           sha256sum "lucidfence-$VERSION.tar.gz" | tee SHA256SUMS
+
+      - name: Instalar dependencias de firma offline
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 -m pip install --require-hashes -r requirements.lock
+
+      - name: Generar SBOM y procedencia offline
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          python3 scripts/generate_sbom.py --out dist/sbom.cdx.json
+          openssl genpkey -algorithm Ed25519 -out dist/release_signing.key
+          openssl pkey -in dist/release_signing.key -pubout -out dist/release_signing.pub
+          python3 scripts/provenance_attest.py \
+            --artifact "dist/lucidfence-$VERSION.tar.gz" \
+            --sbom dist/sbom.cdx.json \
+            --key dist/release_signing.key \
+            --out dist/provenance.dsse.json \
+            --repo "$GITHUB_WORKSPACE"
+
+      - name: Release preflight con artefacto, SBOM y procedencia
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          python3 scripts/release_preflight.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --artifact "dist/lucidfence-$VERSION.tar.gz" \
+            --sbom dist/sbom.cdx.json \
+            --dsse dist/provenance.dsse.json \
+            --key dist/release_signing.pub \
+            --json
 
       - name: Smoke del artefacto (el tarball arranca de verdad)
         if: steps.guard.outputs.skip == 'false'
@@ -209,4 +243,7 @@ jobs:
           files: |
             dist/lucidfence-*.tar.gz
             dist/SHA256SUMS
+            dist/sbom.cdx.json
+            dist/provenance.dsse.json
+            dist/release_signing.pub
           fail_on_unmatched_files: true

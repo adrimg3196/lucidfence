@@ -37,6 +37,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install build twine
+          python -m pip install --require-hashes -r requirements.lock
 
       # Gate de regresión (t_69acb514): las 4 invariantes mecánicas de release
       # deben cumplirse antes de `twine upload`. El secreto (PYPI_TOKEN) es WARN.
@@ -45,6 +46,37 @@ jobs:
 
       - name: Build package
         run: python -m build
+
+      - name: Generate SBOM and provenance for package
+        run: |
+          mkdir -p build/provenance
+          artifact="$(find dist -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
+          python3 scripts/generate_sbom.py --out build/provenance/sbom.cdx.json
+          openssl genpkey -algorithm Ed25519 -out build/provenance/release_signing.key
+          openssl pkey -in build/provenance/release_signing.key -pubout -out build/provenance/release_signing.pub
+          python3 scripts/provenance_attest.py \
+            --artifact "$artifact" \
+            --sbom build/provenance/sbom.cdx.json \
+            --key build/provenance/release_signing.key \
+            --out build/provenance/provenance.dsse.json \
+            --repo "$GITHUB_WORKSPACE"
+          python3 scripts/release_preflight.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --artifact "$artifact" \
+            --sbom build/provenance/sbom.cdx.json \
+            --dsse build/provenance/provenance.dsse.json \
+            --key build/provenance/release_signing.pub \
+            --json
+
+      - name: Upload PyPI provenance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-provenance
+          path: |
+            build/provenance/sbom.cdx.json
+            build/provenance/provenance.dsse.json
+            build/provenance/release_signing.pub
+          if-no-files-found: error
 
       - name: Verify package (twine check)
         run: python -m twine check dist/*

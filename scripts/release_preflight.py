@@ -201,6 +201,32 @@ def _read_project_version(repo):
     return None
 
 
+def _artifact_version(path):
+    name = os.path.basename(path or "")
+    for suffix in (".tar.gz", ".tar.bz2", ".tar.xz", ".whl", ".zip"):
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+            break
+    m = re.search(r"[-_]v?(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.]+)?)", name)
+    return m.group(1) if m else ""
+
+
+def _load_dsse_statement(dsse_path):
+    import base64
+    import json as _json
+    raw = _read(dsse_path)
+    if raw is None:
+        raise ValueError(f"provenance envelope unreadable: {dsse_path}")
+    env = _json.loads(raw)
+    return _json.loads(base64.b64decode(env["payload"]))
+
+
+def _sha256_file(path):
+    import hashlib
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
 def check_sbom_present(repo, artifact=None, sbom=None, dsse=None):
     path = sbom or os.path.join(repo, "sbom.cdx.json")
     if not os.path.isfile(path):
@@ -238,13 +264,21 @@ def check_prov_artifact_match(repo, artifact=None, sbom=None, dsse=None):
     art_path = artifact
     if not art_path or not os.path.isfile(dsse_path):
         return False, {"error": "need --artifact and --dsse to compare"}
-    import base64
-    import hashlib
-    import json as _json
-    env = _json.loads(_read(dsse_path))
-    statement = _json.loads(base64.b64decode(env["payload"]))
+    statement = _load_dsse_statement(dsse_path)
     expected = statement["subject"][0]["digest"].get("sha256")
-    actual = hashlib.sha256(open(art_path, "rb").read()).hexdigest()
+    actual = _sha256_file(art_path)
+    ok = expected == actual
+    return ok, {"expected": expected, "actual": actual}
+
+
+def check_prov_sbom_match(repo, artifact=None, sbom=None, dsse=None):
+    dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
+    sbom_path = sbom or os.path.join(repo, "sbom.cdx.json")
+    if not os.path.isfile(sbom_path) or not os.path.isfile(dsse_path):
+        return False, {"error": "need --sbom and --dsse to compare"}
+    statement = _load_dsse_statement(dsse_path)
+    expected = statement.get("predicate", {}).get("sbom", {}).get("sha256")
+    actual = _sha256_file(sbom_path)
     ok = expected == actual
     return ok, {"expected": expected, "actual": actual}
 
@@ -253,10 +287,7 @@ def check_prov_commit_ancestor(repo, artifact=None, sbom=None, dsse=None):
     dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
     if not os.path.isfile(dsse_path):
         return False, {"error": "provenance envelope missing (need --dsse)"}
-    import base64
-    import json as _json
-    env = _json.loads(_read(dsse_path))
-    statement = _json.loads(base64.b64decode(env["payload"]))
+    statement = _load_dsse_statement(dsse_path)
     commit = statement["predicate"]["invocation"]["configSource"]["commit"]
     res = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
                           commit, "HEAD"], capture_output=True)
@@ -268,19 +299,45 @@ def check_prov_version_match(repo, artifact=None, sbom=None, dsse=None):
     dsse_path = dsse or os.path.join(repo, "provenance.dsse.json")
     if not os.path.isfile(dsse_path):
         return False, {"error": "provenance envelope missing (need --dsse)"}
-    import base64
-    import json as _json
-    env = _json.loads(_read(dsse_path))
-    statement = _json.loads(base64.b64decode(env["payload"]))
-    pred_version = statement["predicate"]["version"]
+    statement = _load_dsse_statement(dsse_path)
+    predicate = statement["predicate"]
+    pred_version = predicate["version"]
+    artifact_version = predicate.get("artifactVersion") or _artifact_version(artifact)
+    version_consistent = predicate.get("versionConsistent")
     pp_version = _read_project_version(repo)
     rv = _read(os.path.join(repo, ".release-version"))
     rv_version = rv.strip() if rv else None
     versions = {"predicate": pred_version, "pyproject": pp_version}
+    if artifact_version:
+        versions["artifact"] = artifact_version
     if rv_version:
         versions[".release-version"] = rv_version
-    ok = len(set(v for v in versions.values() if v)) <= 1
-    return ok, {"versions": versions}
+    ok = (len(set(v for v in versions.values() if v)) <= 1
+          and bool(pred_version)
+          and version_consistent is not False)
+    return ok, {"versions": versions, "versionConsistent": version_consistent}
+
+
+def check_prov_signature_authenticated(repo, artifact=None, sbom=None, dsse=None, key=None):
+    if not key:
+        return False, {"error": "need --key to authenticate release provenance"}
+    if not artifact or not sbom or not dsse:
+        return False, {"error": "need --artifact, --sbom, --dsse and --key to authenticate"}
+    verifier = os.path.join(repo, "scripts", "verify_provenance.py")
+    if not os.path.isfile(verifier):
+        return False, {"error": f"verify_provenance.py missing: {verifier}"}
+    res = subprocess.run([
+        sys.executable, verifier,
+        "--artifact", artifact,
+        "--sbom", sbom,
+        "--dsse", dsse,
+        "--repo", repo,
+        "--key", key,
+        "--json",
+    ], capture_output=True, text=True)
+    ok = res.returncode == 0
+    last = (res.stdout.strip().splitlines() or [""])[-1]
+    return ok, {"returncode": res.returncode, "verdict": last[:500]}
 
 
 CHECKS = [
@@ -330,6 +387,9 @@ def main():
     ap.add_argument("--dsse", default=None,
                     help="DSSE provenance envelope (default: "
                          "<repo>/provenance.dsse.json)")
+    ap.add_argument("--key", default=None,
+                    help="Ed25519 public PEM used to authenticate release DSSE "
+                         "when --artifact enables release mode")
     args = ap.parse_args()
 
     repo = os.path.abspath(args.repo) if args.repo else _autodetect_repo()
@@ -347,14 +407,16 @@ def main():
             ("sbom_present", check_sbom_present, True),
             ("provenance_present", check_provenance_present, True),
             ("prov_artifact_match", check_prov_artifact_match, True),
+            ("prov_sbom_match", check_prov_sbom_match, True),
             ("prov_commit_ancestor", check_prov_commit_ancestor, True),
             ("prov_version_match", check_prov_version_match, True),
+            ("prov_signature_authenticated", check_prov_signature_authenticated, True),
         ]
     else:
         # Avoid a misleading "PASS" on provenance checks that have no input.
         checks = [c for c in checks if c[0] not in (
             "sbom_present", "provenance_present", "prov_artifact_match",
-            "prov_commit_ancestor", "prov_version_match")]
+            "prov_sbom_match", "prov_commit_ancestor", "prov_version_match")]
 
     results = []
     hard_failed = 0
@@ -365,10 +427,15 @@ def main():
                 is_hard = args.strict_secret
             elif release_mode and name in (
                 "sbom_present", "provenance_present", "prov_artifact_match",
-                "prov_commit_ancestor", "prov_version_match",
+                "prov_sbom_match", "prov_commit_ancestor", "prov_version_match",
+                "prov_signature_authenticated",
             ):
-                ok, detail = fn(repo, artifact=args.artifact,
-                                sbom=args.sbom, dsse=args.dsse)
+                if name == "prov_signature_authenticated":
+                    ok, detail = fn(repo, artifact=args.artifact,
+                                    sbom=args.sbom, dsse=args.dsse, key=args.key)
+                else:
+                    ok, detail = fn(repo, artifact=args.artifact,
+                                    sbom=args.sbom, dsse=args.dsse)
                 is_hard = hard
             else:
                 ok, detail = fn(repo)
