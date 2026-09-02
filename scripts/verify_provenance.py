@@ -36,8 +36,10 @@ import base64
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json"
@@ -143,13 +145,173 @@ def read_release_version(repo: Path) -> str:
     return ""
 
 
-def verify_signature(payload_type: str, payload_bytes: bytes, env: dict, key_path: Path) -> tuple[bool, str]:
-    from cryptography.hazmat.primitives.serialization import load_pem_public_key
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    from cryptography.exceptions import InvalidSignature
+def _load_ed25519_public_raw_stdlib(key_path: Path) -> bytes:
+    """Return raw Ed25519 public key bytes from a PEM SubjectPublicKeyInfo.
 
+    This deliberately supports only the standard RFC 8410 Ed25519 SPKI shape
+    emitted by cryptography/OpenSSL for release signing keys. It is enough for
+    keyid calculation without importing third-party Python packages under -S.
+    """
+    text = key_path.read_text(encoding="utf-8")
+    body = "".join(line.strip() for line in text.splitlines()
+                   if not line.startswith("-----"))
+    der = base64.b64decode(body)
+    prefix = bytes.fromhex("302a300506032b6570032100")
+    if not der.startswith(prefix) or len(der) != len(prefix) + 32:
+        raise ValueError("key is not an Ed25519 public key")
+    return der[-32:]
+
+
+def _ed25519_inv(x: int) -> int:
+    p = 2 ** 255 - 19
+    return pow(x, p - 2, p)
+
+
+def _ed25519_xrecover(y: int) -> int:
+    p = 2 ** 255 - 19
+    d = -121665 * _ed25519_inv(121666) % p
+    i = pow(2, (p - 1) // 4, p)
+    xx = (y * y - 1) * _ed25519_inv(d * y * y + 1) % p
+    x = pow(xx, (p + 3) // 8, p)
+    if (x * x - xx) % p != 0:
+        x = (x * i) % p
+    if (x * x - xx) % p != 0:
+        raise ValueError("invalid Ed25519 point")
+    if x % 2 != 0:
+        x = p - x
+    return x
+
+
+def _ed25519_decode_point(raw: bytes) -> tuple[int, int]:
+    if len(raw) != 32:
+        raise ValueError("invalid Ed25519 point length")
+    p = 2 ** 255 - 19
+    y = int.from_bytes(raw, "little") & ((1 << 255) - 1)
+    x = _ed25519_xrecover(y)
+    if (x & 1) != (raw[31] >> 7):
+        x = p - x
+    return x, y
+
+
+def _ed25519_encode_point(point: tuple[int, int]) -> bytes:
+    x, y = point
+    bits = bytearray(int(y).to_bytes(32, "little"))
+    bits[31] |= (x & 1) << 7
+    return bytes(bits)
+
+
+def _ed25519_add(p1: tuple[int, int], p2: tuple[int, int]) -> tuple[int, int]:
+    prime = 2 ** 255 - 19
+    d = -121665 * _ed25519_inv(121666) % prime
+    x1, y1 = p1
+    x2, y2 = p2
+    denom_x = _ed25519_inv(1 + d * x1 * x2 * y1 * y2)
+    denom_y = _ed25519_inv(1 - d * x1 * x2 * y1 * y2)
+    x3 = (x1 * y2 + x2 * y1) * denom_x % prime
+    y3 = (y1 * y2 + x1 * x2) * denom_y % prime
+    return x3, y3
+
+
+def _ed25519_scalarmult(point: tuple[int, int], scalar: int) -> tuple[int, int]:
+    result = (0, 1)
+    addend = point
+    while scalar:
+        if scalar & 1:
+            result = _ed25519_add(result, addend)
+        addend = _ed25519_add(addend, addend)
+        scalar >>= 1
+    return result
+
+
+def _verify_ed25519_signature_stdlib(public_key: bytes, signature: bytes, message: bytes) -> bool:
+    q = 2 ** 252 + 27742317777372353535851937790883648493
+    if len(signature) != 64:
+        return False
+    r_bytes = signature[:32]
+    s = int.from_bytes(signature[32:], "little")
+    if s >= q:
+        return False
+    try:
+        a_point = _ed25519_decode_point(public_key)
+        r_point = _ed25519_decode_point(r_bytes)
+    except ValueError:
+        return False
+    base_y = 4 * _ed25519_inv(5) % (2 ** 255 - 19)
+    base = (_ed25519_xrecover(base_y), base_y)
+    h = int.from_bytes(hashlib.sha512(r_bytes + public_key + message).digest(), "little") % q
+    left = _ed25519_scalarmult(base, s)
+    right = _ed25519_add(r_point, _ed25519_scalarmult(a_point, h))
+    return _ed25519_encode_point(left) == _ed25519_encode_point(right)
+
+
+def _verify_signature_with_stdlib(payload_type: str, payload_bytes: bytes,
+                                  env: dict, public_key: bytes,
+                                  wanted_keyid: str) -> tuple[bool, str]:
+    message = dsse_pae(payload_type, payload_bytes)
+    for sig in env["signatures"]:
+        if sig.get("keyid") and sig["keyid"] != wanted_keyid:
+            continue
+        raw_sig = base64.b64decode(sig["sig"])
+        if _verify_ed25519_signature_stdlib(public_key, raw_sig, message):
+            return True, f"verified (keyid {wanted_keyid}, stdlib-ed25519)"
+        return False, "Ed25519 signature invalid"
+    return False, f"no signature matching keyid {wanted_keyid}"
+
+
+def _verify_signature_with_openssl(payload_type: str, payload_bytes: bytes,
+                                   env: dict, key_path: Path,
+                                   wanted_keyid: str) -> tuple[bool, str]:
+    openssl = shutil.which("openssl")
+    if not openssl:
+        return False, "cryptography unavailable and openssl not found"
+    for sig in env["signatures"]:
+        if sig.get("keyid") and sig["keyid"] != wanted_keyid:
+            continue
+        raw_sig = base64.b64decode(sig["sig"])
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            msg = tmp_path / "dsse-pae.bin"
+            sigfile = tmp_path / "signature.bin"
+            msg.write_bytes(dsse_pae(payload_type, payload_bytes))
+            sigfile.write_bytes(raw_sig)
+            commands = [
+                [openssl, "pkeyutl", "-verify", "-rawin", "-pubin",
+                 "-inkey", str(key_path), "-sigfile", str(sigfile),
+                 "-in", str(msg)],
+                [openssl, "pkeyutl", "-verify", "-pubin",
+                 "-inkey", str(key_path), "-sigfile", str(sigfile),
+                 "-in", str(msg)],
+            ]
+            errors = []
+            for cmd in commands:
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                if res.returncode == 0:
+                    return True, f"verified (keyid {wanted_keyid}, openssl)"
+                errors.append((res.stderr or res.stdout).strip())
+            detail = "; ".join(e for e in errors if e) or "openssl verification failed"
+            return False, detail
+    return False, f"no signature matching keyid {wanted_keyid}"
+
+
+def verify_signature(payload_type: str, payload_bytes: bytes, env: dict, key_path: Path) -> tuple[bool, str]:
     if not env.get("signatures"):
         return False, "no signatures in envelope"
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.exceptions import InvalidSignature
+    except ModuleNotFoundError:
+        public_key = _load_ed25519_public_raw_stdlib(key_path)
+        wanted_keyid = hashlib.sha256(public_key).hexdigest()[:32]
+        ok, detail = _verify_signature_with_stdlib(payload_type, payload_bytes, env, public_key, wanted_keyid)
+        if ok:
+            return ok, detail
+        openssl_ok, openssl_detail = _verify_signature_with_openssl(
+            payload_type, payload_bytes, env, key_path, wanted_keyid)
+        if openssl_ok:
+            return openssl_ok, openssl_detail
+        return False, f"{detail}; {openssl_detail}"
+
     key = load_pem_public_key(key_path.read_bytes())
     if not isinstance(key, Ed25519PublicKey):
         raise ValueError("key is not an Ed25519 public key")

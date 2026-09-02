@@ -49,7 +49,7 @@ jobs:
       - name: Generate SBOM and provenance for package
         run: |
           mkdir -p build/provenance
-          artifact="$(ls dist/*.tar.gz | head -n 1)"
+          artifact="$(find dist -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
           python3 scripts/generate_sbom.py --out build/provenance/sbom.cdx.json
           python3 scripts/provenance_attest.py \
             --artifact "$artifact" \

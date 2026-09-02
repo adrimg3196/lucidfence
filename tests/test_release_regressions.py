@@ -137,9 +137,26 @@ def test_pypi_workflow_checks_provenance_after_building_artifact():
     provenance_block = workflow[prov_idx:publish_idx]
     assert "scripts/provenance_attest.py" in provenance_block
     assert "scripts/release_preflight.py" in provenance_block
+    assert "artifact=\"$(find dist -maxdepth 1 -type f -name '*.tar.gz'" in provenance_block
     assert "--artifact \"$artifact\"" in provenance_block
     assert "--sbom build/provenance/sbom.cdx.json" in provenance_block
     assert "--dsse build/provenance/provenance.dsse.json" in provenance_block
+
+
+def test_provenance_verifier_with_key_works_without_site_packages():
+    fixture = ROOT / "docs" / "supply-chain" / "fixture"
+    result = subprocess.run(
+        ["python3.11", "-S", str(ROOT / "scripts" / "verify_provenance.py"),
+         "--artifact", str(fixture / "lucidfence-1.6.0.tar.gz"),
+         "--sbom", str(fixture / "sbom.cdx.json"),
+         "--dsse", str(fixture / "provenance.dsse.json"),
+         "--key", str(fixture / "release_signing_demo.pub"),
+         "--repo", str(ROOT)],
+        cwd=str(ROOT), capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "VERIFY PROVENANCE: APTO" in result.stdout
 
 
 def test_release_workflow_publishes_sbom_and_provenance_assets():
