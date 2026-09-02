@@ -261,7 +261,7 @@ def device_cve_summary(apps: list[dict]) -> dict:
     high = sum(1 for a in enriched if a["max_cve_severity"] == "high")
     unknown = sum(
         1 for a in enriched
-        if a["max_cve_severity"] in (None, "unknown")
+        if a["cves"] and a["max_cve_severity"] in (None, "unknown")
     )
     return {
         "apps_total": len(enriched),

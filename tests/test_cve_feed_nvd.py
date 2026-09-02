@@ -118,6 +118,31 @@ def test_load_feed_no_score_not_counted_critical_high():
         cve.restore_feed(saved or {})
 
 
+def test_unknown_cve_apps_excludes_apps_without_any_cve():
+    saved = cve.isolate_feed()
+    cve._FEED["unscoredapp"] = [
+        {
+            "id": "CVE-2099-0002",
+            "severity": "unknown",
+            "score": 0.0,
+            "title": "unscored",
+            "epss": 0.0,
+        }
+    ]
+    try:
+        summary = cve.device_cve_summary(
+            [{"name": "clean-app"}, {"name": "unscored-app"}]
+        )
+        check(summary["apps_total"] == 2, "two apps evaluated")
+        check(summary["vulnerable_apps"] == 1, "only one app has a CVE")
+        check(
+            summary["unknown_cve_apps"] == 1,
+            "only CVE-bearing apps may count as unknown severity",
+        )
+    finally:
+        cve.restore_feed(saved or {})
+
+
 if __name__ == "__main__":
     for fn in (v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)):
         fn()

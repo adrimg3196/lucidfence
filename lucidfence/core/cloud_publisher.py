@@ -134,6 +134,15 @@ def build_demo_engine(workdir: Path) -> Engine:
     # Flota demo determinista (el Engine la lee desde este seed).
     _write_demo_seed(tdir / "fleet_seed.json")
 
+    # engine-cron refresca este cache antes de arrancar el publisher. El Engine
+    # usa un tenant temporal, así que hay que sembrarlo explícitamente: de otro
+    # modo el refresh vivo se ignoraba y un fallo del segundo sync perdía también
+    # el último cache bueno.
+    repository_cve_cache = ROOT / "data" / "cve_feed_nvd.json"
+    tenant_cve_cache = tdir / "cve_feed_nvd.json"
+    if repository_cve_cache.is_file():
+        tenant_cve_cache.write_bytes(repository_cve_cache.read_bytes())
+
     cfg = {
         "mode": "simulation",
         "autostart": False,
@@ -149,7 +158,7 @@ def build_demo_engine(workdir: Path) -> Engine:
         # de arrancar el engine. Si NVD cae, core/cve_feed_nvd.py deja intacto el
         # ultimo feed bueno y serialize() mantiene fallback demo si no hay señal.
         "cve_feed_sync": True,
-        "cve_feed_path": str(tdir / "cve_feed_nvd.json"),
+        "cve_feed_path": str(tenant_cve_cache),
         "cve_feed_apps": _demo_cve_app_names(),
         "cve_feed_per_app": int(os.environ.get("LUCIDFENCE_NVD_PER_APP", "3")),
         "cve_feed_timeout": int(os.environ.get("LUCIDFENCE_NVD_TIMEOUT", "12")),

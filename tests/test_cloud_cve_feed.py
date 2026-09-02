@@ -90,6 +90,46 @@ def test_cloud_cve_summary_falls_back_to_demo_without_engine_signal():
     assert summary["demo"] is True
 
 
+def test_cloud_demo_seeds_tenant_with_refreshed_repository_cache():
+    old_root = cloud_publisher.ROOT
+    old_sync = cve_feed_nvd.sync_nvd_feed
+    saved = cve.isolate_feed()
+    try:
+        with tempfile.TemporaryDirectory(prefix="lucidfence-cloud-cache-") as tmp:
+            root = Path(tmp) / "repo"
+            source = root / "data" / "cve_feed_nvd.json"
+            source.parent.mkdir(parents=True)
+            payload = {
+                "source": "NVD",
+                "generated": "2026-09-02T00:00:00Z",
+                "apps": {
+                    "google chrome": [
+                        {
+                            "id": "CVE-2099-4242",
+                            "severity": "high",
+                            "score": 8.0,
+                            "title": "cached",
+                            "epss": 0.0,
+                        }
+                    ]
+                },
+            }
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            cloud_publisher.ROOT = root
+            cve_feed_nvd.sync_nvd_feed = lambda **_kwargs: 0
+
+            engine = cloud_publisher.build_demo_engine(Path(tmp) / "tenant")
+            loaded_path = Path(engine.cve_feed_load["path"])
+
+            assert engine.cve_feed_load["ok"] is True, engine.cve_feed_load
+            assert loaded_path != source
+            assert json.loads(loaded_path.read_text(encoding="utf-8")) == payload
+    finally:
+        cloud_publisher.ROOT = old_root
+        cve_feed_nvd.sync_nvd_feed = old_sync
+        cve.restore_feed(saved or {})
+
+
 def test_engine_cve_feed_load_is_observable_fail_unknown_not_open():
     """Engine must record CVE feed load health on status() and NOT fail-open.
 
