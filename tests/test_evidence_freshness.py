@@ -179,6 +179,64 @@ def test_corrupt_replay_registry_makes_nonce_evidence_unverifiable() -> None:
             assert fh.read() == "{not json"
 
 
+def test_future_dated_nonce_replay_does_not_become_authoritative_later() -> None:
+    from lucidfence.core import engine as engine_mod
+    from lucidfence.core.evidence_freshness import EvidenceFreshnessVerifier, ReplayRegistry
+
+    with tempfile.TemporaryDirectory() as td:
+        verifier = EvidenceFreshnessVerifier(
+            {"location": {"ttl_seconds": 300}},
+            clock_skew_seconds=30,
+            replay_registry=ReplayRegistry(os.path.join(td, "replay.json")),
+        )
+        first = verifier.evaluate(
+            signal_type="location", source="applivery", observed_at="2026-09-02T12:00:00Z",
+            evidence_ts="2026-09-02T12:10:00Z", nonce="future-replay",
+        )
+        second = verifier.evaluate(
+            signal_type="location", source="applivery", observed_at="2026-09-02T12:10:10Z",
+            evidence_ts="2026-09-02T12:10:00Z", nonce="future-replay",
+        )
+        assert first["status"] == "future"
+        assert second["status"] == "replayed"
+
+    current_now = {"value": "2026-09-02T12:00:00Z"}
+    original_now_iso = engine_mod.now_iso
+    engine_mod.now_iso = lambda: current_now["value"]
+    try:
+        eng = make_temp_engine(extra_config={
+            "evidence_freshness": {"signals": {"location": {"ttl_seconds": 300}}},
+        })
+        eng.add_fence({
+            "id": "restricted", "name": "Restricted", "type": "circle",
+            "center": {"lat": 40.5, "lng": -3.7}, "radius_m": 300,
+            "actions": [{"action": "lock", "when": "on_enter", "params": {}}],
+        })
+        report = LocationReport(
+            device_id="future-replay-loc", name="Future Replay Loc", platform="ios", status="active",
+            compliant=False, lat=40.5, lng=-3.7, last_seen="2026-09-02T12:00:00Z",
+            location_source="applivery", evidence_ts="2026-09-02T12:10:00Z",
+            evidence_nonce="future-replay-engine",
+        )
+        eng.source = _OneReportSource(report)
+
+        eng.run_once()
+        first_state = eng.store.snapshot()["future-replay-loc"]
+        assert first_state.evidence_freshness["location"]["status"] == "future"
+        assert first_state.fence_state == "unknown"
+        assert eng._cycle_actions == []
+
+        current_now["value"] = "2026-09-02T12:10:10Z"
+        eng.run_once()
+        second_state = eng.store.snapshot()["future-replay-loc"]
+        assert second_state.evidence_freshness["location"]["status"] == "replayed"
+        assert second_state.fence_state == "unknown"
+        assert second_state.inside_fence is None
+        assert eng._cycle_actions == []
+    finally:
+        engine_mod.now_iso = original_now_iso
+
+
 def test_api_export_and_evidence_report_keep_unknown_freshness_separate() -> None:
     device = {
         "device_id": "d-unknown", "name": "No clock", "platform": "android",

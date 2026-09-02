@@ -122,6 +122,14 @@ class EvidenceFreshnessVerifier:
         evidence = _parse_iso(evidence_ts)
         age = int((observed - evidence).total_seconds()) if observed and evidence else None
 
+        replayed = False
+        registry_error: Optional[Exception] = None
+        if nonce and self.replay_registry is not None:
+            try:
+                replayed = self.replay_registry.record(signal_type, nonce, observed_at=observed_at)
+            except Exception as exc:  # fail-unknown, never authorize on registry failure
+                registry_error = exc
+
         status = "fresh"
         reason = f"{source}: evidencia fresca; edad {age}s; regla {rule}"
         if age is None:
@@ -136,14 +144,13 @@ class EvidenceFreshnessVerifier:
         elif require_nonce and not nonce:
             status = "unverifiable"
             reason = f"{source}: nonce requerido ausente; edad {age}s; regla {rule}"
-        elif nonce and self.replay_registry is not None:
-            try:
-                if self.replay_registry.record(signal_type, nonce, observed_at=observed_at):
-                    status = "replayed"
-                    reason = f"{source}: nonce repetido; edad {age}s; regla {rule}"
-            except Exception as exc:  # fail-unknown, never authorize on registry failure
-                status = "unverifiable"
-                reason = f"{source}: registro replay no evaluable ({type(exc).__name__}); regla {rule}"
+
+        if registry_error is not None:
+            status = "unverifiable"
+            reason = f"{source}: registro replay no evaluable ({type(registry_error).__name__}); regla {rule}"
+        elif replayed:
+            status = "replayed"
+            reason = f"{source}: nonce repetido; edad {age}s; regla {rule}"
 
         return {
             "status": status,
