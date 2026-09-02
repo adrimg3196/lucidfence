@@ -51,6 +51,9 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Gestión de Políticas y Geocercas como Código con Replay Predictivo** (`lucidfence apply` con diff local y simulación *what-if* sobre telemetría histórica antes de desplegar) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #1) | EXPLORE | `docs/product/PROPOSAL_gitops_policy_replay.md` |
+| E3 | **Informe de Puntos Ciegos y Dispositivos Huérfanos** ("Coverage Gap & Lost Sheep Detector" que identifica endpoints no monitoreados y geocercas vacías) | p2 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #15) | EXPLORE | `docs/product/PROPOSAL_coverage_gap_blindspots.md` |
+| E4 | **Auditor de Mínimo Privilegio para Credenciales Multi-UEM** (Evaluación automática de tokens API conectados frente al modo de operación activo `observe`/`enforce`) | p2 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #16) | EXPLORE | `docs/product/PROPOSAL_uem_credential_auditor.md` |
 
 ## Bitácora de reconciliación
 
