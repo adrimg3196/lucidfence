@@ -161,12 +161,29 @@ def find_workflow_for_context(repo, context):
     """Devuelve la ruta del workflow (en origin/main) que emite `context`,
     o None si ninguno lo emite."""
     target = context.strip()
+    target_lower = target.casefold()
     tslug = _slug(target)
+
+    def job_name_matches(declared):
+        declared = declared.strip()
+        declared_lower = declared.casefold()
+        if declared_lower == target_lower:
+            return True
+        # GitHub añade los valores de matrix al nombre del check. Cuando el
+        # job ya incluye ese valor literalmente, el contexto materializado
+        # repite el sufijo: "Python tests (3.11) (3.11)".
+        suffix = re.search(r"(\([^)]+\))$", declared)
+        return bool(
+            suffix
+            and target_lower
+            == f"{declared_lower} {suffix.group(1).casefold()}"
+        )
+
     for wf in list_workflow_files(repo):
         wf_name, job_ids, job_names = _workflow_contexts(repo, wf)
-        if wf_name and wf_name.lower() == target.lower():
+        if wf_name and wf_name.casefold() == target_lower:
             return wf
-        if target.lower() in {n.lower() for n in job_names}:
+        if any(job_name_matches(name) for name in job_names):
             return wf
         if tslug in {_slug(j) for j in job_ids}:
             return wf
