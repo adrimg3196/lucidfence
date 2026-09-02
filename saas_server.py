@@ -1281,6 +1281,18 @@ def _api_fleet_federated(ctx: routing.Ctx):
     return build_federated_fleet(devices, risk_rows, providers, provider=provider)
 
 
+@api_route("GET", "/api/device-attestation", cap="device:read")
+def _api_device_attestation(ctx: routing.Ctx):
+    """Sobre neutral de atestación Apple/Android/Windows.
+
+    Solo lectura sobre DeviceState persistido: no consulta UEMs, no expone
+    payloads brutos y conserva unknown como unknown (ver core/device_attestation.py).
+    """
+    from lucidfence.core.device_attestation import attestation_report
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    return attestation_report(devices)
+
+
 @api_route("GET", "/api/least-privilege", cap="engine:config")
 def _api_least_privilege(ctx: routing.Ctx):
     """Auditor de mínimo privilegio de las credenciales UEM (backlog §16): qué

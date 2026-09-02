@@ -103,6 +103,11 @@ class DeviceState:
     # status is fresh|stale|replayed|future|unverifiable; unknown stays separate
     # from pass/fail and can be carried through API/UI/export without coercion.
     evidence_freshness: Optional[dict] = None
+    # --- neutral device attestation envelope (#238) ---
+    # Shape produced by core.device_attestation.AttestationEnvelope.to_dict().
+    # None = no attestation reported; consumers must not coerce absence to
+    # failure or compliance.
+    attestation: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
