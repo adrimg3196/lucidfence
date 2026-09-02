@@ -22,6 +22,7 @@ MIGRATED = {
     ("GET", "/api/risk"): "device:read",
     ("GET", "/api/cve"): "device:read",
     ("GET", "/api/pois"): "device:read",
+    ("GET", "/api/device-attestation"): "device:read",
     ("GET", "/api/incidents/analytics"): "incident:read",
     ("GET", "/api/fences"): "fence:read",
 }

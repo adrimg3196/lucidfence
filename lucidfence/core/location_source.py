@@ -127,6 +127,7 @@ class LocationReport:
     ownership: Optional[str] = None
     evidence_ts: Optional[str] = None
     evidence_nonce: Optional[str] = None
+    attestation: Optional[dict] = None
 
 
 class LiveLocationSource:
