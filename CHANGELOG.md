@@ -4,6 +4,16 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- governance(rulesets): Regla de Oro #1 anti-check-fantasma — nunca añadir un
+  contexto a `required_status_checks` de un ruleset antes de que el workflow que
+  lo emite esté mergeado en `origin/main` **y** tenga un run verde en `main`
+  (lección del deadlock del ruleset 21249696, 10/10 PRs bloqueados, tarea
+  t_497540b9). Nuevo pre-flight fail-closed `scripts/ruleset_check_guard.py`
+  (`--diff` / `--context` / `--audit-live`) integrado en el charter
+  (docs/references/agent-team-charter.md), el registro de rulesets
+  (docs/operations/BRANCH_CONFIG.md) y la Definition of Done
+  (docs/references/definition-of-done.md). En review de un PR que toque rulesets
+  se exige el resultado del pre-flight en el cuerpo del PR (tarea t_26b7fac6).
 - fix(ci): el health-check nocturno vuelve a poder alertar — `nightly-health-check`
   llevaba **10 runs consecutivos en rojo** (2026-08-13..2026-08-22) con
   `ModuleNotFoundError: No module named 'requests'`, no porque la vitrina

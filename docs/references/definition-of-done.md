@@ -48,3 +48,10 @@ Complementa (no reemplaza) los criterios de aceptación de cada tarea.
   --complete-on-pass`** (definido en agent-team-charter.md). El guard bloquea
   cualquier cierre cuyo commit no sea ancestro de `origin/main` o cuyo `verify.py`
   no pase *sobre main*. No marques done "a mano" saltándolo.
+- **Cualquier changeset que añada un contexto a `required_status_checks` de un
+  ruleset debe pasar el pre-flight
+  `python3 scripts/ruleset_check_guard.py --diff <changeset.diff>` (exit 0)
+  antes de aterrizar** (Regla de Oro #1, tarea t_26b7fac6). El workflow que emite
+  el check debe estar mergeado en `origin/main` y tener un run verde en `main`;
+  un check "verde en mi rama" no cuenta. Sin el pre-flight en el cuerpo del PR, la
+  review se rechaza.
