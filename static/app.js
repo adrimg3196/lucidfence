@@ -1159,7 +1159,7 @@ async function openDeviceModal(id){
     ["Ubicación", d.lat!=null&&d.lng!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
-    ["Frescura evidencia", evidenceFreshnessBadge(d)],
+    ["Frescura evidencia", evidenceFreshnessBadge(d), true],
     ["Visto", fmt.date(d.last_seen)],
     // Postura DDM (Apple OS 27) + cifrado: campos reales de DeviceState.to_dict().
     ["Lockdown Mode", postureBadge(d.lockdown_mode, "Activado", "Desactivado"), true],

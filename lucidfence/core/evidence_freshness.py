@@ -68,11 +68,15 @@ class ReplayRegistry:
         return replayed
 
     def _load(self) -> dict:
-        try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except Exception:
+        if not self.path.exists():
             return {"entries": []}
-        return raw if isinstance(raw, dict) else {"entries": []}
+        raw = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("replay registry root must be an object")
+        entries = raw.get("entries")
+        if entries is not None and not isinstance(entries, list):
+            raise ValueError("replay registry entries must be a list")
+        return raw
 
     def _pruned(self, entries: list[dict], observed_at: str) -> list[dict]:
         now_s = _epoch_seconds(observed_at)

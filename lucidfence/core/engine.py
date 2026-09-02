@@ -404,8 +404,22 @@ class Engine:
 
         for rep in reports:
             try:
+                evidence_observed_at = now_iso()
+                location_freshness = self.evidence_freshness.evaluate(
+                    signal_type="location",
+                    source=rep.location_source,
+                    observed_at=evidence_observed_at,
+                    evidence_ts=getattr(rep, "evidence_ts", None),
+                    nonce=getattr(rep, "evidence_nonce", None),
+                )
+                freshness_gates_location = "location" in getattr(self.evidence_freshness, "windows", {})
+                location_is_authoritative = (
+                    not freshness_gates_location
+                    or location_freshness.get("status") == "fresh"
+                )
+
                 loc = None
-                if rep.lat is not None and rep.lng is not None:
+                if location_is_authoritative and rep.lat is not None and rep.lng is not None:
                     try:
                         loc = point_from({"lat": rep.lat, "lng": rep.lng})
                     except (TypeError, ValueError):
@@ -443,14 +457,6 @@ class Engine:
                      "country": rep.country, "location_source": rep.location_source,
                      "last_seen": rep.last_seen},
                     prev.to_dict() if prev else None,
-                )
-                evidence_observed_at = now_iso()
-                location_freshness = self.evidence_freshness.evaluate(
-                    signal_type="location",
-                    source=rep.location_source,
-                    observed_at=evidence_observed_at,
-                    evidence_ts=(getattr(rep, "evidence_ts", None) or rep.last_checkin or rep.last_seen),
-                    nonce=getattr(rep, "evidence_nonce", None),
                 )
                 posture = self.osquery.posture_for(
                     rep.device_id,

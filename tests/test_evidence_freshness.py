@@ -9,7 +9,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lucidfence.core.evidence_export import build_evidence_report
 from lucidfence.core.export import export_compliance_csv, export_inventory_csv
+from lucidfence.core.location_source import LiveLocationSource, LocationReport
 from lucidfence.core.policies import Policy, RiskEngine
+from helpers import make_temp_engine
+
+
+class _OneReportSource:
+    def __init__(self, report: LocationReport):
+        self.report = report
+        self.last_error = None
+
+    def fetch(self):
+        return [self.report]
 
 
 def test_freshness_classifies_ttl_edge_future_replay_missing_nonce_and_unverifiable() -> None:
@@ -102,6 +113,70 @@ def test_fresh_evidence_policy_condition_blocks_stale_without_turning_unknown_fa
     assert engine.match_policies([policy], risk, stale, "outside") == []
     assert engine.match_policies([policy], risk, unknown, "outside") == []
     assert unknown.get("compliant") is None
+
+
+def test_run_once_downgrades_non_fresh_location_before_geofence_decisions() -> None:
+    eng = make_temp_engine(extra_config={
+        "evidence_freshness": {"signals": {"location": {"ttl_seconds": 300}}},
+    })
+    eng.add_fence({
+        "id": "restricted", "name": "Restricted", "type": "circle",
+        "center": {"lat": 40.5, "lng": -3.7}, "radius_m": 300,
+        "actions": [{"action": "lock", "when": "on_enter", "params": {}}],
+    })
+    eng.source = _OneReportSource(LocationReport(
+        device_id="stale-loc", name="Stale Loc", platform="ios", status="active",
+        compliant=False, lat=40.5, lng=-3.7, last_seen="2026-09-02T12:00:00Z",
+        location_source="applivery", evidence_ts="2000-01-01T00:00:00Z",
+    ))
+
+    eng.run_once()
+
+    ds = eng.store.snapshot()["stale-loc"]
+    assert ds.evidence_freshness["location"]["status"] == "stale"
+    assert ds.fence_state == "unknown"
+    assert ds.inside_fence is None
+    assert ds.route_state == "unassigned"
+    assert eng._cycle_actions == []
+
+
+def test_applivery_location_evidence_ts_comes_only_from_location_timestamp() -> None:
+    report = LiveLocationSource(org_id="org-test")._to_report({
+        "id": "dev-no-loc-clock",
+        "type": "ios",
+        "lastStatusReportTime": "2026-09-02T12:00:00Z",
+        "sortDate": "2026-09-02T12:00:01Z",
+        "lastLocation": {"agent": {"latitude": 40.5, "longitude": -3.7}},
+    })
+
+    assert report.lat == 40.5
+    assert report.lng == -3.7
+    assert report.last_seen == "2026-09-02T12:00:00Z"
+    assert report.last_checkin == "2026-09-02T12:00:01Z"
+    assert report.evidence_ts is None
+
+
+def test_corrupt_replay_registry_makes_nonce_evidence_unverifiable() -> None:
+    from lucidfence.core.evidence_freshness import EvidenceFreshnessVerifier, ReplayRegistry
+
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "replay.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{not json")
+        verifier = EvidenceFreshnessVerifier(
+            {"location": {"ttl_seconds": 300}},
+            replay_registry=ReplayRegistry(path),
+        )
+
+        result = verifier.evaluate(
+            signal_type="location", source="applivery", observed_at="2026-09-02T12:00:00Z",
+            evidence_ts="2026-09-02T11:59:00Z", nonce="n-corrupt",
+        )
+
+        assert result["status"] == "unverifiable"
+        assert "registro replay" in result["reason"]
+        with open(path, encoding="utf-8") as fh:
+            assert fh.read() == "{not json"
 
 
 def test_api_export_and_evidence_report_keep_unknown_freshness_separate() -> None:
