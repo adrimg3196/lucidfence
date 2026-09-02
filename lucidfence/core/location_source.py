@@ -125,6 +125,8 @@ class LocationReport:
     # gate (core.declarative) via the engine's action routing.
     management_mode: Optional[str] = None
     ownership: Optional[str] = None
+    evidence_ts: Optional[str] = None
+    evidence_nonce: Optional[str] = None
 
 
 class LiveLocationSource:
@@ -375,6 +377,9 @@ class LiveLocationSource:
             last_checkin=dev.get("sortDate") or last_seen,
             enrolled_at=summary.get("enrolledAt") or dev.get("enrolledAt"),
             device_tag=summary.get("tag") or dev.get("tag"),
+            evidence_ts=(loc or {}).get("ts"),
+            evidence_nonce=(dev.get("evidenceNonce") or dev.get("evidence_nonce")
+                            or summary.get("evidenceNonce") or summary.get("evidence_nonce")),
         )
 
     # -------------------------------------------------------------- public API
@@ -461,6 +466,7 @@ class SimulationLocationSource:
             model_default = {"android": "Dispositivo Android", "ios": "iPhone",
                               "windows": "PC Windows", "macos": "Mac",
                               "chromeos": "Chromebook Enterprise"}.get(plat, "Dispositivo")
+            observed_ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             out.append(LocationReport(
                 device_id=dev.get("id", ""),
                 name=dev.get("name", "unknown"),
@@ -473,7 +479,7 @@ class SimulationLocationSource:
                 country=dev.get("country"),
                 city=dev.get("city"),
                 ip=dev.get("ip"),
-                last_seen=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                last_seen=observed_ts,
                 location_source="simulation",
                 apps=[dict(a) for a in dev.get("apps", [])],
                 raw=dev,
@@ -506,6 +512,8 @@ class SimulationLocationSource:
                 enrolled_at=dev.get("enrolled_at") or "2026-01-01T00:00:00Z",
                 device_tag=dev.get("device_tag") or dev.get("id"),
                 geofence_compliance=dev.get("geofence_compliance") if plat in ("ios", "ipados") else None,
+                evidence_ts=dev.get("evidence_ts") or dev.get("last_checkin") or observed_ts,
+                evidence_nonce=dev.get("evidence_nonce"),
             ))
         return out
 

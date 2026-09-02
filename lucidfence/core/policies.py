@@ -523,6 +523,10 @@ def _resolve_field(field_: str, risk: dict, device: dict, fence_state: str):
         return risk.get("severity")
     if field_ == "compliant":
         return device.get("compliant")
+    if field_.startswith("evidence_freshness:"):
+        _, rest = field_.split(":", 1)
+        sig, key = rest.split(".", 1) if "." in rest else (rest, "status")
+        return _safe_get(device.get("evidence_freshness") or {}, sig, key)
     if field_ == "hardware_degraded":
         # Señal derivada (no vive en el device dict, a diferencia de
         # supervised/lockdown_mode): se resuelve desde la señal de postura ya

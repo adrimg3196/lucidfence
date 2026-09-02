@@ -39,6 +39,7 @@ from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 from lucidfence.core.osquery_posture import OsqueryPostureProvider
 from lucidfence.core.location_integrity import assess as assess_location_integrity
+from lucidfence.core.evidence_freshness import build_verifier
 
 
 def _tag_route(res: Any, action: str, declarative: Optional[str],
@@ -174,6 +175,7 @@ class Engine:
         # Optional endpoint posture evidence. osquery observes; LucidFence
         # correlates the evidence with geofences and UEM policy.
         self.osquery = OsqueryPostureProvider(config.get("osquery"))
+        self.evidence_freshness = build_verifier(config.get("evidence_freshness"), self.data_dir)
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
         # --- CVE feed (NVD cache / sync) ----------------------------------
         # SECURITY (fail-unknown, not fail-open): a broken or unavailable CVE
@@ -402,8 +404,22 @@ class Engine:
 
         for rep in reports:
             try:
+                evidence_observed_at = now_iso()
+                location_freshness = self.evidence_freshness.evaluate(
+                    signal_type="location",
+                    source=rep.location_source,
+                    observed_at=evidence_observed_at,
+                    evidence_ts=getattr(rep, "evidence_ts", None),
+                    nonce=getattr(rep, "evidence_nonce", None),
+                )
+                freshness_gates_location = "location" in getattr(self.evidence_freshness, "windows", {})
+                location_is_authoritative = (
+                    not freshness_gates_location
+                    or location_freshness.get("status") == "fresh"
+                )
+
                 loc = None
-                if rep.lat is not None and rep.lng is not None:
+                if location_is_authoritative and rep.lat is not None and rep.lng is not None:
                     try:
                         loc = point_from({"lat": rep.lat, "lng": rep.lng})
                     except (TypeError, ValueError):
@@ -515,6 +531,7 @@ class Engine:
                     posture_collected_at=posture.get("posture_collected_at"),
                     osquery_version=posture.get("osquery_version"),
                     osquery_config_valid=posture.get("osquery_config_valid"),
+                    evidence_freshness={"location": location_freshness},
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
@@ -550,6 +567,7 @@ class Engine:
                     "route_id": assigned_route.id if assigned_route else None,
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
+                    "evidence_freshness": ds.evidence_freshness,
                 })
                 risk_device.update(posture)
                 risk_device["location_integrity"] = integrity

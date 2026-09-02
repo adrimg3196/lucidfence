@@ -52,8 +52,14 @@ INVENTORY_HEADERS = [
     "status", "compliant", "fence_state", "inside_fence", "battery_level",
     "battery_state", "storage_total_gb", "storage_free_gb", "carrier",
     "city", "country", "last_checkin", "enrolled_at", "risk_score",
-    "risk_severity", "lat", "lng",
+    "risk_severity", "lat", "lng", "evidence_freshness_location_status",
+    "evidence_freshness_location_age_seconds", "evidence_freshness_location_rule",
+    "evidence_freshness_location_reason",
 ]
+
+
+def _freshness_field(d: dict, key: str):
+    return ((d.get("evidence_freshness") or {}).get("location") or {}).get(key)
 
 
 def export_inventory_csv(devices: list[dict]) -> str:
@@ -69,6 +75,8 @@ def export_inventory_csv(devices: list[dict]) -> str:
             d.get("storage_free_gb"), d.get("carrier"), d.get("city"),
             d.get("country"), d.get("last_checkin"), d.get("enrolled_at"),
             d.get("risk_score"), d.get("risk_severity"), d.get("lat"), d.get("lng"),
+            _freshness_field(d, "status"), _freshness_field(d, "age_seconds"),
+            _freshness_field(d, "rule"), _freshness_field(d, "reason"),
         ])
     return to_csv(INVENTORY_HEADERS, rows)
 
@@ -93,14 +101,16 @@ def export_actions_csv(actions: list[dict]) -> str:
 def export_compliance_csv(devices: list[dict]) -> str:
     headers = ["device_id", "name", "platform", "compliant", "fence_state",
                "inside_fence", "risk_score", "risk_severity", "os_version",
-               "last_checkin"]
+               "last_checkin", "evidence_freshness_location_status",
+               "evidence_freshness_location_reason"]
     rows = []
     for d in devices:
         rows.append([
             d.get("device_id"), d.get("name"), d.get("platform"),
             d.get("compliant"), d.get("fence_state"), d.get("inside_fence"),
             d.get("risk_score"), d.get("risk_severity"), d.get("os_version"),
-            d.get("last_checkin"),
+            d.get("last_checkin"), _freshness_field(d, "status"),
+            _freshness_field(d, "reason"),
         ])
     return to_csv(headers, rows)
 

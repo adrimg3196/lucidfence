@@ -98,6 +98,11 @@ class DeviceState:
     posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
     osquery_version: Optional[str] = None
     osquery_config_valid: Optional[bool] = None
+    # --- freshness / replay status for trust evidence (#237) ---
+    # Shape: {signal_type: {status, source, age_seconds, rule, reason, ...}}.
+    # status is fresh|stale|replayed|future|unverifiable; unknown stays separate
+    # from pass/fail and can be carried through API/UI/export without coercion.
+    evidence_freshness: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
