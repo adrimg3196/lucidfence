@@ -84,6 +84,23 @@ def test_restored_device_and_uem_id_collision_preserve_lineage_without_auto_merg
     )
 
 
+def test_alias_only_match_stays_separate_with_visible_review_finding():
+    result = MultiUEMOrchestrator([
+        binding("jamf", [device("jamf", "j-alias", alias="shared-cart")]),
+        binding("intune", [device("intune", "i-alias", alias="shared-cart")]),
+    ]).sync(now=NOW)
+
+    assert len(result.devices) == 2
+    assert all(item.identity_conflict for item in result.devices)
+    assert all(item.identity_graph["merge_rule"] == "separated_for_review" for item in result.devices)
+    findings = [finding for item in result.devices for finding in item.identity_findings]
+    assert any(finding["reason"] == "ambiguous_alias" for finding in findings)
+    assert all(
+        any(signal["type"] == "alias" and signal["value"] == "SHAREDCART" for signal in item.identity_graph["signals"])
+        for item in result.devices
+    )
+
+
 def test_identity_identifiers_stay_out_of_cloud_snapshot():
     class EngineStub:
         org_id = "demo"
@@ -115,5 +132,6 @@ if __name__ == "__main__":
     test_same_device_in_two_uems_merges_with_explainable_reversible_lineage()
     test_recycled_serial_keeps_devices_separate_and_marks_visible_ambiguity()
     test_restored_device_and_uem_id_collision_preserve_lineage_without_auto_merging_ambiguous_candidates()
+    test_alias_only_match_stays_separate_with_visible_review_finding()
     test_identity_identifiers_stay_out_of_cloud_snapshot()
     print("identity-lineage tests passed")

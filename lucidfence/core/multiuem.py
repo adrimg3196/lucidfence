@@ -466,7 +466,10 @@ class MultiUEMOrchestrator:
             duplicate_provider = len({item.provider for item in members}) != len(members)
             duplicate_uem_id = len({(item.provider, item.provider_device_id) for item in members}) != len(members)
             cross_key_bridge = self._has_cross_key_bridge(members)
+            alias_only_bridge = self._has_alias_only_bridge(members)
             conflict_reasons: list[str] = []
+            if alias_only_bridge:
+                conflict_reasons.append("ambiguous_alias")
             if len(hardware_ids) > 1:
                 conflict_reasons.append("conflicting_hardware")
             if len(serials) > 1:
@@ -506,6 +509,27 @@ class MultiUEMOrchestrator:
             if serial_matches and imei_matches and serial_matches.isdisjoint(imei_matches):
                 return True
         return False
+
+    @staticmethod
+    def _has_alias_only_bridge(members: list[NormalizedDevice]) -> bool:
+        if len(members) < 2:
+            return False
+        aliases = [MultiUEMOrchestrator._alias_identity(item) for item in members]
+        shared_aliases = {
+            alias
+            for alias in aliases
+            if alias is not None and aliases.count(alias) > 1
+        }
+        if not shared_aliases:
+            return False
+        strong_keys = [
+            {key for key in MultiUEMOrchestrator._identity_keys(item) if key[0] != "alias"}
+            for item in members
+        ]
+        for index, keys in enumerate(strong_keys):
+            if any(keys & other for other in strong_keys[index + 1:]):
+                return False
+        return True
 
     @staticmethod
     def _hardware_identity(device: NormalizedDevice) -> str | None:
@@ -624,6 +648,7 @@ class MultiUEMOrchestrator:
         serial = normalize_identity(device.serial_number)
         imei = normalize_identity(device.imei)
         uem_id = normalize_identity(device.provider_device_id)
+        alias = MultiUEMOrchestrator._alias_identity(device)
         if hardware:
             keys.add(("hardware", hardware))
         if serial:
@@ -632,6 +657,8 @@ class MultiUEMOrchestrator:
             keys.add(("imei", imei))
         if uem_id:
             keys.add((f"uem_id:{device.provider}", uem_id))
+        if alias:
+            keys.add(("alias", alias))
         return keys
 
     def _finalize_single(
