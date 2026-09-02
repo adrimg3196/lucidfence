@@ -79,6 +79,55 @@ def test_runner_treats_nonzero_and_string_system_exit_as_failures():
     assert module._system_exit_code(SystemExit("failed")) == 1
 
 
+def test_live_integration_mock_asks_kernel_for_ephemeral_port():
+    spec = importlib.util.spec_from_file_location(
+        "live_integration_port", ROOT / "tests" / "test_live_integration.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    captured = {}
+
+    class FakeServer:
+        server_port = 45123
+
+        def serve_forever(self):
+            return None
+
+    def fake_http_server(address, handler):
+        captured["address"] = address
+        captured["handler"] = handler
+        return FakeServer()
+
+    with mock.patch.object(module, "HTTPServer", side_effect=fake_http_server), mock.patch.object(
+        module.threading, "Thread"
+    ):
+        server = module._start_mock()
+
+    assert server.server_port == 45123
+    assert captured["address"] == ("127.0.0.1", 0)
+    assert module._MOCK_PORT == 45123
+
+
+def test_live_integration_removes_mock_env_when_no_original():
+    spec = importlib.util.spec_from_file_location(
+        "live_integration_env", ROOT / "tests" / "test_live_integration.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory() as directory:
+        env_path = Path(directory) / ".env"
+        env_path.write_text("APPLIVERY_API_KEY=mock-only\n")
+        setattr(module, "ENV_PATH", str(env_path))
+        setattr(module, "_ENV_BACKUP", None)
+        setattr(module, "_ENV_EXISTED", False)
+
+        module._restore_env()
+
+        assert not env_path.exists()
+
+
 def test_runner_allocates_an_ephemeral_qa_port():
     spec = importlib.util.spec_from_file_location("honest_runner_port", ROOT / "tests" / "run_tests.py")
     assert spec is not None and spec.loader is not None
