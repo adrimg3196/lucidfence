@@ -349,6 +349,100 @@ class Engine:
         except RuntimeError:
             pass
 
+    @staticmethod
+    def _identity_graph_signals(state: DeviceState) -> list[dict]:
+        graph = state.identity_lineage if isinstance(state.identity_lineage, dict) else {}
+        signals = graph.get("signals") if isinstance(graph, dict) else None
+        return signals if isinstance(signals, list) else []
+
+    @classmethod
+    def _hardware_identity_values(cls, state: DeviceState) -> set[str]:
+        return {
+            signal["value"]
+            for signal in cls._identity_graph_signals(state)
+            if isinstance(signal, dict)
+            and signal.get("type") == "hardware"
+            and isinstance(signal.get("value"), str)
+            and signal.get("value")
+        }
+
+    @staticmethod
+    def _lineage_source(state: DeviceState) -> str:
+        refs = state.provider_refs if isinstance(state.provider_refs, dict) else {}
+        return next(iter(refs), state.location_source or "unknown")
+
+    @classmethod
+    def _merge_identity_graphs(cls, current: DeviceState, prior: DeviceState) -> None:
+        graph = dict(current.identity_lineage or {}) if isinstance(current.identity_lineage, dict) else {}
+        by_key: dict[tuple[str, str, str, str], dict] = {}
+        for state in (prior, current):
+            for signal in cls._identity_graph_signals(state):
+                if not isinstance(signal, dict):
+                    continue
+                key = (
+                    str(signal.get("type") or ""),
+                    str(signal.get("value") or ""),
+                    str(signal.get("source") or ""),
+                    str(signal.get("original_identifier") or ""),
+                )
+                if not all(key):
+                    continue
+                existing = by_key.get(key)
+                if existing is None:
+                    by_key[key] = dict(signal)
+                    continue
+                first_seen = [item for item in (existing.get("first_seen"), signal.get("first_seen")) if isinstance(item, str) and item]
+                last_seen = [item for item in (existing.get("last_seen"), signal.get("last_seen")) if isinstance(item, str) and item]
+                if first_seen:
+                    existing["first_seen"] = min(first_seen)
+                if last_seen:
+                    existing["last_seen"] = max(last_seen)
+        graph["signals"] = sorted(
+            by_key.values(),
+            key=lambda signal: (
+                str(signal.get("type") or ""),
+                str(signal.get("source") or ""),
+                str(signal.get("original_identifier") or ""),
+            ),
+        )
+        graph["merge_rule"] = "temporal_handoff"
+        graph["reversible"] = True
+
+        lineage = list(graph.get("lineage") or []) if isinstance(graph.get("lineage"), list) else []
+        for field_name in ("ownership", "management_mode"):
+            previous_value = getattr(prior, field_name)
+            current_value = getattr(current, field_name)
+            if previous_value is None or current_value is None or previous_value == current_value:
+                continue
+            lineage = [item for item in lineage if not (isinstance(item, dict) and item.get("field") == field_name)]
+            lineage.append({
+                "field": field_name,
+                "values": [
+                    {"source": cls._lineage_source(prior), "value": previous_value},
+                    {"source": cls._lineage_source(current), "value": current_value},
+                ],
+            })
+        graph["lineage"] = lineage
+        current.identity_lineage = graph
+
+    @classmethod
+    def _temporal_identity_handoffs(
+        cls,
+        current: DeviceState,
+        previous_states: dict[str, DeviceState],
+    ) -> list[DeviceState]:
+        if current.device_id in previous_states:
+            return []
+        current_hardware = cls._hardware_identity_values(current)
+        if not current_hardware:
+            return []
+        return [
+            prior
+            for prior in previous_states.values()
+            if prior.device_id != current.device_id
+            and bool(current_hardware & cls._hardware_identity_values(prior))
+        ]
+
     def run_once(self) -> dict:
         # Serialize cycles: the autostart loop and an on-demand /api/run-once
         # must never run concurrently (they share the per-cycle accumulators and
@@ -548,6 +642,13 @@ class Engine:
                         else []
                     ),
                 )
+                temporal_handoffs = self._temporal_identity_handoffs(ds, states_prev)
+                for prior_state in temporal_handoffs:
+                    ds.provider_refs.update(
+                        prior_state.provider_refs if isinstance(prior_state.provider_refs, dict) else {}
+                    )
+                    self._merge_identity_graphs(ds, prior_state)
+                    self.store.remove(prior_state.device_id)
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
                     snap = geo_snap(rep, fence_state=fence_state, fence_id=inside_fence)

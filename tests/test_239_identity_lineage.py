@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from tempfile import TemporaryDirectory
 
+from lucidfence.core.engine import Engine
 from lucidfence.core.cloud_publisher import serialize
 from lucidfence.core.multiuem import MultiUEMOrchestrator, NormalizedDevice, ProviderBinding, ProviderCapabilities
 from lucidfence.core.state_store import DeviceState
@@ -101,6 +103,44 @@ def test_alias_only_match_stays_separate_with_visible_review_finding():
     )
 
 
+def test_engine_temporal_uem_handoff_preserves_prior_identity_lineage():
+    with TemporaryDirectory() as tmpdir:
+        eng = Engine({"mode": "simulation", "data_dir": tmpdir})
+        eng.source = MultiUEMOrchestrator([
+            binding("jamf", [
+                device(
+                    "jamf",
+                    "old-uem",
+                    hardware="hw-temporal",
+                    ownership="employee_owned",
+                    mode="user_enrollment",
+                )
+            ]),
+        ])
+        eng.run_once()
+
+        eng.source = MultiUEMOrchestrator([
+            binding("intune", [
+                device(
+                    "intune",
+                    "new-uem",
+                    hardware="hw-temporal",
+                    ownership="company",
+                    mode="fully_managed",
+                )
+            ]),
+        ])
+        eng.run_once()
+
+        snapshot = eng.store.snapshot()
+        assert sorted(snapshot) == ["intune:new-uem"]
+        handoff = snapshot["intune:new-uem"]
+        assert handoff.provider_refs == {"intune": "new-uem", "jamf": "old-uem"}
+        assert handoff.identity_lineage["merge_rule"] == "temporal_handoff"
+        assert {signal["source"] for signal in handoff.identity_lineage["signals"]} == {"intune", "jamf"}
+        assert {event["field"] for event in handoff.identity_lineage["lineage"]} >= {"ownership", "management_mode"}
+
+
 def test_identity_identifiers_stay_out_of_cloud_snapshot():
     class EngineStub:
         org_id = "demo"
@@ -133,5 +173,6 @@ if __name__ == "__main__":
     test_recycled_serial_keeps_devices_separate_and_marks_visible_ambiguity()
     test_restored_device_and_uem_id_collision_preserve_lineage_without_auto_merging_ambiguous_candidates()
     test_alias_only_match_stays_separate_with_visible_review_finding()
+    test_engine_temporal_uem_handoff_preserves_prior_identity_lineage()
     test_identity_identifiers_stay_out_of_cloud_snapshot()
     print("identity-lineage tests passed")

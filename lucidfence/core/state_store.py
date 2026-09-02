@@ -169,6 +169,12 @@ class StateStore:
             self._states[state.device_id] = state
             self._persist_states()
 
+    def remove(self, device_id: str):
+        with self.lock:
+            if device_id in self._states:
+                del self._states[device_id]
+                self._persist_states()
+
     def _persist_states(self):
         tmp = self.states_path.with_suffix(".tmp")
         tmp.write_text(
