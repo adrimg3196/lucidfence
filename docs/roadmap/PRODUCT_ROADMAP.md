@@ -51,6 +51,7 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Simulador GitOps de Impacto «What-If» y Compilador Portable Multi-UEM** (Pre-flight replay sobre historial local de trails y compilador de políticas portables para Fleet/Intune/Jamf) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #1 y #14) | EXPLORE | `docs/product/PROPOSAL_whatif_policy_transpiler.md` |
 
 ## Bitácora de reconciliación
 
