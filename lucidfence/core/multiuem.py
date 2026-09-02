@@ -21,7 +21,17 @@ from lucidfence.core.declarative import (  # noqa: E402
 )
 
 
-_UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}
+# Placeholders que un UEM devuelve cuando NO conoce el serial/IMEI. Si se
+# usaran como clave de correlación, dos dispositivos distintos con el mismo
+# placeholder se fusionarían en uno (compliance y ubicación mezcladas).
+# Formas ya normalizadas (alfanumérico en mayúsculas): "To Be Filled By O.E.M."
+# -> TOBEFILLEDBYOEM, "System Serial Number" -> SYSTEMSERIALNUMBER, etc.
+_UNUSABLE_IDENTITIES = {
+    "NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "UNDEFINED", "NIL", "EMPTY",
+    "INVALID", "NOTSPECIFIED", "NOTAVAILABLE", "NOTAPPLICABLE",
+    "TOBEFILLEDBYOEM", "SYSTEMSERIALNUMBER", "DEFAULTSTRING", "SERIALNUMBER",
+    "CHASSISSERIALNUMBER", "BASEBOARDSERIALNUMBER", "OEM", "XXXXXXXXXXXX",
+}
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_]*")
 _MAX_SAFE_NAME_LENGTH = 64
 _MAX_REMOTE_ID_LENGTH = 512
@@ -52,6 +62,9 @@ def normalize_identity(value: object | None) -> str | None:
         return None
     normalized = "".join(character for character in text if character.isalnum()).upper()
     if not normalized or normalized in _UNUSABLE_IDENTITIES:
+        return None
+    if set(normalized) <= {"0"}:
+        # "0", "00000000", el IMEI 000000000000000: relleno, no identidad.
         return None
     return normalized
 
