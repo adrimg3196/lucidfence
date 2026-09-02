@@ -97,10 +97,19 @@ def test_build_queue_fifo_among_ready():
 
 
 def test_build_queue_drain_mode():
+    """MODO DRENAJE lo activa la métrica NO-SANA (stale | conflicting | red),
+    no el recuento de PRs: 7 PRs verdes y frescas superan el límite (informativo)
+    pero no drenan; una sola PR roja sí."""
     prs = [_pr(number=i, checks=("SUCCESS",)) for i in range(1, 8)]
     q = merge_train.build_queue(prs)
-    assert q["over_limit"] is True
-    assert "DRENAJE" in merge_train.render(q)
+    assert q["over_limit"] is True, q
+    assert q["drain_mode"] is False and q["nosana_total"] == 0, (
+        q, [(pr["number"], merge_train.is_nosana(pr), merge_train.age_days(pr["updatedAt"])) for pr in prs])
+    assert "DRENAJE" not in merge_train.render(q), merge_train.render(q)
+    prs.append(_pr(number=8, checks=("FAILURE",)))
+    q = merge_train.build_queue(prs)
+    assert q["drain_mode"] is True and q["nosana_total"] == 1, q
+    assert "DRENAJE" in merge_train.render(q), merge_train.render(q)
 
 
 def test_build_queue_under_limit_no_drain():
