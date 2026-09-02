@@ -46,8 +46,11 @@ jobs:
             // exigió `claude/**`, este raíl fue un no-op silencioso: el workflow
             // terminaba en success sin mergear nada y la cola se drenaba a mano.
             // Allowlist explícita (no "cualquier rama"): añadir un loop = una línea.
+            // `claude/` es el raíl original (sesiones Claude Code del propietario,
+            // agent-pr.yml abre sus PRs); #344 lo sustituyó por los prefijos de
+            // loop y dejó sus PRs verdes sin mergear (#371).
             const FLEET_PREFIXES = [
-              'cto/', 'devops/', 'soc/', 'qa/', 'fix/', 'kit/', 'seo/', 'pm/',
+              'claude/', 'cto/', 'devops/', 'soc/', 'qa/', 'fix/', 'kit/', 'seo/', 'pm/',
               'selfimprove/', 'bootstrap/',
             ];
             if (!FLEET_PREFIXES.some(p => branch.startsWith(p))) {

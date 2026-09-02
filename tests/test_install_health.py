@@ -16,12 +16,15 @@ def _executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _run_installer(*, succeed_after: int, timeout: int = 2,
+def _run_installer(*, succeed_after: int, timeout: int = 8,
                    docker_available: bool = False,
                    public_host: str = "",
                    server_stays_alive: bool = True,
                    curl_available: bool = True,
                    fake_clock: bool = False):
+    # timeout=8 en el camino feliz: el instalador sondea cada segundo con
+    # `sleep` real y un runner de CI cargado tardaba >2 s en llegar al 2º
+    # intento (falso rojo). Los tests fail-closed pasan timeout=1 explícito.
     with tempfile.TemporaryDirectory(prefix="lucidfence-install-health-") as raw:
         checkout = Path(raw)
         shutil.copy2(ROOT / "install.sh", checkout / "install.sh")
