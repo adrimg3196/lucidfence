@@ -20,6 +20,7 @@ from lucidfence.core.adapters.replay import (
     run_inventory_replay_matrix,
 )
 from lucidfence.core.adapters.intune import IntuneAdapter
+from lucidfence.core.adapters.jamf import JamfAdapter
 
 
 class _CaseInsensitiveHeaders(Mapping):
@@ -77,6 +78,29 @@ def test_retry_after_uses_injected_clock_without_real_sleep():
     assert transport.calls == 2
 
 
+def test_jamf_retry_after_uses_mapping_headers_and_injected_clock():
+    clock = ReplayClock()
+    transport = ReplayTransport(
+        "jamf",
+        [
+            ReplayResponse(429, {"error": "slow down"}, headers=_CaseInsensitiveHeaders({"retry-after": "4"})),
+            ReplayResponse(200, {"results": []}),
+        ],
+        clock=clock,
+    )
+    adapter = JamfAdapter(live=True, base_url="https://jamf.test", client_id="c", client_secret="s")
+    adapter._token = "token"
+    adapter._token_expires_at = float("inf")
+    adapter.requests = _RequestsProxy(transport)
+
+    out = adapter.execute({"device_id": ""}, "list", {})
+
+    assert out["ok"] is True
+    assert out["replay"]["rate_limited"] == 1
+    assert clock.sleeps == [4.0]
+    assert transport.calls == 2
+
+
 def test_duplicate_cursor_stops_without_infinite_loop_or_silent_loss():
     clock = ReplayClock()
     transport = ReplayTransport(
@@ -111,6 +135,11 @@ def test_replay_matrix_marks_unknowns_and_fails_uncovered_inventory_adapters():
         assert covered[adapter_name]["status"] in {"supported", "degraded", "unknown", "error"}
         assert covered[adapter_name]["scenarios"]["unknown_payload"]["unknown_fields"]
         assert covered[adapter_name]["scenarios"]["clock_skew"]["status"] == "unknown"
+        assert covered[adapter_name]["scenarios"]["rate_limit_retry_after"]["virtual_sleeps"] == [2.0]
+        assert covered[adapter_name]["scenarios"]["rate_limit_retry_after"]["replay_calls"] == 2
+        assert covered[adapter_name]["scenarios"]["pagination"]["adapter_result"]["count"] == 2
+        assert covered[adapter_name]["scenarios"]["partial_json"]["status"] == "unknown"
+        assert covered[adapter_name]["scenarios"]["auth_errors"]["adapter_result"]["error_type"] == "auth_error"
         for scenario_name, scenario in covered[adapter_name]["scenarios"].items():
             if scenario_name == "documented_exception":
                 continue
