@@ -25,7 +25,7 @@ def test_tool_outside_stage_allowlist_is_rejected_before_invocation():
 
     decision = authorize_tool_call(
         "model",
-        "device.wipe",
+        "device.lock",
         {"device_id": "mac-123", "serial": "SENSITIVE-SERIAL"},
         policy=DEFAULT_TOOL_POLICY,
         executor=destructive_tool,
@@ -36,6 +36,29 @@ def test_tool_outside_stage_allowlist_is_rejected_before_invocation():
     assert decision["rule"] == "stage_allowlist"
     assert invoked is False
     assert decision["params"] == {"device_id": "mac-123", "serial": "[REDACTED]"}
+
+
+def test_permanently_prohibited_tool_is_rejected_by_strongest_rule_before_invocation():
+    invoked = False
+
+    def destructive_tool():
+        nonlocal invoked
+        invoked = True
+        return {"ok": True}
+
+    decision = authorize_tool_call(
+        "model",
+        "device.wipe",
+        {"device_id": "mac-123"},
+        policy=DEFAULT_TOOL_POLICY,
+        admin_approved=True,
+        executor=destructive_tool,
+    )
+
+    assert decision["allowed"] is False
+    assert decision["result"] is None
+    assert decision["rule"] == "permanently_prohibited"
+    assert invoked is False
 
 
 def test_mutation_trace_records_actor_tool_minimized_params_result_and_rule():

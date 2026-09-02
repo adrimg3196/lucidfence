@@ -119,6 +119,8 @@ def authorize_tool_call(
     tool_class = tool_classes.get(tool)
     if tool_class is None:
         return _deny(actor_id, stage, tool, clean_params, "unknown_tool", "tool is not inventoried")
+    if tool_class == PROHIBITED:
+        return _deny(actor_id, stage, tool, clean_params, "permanently_prohibited", "tool is permanently prohibited")
     allowed_tools = stage_allowlist.get(stage)
     if allowed_tools is None:
         return _deny(actor_id, stage, tool, clean_params, "unknown_stage", "stage has no allowlist")
@@ -127,8 +129,6 @@ def authorize_tool_call(
     approval_required = _policy_get(pol, "admin_approval_required", frozenset({SENSITIVE, PROHIBITED}))
     if tool_class in approval_required and not admin_approved:
         return _deny(actor_id, stage, tool, clean_params, "admin_approval", "administrative approval required")
-    if tool_class == PROHIBITED:
-        return _deny(actor_id, stage, tool, clean_params, "permanently_prohibited", "tool is permanently prohibited")
 
     try:
         raw_result = executor() if executor is not None else None
