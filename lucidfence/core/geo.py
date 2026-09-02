@@ -47,47 +47,67 @@ def haversine_m(a: Point, b: Point) -> float:
     return EARTH_RADIUS_M * 2 * math.asin(min(1.0, math.sqrt(x)))
 
 
+def _unwrap_lng(lng: float, ref: float) -> float:
+    """Longitude equivalent to ``lng`` within 180° of ``ref``.
+
+    Lets planar tests treat a shape straddling the antimeridian (lng 178 ->
+    -178) as the 4°-wide shape it is, not as a 356°-wide band.
+    """
+    return ref + ((lng - ref + 180.0) % 360.0) - 180.0
+
+
 def point_in_polygon(p: Point, polygon: list[Point]) -> bool:
-    """Ray-casting point-in-polygon test."""
+    """Ray-casting point-in-polygon test (antimeridian-safe for polygons
+    narrower than 180° of longitude, i.e. every real fence)."""
     if len(polygon) < 3:
         return False
     inside = False
     n = len(polygon)
     j = n - 1
-    xs = [vp.lng for vp in polygon]
+    ref = polygon[0].lng
+    xs = [_unwrap_lng(vp.lng, ref) for vp in polygon]
     ys = [vp.lat for vp in polygon]
-    lat, lng = p.lat, p.lng
+    lat, lng = p.lat, _unwrap_lng(p.lng, ref)
     for i in range(n):
+        # The parity guard already implies ys[j] != ys[i]: no epsilon needed
+        # (an epsilon can zero the denominator or flip its sign for tiny dy).
         if ((ys[i] > lat) != (ys[j] > lat)) and (
-            lng
-            < (xs[j] - xs[i]) * (lat - ys[i]) / (ys[j] - ys[i] + 1e-12) + xs[i]
+            lng < (xs[j] - xs[i]) * (lat - ys[i]) / (ys[j] - ys[i]) + xs[i]
         ):
             inside = not inside
         j = i
     return inside
 
 
+def _bearing_rad(a: Point, b: Point) -> float:
+    """Initial great-circle bearing from a to b, in radians."""
+    lat1, lat2 = math.radians(a.lat), math.radians(b.lat)
+    d_lng = math.radians(b.lng - a.lng)
+    y = math.sin(d_lng) * math.cos(lat2)
+    x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(d_lng)
+    return math.atan2(y, x)
+
+
 def distance_to_segment_m(p: Point, a: Point, b: Point) -> float:
     """Minimum great-circle distance (meters) from point p to segment a-b.
 
-    Projects p onto the great-circle segment in a local equirectangular
-    approximation (valid for short segments / city scale) and clamps to the
-    endpoints, so the result is the true distance to the nearest point on the
-    segment, not just to its vertices.
+    Exact spherical cross-track / along-track formulas, so the result holds
+    for long segments, high latitudes and segments crossing the antimeridian
+    (the previous local equirectangular frame was off by hundreds of meters
+    there, comparable to a route corridor). Clamps to the nearest endpoint
+    when the perpendicular foot falls outside the segment.
     """
     if a.lat == b.lat and a.lng == b.lng:
         return haversine_m(p, a)
-    # local meters frame anchored at a
-    mx = (p.lng - a.lng) * 111_320 * math.cos(math.radians(a.lat))
-    my = (p.lat - a.lat) * 111_320
-    bx = (b.lng - a.lng) * 111_320 * math.cos(math.radians(a.lat))
-    by = (b.lat - a.lat) * 111_320
-    # project p onto segment
-    dot = mx * bx + my * by
-    len2 = bx * bx + by * by
-    t = max(0.0, min(1.0, dot / len2)) if len2 else 0.0
-    proj_x = bx * t
-    proj_y = by * t
-    dx = mx - proj_x
-    dy = my - proj_y
-    return math.hypot(dx, dy)
+    d_ap = haversine_m(a, p) / EARTH_RADIUS_M  # angular distance a -> p
+    if d_ap == 0.0:
+        return 0.0
+    delta = _bearing_rad(a, p) - _bearing_rad(a, b)
+    if math.cos(delta) < 0.0:  # foot of the perpendicular lies before a
+        return haversine_m(p, a)
+    xt = math.asin(max(-1.0, min(1.0, math.sin(d_ap) * math.sin(delta))))  # cross-track
+    cos_xt = math.cos(xt)
+    at = math.acos(max(-1.0, min(1.0, math.cos(d_ap) / cos_xt))) if cos_xt else 0.0  # along-track
+    if at > haversine_m(a, b) / EARTH_RADIUS_M:  # ... or beyond b
+        return haversine_m(p, b)
+    return abs(xt) * EARTH_RADIUS_M

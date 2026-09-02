@@ -24,7 +24,7 @@ from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
 from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
-from lucidfence.core.geo import Point
+from lucidfence.core.geo import point_from
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
@@ -381,7 +381,12 @@ class Engine:
 
         for rep in reports:
             try:
-                loc = Point(lat=rep.lat, lng=rep.lng) if rep.lat is not None and rep.lng is not None else None
+                loc = None
+                if rep.lat is not None and rep.lng is not None:
+                    try:
+                        loc = point_from({"lat": rep.lat, "lng": rep.lng})
+                    except (TypeError, ValueError):
+                        loc = None  # NaN/fuera de rango = desconocido, nunca "outside"
                 inside_fence = None
                 fence_state = "unknown"
                 if loc is not None:
@@ -1081,7 +1086,7 @@ class Engine:
         if not waypoint_data:
             raise ValueError("waypoints o fence_ids con centro son obligatorios")
         rid = data.get("id") or f"route-{int(time.time()*1000)}"
-        wps = [Point(lat=float(w["lat"]), lng=float(w["lng"])) for w in waypoint_data]
+        wps = [point_from(w) for w in waypoint_data]  # NaN/fuera de rango -> ValueError (400)
         schedule = data.get("schedule")
         if schedule is None and (data.get("window_start") or data.get("window_end")):
             schedule = {"start": data.get("window_start"), "end": data.get("window_end")}
