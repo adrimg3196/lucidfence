@@ -175,8 +175,11 @@ class IntuneAdapter(MDMAdapter):
         if response.status_code == 429:
             delay = retry_after_seconds(response)
             clock = self.replay_clock or getattr(transport, "clock", None) or getattr(getattr(transport, "transport", None), "clock", None)
-            if delay is not None and clock is not None and hasattr(clock, "sleep"):
-                clock.sleep(delay)
+            if delay is not None:
+                if clock is not None and hasattr(clock, "sleep"):
+                    clock.sleep(delay)
+                else:
+                    time.sleep(delay)
             response = call(url, headers=self._auth_headers(), timeout=self.timeout, **kwargs)
             setattr(response, "_lucidfence_rate_limited", 1)
         return response

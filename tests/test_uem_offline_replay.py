@@ -7,6 +7,8 @@ clock skew.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import sys
 sys.path.insert(0, ".")
 
@@ -18,6 +20,23 @@ from lucidfence.core.adapters.replay import (
     run_inventory_replay_matrix,
 )
 from lucidfence.core.adapters.intune import IntuneAdapter
+
+
+class _CaseInsensitiveHeaders(Mapping):
+    def __init__(self, values):
+        self._values = {str(k).lower(): v for k, v in values.items()}
+
+    def __getitem__(self, key):
+        return self._values[str(key).lower()]
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def get(self, key, default=None):
+        return self._values.get(str(key).lower(), default)
 
 
 class _RequestsProxy:
@@ -40,7 +59,7 @@ def test_retry_after_uses_injected_clock_without_real_sleep():
     transport = ReplayTransport(
         "intune",
         [
-            ReplayResponse(429, {"error": "slow down"}, headers={"Retry-After": "3"}),
+            ReplayResponse(429, {"error": "slow down"}, headers=_CaseInsensitiveHeaders({"retry-after": "3"})),
             ReplayResponse(200, {"value": []}),
         ],
         clock=clock,
@@ -92,6 +111,11 @@ def test_replay_matrix_marks_unknowns_and_fails_uncovered_inventory_adapters():
         assert covered[adapter_name]["status"] in {"supported", "degraded", "unknown", "error"}
         assert covered[adapter_name]["scenarios"]["unknown_payload"]["unknown_fields"]
         assert covered[adapter_name]["scenarios"]["clock_skew"]["status"] == "unknown"
+        for scenario_name, scenario in covered[adapter_name]["scenarios"].items():
+            if scenario_name == "documented_exception":
+                continue
+            assert scenario["replay_calls"] > 0, (adapter_name, scenario_name, scenario)
+            assert scenario["adapter_result"]["adapter"] == adapter_name
     assert matrix["uncovered_inventory_adapters"] == []
 
 

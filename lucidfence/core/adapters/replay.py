@@ -6,6 +6,7 @@ exercised against recorded/anonymous edge cases without network or secrets.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -28,7 +29,7 @@ class ReplayResponse:
     status_code: int
     body: dict | list | None = None
     text: str = ""
-    headers: dict[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -73,7 +74,7 @@ def retry_after_seconds(response: Any) -> float | None:
     """Parse Retry-After seconds; HTTP-date forms are marked unknown."""
 
     headers = getattr(response, "headers", {}) or {}
-    raw = headers.get("Retry-After") if isinstance(headers, dict) else None
+    raw = headers.get("Retry-After") if isinstance(headers, Mapping) else None
     if raw is None:
         return None
     try:
@@ -107,6 +108,92 @@ def _unknown_fields(payload: dict) -> list[str]:
     return found
 
 
+def _page_payload(adapter: str, rows: list[dict], next_url: str | None = None) -> dict:
+    if adapter == "jamf":
+        payload: dict[str, Any] = {"results": rows}
+        if next_url:
+            payload["links"] = {"next": next_url}
+        return payload
+    payload = {"value": rows}
+    if next_url:
+        payload["@odata.nextLink"] = next_url
+    return payload
+
+
+def _replay_adapter_result(adapter: str, responses: list[ReplayResponse]) -> tuple[dict, ReplayTransport, ReplayClock]:
+    clock = ReplayClock()
+    transport = ReplayTransport(adapter, responses, clock=clock)
+    if adapter == "intune":
+        from lucidfence.core.adapters.intune import IntuneAdapter
+
+        runner = IntuneAdapter(
+            live=True,
+            tenant_id="replay-tenant",
+            client_id="replay-client",
+            client_secret="replay-secret",
+            endpoint_template="https://graph.replay",
+        )
+    elif adapter == "jamf":
+        from lucidfence.core.adapters.jamf import JamfAdapter
+
+        runner = JamfAdapter(
+            live=True,
+            base_url="https://jamf.replay",
+            client_id="replay-client",
+            client_secret="replay-secret",
+        )
+    else:
+        raise ValueError(f"unsupported replay adapter: {adapter}")
+    runner._token = "replay-token"
+    runner._token_expires_at = float("inf")
+    runner.requests = transport
+    result = runner.execute({"device_id": ""}, "list", {})
+    return result, transport, clock
+
+
+def _scenario_responses(adapter: str, scenario: str) -> list[ReplayResponse]:
+    if scenario in {"unknown_payload", "clock_skew"}:
+        return [ReplayResponse(200, _fixture_payload(adapter, scenario))]
+    if scenario == "pagination":
+        first_url = "https://jamf.replay/page-2" if adapter == "jamf" else "https://graph.replay/page-2"
+        return [
+            ReplayResponse(200, _page_payload(adapter, [{"id": f"{adapter}-page-1"}], first_url)),
+            ReplayResponse(200, _page_payload(adapter, [{"id": f"{adapter}-page-2"}])),
+        ]
+    if scenario == "duplicate_cursor":
+        repeated_url = "https://jamf.replay/repeated" if adapter == "jamf" else "https://graph.replay/repeated"
+        return [
+            ReplayResponse(200, _page_payload(adapter, [{"id": f"{adapter}-dup-1"}], repeated_url)),
+            ReplayResponse(200, _page_payload(adapter, [{"id": f"{adapter}-dup-2"}], repeated_url)),
+        ]
+    if scenario == "rate_limit_retry_after":
+        return [
+            ReplayResponse(429, {"error": "slow down"}, headers={"Retry-After": "2"}),
+            ReplayResponse(200, _page_payload(adapter, [])),
+        ]
+    if scenario == "auth_errors":
+        return [ReplayResponse(401, {"error": "denied"}, text="denied")]
+    if scenario == "timeout":
+        return []
+    if scenario == "partial_json":
+        return [ReplayResponse(200, None, text="{partial")]
+    raise ValueError(f"unknown replay scenario: {scenario}")
+
+
+def _scenario_status(scenario: str, result: dict) -> str:
+    if scenario == "clock_skew":
+        return "unknown" if result.get("ok") else "error"
+    if scenario == "duplicate_cursor":
+        return "degraded" if result.get("error_type") == "duplicate_cursor" else "error"
+    if scenario == "auth_errors":
+        return "supported" if result.get("error_type") == "auth_error" else "error"
+    if scenario == "timeout":
+        return "error" if result.get("ok") is False else "supported"
+    if scenario == "partial_json":
+        return "unknown" if result.get("error_type") == "invalid_payload" else "error"
+    return "supported" if result.get("ok") else "error"
+
+
 def run_inventory_replay_matrix() -> dict:
     """Generate the offline coverage matrix for declared inventory adapters.
 
@@ -116,7 +203,6 @@ def run_inventory_replay_matrix() -> dict:
     reports it under ``uncovered_inventory_adapters`` so CI fails.
     """
 
-    from lucidfence.core.adapters import ADAPTER_REGISTRY
     from lucidfence.core.adapters.capabilities import PROVIDER_CAPABILITIES
 
     covered = {"applivery", "intune", "jamf"}
@@ -149,19 +235,27 @@ def run_inventory_replay_matrix() -> dict:
             }
             status = "degraded"
         else:
-            for scenario in ("unknown_payload", "clock_skew"):
-                payload = _fixture_payload(name, scenario)
+            for scenario in (
+                "unknown_payload",
+                "clock_skew",
+                "pagination",
+                "duplicate_cursor",
+                "rate_limit_retry_after",
+                "auth_errors",
+                "timeout",
+                "partial_json",
+            ):
+                responses = _scenario_responses(name, scenario)
+                fixture_payload = responses[0].body if responses else {}
+                result, transport, clock = _replay_adapter_result(name, responses)
                 scenarios[scenario] = {
-                    "status": "unknown" if scenario == "clock_skew" else "supported",
-                    "unknown_fields": _unknown_fields(payload),
-                    "preserved_payload": payload,
+                    "status": _scenario_status(scenario, result),
+                    "unknown_fields": _unknown_fields(fixture_payload) if isinstance(fixture_payload, dict) else [],
+                    "preserved_payload": fixture_payload,
+                    "adapter_result": result,
+                    "replay_calls": transport.calls,
+                    "virtual_sleeps": clock.sleeps,
                 }
-            scenarios["pagination"] = {"status": "supported"}
-            scenarios["duplicate_cursor"] = {"status": "degraded"}
-            scenarios["rate_limit_retry_after"] = {"status": "supported"}
-            scenarios["auth_errors"] = {"status": "supported", "codes": [401, 403]}
-            scenarios["timeout"] = {"status": "error", "error_type": "transport_error"}
-            scenarios["partial_json"] = {"status": "unknown"}
             status = "supported"
         results.append({
             "adapter": name,
