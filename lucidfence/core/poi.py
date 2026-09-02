@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,13 +16,17 @@ def _safe_seed_path(path: str | Path) -> Path:
 
     Seeds should be internal/trusted files (bundled data/ seeds, tests),
     which arrive as absolute paths and pass through unchanged (normalized).
-    If a future caller ever forwards a *relative* user-controlled path here,
-    keep only the basename so ``../../`` escapes are impossible (mirrors
-    storage.py._local_path)."""
+    Relative paths are resolved beneath the current working directory while
+    preserving safe subdirectories. Paths that escape that trusted base are
+    rejected."""
     p = Path(str(path))
     if p.is_absolute():
         return p.resolve()
-    return Path(Path.cwd()) / os.path.basename(str(path).replace("\\", "/"))
+    base = Path.cwd().resolve()
+    resolved = (base / p).resolve()
+    if not resolved.is_relative_to(base):
+        raise ValueError("relative POI seed path escapes the working directory")
+    return resolved
 
 
 @dataclass
