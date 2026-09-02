@@ -17,6 +17,7 @@ from lucidfence.core.device_attestation import (  # noqa: E402
     envelope_from_json,
     normalize_attestation,
 )
+from lucidfence.core.location_source import LocationReport  # noqa: E402
 from lucidfence.core.state_store import DeviceState  # noqa: E402
 from lucidfence.saas import routing  # noqa: E402
 from helpers import make_temp_engine  # noqa: E402
@@ -192,6 +193,69 @@ def test_read_only_api_route_serves_persisted_neutral_envelopes():
     assert payload["attestations"][0]["signature_status"] == "verified"
 
 
+def test_expired_before_observed_attestation_is_rejected():
+    raw = _fixture("apple")
+    raw["managed_device_attestation"]["expires_at"] = "2026-09-02T10:00:30Z"
+    try:
+        normalize_attestation("apple", raw, observed_at="2026-09-02T10:01:00Z")
+    except AttestationError as exc:
+        assert "expires_at before observed_at" in str(exc)
+    else:
+        raise AssertionError("expired-before-observed attestation accepted")
+
+
+def test_conflicting_vendor_claim_aliases_are_rejected():
+    raw = _fixture("windows")
+    raw["health_attestation"]["claims"]["hardware_backed"] = True
+    raw["health_attestation"]["claims"]["secure_boot"] = False
+    try:
+        normalize_attestation("windows", raw, observed_at="2026-09-02T10:01:00Z")
+    except AttestationError as exc:
+        assert "conflicting aliases" in str(exc)
+    else:
+        raise AssertionError("conflicting vendor aliases accepted")
+
+
+def test_read_only_report_skips_malformed_attestation_without_hiding_valid_rows():
+    valid = normalize_attestation("apple", _fixture("apple"), observed_at="2026-09-02T10:01:00Z")
+    report = attestation_report([
+        DeviceState(device_id="valid", name="Valid", platform="ios", attestation=valid.to_dict()).to_dict(),
+        DeviceState(device_id="bad", name="Bad", platform="windows", attestation={"source": "windows"}).to_dict(),
+    ])
+    assert report["total"] == 1
+    assert report["attestations"][0]["device_id"] == "valid"
+    assert report["invalid"] == 1
+
+
+def test_engine_run_once_preserves_persisted_attestation_when_report_omits_it():
+    eng = make_temp_engine()
+    envelope = normalize_attestation("apple", _fixture("apple"), observed_at="2026-09-02T10:01:00Z")
+    eng.store.upsert(DeviceState(
+        device_id="d-cycle",
+        name="Cycle iPhone",
+        platform="ios",
+        attestation=envelope.to_dict(),
+    ))
+    eng.source = type("Source", (), {"fetch": lambda self: [
+        LocationReport(
+            device_id="d-cycle",
+            name="Cycle iPhone",
+            platform="ios",
+            lat=40.0,
+            lng=-3.0,
+            status="active",
+            compliant=True,
+        )
+    ]})()
+    stored_before = eng.store.get("d-cycle")
+    assert stored_before is not None
+    assert stored_before.attestation is not None
+    eng.run_once()
+    stored_after = eng.store.get("d-cycle")
+    assert stored_after is not None
+    assert stored_after.attestation == envelope.to_dict()
+
+
 if __name__ == "__main__":
     test_three_vendor_fixtures_share_neutral_contract_without_losing_differences()
     test_absent_claim_is_unknown_and_not_false_by_default()
@@ -199,4 +263,8 @@ if __name__ == "__main__":
     test_serialization_is_deterministic_and_old_device_state_data_stays_compatible()
     test_read_only_report_explains_provenance_without_boolean_collapse()
     test_read_only_api_route_serves_persisted_neutral_envelopes()
+    test_expired_before_observed_attestation_is_rejected()
+    test_conflicting_vendor_claim_aliases_are_rejected()
+    test_read_only_report_skips_malformed_attestation_without_hiding_valid_rows()
+    test_engine_run_once_preserves_persisted_attestation_when_report_omits_it()
     print("device-attestation tests passed")

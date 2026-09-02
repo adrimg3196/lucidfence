@@ -165,6 +165,7 @@ class NormalizedDevice:
     # longer falls through to imperative for every device.
     management_mode: str | None = None
     ownership: str | None = None
+    attestation: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -588,6 +589,7 @@ class MultiUEMOrchestrator:
                     imei=device.imei,
                     management_mode=device.management_mode,
                     ownership=device.ownership,
+                    attestation=deepcopy(device.attestation),
                     raw={
                         "provider": device.provider,
                         "provider_device_id": device.provider_device_id,

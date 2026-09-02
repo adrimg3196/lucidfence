@@ -61,6 +61,8 @@ def _validate_time_order(issued_at: str | None, observed_at: str | None, expires
         raise AttestationError("issued_at after observed_at")
     if issued and expires and expires < issued:
         raise AttestationError("expires_at before issued_at")
+    if observed and expires and expires < observed:
+        raise AttestationError("expires_at before observed_at")
 
 
 def _str_or_none(value: Any, field_name: str) -> str | None:
@@ -106,13 +108,21 @@ def _claim_value(source: str, raw_claims: dict, canonical: str, vendor_keys: tup
             "value": None,
             "reason": f"claim absent in {source} attestation payload",
         }
-    key = present[0]
-    value = raw_claims[key]
-    if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
-        raise AttestationError(f"ambiguous boolean claim {key}")
-    if canonical in {"hardware_backed", "managed", "os_integrity", "encryption"}:
-        if not isinstance(value, bool):
-            raise AttestationError(f"claim {key} must be boolean")
+    values: list[tuple[str, Any]] = []
+    for key in present:
+        value = raw_claims[key]
+        if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+            raise AttestationError(f"ambiguous boolean claim {key}")
+        if canonical in {"hardware_backed", "managed", "os_integrity", "encryption"}:
+            if not isinstance(value, bool):
+                raise AttestationError(f"claim {key} must be boolean")
+        values.append((key, value))
+    expected = values[0][1]
+    conflicts = [key for key, value in values[1:] if value != expected]
+    if conflicts:
+        names = ", ".join(present)
+        raise AttestationError(f"conflicting aliases for {canonical}: {names}")
+    key, value = values[0]
     return {
         "status": "asserted",
         "value": value,
@@ -282,13 +292,18 @@ def normalize_attestation(source: str, raw: dict, *, observed_at: str) -> Attest
 def attestation_report(devices: list[dict]) -> dict:
     """Build a read-only tenant report from persisted DeviceState dictionaries."""
     rows = []
+    invalid = 0
     for device in devices or []:
         if not isinstance(device, dict):
             continue
         raw = device.get("attestation")
         if not isinstance(raw, dict):
             continue
-        envelope = envelope_from_dict(raw)
+        try:
+            envelope = envelope_from_dict(raw)
+        except Exception:
+            invalid += 1
+            continue
         item = envelope.to_dict()
         item["device_id"] = device.get("device_id") or envelope.subject
         item["name"] = device.get("name") or None
@@ -298,6 +313,7 @@ def attestation_report(devices: list[dict]) -> dict:
     return {
         "model_version": MODEL_VERSION,
         "total": len(rows),
+        "invalid": invalid,
         "attestations": rows,
         "explanation": "Read-only neutral attestation envelopes; absent claims are unknown, not false.",
     }

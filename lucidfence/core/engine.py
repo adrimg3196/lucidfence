@@ -532,6 +532,11 @@ class Engine:
                     osquery_version=posture.get("osquery_version"),
                     osquery_config_valid=posture.get("osquery_config_valid"),
                     evidence_freshness={"location": location_freshness},
+                    attestation=(
+                        rep.attestation
+                        if isinstance(rep.attestation, dict)
+                        else (prev.attestation if prev is not None else None)
+                    ),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
