@@ -30,6 +30,9 @@ class DeviceState:
     fence_id: Optional[str] = None
     inside_fence: Optional[str] = None  # fence id the device is currently inside
     fence_state: str = "unknown"  # inside | outside | unknown
+    # Última cerca conocida mientras el dispositivo está "unknown" (sin señal):
+    # si reaparece fuera, esa es la cerca que abandonó y cuyo on_exit toca.
+    last_inside_fence: Optional[str] = None
     location_source: str = "unknown"  # gps | coarse_ip | simulated
     risk_score: Optional[float] = None  # MOAT: geospatial risk 0-100
     risk_severity: Optional[str] = None  # low|medium|high|critical
