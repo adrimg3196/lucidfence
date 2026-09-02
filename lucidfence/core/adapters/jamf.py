@@ -27,6 +27,7 @@ from urllib.parse import quote
 import requests
 
 from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.replay import retry_after_seconds
 from lucidfence.core.multiuem import NormalizedDevice
 
 
@@ -116,6 +117,8 @@ class JamfAdapter(MDMAdapter):
         self._token: Optional[str] = None
         self._token_expires_at: float = 0.0
         self._token_cache_seconds = token_cache_seconds
+        self.requests = requests
+        self.replay_clock = None
 
     # --- token cache (Basic auth -> bearer) ---
 
@@ -131,7 +134,7 @@ class JamfAdapter(MDMAdapter):
             )
         url = f"{self.base_url}{JAMF_TOKEN_PATH}"
         try:
-            resp = requests.post(
+            resp = self.requests.post(
                 url,
                 auth=(self.client_id, self.client_secret),
                 headers={"Accept": "application/json"},
@@ -172,6 +175,23 @@ class JamfAdapter(MDMAdapter):
             "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json",
         }
+
+    def _request(self, method: str, url: str, **kwargs):
+        """Issue one HTTP request, honoring one 429 Retry-After via injected clock."""
+        transport = self.requests
+        call = {"GET": transport.get, "POST": transport.post, "PATCH": transport.patch}[method]
+        response = call(url, headers=self._auth_headers(), timeout=self.timeout, **kwargs)
+        if response.status_code == 429:
+            delay = retry_after_seconds(response)
+            clock = self.replay_clock or getattr(transport, "clock", None) or getattr(getattr(transport, "transport", None), "clock", None)
+            if delay is not None:
+                if clock is not None and hasattr(clock, "sleep"):
+                    clock.sleep(delay)
+                else:
+                    time.sleep(delay)
+            response = call(url, headers=self._auth_headers(), timeout=self.timeout, **kwargs)
+            setattr(response, "_lucidfence_rate_limited", 1)
+        return response
 
     # --- helpers ---
 
@@ -338,8 +358,8 @@ class JamfAdapter(MDMAdapter):
                 "would_send": {"method": method, "url": url},
             }
 
-        call = requests.post if sync else requests.get
-        resp = call(url, headers=self._auth_headers(), timeout=self.timeout)
+        call = self._request
+        resp = call(method, url)
         err = self._resp_error(resp, device, action, f"DDM client {mid}")
         if err:
             return err
@@ -427,7 +447,7 @@ class JamfAdapter(MDMAdapter):
                 "would_send": {"method": "POST", "url": url, "json": body},
             }
 
-        resp = requests.post(url, headers=self._auth_headers(), json=body, timeout=self.timeout)
+        resp = self._request("POST", url, json=body)
 
         err = self._resp_error(resp, device, action, f"mobile device {device_id}")
         if err:
@@ -448,21 +468,40 @@ class JamfAdapter(MDMAdapter):
 
     def _list_devices_live(self) -> dict:
         url = f"{self.base_url}{JAMF_DEVICES_PATH}"
-        resp = requests.get(
-            url,
-            headers=self._auth_headers(),
-            params={"page-size": 200, "section": "GENERAL"},
-            timeout=self.timeout,
-        )
-        if resp.status_code in (401, 403):
-            self._token = None
-            raise AuthError(f"Jamf list rejected ({resp.status_code}): {resp.text[:200]}")
-        if resp.status_code >= 500:
-            raise TransportError(f"Jamf list {resp.status_code}: {resp.text[:200]}")
-        if resp.status_code >= 400:
-            return self._err("jamf", {"device_id": "", "name": ""}, "list",
-                             "jamf_rejected", f"Jamf {resp.status_code}: {resp.text[:200]}")
-        results = (resp.json() or {}).get("results", [])
+        params = {"page-size": 200, "section": "GENERAL"}
+        results: list[dict] = []
+        seen_pages = set()
+        rate_limited = 0
+        while True:
+            if url in seen_pages:
+                return {
+                    "adapter": "jamf", "ok": False, "action": "list",
+                    "mode": "live", "error_type": "duplicate_cursor",
+                    "error": f"Jamf pagination repeated cursor {url!r}",
+                    "replay": {"partial_count": len(results), "rate_limited": rate_limited},
+                }
+            seen_pages.add(url)
+            resp = self._request("GET", url, params=params)
+            rate_limited += int(getattr(resp, "_lucidfence_rate_limited", 0) or 0)
+            if resp.status_code in (401, 403):
+                self._token = None
+                raise AuthError(f"Jamf list rejected ({resp.status_code}): {resp.text[:200]}")
+            if resp.status_code >= 500:
+                raise TransportError(f"Jamf list {resp.status_code}: {resp.text[:200]}")
+            if resp.status_code >= 400:
+                return self._err("jamf", {"device_id": "", "name": ""}, "list",
+                                 "jamf_rejected", f"Jamf {resp.status_code}: {resp.text[:200]}")
+            try:
+                payload = resp.json() or {}
+            except ValueError:
+                return self._err("jamf", {"device_id": "", "name": ""}, "list",
+                                 "invalid_payload", "Jamf list response was not JSON")
+            results.extend(payload.get("results", []) or [])
+            next_url = (payload.get("links") or {}).get("next") or payload.get("next")
+            if not next_url:
+                break
+            url = str(next_url)
+            params = None
         items = [self._normalize_list_item(x) for x in results]
         return {
             "adapter": "jamf",
@@ -471,6 +510,7 @@ class JamfAdapter(MDMAdapter):
             "mode": "live",
             "devices": items,
             "count": len(items),
+            "replay": {"pages": len(seen_pages), "rate_limited": rate_limited},
         }
 
     # --- inventory (Issue #88: declarative-eligibility signals) ---

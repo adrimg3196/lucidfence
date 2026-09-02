@@ -24,6 +24,7 @@ from typing import Any, Optional
 import requests
 
 from lucidfence.core.adapters.base import MDMAdapter
+from lucidfence.core.adapters.replay import retry_after_seconds
 
 
 # Mapeo acción UEM -> operación Graph + endpoint pattern.
@@ -95,6 +96,8 @@ class IntuneAdapter(MDMAdapter):
         self._token: Optional[str] = None
         self._token_expires_at: float = 0.0
         self._token_cache_seconds = token_cache_seconds
+        self.requests = requests
+        self.replay_clock = None
 
     # --- token cache ---
 
@@ -110,7 +113,7 @@ class IntuneAdapter(MDMAdapter):
             )
         url = GRAPH_TOKEN_URL.format(tenant_id=self.tenant_id)
         try:
-            resp = requests.post(
+            resp = self.requests.post(
                 url,
                 data={
                     "client_id": self.client_id,
@@ -155,6 +158,31 @@ class IntuneAdapter(MDMAdapter):
             "Authorization": f"Bearer {self._token}",
             "Content-Type": "application/json",
         }
+
+    def _request(self, method: str, url: str, **kwargs):
+        """Issue one HTTP request, honoring one 429 Retry-After via injected clock.
+
+        Tests inject ``self.requests`` and ``self.replay_clock`` so API failures
+        are replayable offline without real sleeps or secrets.
+        """
+        transport = self.requests
+        call = {
+            "GET": transport.get,
+            "POST": transport.post,
+            "PATCH": transport.patch,
+        }[method]
+        response = call(url, headers=self._auth_headers(), timeout=self.timeout, **kwargs)
+        if response.status_code == 429:
+            delay = retry_after_seconds(response)
+            clock = self.replay_clock or getattr(transport, "clock", None) or getattr(getattr(transport, "transport", None), "clock", None)
+            if delay is not None:
+                if clock is not None and hasattr(clock, "sleep"):
+                    clock.sleep(delay)
+                else:
+                    time.sleep(delay)
+            response = call(url, headers=self._auth_headers(), timeout=self.timeout, **kwargs)
+            setattr(response, "_lucidfence_rate_limited", 1)
+        return response
 
     # --- helpers ---
 
@@ -240,7 +268,7 @@ class IntuneAdapter(MDMAdapter):
                 "would_send": {"method": "POST", "url": url, "json": body},
             }
 
-        resp = requests.post(url, headers=self._auth_headers(), json=body, timeout=self.timeout)
+        resp = self._request("POST", url, json=body)
 
         if resp.status_code in (401, 403):
             self._token = None  # force refresh on next call
@@ -279,10 +307,10 @@ class IntuneAdapter(MDMAdapter):
         """
         compliant = bool((params or {}).get("compliant", False))
 
-        r1 = requests.get(
+        r1 = self._request(
+            "GET",
             f"{self.endpoint_template}/deviceManagement/managedDevices/{device_id}"
             "?$select=id,azureADDeviceId",
-            headers=self._auth_headers(), timeout=self.timeout,
         )
         if r1.status_code in (401, 403):
             self._token = None
@@ -298,9 +326,9 @@ class IntuneAdapter(MDMAdapter):
                              "managed device has no Entra (Azure AD) device object; "
                              "compliance/Conditional Access does not apply to it")
 
-        r2 = requests.get(
+        r2 = self._request(
+            "GET",
             f"{self.endpoint_template}/devices?$filter=deviceId eq '{aad_id}'&$select=id",
-            headers=self._auth_headers(), timeout=self.timeout,
         )
         if r2.status_code in (401, 403):
             self._token = None
@@ -323,7 +351,7 @@ class IntuneAdapter(MDMAdapter):
                 "action": "set_compliance", "mode": "dry_run", "compliant": compliant,
                 "would_send": {"method": "PATCH", "url": url, "json": body},
             }
-        r3 = requests.patch(url, headers=self._auth_headers(), json=body, timeout=self.timeout)
+        r3 = self._request("PATCH", url, json=body)
         if r3.status_code in (401, 403):
             self._token = None
             raise AuthError(
@@ -341,28 +369,52 @@ class IntuneAdapter(MDMAdapter):
 
     def _list_devices_live(self) -> dict:
         url = f"{self.endpoint_template}/deviceManagement/managedDevices"
-        resp = requests.get(
-            url,
-            headers=self._auth_headers(),
-            params={"$top": 200, "$select": "id,deviceName,operatingSystem,complianceState,isEncrypted,osVersion,batteryLevelPercentage"},
-            timeout=self.timeout,
-        )
-        if resp.status_code in (401, 403):
-            self._token = None
-            raise AuthError(f"Graph list rejected ({resp.status_code}): {resp.text[:200]}")
-        if resp.status_code >= 500:
-            raise TransportError(f"Graph list {resp.status_code}: {resp.text[:200]}")
-        if resp.status_code >= 400:
-            return self._err("intune", {"device_id": "", "name": ""}, "list",
-                             "graph_rejected", f"Graph {resp.status_code}: {resp.text[:200]}")
-        items = [self._normalize_list_item(x) for x in resp.json().get("value", [])]
+        params = {"$top": 200, "$select": "id,deviceName,operatingSystem,complianceState,isEncrypted,osVersion,batteryLevelPercentage"}
+        items: list[dict] = []
+        seen_urls = set()
+        rate_limited = 0
+        while True:
+            if url in seen_urls:
+                return {
+                    "adapter": "intune",
+                    "ok": False,
+                    "action": "list",
+                    "mode": "live",
+                    "error_type": "duplicate_cursor",
+                    "error": f"Graph pagination repeated cursor {url!r}",
+                    "replay": {"partial_count": len(items), "rate_limited": rate_limited},
+                }
+            seen_urls.add(url)
+            resp = self._request("GET", url, params=params)
+            rate_limited += int(getattr(resp, "_lucidfence_rate_limited", 0) or 0)
+            if resp.status_code in (401, 403):
+                self._token = None
+                raise AuthError(f"Graph list rejected ({resp.status_code}): {resp.text[:200]}")
+            if resp.status_code >= 500:
+                raise TransportError(f"Graph list {resp.status_code}: {resp.text[:200]}")
+            if resp.status_code >= 400:
+                return self._err("intune", {"device_id": "", "name": ""}, "list",
+                                 "graph_rejected", f"Graph {resp.status_code}: {resp.text[:200]}")
+            try:
+                payload = resp.json() or {}
+            except ValueError:
+                return self._err("intune", {"device_id": "", "name": ""}, "list",
+                                 "invalid_payload", "Graph list response was not JSON")
+            items.extend(payload.get("value", []) or [])
+            next_url = payload.get("@odata.nextLink")
+            if not next_url:
+                break
+            url = str(next_url)
+            params = None
+        normalized = [self._normalize_list_item(x) for x in items]
         return {
             "adapter":   "intune",
             "ok":        True,
             "action":    "list",
             "mode":      "live",
-            "devices":   items,
-            "count":     len(items),
+            "devices":   normalized,
+            "count":     len(normalized),
+            "replay":    {"pages": len(seen_urls), "rate_limited": rate_limited},
         }
 
     # --- mock fallback (unchanged contract behaviour) ---

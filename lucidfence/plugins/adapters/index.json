@@ -15,7 +15,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/intune.py",
-      "sha256": "f90d678e5d73f0e00614196c9ca52e8f3fdf18d31beb949eda2c136c30fc7163",
+      "sha256": "643dfa7e7b15b75ad5380b3a1e0c952ebdae1a9e19533ff46bc997f372a9d6a1",
       "install": "bundled",
       "verified": true
     },
@@ -24,7 +24,7 @@
       "version": "1.0.0",
       "api": "MDMAdapter/v1",
       "path": "lucidfence/core/adapters/jamf.py",
-      "sha256": "1c2cd675616f180e2009dc21419abde8bb95b4bb604f261871b331db9230b2d4",
+      "sha256": "7d89f6f5b200d11e93a724ff80f516c6a3c4359c8136d2c408ca8cb974ccc09b",
       "install": "bundled",
       "verified": true
     },
