@@ -27,7 +27,6 @@ from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence,
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
-from lucidfence.core.declarative import declarative_path_for
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
@@ -84,6 +83,16 @@ class Engine:
         self.data_dir = config.get("data_dir", "data")
         self.store = StateStore(self.data_dir)
         self.incidents = IncidentStore(self.data_dir)
+        # Playbooks SOAR del tenant: builtin del producto + los del tenant
+        # persistidos en <data_dir>/soar_playbooks.json. El ciclo los fusiona
+        # vía all_playbooks(); un playbook roto se salta (auditado). Si el
+        # store no puede inicializarse, el ciclo usa DEFAULT_PLAYBOOKS.
+        try:
+            from lucidfence.core.soar_playbook_store import TenantPlaybookStore
+            self.soar_store = TenantPlaybookStore(data_dir=self.data_dir,
+                                                  builtin=DEFAULT_PLAYBOOKS)
+        except Exception:
+            self.soar_store = None
         # Wire the incident lifecycle notifiers if configured: Slack/Teams
         # (incident_webhook_url, legacy) plus the multi-channel list
         # incident_webhooks (slack | generic firmado HMAC | ntfy). All are
@@ -567,13 +576,19 @@ class Engine:
         self.last_run = now_iso()
 
         # ---- SOAR: evaluate orchestration playbooks per device --------------
-        # Each matched playbook yields UEM actions executed via the same adapter
-        # (and cooldown/dry_run machinery) used for geofence actions.
+        # Combina los playbooks builtin del producto con los del tenant: si el
+        # engine expone un soar_store (TenantPlaybookStore), manda él; si un
+        # test lo sustituye por un store falso, se respeta igual.
         soar_ctx = {"cycle": self.cycle_count, "on_error": None}
+        _store = getattr(self, "soar_store", None)
+        try:
+            playbooks = _store.all_playbooks() if _store is not None else DEFAULT_PLAYBOOKS
+        except Exception:
+            playbooks = DEFAULT_PLAYBOOKS
         for ds in states_cur.values():
             dev_dict = ds.to_dict()
             try:
-                execs = evaluate_soar(dev_dict, DEFAULT_PLAYBOOKS, soar_ctx)
+                execs = evaluate_soar(dev_dict, playbooks, soar_ctx)
             except Exception:
                 execs = []
             for ex in execs:
@@ -588,6 +603,43 @@ class Engine:
                             "device_id": ds.device_id,
                             "playbook_id": ex.get("playbook_id"),
                             "note": act.get("params", {}).get("reason", ""),
+                        })
+                        continue
+                    if aname in self.DESTRUCTIVE_ACTIONS:
+                        # Human-gate (diseño §5 / REQ §5): las acciones
+                        # destructivas NUNCA se auto-ejecutan. Se emiten como
+                        # handoff para aprobación manual y quedan como su
+                        # PROPIA entrada en _cycle_actions (no se muta la
+                        # acción previa ni hay guarda condicional: un handoff
+                        # que es la primera acción del ciclo también deja
+                        # rastro — #208). executed/ok=False: no cuenta como
+                        # ejecutado ni arma cooldown.
+                        self.store.log_event({
+                            "ts": now_iso(), "kind": "soar_handoff",
+                            "device_id": ds.device_id,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "action": aname,
+                            "severity": ex.get("severity", "high"),
+                            "matched_fields": ex.get("matched_fields", []),
+                            "params": act.get("params", {}) or {},
+                            "human_gate": True,
+                            "note": "accion destructiva pausada para aprobacion manual (SOAR human-gate)",
+                        })
+                        self._cycle_actions.append({
+                            "ts": now_iso(),
+                            "device_id": ds.device_id,
+                            "action": aname,
+                            "soar": True,
+                            "soar_handoff": True,
+                            "human_gate": True,
+                            "playbook_id": ex.get("playbook_id"),
+                            "playbook_name": ex.get("name"),
+                            "severity": ex.get("severity", "high"),
+                            "executed": False,
+                            "ok": False,
+                            "dry_run": self.dry_run,
+                            "note": "SOAR human-gate: pendiente de aprobacion manual",
                         })
                         continue
                     if self._dedupe_action(
@@ -670,10 +722,16 @@ class Engine:
             # (provider + provider_device_id + provider_refs); DeviceState only
             # keeps provider_refs, so bridge the first ref into those fields.
             first_provider, first_id = next(iter(refs.items()))
+            _sig = (lambda k: dev.get(k) if isinstance(dev, dict)
+                    else getattr(dev, k, None))
             bridge = {
                 "provider": first_provider,
                 "provider_device_id": first_id,
                 "provider_refs": refs,
+                "platform": _sig("platform"),
+                "os_version": _sig("os_version"),
+                "management_mode": _sig("management_mode"),
+                "ownership": _sig("ownership"),
             }
             res = self.orchestrator.execute(bridge, action, params or {}, dry_run=effective_dry)
             if res.get("error_type") not in ("unknown_provider", "missing_provider_device_id"):
@@ -749,33 +807,28 @@ class Engine:
         if action not in VALID_ACTIONS:
             return {"ok": False, "error": "accion no valida", "valid": sorted(VALID_ACTIONS)}
         now = _time.time()
-        # Declarative routing gate (issue #89): consult DDM capability + device mode.
-        # Rutea declarative si el adapter soporta DDM y el device está en modo
-        # fully_managed/mdm/configurator. El resto del flujo (cooldown, readback,
-        # persist) sigue igual — solo cambia la fuente del action result.
-        if (self.adapter and getattr(self.adapter, "supports_ddm", False) and
-                action in ("lock", "wipe", "clear_passcode", "reboot",
-                           "apply_profile")):
-            dev_dict = dev.to_dict() if hasattr(dev, "to_dict") else {}
-            path = declarative_path_for(
-                dev_dict,
-                supports_ddm=True,
-            )
-            if path == "declarative":
-                # Delegate to the declarative builder on the adapter.
-                res = self._execute_action(dev, "apply_ddm", params)
-                res["enforcement"] = "declarative"
-                res["declarative_subaction"] = "apply_ddm"
-                res["original_action"] = action
-                res["ts"] = now_iso()
-                res["fence_id"] = dev.inside_fence
-                res["trigger"] = "operator"
-                res["policy_name"] = "comando manual (declarativo)"
-                res["operator"] = operator
-                res["manual"] = True
-                self.store.log_action(res)
-                return res
-        # Destructive cooldown check (manual commands honor the same guardrail).
+        # Guardarraíl de wipe sobre la acción PEDIDA (antes de elegir vía):
+        # un wipe declarativo exige la doble llave igual que el imperativo
+        # (el enrutado cambia el transporte, jamás el permiso — #205(c)).
+        if action == "wipe" and not self.dry_run:
+            if not self.allow_wipe:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev.device_id, "action": action,
+                    "error": "wipe bloqueado por guardarrail: requiere "
+                             "enforcement.allow_wipe: true en la config del tenant",
+                }
+            if self.wipe_allowlist and dev.device_id not in self.wipe_allowlist:
+                return {
+                    "ok": False, "blocked": True, "error_type": "wipe_not_allowed",
+                    "adapter": getattr(self.adapter, "name", "none"),
+                    "device_id": dev.device_id, "action": action,
+                    "error": f"wipe bloqueado: {dev.device_id!r} no está en "
+                             "enforcement.wipe_allowlist",
+                }
+        # Destructive cooldown check sobre la acción PEDIDA (no la del cable:
+        # el cooldown cuenta el `lock` pedido, no el `apply_ddm` — #205(c)).
         if action in self.DESTRUCTIVE_ACTIONS and self.action_cooldown_seconds > 0:
             last = self.store.last_action_at(dev.device_id, action)
             if last and (now - last) < self.action_cooldown_seconds:
@@ -788,7 +841,106 @@ class Engine:
                     "remaining_seconds": remaining,
                     "error": f"comando {action} en cooldown; reintenta en {remaining}s",
                 }
+        # Gating por acción sobre la PEDIDA: en enforce con live_actions, lo
+        # no listado sale como dry-run. Se calcula aquí para que la vía
+        # declarativa herede el gating de la acción pedida (no el de la
+        # sub-acción del cable, que nunca está en live_actions).
+        effective_dry = self.dry_run
+        if (not effective_dry and self.live_actions is not None
+                and action not in self.live_actions):
+            effective_dry = True
+        # Enrutado declarativo (#205 + #89): la vía la decide el gate
+        # compartido (management_mode/ownership + fallback DDM por
+        # plataforma/OS/perfil). Dato desconocido => imperativo.
+        sub = None
+        gate_adapter = self.adapter
+        refs = getattr(dev, "provider_refs", None)
+        if self.orchestrator is not None and isinstance(refs, dict) and refs:
+            try:
+                from lucidfence.core.adapters import ADAPTER_REGISTRY as _REG
+                _first = next(iter(refs.keys()))
+                gate_adapter = _REG.get(_first, self.adapter)
+            except Exception:
+                gate_adapter = self.adapter
+        try:
+            from lucidfence.core.declarative import resolve_declarative_subaction as _resolve
+            sub = _resolve(
+                dev, action, params or {},
+                supports_ddm=bool(getattr(gate_adapter, "supports_ddm", False)),
+                supports_dsc=bool(getattr(gate_adapter, "supports_dsc", False)),
+                supports_amapi_policy=bool(
+                    getattr(gate_adapter, "supports_amapi_policy", False)),
+                adapter=gate_adapter,
+            )
+        except Exception:
+            sub = None
+        if sub is not None:
+            # Vía declarativa: MISMO gating que la imperativa (dry_run ya
+            # calculado sobre la pedida), solo cambia el transporte.
+            res = None
+            if self.orchestrator is not None and isinstance(refs, dict) and refs:
+                try:
+                    first_provider, first_id = next(iter(refs.items()))
+                    bridge = {
+                        "provider": first_provider,
+                        "provider_device_id": first_id,
+                        "provider_refs": refs,
+                        "platform": getattr(dev, "platform", None),
+                        "os_version": getattr(dev, "os_version", None),
+                        "management_mode": getattr(dev, "management_mode", None),
+                        "ownership": getattr(dev, "ownership", None),
+                    }
+                    res = self.orchestrator.execute(
+                        bridge, sub, params or {}, dry_run=effective_dry)
+                    if res.get("error_type") in ("unknown_provider",
+                                                 "missing_provider_device_id"):
+                        res = None
+                except Exception:
+                    res = None
+            if res is None:
+                if self.adapter is not None:
+                    res = self.adapter.execute(dev, sub, params or {},
+                                               dry_run=effective_dry)
+                else:
+                    res = {"ok": True, "dry_run": True, "simulated": True,
+                           "action": sub,
+                           "device_id": getattr(dev, "device_id", "")}
+            if not isinstance(res, dict):
+                res = {"ok": False, "action": sub,
+                       "device_id": getattr(dev, "device_id", ""),
+                       "error": "respuesta declarativa inválida"}
+            res["enforcement"] = "declarative"
+            res["requested_action"] = action
+            res["original_action"] = action
+            res["declarative_subaction"] = sub
+            res["action"] = sub
+            if effective_dry:
+                res.setdefault("dry_run", True)
+            res["ts"] = now_iso()
+            res["fence_id"] = dev.inside_fence
+            res["trigger"] = "operator"
+            res["policy_name"] = "comando manual (declarativo)"
+            res["operator"] = operator
+            res["manual"] = True
+            self.store.log_action(res)
+            readback = res.get("device_state")
+            if res.get("ok") and not self.dry_run and isinstance(readback, dict):
+                target = self.store.get(dev.device_id) or dev
+                merged = False
+                for key, value in readback.items():
+                    if value is None or key == "device_id" or not hasattr(target, key):
+                        continue
+                    setattr(target, key, value)
+                    merged = True
+                if merged:
+                    self.store.upsert(target)
+            effective = bool(res.get("dry_run") or res.get("ok") or res.get("delegated"))
+            if action in self.DESTRUCTIVE_ACTIONS and effective:
+                self.store.record_action_at(dev.device_id, action, now)
+            return res
         res = self._execute_action(dev, action, params)
+        if isinstance(res, dict):
+            res.setdefault("enforcement", "imperative")
         res["ts"] = now_iso()
         res["fence_id"] = dev.inside_fence
         res["trigger"] = "operator"
@@ -824,7 +976,6 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
-        fence = self.fence_by_id.get(fence_id) if fence_id and fence_id != "none" else None
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -837,6 +988,20 @@ class Engine:
             # first sighting; only act on enter if a fence is known
             if state != "inside":
                 when = None
+            target_fence_id = fence_id
+        elif state == "inside":
+            target_fence_id = fence_id
+        elif state in ("outside", "unknown"):
+            # La cerca que importa es la ABANDONADA (la de prev), no la
+            # actual: al salir cur_key es "None:outside" y al perder señal
+            # "None:unknown" — resolver desde cur_key jamás encuentra fence
+            # y on_exit/on_unknown no disparaban nunca (#karpathy-2).
+            target_fence_id = getattr(prev, "inside_fence", None)
+        else:
+            target_fence_id = fence_id
+        fence = (self.fence_by_id.get(target_fence_id)
+                 if target_fence_id and target_fence_id not in ("none", "None")
+                 else None)
         if fence is None:
             return fired
         for act in fence.actions:
