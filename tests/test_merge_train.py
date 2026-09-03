@@ -97,9 +97,22 @@ def test_build_queue_fifo_among_ready():
 
 
 def test_build_queue_drain_mode():
-    prs = [_pr(number=i, checks=("SUCCESS",)) for i in range(1, 8)]
+    # Nuevo contrato (drain_mode = nosana_total > 0): con >=1 PR NO-SANA
+    # (STALE>7d / CONFLICTING / RED) el gate activa MODO DRENAJE aunque el
+    # recuento de PRs esté sobre el límite. 7 PRs verdes frescas no activan
+    # el gate (ninguno cumple STALE>7d / CONFLICTING / RED).
+    prs = [
+        _pr(number=1, checks=("SUCCESS",)),
+        _pr(number=2, checks=("SUCCESS",)),
+        _pr(number=3, checks=("SUCCESS",)),
+        _pr(number=4, state="DIRTY", checks=("SUCCESS",)),  # CONFLICTING -> NO-SANA
+        _pr(number=5, checks=("SUCCESS",)),
+        _pr(number=6, checks=("SUCCESS",)),
+        _pr(number=7, checks=("SUCCESS",)),
+    ]
     q = merge_train.build_queue(prs)
     assert q["over_limit"] is True
+    assert q["drain_mode"] is True, q
     assert "DRENAJE" in merge_train.render(q)
 
 

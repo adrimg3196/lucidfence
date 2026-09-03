@@ -1,6 +1,5 @@
 import datetime
 import importlib.util
-import sys
 
 spec = importlib.util.spec_from_file_location("mt", "scripts/merge_train.py")
 mt = importlib.util.module_from_spec(spec)
