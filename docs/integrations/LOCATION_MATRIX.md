@@ -32,8 +32,15 @@ piloto con expectativas reales, no las de una demo.
 - Un dispositivo sin ubicación es `unknown`, nunca se inventa una posición.
 - El anti-spoofing (`location_integrity`) usa **nuestro** reloj de
   observación, no el `last_seen` que declara el dispositivo.
-- Precisión ≠ verdad: `accuracy_m` viaja con cada report y las políticas
-  pueden exigir una precisión mínima antes de disparar acciones.
+- Precisión ≠ verdad: `accuracy_m` viaja con cada report. Con
+  `location_max_accuracy_m` en la config (metros; `0` = desactivado, el valor
+  por defecto) el engine trata como **desconocido** cualquier fix más impreciso
+  que ese umbral: no dispara `on_exit`, no cuenta como "fuera" y deja un
+  evento `location_rejected` (`reason: inaccurate`) en el timeline, y el
+  contador `location_rejected_inaccurate` en las estadísticas del ciclo. Una
+  precisión desconocida (`accuracy_m` ausente) nunca descarta el fix. Ojo con
+  la ubicación por red: declara `accuracy_m` = radio del sitio a propósito, así
+  que el umbral debe ser mayor que el radio de tus sitios.
 - Todo lo anterior corre local: la ubicación de tu flota no sale de tu
   máquina (garantía de diseño del producto, no una promesa de marketing).
 - La ubicación se **correlaciona** con postura de readback (cifrado, y ahora

@@ -12,6 +12,7 @@ Runs locally, forever, on the configured interval (default 15 min).
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 import time
@@ -85,6 +86,14 @@ class Engine:
         self.org_id = config.get("applivery", {}).get("org_id", "")
         self.mode = config.get("mode", "simulation")  # simulation | live
         self.interval = int(config.get("interval_seconds", 900))
+        # Precisión máxima (m) que acepta el veredicto de geocerca. Un fix más
+        # impreciso que esto no es evidencia de dentro/fuera: el dispositivo
+        # queda "unknown" (desconocido nunca penaliza) y se registra el motivo.
+        # 0 = desactivado (por defecto): la ubicación por red declara
+        # accuracy_m = radio del sitio a propósito y no debe filtrarse sin
+        # que el admin lo decida. Ver docs/integrations/LOCATION_MATRIX.md.
+        self.location_max_accuracy_m = self._parse_max_accuracy(config.get("location_max_accuracy_m"))
+        self._cycle_location_rejected = 0
         self.dry_run = bool(config.get("dry_run", True))
         # --- Enforcement (piloto seguro) ---
         # Rollout progresivo pensado para admins reales: observe (todo dry-run,
@@ -401,6 +410,7 @@ class Engine:
         # matching policy.
         self._cycle_actions = []
         self._cycle_fired = {}
+        self._cycle_location_rejected = 0
 
         for rep in reports:
             try:
@@ -424,6 +434,19 @@ class Engine:
                         loc = point_from({"lat": rep.lat, "lng": rep.lng})
                     except (TypeError, ValueError):
                         loc = None  # NaN/fuera de rango = desconocido, nunca "outside"
+                if loc is not None and self._location_too_inaccurate(rep.accuracy_m):
+                    # Un fix de 5 km de precisión "fuera" del almacén no es
+                    # una salida: es falta de evidencia. Desconocido, con el
+                    # motivo en el timeline; jamás on_exit ni riesgo.
+                    self._cycle_location_rejected += 1
+                    self.store.log_event({
+                        "ts": now_iso(), "device_id": rep.device_id,
+                        "kind": "location_rejected", "reason": "inaccurate",
+                        "accuracy_m": rep.accuracy_m,
+                        "location_max_accuracy_m": self.location_max_accuracy_m,
+                        "location_source": rep.location_source,
+                    })
+                    loc = None
                 inside_fence = None
                 fence_state = "unknown"
                 if loc is not None:
@@ -773,6 +796,31 @@ class Engine:
     # Actions that physically alter a device and MUST be cooled so a standing
     # violation can't re-issue them every cycle or after a restart.
     DESTRUCTIVE_ACTIONS = {"wipe", "lock", "clear_passcode", "reboot"}
+
+    @staticmethod
+    def _parse_max_accuracy(raw: Any) -> float:
+        """`location_max_accuracy_m` de la config: metros > 0, o 0 = desactivado.
+        Un valor basura (None, "abc", NaN, negativo) desactiva el filtro en vez
+        de convertir a toda la flota en desconocida."""
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return 0.0
+        if not math.isfinite(value) or value <= 0:
+            return 0.0
+        return value
+
+    def _location_too_inaccurate(self, accuracy_m: Any) -> bool:
+        """True solo con umbral activo y una precisión numérica finita por
+        encima de él. Precisión desconocida (None) o basura nunca descarta:
+        desconocido no penaliza, ni siquiera al propio veredicto."""
+        if self.location_max_accuracy_m <= 0 or accuracy_m is None:
+            return False
+        try:
+            value = float(accuracy_m)
+        except (TypeError, ValueError):
+            return False
+        return math.isfinite(value) and value > self.location_max_accuracy_m
 
     def _declarative_route(self, dev: Any, action: str, params: dict, *, dry_run: bool = False) -> Optional[dict]:
         """Issue #89 (single-provider): route an eligible action through the
@@ -1236,6 +1284,7 @@ class Engine:
             "inside": inside,
             "outside": outside,
             "unknown": unknown,
+            "location_rejected_inaccurate": self._cycle_location_rejected,
             "non_compliant": noncompliant,
             "risk_critical": critical,
             "risk_high": high,

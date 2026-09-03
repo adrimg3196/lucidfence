@@ -667,6 +667,49 @@ def main() -> int:
         # /api/members lo lista, POST /api/members/role le cambia el rol en vivo,
         # y can() del backend cambia en consecuencia (operator sí puede
         # engine:run, viewer no). El guardarraíl del último owner se ejercita.
+        # Claim: umbral de precisión del veredicto. Con location_max_accuracy_m
+        # un fix más impreciso que el umbral es "unknown" con motivo en el
+        # timeline y contador en las stats — jamás "outside" ni on_exit
+        # (desconocido nunca penaliza). Ciclo REAL del engine, sin atajos.
+        print("\n== Umbral de precisión del veredicto (location_max_accuracy_m) ==")
+        from lucidfence.core.location_source import LocationReport as _AccReport
+
+        class _AccSource:
+            def __init__(self, fixes):
+                self._fixes = list(fixes)
+                self._last = None
+
+            def fetch(self):
+                if self._fixes:
+                    self._last = self._fixes.pop(0)
+                lat, lng, acc = self._last
+                return [_AccReport(device_id="rt-acc", name="Acc RT", platform="android",
+                                   status="active", compliant=True, lat=lat, lng=lng,
+                                   accuracy_m=acc, location_source="gps")]
+
+        eng_acc = Engine({"mode": "simulation", "autostart": False,
+                          "data_dir": str(tmp / "eng-accuracy"),
+                          "sim_seed_path": "data/fleet_seed.json",
+                          "location_max_accuracy_m": 100})
+        eng_acc.routes, eng_acc.fences, eng_acc.fence_by_id = [], [], {}
+        eng_acc.add_fence({"id": "rt-acc-fence", "name": "Almacén RT", "type": "circle",
+                           "center": {"lat": 40.5, "lng": -3.7}, "radius_m": 300,
+                           "actions": [{"action": "notify", "when": "on_exit", "params": {}}]})
+        eng_acc.source = _AccSource([(40.5, -3.7, 12.0), (40.6, -3.7, 5000.0)])
+        eng_acc.run_once()
+        st_acc = eng_acc.run_once() or {}
+        ds_acc = eng_acc.store.snapshot().get("rt-acc")
+        exit_fired = any(a.get("trigger") == "on_exit" for a in eng_acc._cycle_actions)
+        ev_acc = [e for e in eng_acc.store.recent_events(20) if e.get("kind") == "location_rejected"]
+        check("fix de 5 km de precisión con umbral 100 m: unknown con motivo, "
+              "contador en stats y sin on_exit (desconocido nunca penaliza)",
+              ds_acc is not None and ds_acc.fence_state == "unknown"
+              and st_acc.get("location_rejected_inaccurate") == 1
+              and not exit_fired and bool(ev_acc) and ev_acc[-1].get("reason") == "inaccurate",
+              f"fence_state={getattr(ds_acc, 'fence_state', None)}, "
+              f"rechazados={st_acc.get('location_rejected_inaccurate')}, on_exit={exit_fired}, "
+              f"eventos={len(ev_acc)}")
+
         print("\n== RBAC (GET /api/members + POST /api/members/role) ==")
         from lucidfence.saas.auth import AuthStore
         rbac_email = f"rbac-runtime-{int(time.time())}@demo.test"
