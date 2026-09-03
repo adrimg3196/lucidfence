@@ -27,7 +27,6 @@ from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence,
 from lucidfence.core.geo import Point
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
-from lucidfence.core.declarative import declarative_path_for
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
 from lucidfence.core.incidents import IncidentStore
