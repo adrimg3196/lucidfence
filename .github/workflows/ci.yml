@@ -153,6 +153,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          # Explicitar config para que la action v2 lo use incluso en runners
+          # con versiones de gitleaks que no detectan .gitleaks.toml auto.
+          GITLEAKS_CONFIG: .gitleaks.toml
 
   # "Verificar en runtime, no solo compila": la batería arranca el server
   # real, un receptor webhook real y el MCP por stdio, y ejercita cada claim
