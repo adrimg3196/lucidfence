@@ -108,6 +108,11 @@ class DeviceState:
     # None = no attestation reported; consumers must not coerce absence to
     # failure or compliance.
     attestation: Optional[dict] = None
+    # --- local identity reconciliation lineage (#239) ---
+    # Local-only graph of identifiers and provenance used for audit/reversal.
+    # Cloud/public publishers must not serialize this field.
+    identity_lineage: Optional[dict] = None
+    identity_findings: Optional[list] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -163,6 +168,12 @@ class StateStore:
         with self.lock:
             self._states[state.device_id] = state
             self._persist_states()
+
+    def remove(self, device_id: str):
+        with self.lock:
+            if device_id in self._states:
+                del self._states[device_id]
+                self._persist_states()
 
     def _persist_states(self):
         tmp = self.states_path.with_suffix(".tmp")

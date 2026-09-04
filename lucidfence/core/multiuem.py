@@ -51,6 +51,14 @@ _RESPONSE_ERROR_TYPES = frozenset({
     "unsupported_action",
     "vendor_rejected",
 })
+_IDENTITY_PRECEDENCE = ("hardware", "serial", "imei", "uem_id", "alias")
+_IDENTITY_CONFIDENCE = {
+    "hardware": 100,
+    "serial": 80,
+    "imei": 75,
+    "uem_id": 60,
+    "alias": 30,
+}
 
 
 def normalize_identity(value: object | None) -> str | None:
@@ -157,6 +165,11 @@ class NormalizedDevice:
     provider_refs: dict[str, str] = field(default_factory=dict)
     provenance: dict[str, str] = field(default_factory=dict)
     identity_conflict: bool = False
+    # Local-only identity reconciliation graph (#239). It preserves the original
+    # UEM identifiers and signal source for audit/reversal, but publishers must
+    # not expose it in public cloud snapshots.
+    identity_graph: dict | None = None
+    identity_findings: list[dict] = field(default_factory=list)
     # --- declarative-eligibility signals (Issue #88) ---
     # Populated by the adapter from the real UEM/EMM response (e.g. Jamf's
     # `managementId`/supervision, Intune's managedDeviceOwnerType, AMAPI's
@@ -341,6 +354,9 @@ class MultiUEMOrchestrator:
                 or type(item.provider_refs) is not dict
                 or type(item.provenance) is not dict
                 or type(item.identity_conflict) is not bool
+                or (item.identity_graph is not None and not cls._valid_inventory(item.identity_graph))
+                or type(item.identity_findings) is not list
+                or not cls._valid_inventory(item.identity_findings)
                 or not cls._valid_optional_text(item.management_mode)
                 or not cls._valid_optional_text(item.ownership)
                 or not cls._valid_location(provider, item.location)
@@ -441,22 +457,53 @@ class MultiUEMOrchestrator:
         output: list[NormalizedDevice] = []
         for component in components:
             members = [records[index] for index in component]
+            strong_groups = self._strong_identity_components(members)
+            if len(strong_groups) > 1 and self._has_alias_bridge_between_groups(members, strong_groups):
+                conflict_reasons = ["ambiguous_alias"]
+                for group in strong_groups:
+                    group_members = [members[index] for index in group]
+                    if len(group_members) == 1:
+                        group_members[0].identity_conflict = True
+                        output.append(
+                            self._finalize_single(
+                                group_members[0], now, members, conflict_reasons
+                            )
+                        )
+                    else:
+                        merged = self._merge(group_members, now)
+                        merged.identity_conflict = True
+                        merged.identity_findings = self._identity_findings(members, conflict_reasons)
+                        output.append(merged)
+                continue
+
             serials = {normalize_identity(item.serial_number) for item in members}
             imeis = {normalize_identity(item.imei) for item in members}
+            hardware_ids = {self._hardware_identity(item) for item in members}
             serials.discard(None)
             imeis.discard(None)
+            hardware_ids.discard(None)
             duplicate_provider = len({item.provider for item in members}) != len(members)
+            duplicate_uem_id = len({(item.provider, item.provider_device_id) for item in members}) != len(members)
             cross_key_bridge = self._has_cross_key_bridge(members)
-            conflict = (
-                len(serials) > 1
-                or len(imeis) > 1
-                or duplicate_provider
-                or cross_key_bridge
-            )
+            alias_only_bridge = self._has_alias_only_bridge(members)
+            conflict_reasons: list[str] = []
+            if alias_only_bridge:
+                conflict_reasons.append("ambiguous_alias")
+            if len(hardware_ids) > 1:
+                conflict_reasons.append("conflicting_hardware")
+            if len(serials) > 1:
+                conflict_reasons.append("conflicting_serial")
+            if len(imeis) > 1:
+                conflict_reasons.append("conflicting_imei")
+            if duplicate_provider:
+                conflict_reasons.append("colliding_uem_id" if duplicate_uem_id else "duplicate_provider")
+            if cross_key_bridge:
+                conflict_reasons.append("cross_key_bridge")
+            conflict = bool(conflict_reasons)
             if conflict:
                 for member in members:
                     member.identity_conflict = True
-                    output.append(self._finalize_single(member, now))
+                    output.append(self._finalize_single(member, now, members, conflict_reasons))
             else:
                 output.append(self._merge(members, now))
         return sorted(output, key=lambda item: item.canonical_id)
@@ -483,21 +530,208 @@ class MultiUEMOrchestrator:
         return False
 
     @staticmethod
+    def _strong_identity_components(members: list[NormalizedDevice]) -> list[list[int]]:
+        strong_keys = [
+            {key for key in MultiUEMOrchestrator._identity_keys(item) if key[0] != "alias"}
+            for item in members
+        ]
+        pending = set(range(len(members)))
+        groups: list[list[int]] = []
+        while pending:
+            group = {min(pending)}
+            changed = True
+            while changed:
+                changed = False
+                related = {
+                    candidate
+                    for candidate in pending - group
+                    if any(strong_keys[candidate] & strong_keys[current] for current in group)
+                }
+                if related:
+                    group.update(related)
+                    changed = True
+            pending.difference_update(group)
+            groups.append(sorted(group))
+        return groups
+
+    @staticmethod
+    def _has_alias_bridge_between_groups(
+        members: list[NormalizedDevice], groups: list[list[int]]
+    ) -> bool:
+        alias_to_groups: dict[str, set[int]] = {}
+        for group_index, group in enumerate(groups):
+            for member_index in group:
+                alias = MultiUEMOrchestrator._alias_identity(members[member_index])
+                if alias:
+                    alias_to_groups.setdefault(alias, set()).add(group_index)
+        return any(len(group_indexes) > 1 for group_indexes in alias_to_groups.values())
+
+    @staticmethod
+    def _has_alias_only_bridge(members: list[NormalizedDevice]) -> bool:
+        if len(members) < 2:
+            return False
+        aliases = [MultiUEMOrchestrator._alias_identity(item) for item in members]
+        shared_aliases = {
+            alias
+            for alias in aliases
+            if alias is not None and aliases.count(alias) > 1
+        }
+        if not shared_aliases:
+            return False
+        strong_keys = [
+            {key for key in MultiUEMOrchestrator._identity_keys(item) if key[0] != "alias"}
+            for item in members
+        ]
+        for index, keys in enumerate(strong_keys):
+            if any(keys & other for other in strong_keys[index + 1:]):
+                return False
+        return True
+
+    @staticmethod
+    def _hardware_identity(device: NormalizedDevice) -> str | None:
+        inventory = device.inventory if isinstance(device.inventory, dict) else {}
+        return normalize_identity(
+            inventory.get("hardware_identity")
+            or inventory.get("hardware_id")
+            or inventory.get("device_identity_hash")
+        )
+
+    @staticmethod
+    def _alias_identity(device: NormalizedDevice) -> str | None:
+        inventory = device.inventory if isinstance(device.inventory, dict) else {}
+        return normalize_identity(
+            inventory.get("asset_alias")
+            or inventory.get("alias")
+            or inventory.get("hostname")
+            or inventory.get("device_tag")
+        )
+
+    @staticmethod
+    def _identity_seen_at(device: NormalizedDevice, now: datetime) -> str:
+        inventory = device.inventory if isinstance(device.inventory, dict) else {}
+        value = inventory.get("last_seen") or inventory.get("last_checkin") or inventory.get("observed_at")
+        if isinstance(value, str) and value:
+            return value
+        if device.location is not None and isinstance(device.location.observed_at, str):
+            return device.location.observed_at
+        return now.isoformat()
+
+    @staticmethod
+    def _identity_signals(members: list[NormalizedDevice], now: datetime) -> list[dict]:
+        signals: list[dict] = []
+        for item in sorted(members, key=lambda member: (member.provider, member.provider_device_id)):
+            seen_at = MultiUEMOrchestrator._identity_seen_at(item, now)
+            raw_signals = (
+                ("hardware", item.inventory.get("hardware_identity") or item.inventory.get("hardware_id") or item.inventory.get("device_identity_hash") if isinstance(item.inventory, dict) else None),
+                ("serial", item.serial_number),
+                ("imei", item.imei),
+                ("uem_id", item.provider_device_id),
+                ("alias", item.inventory.get("asset_alias") or item.inventory.get("alias") or item.inventory.get("hostname") or item.inventory.get("device_tag") if isinstance(item.inventory, dict) else None),
+            )
+            for kind, original in raw_signals:
+                value = normalize_identity(original)
+                if not value:
+                    continue
+                signals.append({
+                    "type": kind,
+                    "value": value,
+                    "source": item.provider,
+                    "original_identifier": str(original),
+                    "first_seen": seen_at,
+                    "last_seen": seen_at,
+                    "confidence": _IDENTITY_CONFIDENCE[kind],
+                })
+        return sorted(signals, key=lambda signal: (
+            _IDENTITY_PRECEDENCE.index(signal["type"]),
+            signal["source"],
+            signal["original_identifier"],
+        ))
+
+    @staticmethod
+    def _identity_lineage(members: list[NormalizedDevice]) -> list[dict]:
+        lineage: list[dict] = []
+        for field_name in ("ownership", "management_mode"):
+            values = []
+            seen = set()
+            for item in sorted(members, key=lambda member: (member.provider, member.provider_device_id)):
+                value = getattr(item, field_name)
+                if value is None:
+                    continue
+                key = (item.provider, value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                values.append({"source": item.provider, "value": value})
+            if len({entry["value"] for entry in values}) > 1:
+                lineage.append({"field": field_name, "values": values})
+        return lineage
+
+    @staticmethod
+    def _identity_graph(members: list[NormalizedDevice], now: datetime, *, conflict_reasons: list[str] | None = None) -> dict:
+        signals = MultiUEMOrchestrator._identity_signals(members, now)
+        primary = None
+        if signals:
+            first = signals[0]
+            primary = {"type": first["type"], "value": first["value"]}
+        return {
+            "primary_identifier": primary,
+            "precedence": list(_IDENTITY_PRECEDENCE),
+            "merge_rule": "separated_for_review" if conflict_reasons else "deterministic" if len(members) > 1 else "observed",
+            "reversible": True,
+            "signals": signals,
+            "lineage": MultiUEMOrchestrator._identity_lineage(members),
+        }
+
+    @staticmethod
+    def _identity_findings(members: list[NormalizedDevice], conflict_reasons: list[str]) -> list[dict]:
+        if not conflict_reasons:
+            return []
+        sources = sorted({item.provider for item in members})
+        return [
+            {
+                "type": "identity_conflict",
+                "reason": reason,
+                "severity": "review_required",
+                "sources": sources,
+            }
+            for reason in sorted(set(conflict_reasons))
+        ]
+
+    @staticmethod
     def _identity_keys(device: NormalizedDevice) -> set[tuple[str, str]]:
         keys: set[tuple[str, str]] = set()
+        hardware = MultiUEMOrchestrator._hardware_identity(device)
         serial = normalize_identity(device.serial_number)
         imei = normalize_identity(device.imei)
+        uem_id = normalize_identity(device.provider_device_id)
+        alias = MultiUEMOrchestrator._alias_identity(device)
+        if hardware:
+            keys.add(("hardware", hardware))
         if serial:
             keys.add(("serial", serial))
         if imei:
             keys.add(("imei", imei))
+        if uem_id:
+            keys.add((f"uem_id:{device.provider}", uem_id))
+        if alias:
+            keys.add(("alias", alias))
         return keys
 
-    def _finalize_single(self, device: NormalizedDevice, now: datetime) -> NormalizedDevice:
+    def _finalize_single(
+        self,
+        device: NormalizedDevice,
+        now: datetime,
+        component_members: list[NormalizedDevice] | None = None,
+        conflict_reasons: list[str] | None = None,
+    ) -> NormalizedDevice:
+        members = component_members or [device]
+        reasons = conflict_reasons or []
         device.provider_refs = {device.provider: device.provider_device_id}
         device.provenance.update(
             {key: device.provider for key in device.inventory}
         )
+        device.identity_graph = self._identity_graph(members, now, conflict_reasons=reasons)
+        device.identity_findings = self._identity_findings(members, reasons)
         return device
 
     def _merge(self, members: list[NormalizedDevice], now: datetime) -> NormalizedDevice:
@@ -516,6 +750,8 @@ class MultiUEMOrchestrator:
                     provenance[key] = item.provider
         merged.inventory = inventory
         merged.provenance.update(provenance)
+        merged.identity_graph = self._identity_graph(members, now)
+        merged.identity_findings = []
 
         compliance = {item.compliant for item in members}
         merged.compliant = False if False in compliance else True if True in compliance else None
@@ -596,6 +832,8 @@ class MultiUEMOrchestrator:
                         "provider_refs": deepcopy(device.provider_refs),
                         "provenance": deepcopy(device.provenance),
                         "identity_conflict": device.identity_conflict,
+                        "identity_graph": deepcopy(device.identity_graph),
+                        "identity_findings": deepcopy(device.identity_findings),
                         "location_quality": "accepted" if accepted else "rejected",
                         "location_rejection_reason": None if accepted else reason,
                         "management_mode": device.management_mode,
