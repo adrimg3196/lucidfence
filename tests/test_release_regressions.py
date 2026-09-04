@@ -110,12 +110,12 @@ def test_demo_and_gateway_use_actual_bound_socket():
 
 
 def test_quick_runner_uses_supported_python_and_hash_locked_venv():
-    runner = (ROOT / "scripts/run.sh").read_text()
+    runner = (ROOT / "scripts" / "run.sh").read_text()
     assert "3, 11" in runner
     assert "-m venv" in runner
     assert "requirements.lock" in runner
     assert "--require-hashes" in runner
-    assert "exec \"$VENV_PYTHON\" saas_server.py" in runner
+    assert 'exec "$VENV_PYTHON" saas_server.py' in runner
     assert "pip install requests" not in runner
 
 
@@ -138,17 +138,20 @@ def test_pypi_workflow_checks_provenance_after_building_artifact():
     provenance_block = workflow[prov_idx:publish_idx]
     assert "scripts/provenance_attest.py" in provenance_block
     assert "scripts/release_preflight.py" in provenance_block
-    assert "artifact=\"$(find dist -maxdepth 1 -type f -name '*.tar.gz'" in provenance_block
-    assert "--artifact \"$artifact\"" in provenance_block
+    assert "artifact=\"$(find dist -maxdepth 1 -type f -name '*.tar.gz' -print -quit)\"" in provenance_block
+    assert '--artifact "$artifact"' in provenance_block
     assert "--sbom build/provenance/sbom.cdx.json" in provenance_block
     assert "--dsse build/provenance/provenance.dsse.json" in provenance_block
+
+
+ARTIFACT_VERSION = "1.6.1"
 
 
 def test_provenance_verifier_with_key_works_without_site_packages():
     fixture = ROOT / "docs" / "supply-chain" / "fixture"
     result = subprocess.run(
         ["python3.11", "-S", str(ROOT / "scripts" / "verify_provenance.py"),
-         "--artifact", str(fixture / "lucidfence-1.6.0.tar.gz"),
+         "--artifact", str(fixture / f"lucidfence-{ARTIFACT_VERSION}.tar.gz"),
          "--sbom", str(fixture / "sbom.cdx.json"),
          "--dsse", str(fixture / "provenance.dsse.json"),
          "--key", str(fixture / "release_signing_demo.pub"),
@@ -175,7 +178,7 @@ def test_release_workflow_publishes_sbom_and_provenance_assets():
     publish_idx = workflow.index("name: Crear GitHub Release con el asset")
     assert build_idx < prov_idx < preflight_idx < publish_idx
     assert "scripts/provenance_attest.py" in workflow[prov_idx:preflight_idx]
-    assert "--artifact \"dist/lucidfence-$VERSION.tar.gz\"" in workflow[preflight_idx:publish_idx]
+    assert '--artifact "dist/lucidfence-$VERSION.tar.gz"' in workflow[preflight_idx:publish_idx]
     assert "--sbom dist/sbom.cdx.json" in workflow[preflight_idx:publish_idx]
     assert "--dsse dist/provenance.dsse.json" in workflow[preflight_idx:publish_idx]
     release_block = workflow[publish_idx:]
@@ -187,7 +190,7 @@ def test_release_preflight_rejects_stale_sbom_not_bound_to_attestation():
     rp = _load_script("release_preflight.py")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        artifact = root / "lucidfence-1.6.0.tar.gz"
+        artifact = root / f"lucidfence-{ARTIFACT_VERSION}.tar.gz"
         sbom = root / "sbom.cdx.json"
         dsse = root / "provenance.dsse.json"
         artifact.write_bytes(b"artifact")
@@ -208,13 +211,13 @@ def test_release_preflight_rejects_artifact_version_mismatch():
     rp = _load_script("release_preflight.py")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "pyproject.toml").write_text('[project]\nversion = "1.6.0"\n', encoding="utf-8")
-        artifact = root / "lucidfence-9.9.9.tar.gz"
+        (root / "pyproject.toml").write_text(f'[project]\nversion = "{ARTIFACT_VERSION}"\n', encoding="utf-8")
+        artifact = root / f"lucidfence-9.9.9.tar.gz"
         dsse = root / "provenance.dsse.json"
         artifact.write_bytes(b"artifact")
         statement = {
             "subject": [{"name": artifact.name, "digest": {"sha256": "ignored"}}],
-            "predicate": {"version": "1.6.0", "artifactVersion": "9.9.9", "versionConsistent": False},
+            "predicate": {"version": ARTIFACT_VERSION, "artifactVersion": "9.9.9", "versionConsistent": False},
         }
         dsse.write_text(json.dumps(_dsse_with_statement(statement)), encoding="utf-8")
 
@@ -229,8 +232,8 @@ def test_provenance_verifier_without_key_is_not_apto():
     vp = _load_script("verify_provenance.py")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "pyproject.toml").write_text('[project]\nversion = "1.6.0"\n', encoding="utf-8")
-        artifact = root / "lucidfence-1.6.0.tar.gz"
+        (root / "pyproject.toml").write_text(f'[project]\nversion = "{ARTIFACT_VERSION}"\n', encoding="utf-8")
+        artifact = root / f"lucidfence-{ARTIFACT_VERSION}.tar.gz"
         sbom = root / "sbom.cdx.json"
         dsse = root / "provenance.dsse.json"
         artifact.write_bytes(b"artifact")
@@ -240,8 +243,8 @@ def test_provenance_verifier_without_key_is_not_apto():
         statement = {
             "subject": [{"name": artifact.name, "digest": {"sha256": artifact_sha}}],
             "predicate": {
-                "version": "1.6.0",
-                "artifactVersion": "1.6.0",
+                "version": ARTIFACT_VERSION,
+                "artifactVersion": ARTIFACT_VERSION,
                 "versionConsistent": True,
                 "sbom": {"sha256": sbom_sha},
                 "invocation": {"configSource": {"commit": ""}},
@@ -268,7 +271,7 @@ def test_dsse_signature_uses_pae_not_raw_payload():
 
     assert pa.dsse_pae("application/vnd.in-toto+json", payload) != payload
     assert pa.dsse_pae("application/vnd.in-toto+json", payload) == (
-        b"DSSEv1 28 application/vnd.in-toto+json 17 " + payload
+        b"DSSEv1 28 application/vnd.in-toto+json 17" + payload
     )
 
 
@@ -298,7 +301,7 @@ def test_provenance_verifier_rejects_absent_commit_even_when_signed():
         dsse.write_text(json.dumps(env), encoding="utf-8")
 
         results = vp.run(
-            fixture / "lucidfence-1.6.0.tar.gz",
+            fixture / f"lucidfence-{ARTIFACT_VERSION}.tar.gz",
             fixture / "sbom.cdx.json",
             dsse,
             ROOT,
@@ -314,7 +317,7 @@ def test_release_preflight_requires_authenticated_provenance_when_releasing():
     rp = _load_script("release_preflight.py")
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        artifact = root / "lucidfence-1.6.0.tar.gz"
+        artifact = root / f"lucidfence-{ARTIFACT_VERSION}.tar.gz"
         sbom = root / "sbom.cdx.json"
         dsse = root / "provenance.dsse.json"
         artifact.write_bytes(b"artifact")
@@ -322,8 +325,8 @@ def test_release_preflight_requires_authenticated_provenance_when_releasing():
         statement = {
             "subject": [{"name": artifact.name, "digest": {"sha256": _load_script("verify_provenance.py").sha256_bytes(artifact.read_bytes())}}],
             "predicate": {
-                "version": "1.6.0",
-                "artifactVersion": "1.6.0",
+                "version": ARTIFACT_VERSION,
+                "artifactVersion": ARTIFACT_VERSION,
                 "versionConsistent": True,
                 "sbom": {"sha256": _load_script("verify_provenance.py").sha256_bytes(sbom.read_bytes())},
                 "invocation": {"configSource": {"commit": ""}},
@@ -342,7 +345,7 @@ def test_release_preflight_requires_authenticated_provenance_when_releasing():
 
 def test_release_workflow_signs_and_preflights_authenticated_provenance_at_release_commit():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
-    assert "git checkout --detach \"${{ github.sha }}\"" in workflow
+    assert 'git checkout --detach "${{ github.sha }}"' in workflow
     assert "openssl genpkey -algorithm Ed25519 -out dist/release_signing.key" in workflow
     assert "openssl pkey -in dist/release_signing.key -pubout -out dist/release_signing.pub" in workflow
     assert "--key dist/release_signing.key" in workflow

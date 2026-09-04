@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "lucidfence",
-      "version": "1.6.0"
+      "version": "1.6.1"
     }
   },
   "components": [
@@ -68,11 +68,11 @@
   "properties": [
     {
       "name": "lucidfence:source-file-count",
-      "value": "259"
+      "value": "325"
     },
     {
       "name": "lucidfence:source-manifest-sha256",
-      "value": "2aef54d315a3a453585899543cb7d8ea72a7c59ec3d500b400460029a0e1c6bc"
+      "value": "c5b6d4928729c198ef2143f91120a4ae396c432417fe6993ae96ead6d9d8377c"
     }
   ]
 }
