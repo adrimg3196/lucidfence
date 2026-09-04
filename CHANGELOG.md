@@ -111,6 +111,23 @@ All notable changes to LucidFence are documented here.
 
 - chore(barrendero): `static/saas_views*.js` (4 ficheros, 530 líneas muertas: ningún HTML los cargaba) + SBOM regenerado
 
+## [1.4.0] - 2026-08-07
+
+### Added
+
+- feat(multi-uem): MultiUEMOrchestrator — panel único multi-UEM con enrutado declarativo a Intune/Jamf/ChromeOS/Fleet por tenant y segmento de flota (#101); endpoint `/api/providers` expone proveedores registrados y su estado live/simulation
+- feat(multi-uem): guía de integración multi-UEM `docs/integrations/MULTI_UEM.md` (registro de proveedores, segmentación móvil/portátil, migración desde single-UEM)
+
+## [1.3.1] - 2026-07-22
+
+### Fixed
+
+- fix(release): launcher local v1.3.1 con hash-lock de integridad — el instalador verifica el checksum del `.app`/binary antes de ejecutar, cierra la vía de tampering post-download (#313, #311)
+
+### Other
+
+- cloud: actualizar estado en vivo (2026-07-22) — publicación de v1.3.1 en canal Homebrew y GitHub Releases
+
 ## [1.3.0] - 2026-07-21
 
 ### Added
