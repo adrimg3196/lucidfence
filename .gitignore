@@ -55,7 +55,9 @@ loop_improve.py.bak
 # Build output
 dist/
 build/
-*.tar.gz
+
+# Release signing keys (private key — nunca en repo; el .pub sí va)
+*.key
 
 # OS
 .DS_Store
