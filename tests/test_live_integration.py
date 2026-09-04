@@ -32,23 +32,28 @@ from types import SimpleNamespace
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT, ".env")
 # Preserve the operator's real .env (may hold a live Applivery token + workspace).
-# Tests rewrite .env with mock values; we restore the original at process exit so
-# production is never left pointing at "org-test". Works under the test runner too.
-_ENV_BACKUP = None
-if os.path.exists(ENV_PATH):
-    _ENV_BACKUP = ENV_PATH + ".bak"
+# Tests rewrite .env with mock values; restore an original or remove the generated
+# mock file at process exit so no worktree remains polluted.
+_ENV_EXISTED = os.path.exists(ENV_PATH)
+_ENV_BACKUP = ENV_PATH + ".bak" if _ENV_EXISTED else None
+if _ENV_BACKUP:
     shutil.copy2(ENV_PATH, _ENV_BACKUP)
 
-    def _restore_env():
-        if os.path.exists(_ENV_BACKUP):
-            shutil.move(_ENV_BACKUP, ENV_PATH)
-            try:
-                os.chmod(ENV_PATH, 0o600)
-            except OSError:
-                pass
 
-    atexit.register(_restore_env)
+def _restore_env():
+    if _ENV_BACKUP and os.path.exists(_ENV_BACKUP):
+        shutil.move(_ENV_BACKUP, ENV_PATH)
+        try:
+            os.chmod(ENV_PATH, 0o600)
+        except OSError:
+            pass
+    elif not _ENV_EXISTED and os.path.exists(ENV_PATH):
+        os.remove(ENV_PATH)
+
+
+atexit.register(_restore_env)
 _MOCK = None
+_MOCK_PORT = None
 
 
 class MockHandler(BaseHTTPRequestHandler):
@@ -92,7 +97,10 @@ class MockHandler(BaseHTTPRequestHandler):
                      "status": "active", "is_compliant": True,
                      "last_location": {"latitude": 40.43, "longitude": -3.69, "accuracy": 20}},
                 ]},
-                link='<http://127.0.0.1:8799/v1/organizations/org-test/mdm/devices?page=2>; rel="next"',
+                link=(
+                    f'<http://127.0.0.1:{getattr(self.server, "server_port")}/v1/organizations/'
+                    'org-test/mdm/devices?page=2>; rel="next"'
+                ),
             )
             return
         self._send(404, {"status": False, "error": {"code": 1002, "message": "Route not found"}})
@@ -111,10 +119,12 @@ class MockHandler(BaseHTTPRequestHandler):
 
 
 def _start_mock():
+    global _MOCK_PORT
     # allow_reuse_address tolerates TIME_WAIT leftovers if a prior run didn't
     # shut down cleanly (e.g. the runner interrupted mid-test).
     HTTPServer.allow_reuse_address = True
-    srv = HTTPServer(("127.0.0.1", 8799), MockHandler)
+    srv = HTTPServer(("127.0.0.1", 0), MockHandler)
+    _MOCK_PORT = int(srv.server_port)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 
@@ -135,7 +145,8 @@ def _write_env(key, org):
 
 
 def _engine_for_live():
-    os.environ["APPLIVERY_API_BASE"] = "http://127.0.0.1:8799/v1"
+    assert _MOCK_PORT is not None
+    os.environ["APPLIVERY_API_BASE"] = f"http://127.0.0.1:{_MOCK_PORT}/v1"
     cfg = load_config(os.path.join(ROOT, "config.json"))
     cfg["mode"] = "live"
     cfg["dry_run"] = True
@@ -184,7 +195,8 @@ def test_live_command_body_shape():
     """LiveAdapter POSTs to /organizations/.../commands with dual auth."""
     _ensure_mock()
     os.environ.pop("APPLIVERY_API_KEY", None)
-    os.environ["APPLIVERY_API_BASE"] = "http://127.0.0.1:8799/v1"
+    assert _MOCK_PORT is not None
+    os.environ["APPLIVERY_API_BASE"] = f"http://127.0.0.1:{_MOCK_PORT}/v1"
     _write_env("valid-token", "org-test")
     adapter = LiveAdapter("org-test", "/organizations/{org_id}/mdm/devices/{device_id}/commands")
     result = adapter.execute(

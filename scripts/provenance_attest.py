@@ -21,7 +21,7 @@ Output: provenance.dsse.json
   {
     "payloadType": "application/vnd.in-toto+json",
     "payload": "<base64(in-toto statement)>",
-    "signatures": [ {"keyid": "...", "sig": "<base64(Ed25519 over payload bytes)>"} ]
+    "signatures": [ {"keyid": "...", "sig": "<base64(Ed25519 over DSSE PAE)>"} ]
   }
 
 The base64 in `payload` is what makes the record "canonically stable":
@@ -114,7 +114,12 @@ def _artifact_version(artifact: Path) -> str:
     Returns "" if it cannot be parsed (the predicate still uses the
     pyproject version as the authoritative one).
     """
-    m = re.search(r"[-_]v?(\d+\.\d+\.\d+([.-]?[\w]+)?)", artifact.name)
+    name = artifact.name
+    for suffix in (".tar.gz", ".tar.bz2", ".tar.xz", ".whl", ".zip"):
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+            break
+    m = re.search(r"[-_]v?(\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.]+)?)", name)
     return m.group(1) if m else ""
 
 
@@ -123,6 +128,13 @@ def _artifact_version(artifact: Path) -> str:
 # --------------------------------------------------------------------------
 def canonical_json(obj) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def dsse_pae(payload_type: str, payload: bytes) -> bytes:
+    """Return DSSE v1 pre-authentication encoding for signing/verifying."""
+    pt = payload_type.encode("utf-8")
+    return b" ".join([b"DSSEv1", str(len(pt)).encode("ascii"), pt,
+                      str(len(payload)).encode("ascii"), payload])
 
 
 def blank_volatile(obj):
@@ -257,9 +269,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--artifact", required=True, help="path to the release artifact")
     ap.add_argument("--sbom", required=True, help="path to the CycloneDX SBOM (sbom.cdx.json)")
     ap.add_argument("--key", default=None,
-                    help="operator-held Ed25519 PEM private key (optional; if omitted, "
-                         "the envelope is produced unsigned and verify runs in "
-                         "signature-optional mode)")
+                    help="operator-held Ed25519 PEM private key. Required for "
+                         "release APTO; if omitted, the envelope is unsigned "
+                         "and offline verification remains FALLO")
     ap.add_argument("--out", default="provenance.dsse.json", help="output envelope path")
     ap.add_argument("--builder-id", default="local:lucidfence-release")
     ap.add_argument("--build-type", default="manual")
@@ -295,7 +307,7 @@ def main(argv: list[str]) -> int:
         if not key_path.exists():
             print(f"ERROR: key not found: {key_path}", file=sys.stderr)
             return 1
-        sig, keyid = sign_ed25519(payload_bytes, key_path)
+        sig, keyid = sign_ed25519(dsse_pae(DSSE_PAYLOAD_TYPE, payload_bytes), key_path)
         envelope["signatures"].append({
             "keyid": keyid,
             "sig": base64.b64encode(sig).decode("ascii"),

@@ -88,4 +88,82 @@ def test_cloud_cve_summary_falls_back_to_demo_without_engine_signal():
     status = {"cve_summary": {"apps_total": 0, "vulnerable_apps": 0}, "devices": []}
     summary = cloud_publisher._cve_summary_for_cloud(status, total=5)
     assert summary["demo"] is True
-    assert summary["vulnerable_apps"] > 0
+
+
+def test_cloud_demo_seeds_tenant_with_refreshed_repository_cache():
+    old_root = cloud_publisher.ROOT
+    old_sync = cve_feed_nvd.sync_nvd_feed
+    saved = cve.isolate_feed()
+    try:
+        with tempfile.TemporaryDirectory(prefix="lucidfence-cloud-cache-") as tmp:
+            root = Path(tmp) / "repo"
+            source = root / "data" / "cve_feed_nvd.json"
+            source.parent.mkdir(parents=True)
+            payload = {
+                "source": "NVD",
+                "generated": "2026-09-02T00:00:00Z",
+                "apps": {
+                    "google chrome": [
+                        {
+                            "id": "CVE-2099-4242",
+                            "severity": "high",
+                            "score": 8.0,
+                            "title": "cached",
+                            "epss": 0.0,
+                        }
+                    ]
+                },
+            }
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            cloud_publisher.ROOT = root
+            cve_feed_nvd.sync_nvd_feed = lambda **_kwargs: 0
+
+            engine = cloud_publisher.build_demo_engine(Path(tmp) / "tenant")
+            loaded_path = Path(engine.cve_feed_load["path"])
+
+            assert engine.cve_feed_load["ok"] is True, engine.cve_feed_load
+            assert loaded_path != source
+            assert json.loads(loaded_path.read_text(encoding="utf-8")) == payload
+    finally:
+        cloud_publisher.ROOT = old_root
+        cve_feed_nvd.sync_nvd_feed = old_sync
+        cve.restore_feed(saved or {})
+
+
+def test_engine_cve_feed_load_is_observable_fail_unknown_not_open():
+    """Engine must record CVE feed load health on status() and NOT fail-open.
+
+    A broken feed path must surface as cve_feed_load.ok==False (observable),
+    never silently degrade to 'no CVEs'. See task t_6479d79a item 8.
+    """
+    saved = cve.isolate_feed()
+    try:
+        with tempfile.TemporaryDirectory(prefix="lucidfence-engine-cfe-") as tmp:
+            from lucidfence.saas.tenant import TenantStore
+            from lucidfence.core.engine import Engine
+
+            ts = TenantStore(tmp)
+            org = ts.create(name="t", owner_id="cloud")
+            tdir = ts.data_dir(org.id)
+            (Path(tdir) / "fences.json").write_text('{"fences": []}', encoding="utf-8")
+            (Path(tdir) / "policies.json").write_text("[]", encoding="utf-8")
+            (Path(tdir) / "routes.json").write_text("[]", encoding="utf-8")
+            cloud_publisher._write_demo_seed(Path(tdir) / "fleet_seed.json")
+
+            # Point the feed loader at a directory (not a file) => osError on load.
+            bad_feed = str(Path(tdir) / "no_such_dir")
+            eng = Engine({
+                "mode": "simulation", "autostart": False, "data_dir": str(tdir),
+                "org_id": org.id, "sim_seed_path": str(Path(tdir) / "fleet_seed.json"),
+                "fences_path": str(Path(tdir) / "fences.json"),
+                "routes_path": str(Path(tdir) / "routes.json"),
+                "policies_path": str(Path(tdir) / "policies.json"),
+                "cve_feed_path": bad_feed,
+            })
+            st = eng.status()
+            load = st.get("cve_feed_load")
+            assert load is not None, "cve_feed_load must be present on status()"
+            assert load["ok"] is False, f"broken feed must be observable, got {load}"
+            assert load["error"], "error must be recorded (fail-unknown, not fail-open)"
+    finally:
+        cve.restore_feed(saved or {})

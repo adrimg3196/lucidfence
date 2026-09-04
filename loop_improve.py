@@ -68,6 +68,11 @@ from lucidfence.core.free_tier import is_free_model  # noqa: E402 (after sys.pat
 # preserva la postura 100%-free del 2026-08-16. Requiere sign-off de Product
 # (impacto de modelo de negocio) anotado en docs/internal/loop-budget.md.
 # PAID_OPTIN_APPROVED #188  (CTO+PM co-signed opt-in; gated by ABSOLUTE LUCIDFENCE_CLAUDE_CLI only)
+#   Exposure if LUCIDFENCE_CLAUDE_CLI is set (the ONLY activation path) and the
+#   Opus 4.8 tier is used: ~$196/day ~ $5,894/mo ~ $71,716/yr at fleet load
+#   (11.86M in + 248K out tokens/day; 2026-08-24 audit). Recorded & reaffirmed
+#   in docs/internal/loop-budget.md (Co-signed paid opt-in, #188). PM decision:
+#   $0-free posture intact; this path stays OPT-IN ONLY.
 _CLI = os.environ.get("LUCIDFENCE_CLAUDE_CLI", "")
 if _CLI and not Path(_CLI).is_absolute():
     # No permitimos auto-descubrimiento de `claude` en PATH (rompe 100%-free).

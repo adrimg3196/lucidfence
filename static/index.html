@@ -197,8 +197,8 @@
           <p>4 playbooks frontline (CVE crítico, CVE + fuera de perímetro, no conforme + fuera, EPSS alto) con auditoría por dispositivo (<code>matched_fields</code>).</p>
         </div>
         <div class="cell">
-          <h3>IA local (MoA)</h3>
-          <p>Un motor Mixture-of-Agents redacta narrativas de incidente y resúmenes de flota. Sin API externa obligatoria.</p>
+          <h3>Sin IA obligatoria</h3>
+          <p>El motor de riesgo es determinista y explicable: cada veredicto lleva sus señales. Las narrativas de incidente y los borradores de soporte (<code>/api/ai/support</code>) son opcionales y usan un servidor MoA local externo si lo tienes; sin él, todo lo demás funciona igual.</p>
         </div>
         <div class="cell">
           <h3>Email soberano</h3>
@@ -225,7 +225,7 @@
             <li><code>brew install adrimg3196/lucidfence/lucidfence</code></li>
             <li>Dashboard + motor de geocercas local</li>
             <li>Alertas por email (Atomic Mail)</li>
-            <li>IA local (MoA, modo libre)</li>
+            <li>Motor de riesgo explicable, sin IA ni API externa</li>
             <li>Datos y credenciales en tu máquina</li>
           </ul>
           <a class="btn ghost" href="https://github.com/adrimg3196/lucidfence">Ver el código</a>

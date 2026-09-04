@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import http.client
+import os
 import sys
 import time
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def _get(path: str) -> tuple[int, bytes]:

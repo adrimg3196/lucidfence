@@ -25,7 +25,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from lucidfence.core.geo import Point, haversine_m
+from lucidfence.core.geo import Point, haversine_m, point_from
 
 # Umbral de velocidad físicamente plausible entre dos reports. Un avión
 # comercial cruza a ~900 km/h; por encima de 1000 km/h sostenidos entre
@@ -55,7 +55,9 @@ def _coords(d: dict) -> Optional[Point]:
     if lat is None or lng is None:
         return None
     try:
-        return Point(float(lat), float(lng))
+        # NaN/inf/fuera de rango = sin evidencia (None), no un salto de
+        # 20.015 km que fabrique una sospecha de "velocidad imposible".
+        return point_from({"lat": lat, "lng": lng})
     except (TypeError, ValueError):
         return None
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import socket
+import subprocess
 import sys
 import tempfile
 import time
@@ -68,77 +70,56 @@ def _system_exit_code(exc: SystemExit) -> int:
     return exc.code if isinstance(exc.code, int) else 1
 
 
+def _allocate_qa_port() -> int:
+    """Ask the kernel for a free loopback port instead of sharing :8765."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
 def main():
     passed = 0
     skipped = 0
     failed = 0
     failures = []
     skips = []
-    # Arranca el server local en :8765 para los tests de integración que lo
-    # requieren (test_it_admin_features.py, test_qa_e2e.py Part A, endpoints
-    # SOAR/CVE, etc.). Se mata al terminar. Hermético en CI.
-    #
-    # Robustez: si quedó un saas_server.py huérfano de un run anterior
-    # escuchando en :8765, éste y el nuevo compiten por el puerto y el boot del
-    # nuevo falla -> ConnectionRefused intermitente en los tests de integración.
-    # Antes de arrancar, matamos cualquier proceso nuestro que ya esté en :8765
-    # (pero jamás matamos un server que el usuario tenga levantado a propósito,
-    # pues esos corren fuera de este PID/venv).
-    import subprocess
+    # Every runner gets its own loopback port. Parallel agents and a real local
+    # LucidFence instance may coexist without sharing tenants or HTTP state.
+    qa_port = _allocate_qa_port()
     qa_data = tempfile.TemporaryDirectory(prefix="lucidfence-qa-")
-    previous_data_dir = os.environ.get("LUCIDFENCE_DATA_DIR")
-    os.environ["LUCIDFENCE_DATA_DIR"] = qa_data.name
+    managed_env = {
+        "LUCIDFENCE_DATA_DIR": qa_data.name,
+        "LUCIDFENCE_PORT": str(qa_port),
+        "LUCIDFENCE_TEST_PORT": str(qa_port),
+        "LUCIDFENCE_WEB_URL": f"http://127.0.0.1:{qa_port}/static/web.html",
+    }
+    previous_env = {key: os.environ.get(key) for key in managed_env}
+    os.environ.update(managed_env)
     srv = None
     try:
         import http.client
+
         def _server_up():
             try:
-                c = http.client.HTTPConnection("127.0.0.1", 8765, timeout=2)
+                c = http.client.HTTPConnection("127.0.0.1", qa_port, timeout=2)
                 c.request("GET", "/api/health")
                 c.getresponse().read()
                 c.close()
                 return True
             except Exception:
                 return False
-        if _server_up():
-            print("ERROR: :8765 ya está ocupado; QA hermético no reutiliza servidores existentes.", file=sys.stderr)
-            if previous_data_dir is None:
-                os.environ.pop("LUCIDFENCE_DATA_DIR", None)
-            else:
-                os.environ["LUCIDFENCE_DATA_DIR"] = previous_data_dir
-            qa_data.cleanup()
-            sys.exit(2)
-        if not _server_up():
-            # Liberar :8765 si lo ocupa un server huérfano de un run previo.
-            try:
-                out = subprocess.run(
-                    ["lsof", "-tiTCP:8765", "-sTCP:LISTEN"],
-                    capture_output=True, text=True,
-                ).stdout.strip().split()
-                for pid in out:
-                    try:
-                        p = int(pid)
-                        # Solo matamos nuestro propio server: confirmamos por el
-                        # nombre del ejecutable vía `ps` (portable macOS/Linux).
-                        ps_out = subprocess.run(
-                            ["ps", "-o", "command=", "-p", str(p)],
-                            capture_output=True, text=True,
-                        ).stdout
-                        if "saas_server.py" in ps_out:
-                            os.kill(p, 15)
-                    except Exception:
-                        pass
-                time.sleep(1)
-            except Exception:
-                pass
-            srv = subprocess.Popen(
-                [sys.executable, "saas_server.py"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-            for _ in range(60):
-                if _server_up():
-                    break
-                time.sleep(0.5)
+
+        srv = subprocess.Popen(
+            [sys.executable, "saas_server.py"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        for _ in range(60):
+            if _server_up():
+                break
+            if srv.poll() is not None:
+                break
+            time.sleep(0.5)
     except Exception:
         pass
 
@@ -207,10 +188,11 @@ def main():
                 srv.wait(timeout=5)
             except Exception:
                 srv.kill()
-        if previous_data_dir is None:
-            os.environ.pop("LUCIDFENCE_DATA_DIR", None)
-        else:
-            os.environ["LUCIDFENCE_DATA_DIR"] = previous_data_dir
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         qa_data.cleanup()
     if skips:
         print("\nSKIPPED:")

@@ -4,9 +4,10 @@ Assumes the local server is running, matching the existing E2E convention.
 """
 import http.client
 import json
+import os
 import time
 
-HOST, PORT = "127.0.0.1", 8765
+HOST, PORT = "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def req(method, path, body=None, cookie=None):

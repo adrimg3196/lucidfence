@@ -98,6 +98,7 @@ def build_evidence_report(
             "risk_severity": d.get("risk_severity"),
             "encryption_enabled": d.get("encryption_enabled"),
             "location_integrity": d.get("location_integrity"),
+            "evidence_freshness": d.get("evidence_freshness"),
             "last_report_ts": d.get("last_report_ts"),
         })
     for e in events_in:

@@ -134,14 +134,27 @@ def validate_fences(fences: list[Fence]) -> list[str]:
                 problems.append(f"{f.id}: polygon needs >= 3 points (has {len(f.coordinates)})")
             elif _polygon_self_intersects(f.coordinates):
                 problems.append(f"{f.id}: polygon is self-intersecting (invalid)")
+            elif _polygon_has_zero_area(f.coordinates):
+                # contains() is False everywhere for a degenerate ring: every
+                # device would be "outside" forever, silently.
+                problems.append(f"{f.id}: polygon has zero area (collinear or duplicate points)")
         else:
             problems.append(f"{f.id}: unknown fence type {f.type!r}")
         for a in f.actions:
             if a.when not in valid_when:
                 problems.append(f"{f.id}: action {a.action} has invalid 'when'={a.when!r}")
+            if a.when == "on_unknown" and a.action in {"lock", "wipe", "clear_passcode", "reboot"}:
+                # Perder señal no es evidencia: desconocido nunca penaliza.
+                problems.append(f"{f.id}: destructive action {a.action!r} on 'on_unknown' is not allowed")
             if a.action not in valid_actions:
                 problems.append(f"{f.id}: unknown action {a.action!r}")
     return problems
+
+
+def _polygon_has_zero_area(poly: list[Point]) -> bool:
+    """Shoelace area (deg²) of the ring is ~0: collinear or duplicate vertices."""
+    area2 = sum(a.lng * b.lat - b.lng * a.lat for a, b in zip(poly, poly[1:] + poly[:1]))
+    return abs(area2) < 1e-12
 
 
 def _polygon_self_intersects(poly: list[Point]) -> bool:

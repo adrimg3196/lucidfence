@@ -56,6 +56,7 @@ import threading
 import time
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from typing import Any, Optional
@@ -1273,11 +1274,23 @@ def _api_fleet_federated(ctx: routing.Ctx):
     if provider is not None and not valid_provider_filter(provider):
         return {"error": "provider inválido (nombre de UEM: minúsculas/dígitos/_)"}, 400
     devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
-    risk_rows = _risk_from_engine(ctx.eng, devices)
+    risk_rows = _risk_from_engine(ctx.eng, devices, int(getattr(ctx.eng, "interval", 900) or 900))
     # Del registro del tenant solo viajan nombre + segmento (jamás credenciales).
     providers = [{"name": p.get("name"), "segment": p.get("segment")}
                  for p in _list_providers(_tenants.data_dir(ctx.org))]
     return build_federated_fleet(devices, risk_rows, providers, provider=provider)
+
+
+@api_route("GET", "/api/device-attestation", cap="device:read")
+def _api_device_attestation(ctx: routing.Ctx):
+    """Sobre neutral de atestación Apple/Android/Windows.
+
+    Solo lectura sobre DeviceState persistido: no consulta UEMs, no expone
+    payloads brutos y conserva unknown como unknown (ver core/device_attestation.py).
+    """
+    from lucidfence.core.device_attestation import attestation_report
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    return attestation_report(devices)
 
 
 @api_route("GET", "/api/least-privilege", cap="engine:config")
@@ -1361,6 +1374,19 @@ def _api_incidents_analytics(ctx: routing.Ctx):
 @api_route("GET", "/api/fences", cap="fence:read")
 def _api_fences_list(ctx: routing.Ctx):
     return {"fences": ctx.eng.status().get("fences", [])}
+
+
+class LucidFenceHTTPServer(ThreadingHTTPServer):
+    """HTTP server whose local bind never depends on reverse DNS."""
+
+    def server_bind(self) -> None:
+        # http.server.HTTPServer.server_bind calls socket.getfqdn(host). On
+        # macOS that reverse lookup can block indefinitely even for 127.0.0.1.
+        # TCPServer performs the real socket bind without any DNS dependency.
+        TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -3073,7 +3099,7 @@ def main():
         if not _cluster_lease.acquire():
             raise RuntimeError("standby: another LucidFence node holds the writer lease")
         print(f"  cluster=active-passive leader={_cluster_lease.node_id}")
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    httpd = LucidFenceHTTPServer((host, port), Handler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

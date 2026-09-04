@@ -68,10 +68,10 @@ service_verify_health() {
   local start payload
   start="$(date +%s)"
   while ! payload="$(service_health_payload "$port" 2>/dev/null)"; do
-    sleep 1
     if [ "$(($(date +%s) - start))" -ge "$timeout" ]; then
       return 1
     fi
+    sleep 1
   done
   printf '%s\n' "$payload"
 }
