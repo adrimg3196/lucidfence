@@ -80,3 +80,14 @@ sbom.cdx.json
 data/cloud_state.json
 design-work/*.html
 !design-work/*.dc.html
+
+# === Tooling de agentes (vive en ~/lucidfence-agents-tooling/, no en el producto) ===
+brand/
+.claude/
+.agents/
+.gemini/
+.superpowers/
+design-work/
+marketing/
+.claude-plugin/
+skills-lock.json
