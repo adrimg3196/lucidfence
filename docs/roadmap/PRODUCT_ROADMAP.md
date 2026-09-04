@@ -51,6 +51,9 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Geocercas y Políticas como Código con Replay de Simulación (`lucidfence apply`)** (Gestión declarativa GitOps de cercas y reglas con simulación what-if previa sobre eventos pasados) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #1) | EXPLORE | `docs/product/PROPOSAL_gitops_policy_as_code.md` |
+| E3 | **Descubrimiento de Puntos Ciegos y Dispositivos Perdidos (Coverage Gap & Lost Sheep)** (Auditoría en negativo que expone dispositivos sin cerca, cercas muertas y latidos caducados) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #15) | EXPLORE | `docs/product/PROPOSAL_coverage_gap_discovery.md` |
+| E4 | **Streaming Criptográfico de Eventos OCSF para SIEM/SOC** (Normalización y transmisión local-first de veredictos e incidentes en esquema OCSF v1.1+ con firma SHA-256) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #17) | EXPLORE | `docs/product/PROPOSAL_ocsf_event_streaming.md` |
 
 ## Bitácora de reconciliación
 
