@@ -257,12 +257,37 @@ def _aggregate_moa(proposals, feature, temperature):
             pass
 
 
+def _mock_content(text: str) -> bool:
+    """True si el texto es un eco MOCK del server MoA (dry-run sin keys reales).
+
+    El server MoA en dry mode devuelve este patron caracteristico:
+        "[<provider>] (mock) Propuesta sintetica de <model> sobre: ..."
+    Esto NO es una fusion real — es un texto sintetico de relleno.
+    Cuando el agregador por defecto devuelve esto, el loop entrega 3/10 en vez
+    de 9/10 (heuristico). Detectamos y degradamos al heuristico para mantener
+    calidad real sin costo (camino B del ticket t_86923d1b).
+    """
+    if not text:
+        return False
+    low = text.lower()
+    # Patron del mock del server MoA (core.py: call_provider dry branch)
+    if "(mock) propuesta sintetica" in low:
+        return True
+    # Eco sintetico generico del agregador: texto generico sin seniales
+    # de analisis real (sin referencia a los proposers, sin pasos, sin conflicto).
+    if "propuesta sintetica" in low and "sobre:" in low:
+        return True
+    return False
+
+
 def _aggregate(proposals, feature, temperature):
     """Agrega propuestas con el agregador configurado (prioridad $0):
 
     1. Opus 4.8 via `claude` CLI SOLO si LUCIDFENCE_CLAUDE_CLI apunta a un
        binario absoluto (opt-in explicito, de paga, requiere sign-off Product).
     2. Si no: servidor MoA local en 127.0.0.1:8085 (GRATIS, moa_dry=true).
+       Si el MoA devuelve un eco MOCK (dry sin keys) o no puede fusionar,
+       caemos al heuristico local para no entregar un eco.
     3. Si el MoA no esta arriba: merge heuristico local deterministico ($0).
     """
     # (1) Opus 4.8 — solo opt-in explicito (de paga)
@@ -280,9 +305,11 @@ def _aggregate(proposals, feature, temperature):
     # (2) MoA local gratis
     if _moa_available():
         out = _aggregate_moa(proposals, feature, temperature)
-        if out:
+        if out and not _mock_content(out):
             return out
-    # (3) Merge heuristico local (sin clave/sin servicios)
+        # MoA UP pero devolvio mock / no fusiono -> caer al heuristico
+        # (no entregar un eco que puntua 3/10 en vez de 9/10).
+    # (3) Merge heuristico local (sin clave/sin servicios / mock detection)
     merged = "\n".join(proposals)
     summary = (
         f"[AGGREGATE:local-heuristic] Resumen de {len(proposals)} propuestas para {feature['id']}.\n"
