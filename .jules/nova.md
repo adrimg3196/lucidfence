@@ -17,3 +17,19 @@ Cualquier función que intente convertir a LucidFence en un enrolador/UEM sustit
 
 **Acción futura:**
 Toda propuesta de producto dentro del horizonte `EXPLORE` debe evaluar cómo capitaliza la neutralidad multi-UEM y amplifica la confianza/auditabilidad del CISO sin requerir infraestructura centralizada ni backend de pago.
+
+## 2026-09-01 — La auto-gobernanza de mínimo privilegio de credenciales UEM como acelerador de adopción Enterprise
+
+**Aprendizaje:**
+Las herramientas de seguridad en el sector exigen habitualmente claves de API con permisos globales o administrativos por comodidad del onboarding. Esto genera una resistencia inmediata en los equipos de CISO y Cloud Risk durante la fase piloto, donde la herramienta está configurada en modo observación (`observe`) pero el token UEM conectado ostenta capacidad de borrado remoto (`Wipe`). Un conector de seguridad que **audite sus propias credenciales** e insista en exigir la menor autoridad posible para operar invierte la relación de desconfianza tradicional en software de terceros.
+
+**Evidencia:**
+- `docs/internal/product/BACKLOG.md` (Ítem #16 "Auditor de mínimo privilegio de credenciales UEM").
+- `docs/operations/ENFORCEMENT.md` y `docs/integrations/` (Modo `observe` vs permisos de escritura/wipe requeridos solo en `enforce`).
+- Proposal `docs/product/PROPOSAL_uem_least_privilege_auditor.md`.
+
+**Implicación estratégica:**
+Exigir y auditar el mínimo privilegio de las credenciales UEM propias no es solo una medida defensiva de hardening: es una ventaja competitiva de producto que acelera la aprobación por los departamentos de Risk & Security en cuentas Enterprise sin cambiar el modelo local-first $0.
+
+**Acción futura:**
+Toda integración o adaptador UEM futuro debe definir explícitamente su matriz de permisos mínimos por modo de ejecución (`observe`, `dry_run`, `enforce`) e incorporar mecanismos de introspección de tokens en la fase de diagnóstico.

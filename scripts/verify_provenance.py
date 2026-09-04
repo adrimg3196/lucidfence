@@ -87,10 +87,10 @@ def parse_dsse(raw: bytes) -> tuple[dict, bytes, dict]:
 
 
 def git_commit_linked(repo: Path, commit: str):
-    """Decide whether `commit` is an ancestor of HEAD.
+    """Decide whether `commit` is an ancestor of HEAD or any origin ref.
 
     Returns one of:
-      "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok)
+      "ancestor"    — proven ancestor of HEAD or an origin ref (git merge-base --is-ancestor ok)
       "not_ancestor"— commit resolves but is provably NOT an ancestor (AC1c: FALLO)
       "unknown"     — commit object is NOT in the local repository. A verifier
                       cannot prove provenance for a commit it cannot resolve, so
@@ -111,7 +111,25 @@ def git_commit_linked(repo: Path, commit: str):
         ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
         capture_output=True,
     )
-    return "ancestor" if res.returncode == 0 else "not_ancestor"
+    if res.returncode == 0:
+        return "ancestor"
+    # 3) Check if it's an ancestor of any origin remote branch (e.g. origin/release/*, origin/main)
+    res_refs = subprocess.run(
+        ["git", "-C", str(repo), "for-each-ref", "--format=%(refname)", "refs/remotes/origin/"],
+        capture_output=True, text=True,
+    )
+    if res_refs.returncode == 0:
+        for ref in res_refs.stdout.splitlines():
+            ref = ref.strip()
+            if not ref or ref.endswith("/HEAD"):
+                continue
+            mb = subprocess.run(
+                ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, ref],
+                capture_output=True,
+            )
+            if mb.returncode == 0:
+                return "ancestor"
+    return "not_ancestor"
 
 
 def read_project_version(repo: Path) -> str:

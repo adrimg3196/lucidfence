@@ -51,6 +51,7 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Auditor de Mínimo Privilegio de Credenciales UEM y Análisis de Radio de Impacto** (Inspección local de permisos de tokens UEM conectados, detección de exceso de privilegios según modo `observe` vs `enforce` y recomendación de recorte de scopes) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #16) | EXPLORE | `docs/product/PROPOSAL_uem_least_privilege_auditor.md` |
 
 ## Bitácora de reconciliación
 
