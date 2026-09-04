@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from lucidfence.core.app_paths import ensure_data_dir  # noqa: E402
 
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 STARTUP_TIMEOUT_SECONDS = 15.0
