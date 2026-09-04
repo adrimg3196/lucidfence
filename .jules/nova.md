@@ -17,3 +17,18 @@ Cualquier función que intente convertir a LucidFence en un enrolador/UEM sustit
 
 **Acción futura:**
 Toda propuesta de producto dentro del horizonte `EXPLORE` debe evaluar cómo capitaliza la neutralidad multi-UEM y amplifica la confianza/auditabilidad del CISO sin requerir infraestructura centralizada ni backend de pago.
+
+## 2026-09-01 — Tres pilares de la capa complemento: Portabilidad Cross-UEM, Auditoría Negativa de Cobertura y Telemetría SOC en OCSF
+
+**Aprendizaje:**
+Para que la visión "Complement, Not UEM" sea irresistible para CISOs y admins de flotas heterogéneas, LucidFence no debe conformarse con auditar discrepancias puntuales, sino convertirse en la **capa de abstracción declarativa y bus de eventos estándar** de la flota. Esto se logra mediante tres vectores sinérgicos:
+1. **Portabilidad "Write Once, Enforce Anywhere":** Traducir políticas neutrales a primitivas nativas del UEM (Fleet YAML, Intune JSON, Jamf Smart Groups, Applivery AMAPI) elimina el lock-in y la duplicación manual de reglas.
+2. **Auditoría Negativa (Espacio Sombra):** Reportar lo que los UEMs ocultan (dispositivos sin geocercas, agentes caducados "lost sheep" y zonas de sombra de monitoreo).
+3. **Telemetría SOC Estándar (OCSF):** Emitir alertas de postura y geoperímetros firmadas criptográficamente directamente en formato OCSF v1.1.0 para SIEMs (Splunk, Sentinel, Elastic) desde la máquina local, sin pasar por nubes intermedias.
+
+**Evidencia:**
+- Proposals `docs/product/PROPOSAL_portable_policies_compiler.md`, `docs/product/PROPOSAL_coverage_gap_inspector.md`, `docs/product/PROPOSAL_ocsf_event_stream.md`.
+- Backlog de producto en `docs/internal/product/BACKLOG.md` (Ítems #14, #15 y #17).
+
+**Implicación estratégica:**
+Estos tres desarrollos posicionan a LucidFence no como un "dashboard más", sino como el plano de definición de políticas y auditoría de visibilidad indispensable para cualquier infraestructura Zero-Trust Multi-UEM.

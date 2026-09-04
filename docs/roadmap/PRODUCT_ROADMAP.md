@@ -51,6 +51,9 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Compilador Declarativo Cross-UEM de Políticas Portables** («Write Once, Enforce Anywhere» para Fleet, Intune, Jamf y Applivery) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #14) | EXPLORE | `docs/product/PROPOSAL_portable_policies_compiler.md` |
+| E3 | **Inspector de Puntos Ciegos y Falsos Verdes de Cobertura** (Auditoría negativa de vacíos de geocercado, dispositivos desatendidos y cercas huérfanas) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #15) | EXPLORE | `docs/product/PROPOSAL_coverage_gap_inspector.md` |
+| E4 | **Bus Criptográfico de Eventos OCSF y Stream SOC Local-First** (Emisión de alertas de geofencing y postura en formato OCSF v1.1.0 para SIEM/XDR) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #17) | EXPLORE | `docs/product/PROPOSAL_ocsf_event_stream.md` |
 
 ## Bitácora de reconciliación
 
