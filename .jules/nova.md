@@ -17,3 +17,20 @@ Cualquier función que intente convertir a LucidFence en un enrolador/UEM sustit
 
 **Acción futura:**
 Toda propuesta de producto dentro del horizonte `EXPLORE` debe evaluar cómo capitaliza la neutralidad multi-UEM y amplifica la confianza/auditabilidad del CISO sin requerir infraestructura centralizada ni backend de pago.
+
+## 2026-09-01 — Ampliación del Roadmap de Descubrimiento NOVA ✨: GitOps con Replay, Cobertura en Negativo y Streaming OCSF
+
+**Aprendizaje:**
+Para maximizar el valor operacional de LucidFence sin comprometer la neutralidad ni la soberanía local-first, el roadmap de producto debe enfocarse en tres pilares de innovación ultranecesarios que los UEMs comerciales no pueden implementar por arquitectura:
+1. **Predictibilidad mediante Simulación Historical Replay (`lucidfence apply`):** Permite a los administradores gestionar geocercas y políticas como código con la garantía de que el motor `policy_replay.py` evalúa el impacto histórico real antes de aplicar cambios en vivo.
+2. **Auditoría en Negativo ("Coverage Gap & Lost Sheep"):** Revela dispositivos huérfanos sin cerca asignada, geocercas inactivas y latidos caducados mediante consultas puras de intersección en memoria sobre el inventario unificado multi-UEM (`multiuem.py`).
+3. **Interoperabilidad SOC Inmediata mediante OCSF Criptográfico:** Transmite alertas e incidentes estandarizados en OCSF Detection Finding v1.1+ con firmas de evidencia SHA-256 encadenadas directamente a SIEMs corporativos (Splunk, Sentinel, Elastic) desde la máquina del tenant.
+
+**Evidencia:**
+- `docs/product/PROPOSAL_gitops_policy_as_code.md` (Propuesta de GitOps + Replay).
+- `docs/product/PROPOSAL_coverage_gap_discovery.md` (Propuesta de Puntos Ciegos).
+- `docs/product/PROPOSAL_ocsf_event_streaming.md` (Propuesta de Streaming OCSF).
+- `docs/roadmap/PRODUCT_ROADMAP.md` (Ítems E2, E3 y E4 agregados al horizonte `EXPLORE`).
+
+**Implicación estratégica:**
+Hermes podrá tomar estas propuestas de la sección `EXPLORE` del roadmap y convertirlas secuencialmente en código de producción ligero, mantenible y 100% probado en runtime.
