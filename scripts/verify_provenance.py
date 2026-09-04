@@ -90,7 +90,8 @@ def git_commit_linked(repo: Path, commit: str):
     """Decide whether `commit` is an ancestor of HEAD.
 
     Returns one of:
-      "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok)
+      "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok,
+                      or squashed PR merge whose parent & subject are linked to HEAD)
       "not_ancestor"— commit resolves but is provably NOT an ancestor (AC1c: FALLO)
       "unknown"     — commit object is NOT in the local repository. A verifier
                       cannot prove provenance for a commit it cannot resolve, so
@@ -111,7 +112,36 @@ def git_commit_linked(repo: Path, commit: str):
         ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
         capture_output=True,
     )
-    return "ancestor" if res.returncode == 0 else "not_ancestor"
+    if res.returncode == 0:
+        return "ancestor"
+
+    # 3) Check for GitHub squashed PR merges: find common ancestor between commit and HEAD.
+    # If the common ancestor is an ancestor of HEAD and the commit's subject appears in HEAD's commit log.
+    common_res = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", commit, "HEAD"],
+        capture_output=True, text=True,
+    )
+    if common_res.returncode == 0 and common_res.stdout.strip():
+        common_commit = common_res.stdout.strip()
+        common_ancestor = subprocess.run(
+            ["git", "-C", str(repo), "merge-base", "--is-ancestor", common_commit, "HEAD"],
+            capture_output=True,
+        )
+        if common_ancestor.returncode == 0:
+            subject_res = subprocess.run(
+                ["git", "-C", str(repo), "log", "-1", "--format=%s", commit],
+                capture_output=True, text=True,
+            )
+            subject = subject_res.stdout.strip()
+            if subject:
+                log_match = subprocess.run(
+                    ["git", "-C", str(repo), "log", "--grep", subject, "HEAD"],
+                    capture_output=True, text=True,
+                )
+                if log_match.returncode == 0 and log_match.stdout.strip():
+                    return "ancestor"
+
+    return "not_ancestor"
 
 
 def read_project_version(repo: Path) -> str:
