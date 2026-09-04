@@ -50,6 +50,16 @@ import tomllib  # noqa: E402  (después del guard de versión)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Versión del proyecto (pyproject.toml), usada por check_provenance_release
+# para construir el nombre del artifact del fixture. Se lee de pyproject.toml
+# en vez de importar lucidfence.cli para evitar efectos laterales al importar
+# el módulo completo durante verify --docs-only.
+def _read_project_version() -> str:
+    with open(os.path.join(ROOT, "pyproject.toml"), "rb") as fh:
+        return tomllib.load(fh)["project"]["version"]
+
+PROJECT_VERSION = _read_project_version()
+
 
 def _run(cmd: list[str]) -> tuple[int, str]:
     p = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
@@ -207,7 +217,7 @@ FIXTURE_DIR = os.path.join(ROOT, "docs", "supply-chain", "fixture")
 
 
 def check_provenance_release() -> tuple[bool, str]:
-    artifact = os.path.join(FIXTURE_DIR, "lucidfence-1.6.0.tar.gz")
+    artifact = os.path.join(FIXTURE_DIR, f"lucidfence-{PROJECT_VERSION}.tar.gz")
     sbom = os.path.join(FIXTURE_DIR, "sbom.cdx.json")
     dsse = os.path.join(FIXTURE_DIR, "provenance.dsse.json")
     key = os.path.join(FIXTURE_DIR, "release_signing_demo.pub")
