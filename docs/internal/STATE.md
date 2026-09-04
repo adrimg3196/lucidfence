@@ -76,6 +76,18 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    check runtime (46/46), sección en `docs/operations/apple_ddm.md`.
    **El backlog numerado queda drenado**: el siguiente trabajo sale de los SÍ
    de `docs/internal/product/BACKLOG.md`.
+8. ~~**Umbral de precisión del veredicto de geocerca**~~ — **HECHO 2026-09-03**
+   (heartbeat de producto; hallazgo del pase experto 2026-09-01): el engine
+   decidía dentro/fuera con el punto crudo e ignoraba `accuracy_m`, así que un
+   fix de 5 km "fuera" del almacén disparaba `on_exit`. Con
+   `location_max_accuracy_m` (config, metros; 0 = desactivado por defecto para
+   no romper la ubicación por red) el fix impreciso es `unknown` con evento
+   `location_rejected` (`reason: inaccurate`), contador
+   `location_rejected_inaccurate` en las stats del ciclo y memoria de cerca
+   intacta (el siguiente fix preciso fuera sí dispara `on_exit`). Precisión
+   ausente o basura nunca descarta. 5 tests + 1 check runtime +
+   `docs/integrations/LOCATION_MATRIX.md` (y se corrige el claim de que "las
+   políticas pueden exigir precisión mínima", que no era cierto).
 9. ~~**Segunda opinión: lo que el UEM dice vs lo que se observa**~~ — **HECHO
    2026-08-23** (backlog evaluado #13): `lucidfence/core/second_opinion.py`
    (función pura stdlib) + `GET /api/second-opinion` (`device:read`,
@@ -263,4 +275,5 @@ Estado: **producto estable y verificado en runtime**. Base v1.2.0. Próximo hito
 ## Activity log (append-only)
 
 - 2026-07-20: loop-audit baseline 33/100; scaffolding (STATE/LOOP/budget/run-log/CI) added.
+- 2026-09-03: heartbeat de producto — umbral de precisión del veredicto de geocerca (`location_max_accuracy_m`): fix impreciso = unknown con motivo, nunca outside/on_exit; 5 tests, claim runtime, doc.
 - 2026-07-20: GitHub triage — 1 merge (#13), 3 closes (#11/#12/#4).
