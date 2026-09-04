@@ -5,7 +5,7 @@ ciclo, sin autorización humana. Mientras Admin-value ejecuta el backlog
 priorizado (hacer lo pendiente "imprescindible"), este loop **concibe y entrega
 funciones nuevas** que amplían lo que LucidFence hace por el admin IT.
 
-Lo pilota el especialista `product-manager` del bench (`.claude/agents/`).
+Lo pilota el especialista `product-manager` del bench (`~/lucidfence-agents-tooling/.claude/agents/`).
 
 ## Norte
 

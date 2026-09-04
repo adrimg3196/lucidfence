@@ -113,7 +113,7 @@ autónomo; el enforcement sobre dispositivos reales lo decide siempre el admin
   una edición legítima regenera el índice en la misma PR
   (`scripts/build_adapter_index.py`).
 - **Lint write-time:** `.ruff.toml` selecciona solo clases de error reales
-  (`F`, `E9`); el hook PostToolUse `.claude/hooks/quality_gate.sh` devuelve
+  (`F`, `E9`); el hook PostToolUse `~/lucidfence-agents-tooling/.claude/hooks/quality_gate.sh` devuelve
   los hallazgos al agente en el momento de escribir. El estilo compacto de la
   casa es deliberado y no se lintea.
 

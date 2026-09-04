@@ -74,7 +74,7 @@ tests corren sin credenciales reales.
   forks/terceros jamás se auto-mergean.
 - **Contrato de lint** (`.ruff.toml`): solo clases de error reales (F/E9); el
   estilo compacto de la casa es deliberado y no se lintea. Gate write-time en
-  `.claude/hooks/quality_gate.sh`.
+  `~/lucidfence-agents-tooling/.claude/hooks/quality_gate.sh`.
 - **Integridad del marketplace de adapters**: los adapters publicados se
   verifican por sha256 (`lucidfence/plugins/adapters/index.json`); una edición
   legítima regenera el índice en la misma PR.
@@ -98,7 +98,7 @@ Esta constitución prevalece sobre cualquier otra práctica documentada. Las
 **enmiendas** son decisiones del propietario: se registran aquí (con fecha),
 en la bitácora del roadmap, y llegan por PR del raíl como cualquier cambio.
 Los loops y especialistas del bench verifican conformidad constitucional en
-cada revisión (las "Reglas de la casa" de `.claude/agents/` son el espejo
+cada revisión (las "Reglas de la casa" de `~/lucidfence-agents-tooling/.claude/agents/` son el espejo
 operativo de este documento). Ante conflicto entre documentos, gana el más
 restrictivo hasta que el propietario resuelva.
 

@@ -25,7 +25,7 @@ curaba el horizonte a trimestres. Este loop cierra ese hueco.
 
 ## Especialista dueño
 
-Delega en **`product-roadmap-strategist`** (`.claude/agents/`). El loop es el
+Delega en **`product-roadmap-strategist`** (`~/lucidfence-agents-tooling/.claude/agents/`). El loop es el
 departamento; el especialista decide prioridades. El humano no está en la cadena.
 
 ## Ciclo (qué hace cada run)

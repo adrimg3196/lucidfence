@@ -1,7 +1,7 @@
 # El consejo directivo — quién ocupa cada silla
 
 > Para el propietario, que es de negocio. Sin jerga: quién hace qué, y qué
-> llega hasta ti. El detalle técnico de cada agente está en `.claude/agents/`;
+> llega hasta ti. El detalle técnico de cada agente está en `~/lucidfence-agents-tooling/.claude/agents/`;
 > el contrato de la flota, en `docs/internal/LOOP.md`.
 
 ## Las siete sillas

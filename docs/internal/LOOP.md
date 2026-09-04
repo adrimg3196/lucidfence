@@ -8,7 +8,7 @@ Reporting style follows [i-have-adhd](https://github.com/ayghri/i-have-adhd)
 Centinela's offensive method follows [Strix](https://github.com/usestrix/strix).
 Cada loop delega decisiones de dominio en un bench de especialistas
 ([agency-agents](https://github.com/msitarzewski/agency-agents), adaptado en
-`.claude/agents/`); el organigrama loop→especialistas→derechos de decisión está
+`~/lucidfence-agents-tooling/.claude/agents/`); el organigrama loop→especialistas→derechos de decisión está
 en `docs/internal/agency/ORG.md`.
 
 ## Norte de la flota (goal, propietario 2026-08-16)
@@ -342,7 +342,7 @@ autónomos no se pisen como no se pisarían dos ingenieros seniors.
    - **Cierre con UN siguiente paso concreto** (el del propietario si lo
      hay; el del loop si no).
 9. **Delegación al bench (agency-agents).** Cada loop es un departamento y
-   delega las decisiones de dominio en los especialistas de `.claude/agents/`
+   delega las decisiones de dominio en los especialistas de `~/lucidfence-agents-tooling/.claude/agents/`
    (invocables por su slug como `subagent_type`). El loop es el gerente; el
    especialista decide y devuelve el entregable. El humano no está en esta
    cadena. Mapa loop→especialistas→derechos de decisión:

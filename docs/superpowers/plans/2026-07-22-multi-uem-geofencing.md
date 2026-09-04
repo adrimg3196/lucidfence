@@ -591,7 +591,7 @@ git commit -m "feat(ui): support hosted login and local Multi-UEM ownership"
 **Files:**
 - Modify: `README.md`
 - Create: `docs/MULTI_UEM.md`
-- Modify: plan checkboxes and `.superpowers/sdd/progress.md` (ledger is scratch/ignored)
+- Modify: plan checkboxes and `~/lucidfence-agents-tooling/.superpowers/sdd/progress.md` (ledger is scratch/ignored)
 
 **Interfaces:**
 - Documents exact config schema, supported/live limitations, quality defaults, migration from legacy and safety boundaries.
