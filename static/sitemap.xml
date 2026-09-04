@@ -2,7 +2,11 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://adrimg3196.github.io/lucidfence/</loc></url>
   <url><loc>https://adrimg3196.github.io/lucidfence/cloud.html</loc></url>
+  <url><loc>https://adrimg3196.github.io/lucidfence/dashboard.html</loc></url>
   <url><loc>https://adrimg3196.github.io/lucidfence/manual.html</loc></url>
   <url><loc>https://adrimg3196.github.io/lucidfence/web.html</loc></url>
   <url><loc>https://adrimg3196.github.io/lucidfence/whitelabel.html</loc></url>
+  <url><loc>https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-intune.html</loc></url>
+  <url><loc>https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-jamf.html</loc></url>
+  <url><loc>https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-kandji.html</loc></url>
 </urlset>

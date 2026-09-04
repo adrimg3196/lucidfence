@@ -80,8 +80,13 @@ def sig_shift_match(device, ctx):
 @register_signal("device_health")
 def sig_device_health(device, ctx):
     encryption = device.get("encryption_enabled")
+    compliant = device.get("compliant")
     return {
-        "compliant": bool(device.get("compliant")),
+        # None = el UEM nunca lo afirmó. bool(None) lo convertía en False y
+        # sumaba +25 con la razón fabricada "dispositivo no conforme" — el
+        # mismo pecado que la línea de encryption ya evita. Desconocido no
+        # es evidencia de incumplimiento.
+        "compliant": True if compliant is None else bool(compliant),
         "rooted": bool(device.get("rooted", False)),
         # Unknown posture is not evidence of disabled encryption.
         "encryption": True if encryption is None else bool(encryption),
@@ -518,6 +523,10 @@ def _resolve_field(field_: str, risk: dict, device: dict, fence_state: str):
         return risk.get("severity")
     if field_ == "compliant":
         return device.get("compliant")
+    if field_.startswith("evidence_freshness:"):
+        _, rest = field_.split(":", 1)
+        sig, key = rest.split(".", 1) if "." in rest else (rest, "status")
+        return _safe_get(device.get("evidence_freshness") or {}, sig, key)
     if field_ == "hardware_degraded":
         # Señal derivada (no vive en el device dict, a diferencia de
         # supervised/lockdown_mode): se resuelve desde la señal de postura ya

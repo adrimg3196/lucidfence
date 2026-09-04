@@ -16,11 +16,15 @@ def _executable(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-def _run_installer(*, succeed_after: int, timeout: int = 2,
+def _run_installer(*, succeed_after: int, timeout: int = 8,
                    docker_available: bool = False,
                    public_host: str = "",
                    server_stays_alive: bool = True,
-                   curl_available: bool = True):
+                   curl_available: bool = True,
+                   fake_clock: bool = False):
+    # timeout=8 en el camino feliz: el instalador sondea cada segundo con
+    # `sleep` real y un runner de CI cargado tardaba >2 s en llegar al 2º
+    # intento (falso rojo). Los tests fail-closed pasan timeout=1 explícito.
     with tempfile.TemporaryDirectory(prefix="lucidfence-install-health-") as raw:
         checkout = Path(raw)
         shutil.copy2(ROOT / "install.sh", checkout / "install.sh")
@@ -31,6 +35,20 @@ def _run_installer(*, succeed_after: int, timeout: int = 2,
 
         fake_bin = checkout / "fake-bin"
         fake_bin.mkdir()
+        clock = checkout / "fake-clock"
+        if fake_clock:
+            clock.write_text("100")
+            _executable(
+                fake_bin / "date",
+                "#!/usr/bin/env bash\ncat \"$FAKE_CLOCK\"\n",
+            )
+            _executable(
+                fake_bin / "sleep",
+                "#!/usr/bin/env bash\n"
+                "if [[ \"${1:-}\" == \"30\" ]]; then exec /bin/sleep 30; fi\n"
+                "value=$(<\"$FAKE_CLOCK\")\n"
+                "printf '%s' \"$((value + 2))\" > \"$FAKE_CLOCK\"\n",
+            )
         if not curl_available:
             for command in (
                 "bash", "cat", "chmod", "cp", "date", "dirname", "grep",
@@ -93,6 +111,8 @@ def _run_installer(*, succeed_after: int, timeout: int = 2,
             "FAKE_SERVER_STAYS_ALIVE": "1" if server_stays_alive else "0",
             "LUCIDFENCE_HEALTH_TIMEOUT": str(timeout),
         })
+        if fake_clock:
+            env["FAKE_CLOCK"] = str(clock)
         if public_host:
             env["LUCIDFENCE_PUBLIC_HOST"] = public_host
         result = subprocess.run(
@@ -114,6 +134,12 @@ def test_python_fallback_waits_until_health_is_ready():
     assert result.returncode == 0, result.stderr
     assert attempts >= 2
     assert "Health confirmado" in result.stdout
+
+
+def test_python_fallback_retries_before_timing_out():
+    result, attempts = _run_installer(succeed_after=2, timeout=2, fake_clock=True)
+    assert result.returncode == 0, result.stderr
+    assert attempts == 2
 
 
 def test_python_fallback_creates_an_isolated_virtualenv():

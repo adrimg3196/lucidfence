@@ -4,6 +4,16 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+- governance(rulesets): Regla de Oro #1 anti-check-fantasma — nunca añadir un
+  contexto a `required_status_checks` de un ruleset antes de que el workflow que
+  lo emite esté mergeado en `origin/main` **y** tenga un run verde en `main`
+  (lección del deadlock del ruleset 21249696, 10/10 PRs bloqueados, tarea
+  t_497540b9). Nuevo pre-flight fail-closed `scripts/ruleset_check_guard.py`
+  (`--diff` / `--context` / `--audit-live`) integrado en el charter
+  (docs/references/agent-team-charter.md), el registro de rulesets
+  (docs/operations/BRANCH_CONFIG.md) y la Definition of Done
+  (docs/references/definition-of-done.md). En review de un PR que toque rulesets
+  se exige el resultado del pre-flight en el cuerpo del PR (tarea t_26b7fac6).
 - fix(ci): el health-check nocturno vuelve a poder alertar — `nightly-health-check`
   llevaba **10 runs consecutivos en rojo** (2026-08-13..2026-08-22) con
   `ModuleNotFoundError: No module named 'requests'`, no porque la vitrina
@@ -16,6 +26,15 @@ All notable changes to LucidFence are documented here.
   promete su docstring. Con test de regresión que bloquea los terceros en un
   subproceso y exige que el checker arranque igual — el test de contrato anterior
   comprobaba que el workflow *llama* al checker, no que pueda *ejecutarlo*.
+- fix(seo/pages): publicar `robots.txt` en la raíz de GitHub Pages (t_087de185 / t_b5902025).
+  `publish-pages.yml` solo copiaba `static/*` y `cp -rL` **no copia ficheros que no
+  existen**, así que la superficie pública se publicaba sin `robots.txt` (y el
+  `Sitemap:` del mismo apuntaba a un 404). Se añade `static/robots.txt` (con
+  `Sitemap: https://adrimg3196.github.io/lucidfence/sitemap.xml`) y el workflow lo
+  publica explícitamente a `_site/` con un guardarraíl que rompe el build si falta.
+  Nota: el `sitemap.xml` YA se genera dinámicamente en Pages vía `build_sitemap.py`
+  (incluye las comparativas de `comparisons/`); no se copia uno estático para no
+  perder esas URLs.
 - gitops/repo-higiene: `.gitattributes` con `merge=union` para los logs append-only
   de los loops (`loop-run-log.md`, `release/history.md`, `trends/signals.md`,
   `security/findings.md`, `growth/experiments.md`, `growth/mentions.md`) — corta

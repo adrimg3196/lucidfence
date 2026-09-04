@@ -9,18 +9,20 @@ title = "LucidFence gitleaks config"
 useDefault = true
 
 [allowlist]
-# No alertar sobre placeholders de ejemplo ni documentación de marketing.
-# NOTA: .github/ fue quitado de la allowlist (SOC audit 2026-08-20, L-3) —
-# es precisamente donde viven los secretos de CI (tokens de deploy, PATs de
-# publish-pypi/publish-pages), así que excluirlo era un hueco de escaneo.
-# Los tests siguen excluidos porque usan tenants/tokens de mentira por diseño.
-description = "Allowlist de placeholders y docs sin secretos reales"
+# No alertar sobre placeholders de ejemplo ni binarios de diagramas.
+# NOTA (hardening SOC 2026-08-22, hallazgo #2): antes se excluían directorios
+# completos (docs/, README.md, reports/, tests/) y eso podía enmascarar un
+# secreto REAL commiteado en esas rutas. Ahora NO se excluyen directorios:
+# docs/, README.md, reports/ y tests/ SE ESCANEAN. Solo se excluyen: (a) el
+# .env.example que solo tiene placeholders, y (b) binarios de imagen en
+# docs/reports (no contienen secretos detectables). .github/ ya NO está en la
+# allowlist (SOC audit 2026-08-20, L-3) porque es donde viven los secretos de
+# CI (deploy/PATs de publish-pypi/publish-pages).
+description = "Allowlist de placeholders y binarios sin secretos reales"
 paths = [
     '''.*\.env\.example$''',
-    '''.*docs/.*''',
-    '''.*README\.md$''',
-    '''.*reports/.*''',
-    '''.*tests/.*''',   # los tests usan tenants/tokens de mentira
+    '''.*docs/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
+    '''.*reports/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
 ]
 regexes = [
     # placeholders tipo <INSERT_...> o TU_ALGO
@@ -30,4 +32,10 @@ regexes = [
     '''acme\.test''',
     '''your-org''',
     '''adrimg3196''',
+    # tokens de mentira usados en tests (no reales) — evita falsos positivos
+    # sin tener que excluir todo el directorio tests/. Patrón literal, no
+    # directorio: cualquier OTRO secreto en tests/ sí se detecta.
+    '''longenoughkey123''',
+    '''MuemQa123456''',          # test_multiuem_register.py (password fake)
+    '''fleet-tok-SECRET-abc123''',  # test_multiuem_register.py (FLEET_SECRET fake)
 ]

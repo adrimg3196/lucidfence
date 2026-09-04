@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -30,9 +30,22 @@ class DeviceState:
     fence_id: Optional[str] = None
     inside_fence: Optional[str] = None  # fence id the device is currently inside
     fence_state: str = "unknown"  # inside | outside | unknown
+    # Última cerca conocida mientras el dispositivo está "unknown" (sin señal):
+    # si reaparece fuera, esa es la cerca que abandonó y cuyo on_exit toca.
+    last_inside_fence: Optional[str] = None
     location_source: str = "unknown"  # gps | coarse_ip | simulated
     risk_score: Optional[float] = None  # MOAT: geospatial risk 0-100
     risk_severity: Optional[str] = None  # low|medium|high|critical
+    # --- Defect 2 (issue #302): persisted EXPLAIN of the verdict. ---
+    # Written by Engine.run_once alongside risk_score/risk_severity so the GET
+    # path can PROJECT the exact verdict (WHY) that fired actions — instead of
+    # recomputing with a fresh context after a shift change / config edit and
+    # silently disagreeing with itself. All Optional => old JSON loads clean.
+    risk_reasons: Optional[list] = None  # reasons[] from RiskEngine.evaluate
+    risk_matched_policies: Optional[list] = None  # policy ids from match_policies
+    risk_evaluated_at: Optional[str] = None  # ISO timestamp of the cycle verdict
+    risk_provenance: Optional[str] = None  # "tool"|"context"|"none"
+    risk_verified: Optional[bool] = None  # provenance gate (evidence-backed?)
     route_id: Optional[str] = None  # assigned route (if any)
     route_state: Optional[str] = None  # on_route|off_route|unassigned
     route_deviation_m: Optional[float] = None  # meters from route polyline
@@ -85,6 +98,16 @@ class DeviceState:
     posture_collected_at: Optional[str] = None # evidence timestamp (ISO)
     osquery_version: Optional[str] = None
     osquery_config_valid: Optional[bool] = None
+    # --- freshness / replay status for trust evidence (#237) ---
+    # Shape: {signal_type: {status, source, age_seconds, rule, reason, ...}}.
+    # status is fresh|stale|replayed|future|unverifiable; unknown stays separate
+    # from pass/fail and can be carried through API/UI/export without coercion.
+    evidence_freshness: Optional[dict] = None
+    # --- neutral device attestation envelope (#238) ---
+    # Shape produced by core.device_attestation.AttestationEnvelope.to_dict().
+    # None = no attestation reported; consumers must not coerce absence to
+    # failure or compliance.
+    attestation: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -117,9 +140,14 @@ class StateStore:
             # schema-drifted row must be skipped, never wipe the whole fleet's
             # persisted state. (ponytail: no logging infra here; skip silently
             # but keep every good record — add logging if forensics matter.)
+            # Una clave que este build no conoce (fila escrita por un build más
+            # nuevo, luego rollback) se ignora: descartar la fila entera dejaba
+            # al dispositivo como "recién visto" y re-disparaba on_enter en masa.
+            known = {f.name for f in fields(DeviceState)}
             for d in raw:
                 try:
-                    self._states[d["device_id"]] = DeviceState(**d)
+                    self._states[d["device_id"]] = DeviceState(
+                        **{k: v for k, v in d.items() if k in known})
                 except Exception:
                     continue
 

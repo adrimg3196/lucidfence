@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LucidFence vs Kandji</title>
+  <link rel="canonical" href="https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-kandji.html" />
+  <link rel="alternate" hreflang="x-default" href="https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-kandji.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-kandji.html" />
+  <meta property="og:site_name" content="LucidFence" />
+  <meta property="og:title" content="LucidFence vs Kandji" />
+  <meta property="og:description" content="Capability-by-capability comparison: what each tool does, with cited sources. Not a 'we're better' page." />
+  <meta property="og:image" content="https://adrimg3196.github.io/lucidfence/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <style>
+:root{--bg:#08090a;--bg-2:#0c0d0f;--panel:#111214;--panel-2:#16181b;--border:#26282c;--fg:#f7f8f8;--fg-2:#d4d6d9;--muted:#8a8f98;--accent:#5e6ad5;--accent-h:#7d87e6;--green:#4cc38a;--red:#ff6b6b;--radius:8px;--radius-lg:12px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-h);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:920px;margin:0 auto;padding:0 24px}
+header{position:sticky;top:0;z-index:10;background:rgba(8,9,10,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{font-weight:700;font-size:16px;letter-spacing:-.02em;color:var(--fg)}
+.nav a{color:var(--muted);font-size:14px}
+main{padding:48px 0 64px}
+h1{font-size:clamp(28px,5vw,40px);letter-spacing:-.02em;margin-bottom:8px}
+h2{font-size:24px;letter-spacing:-.02em;margin:40px 0 16px}
+p{color:var(--fg-2);margin:12px 0}
+blockquote{border-left:3px solid var(--accent);background:var(rgba(94,106,213,.14));padding:12px 16px;margin:16px 0;border-radius:0 var(--radius) var(--radius) 0;color:var(--fg-2)}
+table{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}
+th,td{border:1px solid var(--border);padding:10px 12px;text-align:left;vertical-align:top}
+th{background:var(--panel-2);font-weight:600}
+tr:nth-child(even) td{background:var(--panel)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.9em;background:var(--panel-2);padding:2px 5px;border-radius:4px}
+footer{border-top:1px solid var(--border);padding:28px 0;color:var(--muted);font-size:13px}
+.skip-link{position:absolute;left:-9999px;top:0}
+</style>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to content</a>
+  <header><div class="wrap nav"><span class="logo">LucidFence</span><a href="../">← Back to home</a></div></header>
+  <main class="wrap" id="main">
+<h1>LucidFence vs Kandji</h1>
+<blockquote><strong>Capability-by-capability comparison.</strong> This page is not &quot;we&#x27;re better&quot; — it is a structured, sourced comparison of what each tool does so you can decide where each fits. Every claim links to the internal doc that backs it. For the other vendors, see <a href="lucidfence-vs-intune.html">LucidFence vs Intune</a> and <a href="lucidfence-vs-jamf.html">LucidFence vs Jamf</a>.</blockquote>
+<h2>What each one is</h2>
+<p><strong>Kandji</strong> (rebranded to <strong>Iru</strong> in late 2025, now extending beyond Apple to Windows/Android MDM) is an Apple-first UEM: device enrollment, inventory, auto-remediation, and smart templates for macOS/iOS, with a mature ecosystem and vendor support.</p>
+<p><strong>LucidFence</strong> is a <strong>local-first control plane</strong> that turns fleet geolocation into *explainable risk* (a 0–100 score <strong>with its reason</strong>) and runs automated actions — <strong>MDM-agnostic</strong> through adapters. It is not a replacement UEM: it sits on top of the UEM you already run (Applivery, Intune, Jamf, Fleet, … and Kandji <strong>location</strong> via the bring-your-own-UEM connector — location ingestion only) and correlates everything on your own machine. See <a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a> and the root <a href="https://github.com/adrimg3196/lucidfence/blob/main/README.md">README.md</a>.</p>
+<blockquote>⚠️ <strong>Accuracy note (signed off by CTO, 2026-08-26 — mirrors the Intune/Jamf #203/#267 co-sign).</strong> Two facts on this page are *vendor-side* and come from the SEO &amp; Docs Bot&#x27;s 2026 evidence review, not from LucidFence source code. The CTO verified both against <code>origin/main</code> (@ <code>1e6bfd3</code>) and co-signed them: the adapter registry (<code>lucidfence/core/adapters/__init__.py</code>, <code>ADAPTER_REGISTRY</code>) has <strong>no <code>kandji</code> key</strong> (keys: <code>simulation</code>, <code>applivery</code>, <code>intune</code>, <code>jamf</code>, <code>windows_conformidad</code>, <code>chromeos</code>, <code>workspace_one</code>, <code>fleet</code>) — so Kandji is reached via <code>GENERIC_HTTP</code> (and <code>docs/adapters/GENERIC_HTTP.md</code> names Kandji as a BYO example); and Kandji/Iru&#x27;s &quot;Lost Mode&quot; is documented vendor *recovery* location, <strong>not</strong> geofencing/compliance-by-location (consistent with <code>docs/internal/product/BACKLOG.md</code> §6). The LucidFence-side claims remain verifiable from code/docs: 1. <strong>Kandji has no native LucidFence adapter today</strong> (the adapter registry holds Applivery, Intune, Jamf, Fleet + chromeos/workspace_one/windows_conformidad). Kandji is reached through the <strong>GENERIC_HTTP</strong> bring-your-own-UEM connector (<a href="https://github.com/adrimg3196/lucidfence/blob/main/adapters/GENERIC_HTTP.md">adapters/GENERIC_HTTP.md</a>). This is a real gap vs Intune/Jamf, stated honestly below. 2. <strong>Kandji offers no geofencing / location-based compliance policy.</strong> Its only location feature is <strong>&quot;Lost Mode&quot;</strong> — on-demand device location for *lost-device recovery*, not continuous fleet geofencing or risk-by-location policy. Source: 2026 vendor docs reviewed by the bot.  <strong>Correction to the 2026-08-26 co-sign (CTO, 2026-08-29):</strong> <code>GENERIC_HTTP</code> is a <strong>location-ingestion</strong> connector (it pulls device location into LucidFence&#x27;s risk engine) — it is <strong>not</strong> an action adapter, so LucidFence does <strong>not</strong> push lock/wipe/message actions back into Kandji today. <code>build_adapter(&quot;generic&quot;, …)</code> falls back to <code>SimulationAdapter</code>, and <code>ADAPTER_REGISTRY</code> has no <code>kandji</code> key. LucidFence&#x27;s own remote actions run through its *native* adapters (Intune/Jamf/Fleet/Applivery). The capability table reflects this (no Kandji action-adapter yet). This corrects the Codex P2 review thread on the PR.  The LucidFence-side claims (local-first, explainable risk, no exfiltration, MDM-agnostic) are verifiable from the codebase and the docs linked below.</blockquote>
+<h2>Capability table</h2>
+<table><thead><tr>
+<th>Capability</th>
+<th>Kandji</th>
+<th>LucidFence</th>
+<th>Source</th>
+</tr></thead><tbody>
+<tr>
+<td>Core purpose</td>
+<td>Apple-first UEM (enrollment, inventory, auto-remediation, templates)</td>
+<td>Local-first geofence + explainable-risk control plane (MDM-agnostic)</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/README.md">README.md</a></td>
+</tr>
+<tr>
+<td>Geofencing engine</td>
+<td><strong>None</strong> — only &quot;Lost Mode&quot; (on-demand lost-device location)</td>
+<td>Geofences + risk engine with reasons; policies as code</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/LOCATION_MATRIX.md">integrations/LOCATION_MATRIX.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/config_as_code.md">operations/config_as_code.md</a></td>
+</tr>
+<tr>
+<td><strong>Location data fidelity</strong></td>
+<td>Lost Mode = point-in-time location for recovery; <strong>no continuous fleet geofencing</strong></td>
+<td>Pairs with a real location source (Applivery GPS, iOS on-device, or network/osquery) for continuous geo</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/LOCATION_MATRIX.md">integrations/LOCATION_MATRIX.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/adapters/GENERIC_HTTP.md">adapters/GENERIC_HTTP.md</a></td>
+</tr>
+<tr>
+<td><strong>Location-based compliance / risk policy</strong></td>
+<td>Not provided (no geofence-triggered policy)</td>
+<td>Geofence is a first-class risk signal; policies trigger on location + posture</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/config_as_code.md">operations/config_as_code.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/ENFORCEMENT.md">operations/ENFORCEMENT.md</a></td>
+</tr>
+<tr>
+<td>Explainable risk (0–100 + reason)</td>
+<td>Not provided (no risk score with reason)</td>
+<td>Every device gets a 0–100 score <strong>with the reason</strong> — never a magic number</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a></td>
+</tr>
+<tr>
+<td>Data sovereignty / no exfiltration</td>
+<td>Vendor cloud (Kandji/Iru Cloud) holds fleet data</td>
+<td>Local-first: location/data <strong>never leave your infrastructure</strong></td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/README.md">README.md</a></td>
+</tr>
+<tr>
+<td>MDM-agnostic / multi-UEM</td>
+<td>Apple-centric (2026: expanding to Win/Android via Iru)</td>
+<td>Correlates a mixed fleet (Applivery + Intune + Jamf + Fleet + generic UEM) in one risk map</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/MULTI_UEM.md">integrations/MULTI_UEM.md</a></td>
+</tr>
+<tr>
+<td>Native adapter today</td>
+<td>— (no LucidFence Kandji adapter in registry)</td>
+<td>Reach Kandji via <strong>GENERIC_HTTP</strong> bring-your-own-UEM connector</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/adapters/GENERIC_HTTP.md">adapters/GENERIC_HTTP.md</a></td>
+</tr>
+<tr>
+<td>Remote actions (lock/wipe/message/restart)</td>
+<td>Native via Kandji automations</td>
+<td>Through LucidFence *native* adapters (Intune/Jamf/Fleet/Applivery). Kandji integration today is <strong>location-ingestion only</strong> via GENERIC_HTTP — no action adapter pushes back into Kandji yet (honest gap)</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/adapters/GENERIC_HTTP.md">adapters/GENERIC_HTTP.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/ENFORCEMENT.md">operations/ENFORCEMENT.md</a></td>
+</tr>
+<tr>
+<td>Apple DDM declarative</td>
+<td>First-class Apple DDM</td>
+<td>Generates Apple DDM declarations; <strong>DDM does not geolocate</strong></td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/apple_ddm.md">operations/apple_ddm.md</a></td>
+</tr>
+<tr>
+<td>On-device (iOS) &amp; logical (network) geo options</td>
+<td>Not a geofencing location source</td>
+<td>iOS on-device CoreLocation (privacy) + network/osquery logical geo</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/IOS_ONDEVICE.md">integrations/IOS_ONDEVICE.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/NETWORK_LOCATION.md">integrations/NETWORK_LOCATION.md</a></td>
+</tr>
+<tr>
+<td>Safe rollout (observe→enforce, double-key wipe)</td>
+<td>Via Kandji automations/policies</td>
+<td><code>observe</code> default, action gating, <code>wipe</code> needs double key (opt-in + allowlist)</td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/ENFORCEMENT.md">operations/ENFORCEMENT.md</a></td>
+</tr>
+<tr>
+<td>Deployment / licensing</td>
+<td>Commercial SaaS/self-host (subscription)</td>
+<td>Self-hosted, Apache-2.0, <strong>no telemetry, no accounts, free</strong></td>
+<td><a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>, <a href="https://github.com/adrimg3196/lucidfence/blob/main/README.md">README.md</a></td>
+</tr>
+</tbody></table>
+<h2>Where Kandji clearly wins</h2>
+<p>We are explicit about this — it is what makes the comparison citable rather than marketing:</p>
+<ul><li><strong>Apple device management depth.</strong> Enrollment, inventory, configuration</li></ul>
+<p>  profiles, and DDM for macOS/iOS are Kandji&#x27;s home turf — LucidFence consumes   that posture, it does not replace it.</p>
+<ul><li><strong>Auto-remediation &amp; smart templates.</strong> Kandji&#x27;s templated automations reduce</li></ul>
+<p>  macOS/iOS toil out of the box; LucidFence does not attempt device lifecycle   management.</p>
+<ul><li><strong>Mature, vendor-supported UEM.</strong> Full Apple device lifecycle, app</li></ul>
+<p>  distribution, patch/OS update management, SLAs, and a large admin community —   far beyond a focused geofence/risk plane.</p>
+<ul><li><strong>Expanding platform (2026).</strong> The &quot;Iru&quot; rebrand opens Windows/Android MDM,</li></ul>
+<p>  broadening the fleet Kandji can natively cover.</p>
+<p><strong>Use both:</strong> Kandji as your Apple UEM; LucidFence ingests Kandji device location via the GENERIC_HTTP connector for local-first geofence risk and explainable scoring. LucidFence&#x27;s own remote actions (lock/wipe/message) run through its native adapters on the devices it manages — not by pushing back into Kandji (no Kandji action adapter yet). See <a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/MULTI_UEM.md">MULTI_UEM.md</a>.</p>
+<h2>Where LucidFence is a different bet</h2>
+<ul><li><strong>Local-first sovereignty.</strong> Your fleet&#x27;s location and data never leave your</li></ul>
+<p>  infrastructure; no vendor cloud, no telemetry. Kandji&#x27;s data lives in   Kandji/Iru Cloud by design (<a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>).</p>
+<ul><li><strong>Explainable risk, not a black box.</strong> Every device gets a 0–100 score *with</li></ul>
+<p>  the reason*; Kandji does not provide a risk score with rationale   (<a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>).</p>
+<ul><li><strong>MDM-agnostic.</strong> One risk plane across a mixed fleet (Applivery + Intune +</li></ul>
+<p>  Jamf + Fleet + Kandji) instead of per-vendor silos   (<a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/MULTI_UEM.md">MULTI_UEM.md</a>).</p>
+<ul><li><strong>The layer Kandji lacks: geofencing as risk.</strong> Kandji gives you *Lost Mode*</li></ul>
+<p>  for recovery; LucidFence adds continuous geofence risk <strong>on top</strong> of Kandji —   exactly the &quot;geofencing layer over your UEM&quot; positioning   (<a href="https://github.com/adrimg3196/lucidfence/blob/main/README.en.md">README.en.md</a>).</p>
+<h2>The moat (honest)</h2>
+<table><thead><tr>
+<th></th>
+<th>Native UEM (Kandji)</th>
+<th>LucidFence</th>
+</tr></thead><tbody>
+<tr>
+<td>Geofencing</td>
+<td>❌ (Lost Mode only)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>Explainable risk</strong> (0–100 + reason)</td>
+<td>❌ black box</td>
+<td>✅ score + <code>reasons</code></td>
+</tr>
+<tr>
+<td><strong>No location exfiltration</strong></td>
+<td>❌ (vendor cloud)</td>
+<td>✅ local-first</td>
+</tr>
+<tr>
+<td>MDM-agnostic</td>
+<td>❌ Apple-centric (expanding)</td>
+<td>✅ via adapters + GENERIC_HTTP</td>
+</tr>
+<tr>
+<td>Geofence as a first-class risk signal</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+</tbody></table>
+<h2>Deep links</h2>
+<ul><li>Bring-your-own UEM (Kandji): <a href="https://github.com/adrimg3196/lucidfence/blob/main/adapters/GENERIC_HTTP.md">adapters/GENERIC_HTTP.md</a></li><li>Location reality per UEM: <a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/LOCATION_MATRIX.md">integrations/LOCATION_MATRIX.md</a></li><li>Mixed fleet: <a href="https://github.com/adrimg3196/lucidfence/blob/main/integrations/MULTI_UEM.md">integrations/MULTI_UEM.md</a></li><li>Safe rollout: <a href="https://github.com/adrimg3196/lucidfence/blob/main/operations/ENFORCEMENT.md">operations/ENFORCEMENT.md</a></li><li>Other vendors: <a href="lucidfence-vs-intune.html">LucidFence vs Intune</a>, <a href="lucidfence-vs-jamf.html">LucidFence vs Jamf</a></li></ul>
+  </main>
+  <footer><div class="wrap">© 2026 LucidFence · <a href="https://adrimg3196.github.io/lucidfence/">Home</a> · <a href="https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-intune.html">vs Intune</a> · <a href="https://adrimg3196.github.io/lucidfence/comparisons/lucidfence-vs-jamf.html">vs Jamf</a></div></footer>
+</body>
+</html>

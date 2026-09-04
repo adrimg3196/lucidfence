@@ -23,6 +23,8 @@ import sys
 import urllib.request
 import urllib.error
 
+from lucidfence.core.agent_safety import authorize_tool_call, record_tool_trace
+
 BASE = os.environ.get("APPLIVERY_API_BASE", "https://api.applivery.io/v1").rstrip("/")
 TOKEN = os.environ.get("APPLIVERY_API_KEY", "")
 ORG = os.environ.get("APPLIVERY_ORG_ID", "")
@@ -108,6 +110,14 @@ def _next_link(link_header: str):
     return None
 
 
+def _format_content(payload: dict) -> dict:
+    return {"content": [{"type": "text", "text": json.dumps(payload, indent=2, ensure_ascii=False)}]}
+
+
+def _applivery_command_tool(command: str) -> str:
+    return f"device.{command}"
+
+
 # ---- MCP protocol -------------------------------------------------------
 def tools_list():
     return {
@@ -138,9 +148,34 @@ def tool_call(name: str, args: dict) -> dict:
         res = _req("GET", f"/orgs/{org}/devices/{args.get('device_id')}", tk)
         return {"content": [{"type": "text", "text": json.dumps(res, indent=2, ensure_ascii=False)}]}
     if name == "applivery_send_command":
-        res = _req("POST", f"/orgs/{org}/devices/{args.get('device_id')}/commands",
-                   tk, {"command": args.get("command"), "params": args.get("params", {})})
-        return {"content": [{"type": "text", "text": json.dumps(res, indent=2, ensure_ascii=False)}]}
+        command = str(args.get("command") or "")
+        safety_params = {
+            "org_id": org,
+            "device_id": args.get("device_id"),
+            "command": command,
+            "api_key": tk,
+            "params": args.get("params", {}),
+        }
+        decision = authorize_tool_call(
+            "model",
+            _applivery_command_tool(command),
+            safety_params,
+            actor="applivery_mcp",
+            executor=lambda: _req(
+                "POST",
+                f"/orgs/{org}/devices/{args.get('device_id')}/commands",
+                tk,
+                {"command": command, "params": args.get("params", {})},
+            ),
+        )
+        trace = record_tool_trace(decision)
+        if not decision["allowed"]:
+            return _format_content({"ok": False, "error": decision["reason"], "safety_trace": trace})
+        result = decision.get("result") or {}
+        if isinstance(result, dict):
+            result["safety_trace"] = trace
+            return _format_content(result)
+        return _format_content({"ok": True, "result": result, "safety_trace": trace})
     return {"content": [{"type": "text", "text": json.dumps({"error": "unknown tool"})}]}
 
 

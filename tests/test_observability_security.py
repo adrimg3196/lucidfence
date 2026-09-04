@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import http.client
+import os
 
 
 def _get(path):
-    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=5)
+    connection = http.client.HTTPConnection(
+        "127.0.0.1", int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765")), timeout=5
+    )
     connection.request("GET", path)
     response = connection.getresponse()
     body = response.read()

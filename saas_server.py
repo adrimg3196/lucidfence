@@ -29,6 +29,8 @@ Routes (product, require session + capability + scoped to active org):
   GET  /api/fences           -> fence IDs only (geometry comes from /api/status.st.fences)
   GET  /api/risk
   GET  /api/coverage         -> informe de puntos ciegos (cobertura en negativo)
+  GET  /api/fleet/federated  -> flota federada multi-UEM (+ ?provider=)
+  GET  /api/least-privilege  -> auditoría de privilegios de las credenciales UEM
   GET  /api/incidents
   GET  /api/policies
   GET  /api/analytics
@@ -54,6 +56,7 @@ import threading
 import time
 from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from typing import Any, Optional
@@ -331,6 +334,13 @@ def _masked_provider(p: dict) -> dict:
     # ChromeOS guardan client_secret/refresh_token). `segment` (la etiqueta de
     # flota: móviles/portátiles/…) no es secreto y se conserva para la UI.
     out = {k: v for k, v in p.items() if k not in _PROVIDER_SECRET_KEYS}
+    # `scopes` NO es secreto (son permisos declarados, no credenciales), pero
+    # sale aparte: el veredicto del auditor de mínimo privilegio está tras
+    # `engine:config` porque dice en voz alta qué tokens pueden wipear — y de
+    # los nombres de scope ese veredicto se deriva trivialmente. Dejarlos en
+    # este GET (sin cap propia) convertiría ese gating en teatro. Se sirven en
+    # GET /api/least-privilege, con su cap.
+    out.pop("scopes", None)
     out["configured"] = bool(p.get("secret") or p.get("api_key")
                              or p.get("api_token") or p.get("password")
                              or p.get("client_secret") or p.get("refresh_token")
@@ -1052,14 +1062,19 @@ def _send_html(handler, html_text: str):
 
 
 def _summary(devices: list[dict]) -> dict:
+    from lucidfence.core.risk_levels import count_high_risk
+
     total = len(devices)
     compliant = sum(1 for d in devices if d.get("compliant") is True)
     noncompliant = sum(1 for d in devices if d.get("compliant") is False)
     outside = sum(1 for d in devices if d.get("fence_state") == "outside")
-    high_risk = sum(1 for d in devices if (float(d.get("risk_score") or 0)) >= 70)
+    # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo
+    # (anti falso-verde #302 / t_0de7c223).
+    high_risk = count_high_risk(devices, 70)
+    unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
     return {
         "total": total, "compliant": compliant, "noncompliant": noncompliant,
-        "outside": outside, "high_risk": high_risk,
+        "outside": outside, "high_risk": high_risk, "unknown_risk": unknown_risk,
     }
 
 
@@ -1238,6 +1253,72 @@ def _api_second_opinion(ctx: routing.Ctx):
     return second_opinion_report(devices, stale_claim_after_s=stale_after_s)
 
 
+@api_route("GET", "/api/fleet/federated", cap="device:read")
+def _api_fleet_federated(ctx: routing.Ctx):
+    """Panel único multi-UEM (backlog §12): la flota de TODOS los providers del
+    tenant en una sola lista, con el origen trazado (provider + segmento) y el
+    MISMO veredicto de riesgo explicable para todos.
+
+    Solo lectura sobre estado ya existente: el riesgo es el veredicto que el
+    engine ya produce por dispositivo (la misma vía que /api/risk), nunca un
+    recálculo del panel. Un campo que el UEM no reportó llega como null — jamás
+    se inventa ni penaliza (ver core/federated_fleet.py). Mismo gating que
+    /api/coverage."""
+    from lucidfence.core.federated_fleet import (build_federated_fleet,
+                                                 valid_provider_filter)
+    from lucidfence.core.product import _risk_from_engine
+    # ?provider= filtra por UEM de origen. Un filtro que no puede ser un nombre
+    # de provider -> 400, no silencio: un filtro ignorado devolvería una lista
+    # que miente.
+    provider = (ctx.qs.get("provider") or [None])[0]
+    if provider is not None and not valid_provider_filter(provider):
+        return {"error": "provider inválido (nombre de UEM: minúsculas/dígitos/_)"}, 400
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    risk_rows = _risk_from_engine(ctx.eng, devices, int(getattr(ctx.eng, "interval", 900) or 900))
+    # Del registro del tenant solo viajan nombre + segmento (jamás credenciales).
+    providers = [{"name": p.get("name"), "segment": p.get("segment")}
+                 for p in _list_providers(_tenants.data_dir(ctx.org))]
+    return build_federated_fleet(devices, risk_rows, providers, provider=provider)
+
+
+@api_route("GET", "/api/device-attestation", cap="device:read")
+def _api_device_attestation(ctx: routing.Ctx):
+    """Sobre neutral de atestación Apple/Android/Windows.
+
+    Solo lectura sobre DeviceState persistido: no consulta UEMs, no expone
+    payloads brutos y conserva unknown como unknown (ver core/device_attestation.py).
+    """
+    from lucidfence.core.device_attestation import attestation_report
+    devices = [st.to_dict() for st in ctx.eng.store.snapshot().values()]
+    return attestation_report(devices)
+
+
+@api_route("GET", "/api/least-privilege", cap="engine:config")
+def _api_least_privilege(ctx: routing.Ctx):
+    """Auditor de mínimo privilegio de las credenciales UEM (backlog §16): qué
+    puede el token de cada adapter conectado frente a lo que el modo de
+    enforcement actual necesita (ver core/least_privilege.py).
+
+    Gating `engine:config` (más estricto que /api/coverage) a propósito: el
+    informe dice en voz alta qué credenciales del tenant pueden wipear, y quien
+    puede recortar el token es exactamente quien tiene esta capability.
+
+    Del registro del tenant solo viajan nombre, scopes declarados y si hay
+    credencial: la credencial NUNCA sale de disco."""
+    from lucidfence.core.least_privilege import least_privilege_report
+    from lucidfence.saas.providers import PROVIDER_CATALOG
+    rows = []
+    for p in _list_providers(_tenants.data_dir(ctx.org)):
+        name = p.get("name")
+        rows.append({
+            "name": name,
+            "scopes": p.get("scopes"),
+            "configured": _masked_provider(p).get("configured"),
+            "min_permission": (PROVIDER_CATALOG.get(name) or {}).get("min_permission") or None,
+        })
+    return least_privilege_report(rows, ctx.eng.enforcement_status())
+
+
 @api_route("GET", "/api/risk", cap="device:read")
 def _api_risk(ctx: routing.Ctx):
     product = _product_bundle(ctx.eng)
@@ -1293,6 +1374,19 @@ def _api_incidents_analytics(ctx: routing.Ctx):
 @api_route("GET", "/api/fences", cap="fence:read")
 def _api_fences_list(ctx: routing.Ctx):
     return {"fences": ctx.eng.status().get("fences", [])}
+
+
+class LucidFenceHTTPServer(ThreadingHTTPServer):
+    """HTTP server whose local bind never depends on reverse DNS."""
+
+    def server_bind(self) -> None:
+        # http.server.HTTPServer.server_bind calls socket.getfqdn(host). On
+        # macOS that reverse lookup can block indefinitely even for 127.0.0.1.
+        # TCPServer performs the real socket bind without any DNS dependency.
+        TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -2268,6 +2362,14 @@ class Handler(BaseHTTPRequestHandler):
             }
             if segment:
                 provider["segment"] = segment
+            # Scopes que el operador declara para este token (backlog §16). No
+            # son secreto — son permisos, no credenciales — y sin ellos el
+            # auditor de mínimo privilegio no tiene nada que auditar (y lo dice
+            # así, en vez de dar el token por correcto).
+            from lucidfence.core.least_privilege import normalize_declared_scopes
+            declared_scopes = normalize_declared_scopes(body.get("scopes"))
+            if declared_scopes:
+                provider["scopes"] = declared_scopes
             # Persist any extra OAuth/connection fields (tenant_id, client_id,
             # client_secret, refresh_token) so the connector is functional.
             for extra in ("tenant_id", "client_id", "client_secret", "refresh_token",
@@ -2997,7 +3099,7 @@ def main():
         if not _cluster_lease.acquire():
             raise RuntimeError("standby: another LucidFence node holds the writer lease")
         print(f"  cluster=active-passive leader={_cluster_lease.node_id}")
-    httpd = ThreadingHTTPServer((host, port), Handler)
+    httpd = LucidFenceHTTPServer((host, port), Handler)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

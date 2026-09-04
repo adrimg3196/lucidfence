@@ -210,13 +210,14 @@ def check_provenance_release() -> tuple[bool, str]:
     artifact = os.path.join(FIXTURE_DIR, "lucidfence-1.6.0.tar.gz")
     sbom = os.path.join(FIXTURE_DIR, "sbom.cdx.json")
     dsse = os.path.join(FIXTURE_DIR, "provenance.dsse.json")
-    missing = [p for p in (artifact, sbom, dsse) if not os.path.exists(p)]
+    key = os.path.join(FIXTURE_DIR, "release_signing_demo.pub")
+    missing = [p for p in (artifact, sbom, dsse, key) if not os.path.exists(p)]
     if missing:
         return False, "fixture ausente: " + ", ".join(os.path.relpath(p, ROOT) for p in missing)
     # Invoke the standalone verifier; it returns JSON on stdout.
     rc, out = _run([sys.executable, "scripts/verify_provenance.py",
                     "--artifact", artifact, "--sbom", sbom, "--dsse", dsse,
-                    "--repo", ROOT, "--json"])
+                    "--repo", ROOT, "--key", key, "--json"])
     # The verifier prints the per-check JSON then a final JSON verdict line.
     # Parse the last JSON object on stdout (the verdict dict).
     verdict = None

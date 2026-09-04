@@ -165,9 +165,10 @@ def main():
 
     # --- Authorization gate (SEC t_1ff47164): HMAC signature + RBAC by ACTION ---
     # Fail-closed: sin firma válida O sin el scope requerido por la ACTION,
-    # NO se ejecuta ninguna mutación. Se devuelve sin salir del proceso para
-    # que el llamador (test o workflow) pueda inspeccionar el estado intacto;
-    # el mensaje ACCESS DENIED queda en stdout/stderr como señal de rechazo.
+    # NO se ejecuta ninguna mutación. En serverless, la observabilidad depende
+    # del exit code: un `return` dejaba exit 0 (falso éxito / fail-open en
+    # dashboards y reintentos). Por eso se sale con sys.exit(2) en denegación,
+    # NUNCA con exit 0. El mensaje ACCESS DENIED queda en stderr como señal.
     signature = os.environ.get(SIGNATURE_ENV, "")
     role = os.environ.get(ROLE_ENV, "")
     if not authorize(action, raw, role, signature):
@@ -176,7 +177,7 @@ def main():
             f"la acción '{action}'. No se ejecuta ninguna mutación."
         )
         print(msg, file=sys.stderr)
-        return
+        sys.exit(2)
 
     if action == "create_tenant":
         create_tenant(tid, payload)

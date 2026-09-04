@@ -25,6 +25,7 @@ from lucidfence.core.app_paths import ensure_data_dir  # noqa: E402
 VERSION = "1.6.0"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+STARTUP_TIMEOUT_SECONDS = 15.0
 
 
 def _host(value: Optional[str] = None) -> str:
@@ -172,7 +173,13 @@ def cmd_serve(args) -> int:
 def cmd_start(args) -> int:
     host, port = _host(args.host), _port(args.port)
     url = _url(host, port)
-    if _healthy(host, port):
+    deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
+
+    def healthy_before_deadline() -> bool:
+        remaining = deadline - time.monotonic()
+        return remaining > 0 and _healthy(host, port, timeout=min(0.8, remaining))
+
+    if healthy_before_deadline():
         print(f"LucidFence ya está activo: {url}")
         if args.open_browser:
             webbrowser.open(url)
@@ -193,8 +200,8 @@ def cmd_start(args) -> int:
     log_handle.close()
     _write_pid_record(process, host, port)
 
-    for _ in range(60):
-        if _healthy(host, port):
+    while time.monotonic() < deadline:
+        if healthy_before_deadline():
             print(f"LucidFence iniciado: {url}")
             print(f"Datos: {runtime}")
             print(f"Log: {log_path}")
@@ -203,7 +210,9 @@ def cmd_start(args) -> int:
             return 0
         if process.poll() is not None:
             break
-        time.sleep(0.25)
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(0.25, remaining))
 
     print(f"ERROR: LucidFence no arrancó. Revisa {log_path}", file=sys.stderr)
     _rollback_start(process)

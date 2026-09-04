@@ -51,6 +51,10 @@ raíz es la puerta de entrada para usuarios; aquí vive todo lo demás.
 | [`operations/RBAC.md`](operations/RBAC.md) | Roles, permisos y cómo asignarlos desde el dashboard |
 | [`operations/coverage.md`](operations/coverage.md) | Informe de puntos ciegos: qué NO cubre tu configuración |
 | [`operations/second_opinion.md`](operations/second_opinion.md) | Segunda opinión: lo que el UEM afirma vs lo que se observa, con evidencia de ambos lados |
+| [`operations/least_privilege.md`](operations/least_privilege.md) | Auditor de mínimo privilegio: qué puede de verdad el token de cada UEM conectado |
+| [`operations/ocsf_events.md`](operations/ocsf_events.md) | Eventos OCSF: los incidentes hacia el SIEM que ya tienes, sin parser a medida |
+| [`operations/federated_fleet.md`](operations/federated_fleet.md) | Flota federada multi-UEM: un panel, N consolas, el mismo veredicto de riesgo |
+| [`references/device-attestation.md`](references/device-attestation.md) | Sobre neutral de atestación Apple, Android y Windows: claims, vigencia, firma y procedencia |
 | [`operations/config_as_code.md`](operations/config_as_code.md) | Políticas y geocercas como código: `lucidfence apply` (valida, diff, what-if) |
 | [`operations/apple_ddm.md`](operations/apple_ddm.md) | Apple DDM: enforcement declarativo de geocercas |
 | [`operations/windows_dsc.md`](operations/windows_dsc.md) | Windows PowerShell DSC: matriz de soporte y despliegue |
@@ -64,6 +68,7 @@ Páginas capability-by-capability, citando doc interna, para quien busca
 | --- | --- |
 | [`comparisons/lucidfence-vs-intune.md`](comparisons/lucidfence-vs-intune.md) | LucidFence vs Microsoft Intune (capacidad por capacidad, claims co-firmados CTO) |
 | [`comparisons/lucidfence-vs-jamf.md`](comparisons/lucidfence-vs-jamf.md) | LucidFence vs Jamf Pro (capacidad por capacidad, claims co-firmados CTO) |
+| [`comparisons/lucidfence-vs-kandji.md`](comparisons/lucidfence-vs-kandji.md) | LucidFence vs Kandji / Iru (capacidad por capacidad; entry-point "Kandji geofencing") |
 
 ## Integraciones
 

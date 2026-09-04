@@ -49,9 +49,13 @@ jobs:
 
       - name: Resolver versión
         id: ver
+        env:
+          # El input entra por env: interpolado con ${{ }} en el shell, un
+          # valor como '"; comando' se ejecutaria ANTES de la validacion.
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            v="${{ inputs.version }}"
+            v="$INPUT_VERSION"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             v="${GITHUB_REF_NAME#v}"
           else
@@ -81,6 +85,13 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Mover [Unreleased] -> [version] en el CHANGELOG ANTES de leerlo, para
+      # que la release nunca caiga en el fallback "Release vX.Y.Z" vacío (visto
+      # en v1.5.0). El script es idempotente: si la sección ya existe, no toca.
+      - name: Mover [Unreleased] -> [version] en CHANGELOG
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 scripts/move_changelog_unreleased.py --version "${{ steps.ver.outputs.version }}"
+
       - name: Leer changelog
         if: steps.guard.outputs.skip == 'false'
         id: changelog
@@ -94,15 +105,78 @@ jobs:
             found && /^## \[/ { found=0 }
             found { print }
           ' CHANGELOG.md)
+          # El paso "Mover [Unreleased] -> [version]" garantiza que la sección
+          # existe; si no la hay, es un fallo de automatización, no un fallback
+          # silencioso. Antes esto producía el body vacío "Release vX.Y.Z".
           if [ -z "$section" ]; then
-            echo "warning: no se encontró sección en CHANGELOG.md para v$tag"
-            section="Release v$tag"
+            if grep -qF "## [$tag]" CHANGELOG.md; then
+              echo "::error::La sección [${tag}] existe pero está VACÍA:" \
+                   "[Unreleased] no tenía contenido al cortar la release." \
+                   "Apunta los cambios al CHANGELOG antes de re-tagear."
+            else
+              echo "::error::No hay sección [${tag}] en CHANGELOG.md ni" \
+                   "[Unreleased] que mover. ¿Se corrió move_changelog_unreleased?"
+            fi
+            exit 1
           fi
           {
             echo "section<<EOF"
             echo "$section"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
+
+      # El move de arriba solo vive en el workspace del runner. Sin este paso,
+      # main nunca gana la sección [version]: la siguiente release renombraría
+      # un [Unreleased] que aún arrastra los bullets de ESTA y re-publicaría
+      # sus notas. Se persiste por el raíl normal (rama claude/** -> agent-pr
+      # abre la PR -> automerge en verde), no con push directo a main, para no
+      # saltarse el ruleset ni el CI. Corre DESPUÉS de "Leer changelog": así una
+      # sección vacía muere en la validación antes de publicar nada (Codex #295).
+      # Si el push falla, la release DEBE fallar: seguir en silencio recrearía
+      # la deriva que este paso existe para evitar.
+      - name: Persistir CHANGELOG movido (rama claude/ -> PR -> automerge)
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          # PAT y no GITHUB_TOKEN: GitHub SUPRIME los workflows disparados por
+          # pushes hechos con el token del job, así que con GITHUB_TOKEN
+          # agent-pr nunca abriría la PR y la rama quedaría huérfana — el mismo
+          # drift con otra cara (Codex P1 en #295). Mismo secret que usan
+          # agent-pr/agent-automerge.
+          AGENTS_PAT: ${{ secrets.AGENTS_GITHUB_PAT }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG sin cambios (la sección [${VERSION}] ya estaba commiteada)"
+            exit 0
+          fi
+          if [ -z "$AGENTS_PAT" ]; then
+            echo "::error::AGENTS_GITHUB_PAT no configurado. Con GITHUB_TOKEN el" \
+                 "push no dispara agent-pr (GitHub suprime workflows de pushes" \
+                 "con ese token): la rama quedaría huérfana sin PR y main sin" \
+                 "la sección [${VERSION}]."
+            exit 1
+          fi
+          git config user.name "lucidfence-release[bot]"
+          git config user.email "release@lucidfence.local"
+          git checkout -B "claude/changelog-v${VERSION}"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): mover [Unreleased] a [${VERSION}] (corte de release)"
+          for espera in 2 4 8 0; do
+            git push --force-with-lease \
+              "https://x-access-token:${AGENTS_PAT}@github.com/${GITHUB_REPOSITORY}.git" \
+              "claude/changelog-v${VERSION}" && exit 0
+            [ "$espera" -eq 0 ] && break
+            sleep "$espera"
+          done
+          echo "::error::no se pudo pushear claude/changelog-v${VERSION};" \
+               "sin esto main queda sin la sección [${VERSION}] y la próxima" \
+               "release re-publicaría estas notas"
+          exit 1
+
+      - name: Volver al commit exacto de release
+        if: steps.guard.outputs.skip == 'false'
+        run: git checkout --detach "${{ github.sha }}"
 
       - name: Construir tarball versionado
         if: steps.guard.outputs.skip == 'false'
@@ -111,6 +185,36 @@ jobs:
           LUCIDFENCE_BUILD_VERSION="$VERSION" bash scripts/build.sh
           cd dist
           sha256sum "lucidfence-$VERSION.tar.gz" | tee SHA256SUMS
+
+      - name: Instalar dependencias de firma offline
+        if: steps.guard.outputs.skip == 'false'
+        run: python3 -m pip install --require-hashes -r requirements.lock
+
+      - name: Generar SBOM y procedencia offline
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          python3 scripts/generate_sbom.py --out dist/sbom.cdx.json
+          openssl genpkey -algorithm Ed25519 -out dist/release_signing.key
+          openssl pkey -in dist/release_signing.key -pubout -out dist/release_signing.pub
+          python3 scripts/provenance_attest.py \
+            --artifact "dist/lucidfence-$VERSION.tar.gz" \
+            --sbom dist/sbom.cdx.json \
+            --key dist/release_signing.key \
+            --out dist/provenance.dsse.json \
+            --repo "$GITHUB_WORKSPACE"
+
+      - name: Release preflight con artefacto, SBOM y procedencia
+        if: steps.guard.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          python3 scripts/release_preflight.py \
+            --repo "$GITHUB_WORKSPACE" \
+            --artifact "dist/lucidfence-$VERSION.tar.gz" \
+            --sbom dist/sbom.cdx.json \
+            --dsse dist/provenance.dsse.json \
+            --key dist/release_signing.pub \
+            --json
 
       - name: Smoke del artefacto (el tarball arranca de verdad)
         if: steps.guard.outputs.skip == 'false'
@@ -139,4 +243,7 @@ jobs:
           files: |
             dist/lucidfence-*.tar.gz
             dist/SHA256SUMS
+            dist/sbom.cdx.json
+            dist/provenance.dsse.json
+            dist/release_signing.pub
           fail_on_unmatched_files: true

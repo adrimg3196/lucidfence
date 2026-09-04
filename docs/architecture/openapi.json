@@ -35,6 +35,112 @@
           }
         }
       },
+      "AttestationClaim": {
+        "type": "object",
+        "required": [
+          "status",
+          "value",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "asserted",
+              "unknown"
+            ]
+          },
+          "value": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "AttestationEnvelope": {
+        "type": "object",
+        "required": [
+          "source",
+          "subject",
+          "claims",
+          "observed_at",
+          "signature_status",
+          "raw_hash",
+          "explanation"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "apple",
+              "android",
+              "windows"
+            ]
+          },
+          "subject": {
+            "type": "string"
+          },
+          "claims": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AttestationClaim"
+            }
+          },
+          "issued_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "nonce": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signature_status": {
+            "enum": [
+              "verified",
+              "unverified",
+              "invalid",
+              "unknown"
+            ]
+          },
+          "raw_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "model_version": {
+            "type": "string"
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "properties": {
@@ -229,6 +335,43 @@
         "responses": {
           "200": {
             "description": "Coverage report"
+          }
+        }
+      }
+    },
+    "/device-attestation": {
+      "get": {
+        "summary": "Neutral Apple, Android and Windows device attestation envelopes",
+        "responses": {
+          "200": {
+            "description": "Read-only tenant attestation report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model_version": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "attestations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AttestationEnvelope"
+                      }
+                    },
+                    "explanation": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "RBAC denied"
           }
         }
       }

@@ -21,7 +21,17 @@ from lucidfence.core.declarative import (  # noqa: E402
 )
 
 
-_UNUSABLE_IDENTITIES = {"NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "0"}
+# Placeholders que un UEM devuelve cuando NO conoce el serial/IMEI. Si se
+# usaran como clave de correlación, dos dispositivos distintos con el mismo
+# placeholder se fusionarían en uno (compliance y ubicación mezcladas).
+# Formas ya normalizadas (alfanumérico en mayúsculas): "To Be Filled By O.E.M."
+# -> TOBEFILLEDBYOEM, "System Serial Number" -> SYSTEMSERIALNUMBER, etc.
+_UNUSABLE_IDENTITIES = {
+    "NA", "NONE", "NULL", "UNKNOWN", "UNAVAILABLE", "UNDEFINED", "NIL", "EMPTY",
+    "INVALID", "NOTSPECIFIED", "NOTAVAILABLE", "NOTAPPLICABLE",
+    "TOBEFILLEDBYOEM", "SYSTEMSERIALNUMBER", "DEFAULTSTRING", "SERIALNUMBER",
+    "CHASSISSERIALNUMBER", "BASEBOARDSERIALNUMBER", "OEM", "XXXXXXXXXXXX",
+}
 _SAFE_NAME = re.compile(r"[a-z][a-z0-9_]*")
 _MAX_SAFE_NAME_LENGTH = 64
 _MAX_REMOTE_ID_LENGTH = 512
@@ -52,6 +62,9 @@ def normalize_identity(value: object | None) -> str | None:
         return None
     normalized = "".join(character for character in text if character.isalnum()).upper()
     if not normalized or normalized in _UNUSABLE_IDENTITIES:
+        return None
+    if set(normalized) <= {"0"}:
+        # "0", "00000000", el IMEI 000000000000000: relleno, no identidad.
         return None
     return normalized
 
@@ -152,6 +165,7 @@ class NormalizedDevice:
     # longer falls through to imperative for every device.
     management_mode: str | None = None
     ownership: str | None = None
+    attestation: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -486,19 +500,6 @@ class MultiUEMOrchestrator:
         )
         return device
 
-    def _merge_declarative(self, members: list[NormalizedDevice], merged: NormalizedDevice):
-        """Carry management_mode/ownership across consolidated members.
-
-        Same "first non-null wins" rule as inventory: a device reported by two
-        UEMs keeps the first declarative signal it saw. None is never inferred,
-        so if no provider contributed a mode the field stays None.
-        """
-        for item in members:
-            if merged.management_mode is None and item.management_mode is not None:
-                merged.management_mode = item.management_mode
-            if merged.ownership is None and item.ownership is not None:
-                merged.ownership = item.ownership
-
     def _merge(self, members: list[NormalizedDevice], now: datetime) -> NormalizedDevice:
         members = sorted(members, key=lambda item: (item.provider, item.provider_device_id))
         merged = deepcopy(members[0])
@@ -588,6 +589,7 @@ class MultiUEMOrchestrator:
                     imei=device.imei,
                     management_mode=device.management_mode,
                     ownership=device.ownership,
+                    attestation=deepcopy(device.attestation),
                     raw={
                         "provider": device.provider,
                         "provider_device_id": device.provider_device_id,

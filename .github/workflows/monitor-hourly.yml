@@ -2,16 +2,14 @@ name: monitor-hourly
 
 # Capa 1 — Vigilia: detecta problemas de producto sin esperar a que
 # alguien pregunte. Cada hora verifica:
-#   1. Vitrina pública reachability
-#   2. Estructura mínima de cloud_state.json
-#   3. Tests pasando (runner honesto)
-#   4. Regresiones recientes en CI (últimos 3 días)
+#   1. Vitrina pública reachability + esquema (FUENTE ÚNICA: scripts/check_vitrina.py)
+#   2. Tests pasando (runner honesto) con QUARANTINE de tests conocidos-flaky
+#   3. Regresiones recientes en CI (últimos 3 días)
 #
-# Si detecta un problema, crea un issue con label e información de
-# diagnóstico. No intenta arreglar nada — solo hace visible lo roto.
-#
-# Reutiliza scripts/health_monitor.py para los checks, y añade
-# detección de regresiones de CI vía GitHub API.
+# Si detecta un problema de SALUD REAL (no en quarantine), crea un issue
+# kanban-style con label 'monitor-incident' y diagnóstico. No intenta arreglar
+# nada — solo hace visible lo roto, y ahora lo hace EN LA HORA (antes había que
+# esperar al reporte semanal). Ver t_9e6615ad para el contexto de resilience.
 
 on:
   schedule:
@@ -29,6 +27,9 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    # Red de seguridad holgada (incluye la cola de runners); el limite real
+    # contra cuelgues son los timeouts de PASO de abajo (patron de #293).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,13 +39,37 @@ jobs:
       - name: Instalar deps
         run: python -m pip install -r requirements.txt
 
-      - name: Verificar vitrina (URL + esquema, fuente única)
-        run: python3 scripts/check_vitrina.py
-
-      - name: Correr tests del repo (runner honesto)
+      - name: Verificar vitrina pública (FUENTE ÚNICA)
+        id: vitrina
+        timeout-minutes: 5
         run: |
-          python3 tests/run_tests.py
+          set -euo pipefail
+          if python3 scripts/check_vitrina.py; then
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=down" >> "$GITHUB_OUTPUT"
+            echo "vitrina_down=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Correr tests del repo (runner honesto) + clasificar fallos
+        id: tests
         timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          python3 tests/run_tests.py 2>&1 | tee /tmp/run_tests.out || true
+          # parse_test_failures separa real vs quarantined y hace exit 1 si hay
+          # algún fallo REAL (no en tests/QUARANTINE.txt).
+          if python3 scripts/parse_test_failures.py --quarantine tests/QUARANTINE.txt --input /tmp/run_tests.out > /tmp/failures.json; then
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+            cat /tmp/failures.json
+          fi
+          {
+            echo "failures<<EOF"
+            cat /tmp/failures.json
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Detectar regresiones de CI recientes
         env:
@@ -52,22 +77,53 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== Regresiones CI últimas 24h ==="
-          # Obtener los últimos éxitos/fallos del workflow de CI
           if gh api repos/adrimg3196/lucidfence/actions/workflows/11780454598/runs?per_page=10 --jq '.workflow_runs[] | {status: .status, conclusion: .conclusion, created: .created_at}' 2>/dev/null | head -20; then
             echo "OK: CI visible"
           else
             echo "::warning::No se pudo consultar CI reciente (puede ser primer ejecución)"
           fi
 
-      - name: Reportar incidentes detectados
-        if: env.vitrina_down == 'true'
+      - name: Reportar incidente de salud (auto-file)
+        if: env.vitrina_down == 'true' || steps.tests.outputs.status == 'fail'
         uses: actions/github-script@v7
+        env:
+          # Los outputs entran por env, no interpolados con ${{ }} dentro del JS:
+          # un nombre de test con backtick o ${ } acabaria ejecutandose como
+          # codigo dentro del template literal.
+          TESTS_STATUS: ${{ steps.tests.outputs.status }}
+          TESTS_FAILURES: ${{ steps.tests.outputs.failures }}
         with:
           script: |
             const today = new Date().toISOString().split('T')[0];
-            const title = `Vitrina pública caída — ${today}`;
-            const body = `## Incidente detectado automáticamente\n\n- **Cuándo:** ${new Date().toISOString()}\n- **Qué:** Vitrina pública (data/cloud_state.json) no reachable\n- **Impacto:** Dashboard y vitrina serverless caídos\n- **Acción sugerida:** Verificar que engine-cron esté corriendo y que el push de cloud_state.json esté llegando a main\n\nEste issue fue creado por el monitor hourly. No requiere respuesta inmediata salvo que persista > 2 horas.`;
-            // Verificar si ya existe un issue abierto para hoy
+            const vitrinaDown = process.env.vitrina_down === 'true';
+            const testFail = process.env.TESTS_STATUS === 'fail';
+            const failures = process.env.TESTS_FAILURES || '{}';
+            let title, body;
+            if (vitrinaDown && testFail) {
+              title = `Incidente de salud — vitrina caída + tests (${today})`;
+              body = `## Incidente detectado automáticamente (monitor-hourly)\n\n- **Cuándo:** ${new Date().toISOString()}\n- **Vitrina:** caída (cloud-state no reachable)\n- **Tests:** fallos reales detectados\n\n### Fallos de test (real vs quarantine)\n\`\`\`json\n${failures}\n\`\`\`\n\n- **Acción sugerida:** verificar engine-cron/cloud-state-deadman y revisar los fallos reales de tests.`;
+            } else if (vitrinaDown) {
+              title = `Vitrina pública caída — ${today}`;
+              body = `## Incidente detectado automáticamente (monitor-hourly)\n\n- **Cuándo:** ${new Date().toISOString()}\n- **Qué:** Vitrina pública (data/cloud_state.json en rama cloud-state) no reachable\n- **Impacto:** Dashboard y vitrina serverless caídos\n- **Acción sugerida:** Verificar que engine-cron esté corriendo y que el push de cloud_state.json esté llegando a cloud-state (ver workflow cloud-state-deadman).`;
+            } else {
+              title = `Tests rotos en main — ${today}`;
+              body = `## Incidente detectado automáticamente (monitor-hourly)\n\n- **Cuándo:** ${new Date().toISOString()}\n- **Qué:** El runner honesto de tests reportó fallos REALES (no en tests/QUARANTINE.txt)\n- **Impacto:** main tiene regresión de producto\n\n### Fallos de test (real vs quarantine)\n\`\`\`json\n${failures}\n\`\`\`\n\n- **Acción sugerida:** revisar los fallos reales y abrir el fix correspondiente. Los tests en QUARANTINE.txt se ignoran a propósito.`;
+            }
+            // Dedup con el dead-man: si la caida es SOLO de vitrina y ya hay
+            // un incidente cloud-state-deadman abierto, ese workflow es el
+            // dueño del sintoma (misma causa: cloud-state no publica). Dos
+            // issues por el mismo incidente es el ruido que intentamos apagar.
+            if (vitrinaDown && !testFail) {
+              const deadman = await github.rest.issues.listForRepo({
+                owner: context.repo.owner, repo: context.repo.repo,
+                state: 'open', labels: 'cloud-state-deadman', per_page: 5
+              });
+              if (deadman.data.length > 0) {
+                console.log(`cloud-state-deadman ya tiene el incidente abierto (#${deadman.data[0].number}) — no se duplica`);
+                return;
+              }
+            }
+            // Verificar si ya existe un issue abierto para hoy (idempotente).
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -75,15 +131,42 @@ jobs:
               labels: 'monitor-incident',
               per_page: 5
             });
-            const hasOpen = existing.data.some(i => i.title.includes('Vitrina pública caída'));
+            const hasOpen = existing.data.some(i => i.title.includes(title.split('—')[0].trim()));
             if (!hasOpen) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: title,
                 body: body,
-                labels: ['monitor-incident', 'triage']
+                labels: ['monitor-incident', 'triage', 'P1']
               });
             } else {
               console.log('Ya existe issue abierto para esta incidencia — no se duplica');
+            }
+
+      - name: Cerrar incidentes propios si todo volvió a verde
+        # Simétrico al autocierre del dead-man: un incidente que ya no existe
+        # no debe quedarse abierto acumulando polvo — eso también es ruido.
+        # Solo cierra los títulos que este workflow crea, nunca los de humanos.
+        if: env.vitrina_down != 'true' && steps.tests.outputs.status == 'ok'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const propios = ['Vitrina pública caída', 'Tests rotos en main',
+                             'Incidente de salud — vitrina caída + tests'];
+            const abiertos = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'monitor-incident', per_page: 20
+            });
+            for (const i of abiertos.data.filter(x => propios.some(p => x.title.startsWith(p)))) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: i.number,
+                body: `✅ monitor-hourly en verde (vitrina alcanzable, tests OK) a ${new Date().toISOString()}. Cierro el incidente.`
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: i.number, state: 'closed'
+              });
+              console.log(`Issue #${i.number} cerrado (salud recuperada).`);
             }

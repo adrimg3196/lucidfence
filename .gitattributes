@@ -48,6 +48,23 @@ artifact.tar              export-ignore
 .github/                 export-ignore
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Linguist: GitHub language stats (gap #5). El producto es Python 3.11; el JS
+# de la vitrina (static/app.js, i18n.js, web-*.js, manual.js, reicon*.js,
+# vendor/*) y los flujos de CI/Docker son vendored/tooling, no el lenguaje
+# principal. Marcar vendor + dashboard JS como vendored para que GitHub muestre
+# "Python" y no "JavaScript" (tarea t_4a5d2f29).
+static/vendor/*          linguist-vendored
+static/app.js            linguist-vendored
+static/i18n.js           linguist-vendored
+static/web-app.js        linguist-vendored
+static/web-core.js       linguist-vendored
+static/web-store.js      linguist-vendored
+static/web-worker.js     linguist-vendored
+static/manual.js         linguist-vendored
+static/reicon.js         linguist-vendored
+static/reicon-data.js    linguist-vendored
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Merge de fricción-cero para archivos generados / append-only (ver tarea
 # t_e207227e). Objetivo: cortar conflictos crónicos del merge train (#118).
 #

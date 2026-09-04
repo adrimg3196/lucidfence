@@ -154,38 +154,47 @@ class IncidentStore:
             by_sev[sev] = by_sev.get(sev, 0) + 1
         durations = []
         for r in resolved_rows:
-            tl = r.get("timeline") or []
-            opened = None
+            opened = _opened_ts(r)
             resolved_ts = None
-            for ev in tl:
-                if ev.get("to") == "open" and opened is None:
-                    opened = _parse_ts(ev.get("ts"))
+            for ev in r.get("timeline") or []:
                 if ev.get("to") == "resolved":
                     resolved_ts = _parse_ts(ev.get("ts"))
-            if opened and resolved_ts:
+            if opened is not None and resolved_ts is not None:
                 durations.append(max(0.0, resolved_ts - opened))
-        mttr = int(sum(durations) / len(durations)) if durations else 0
-        median = sorted(durations)[len(durations) // 2] if durations else 0
-        oldest = 0.0
+        # Sin datos -> None, nunca 0: un "MTTR 0s" en el panel es un falso
+        # verde (parece resolución instantánea cuando no hay nada que medir).
+        mttr = int(sum(durations) / len(durations)) if durations else None
+        median = int(sorted(durations)[len(durations) // 2]) if durations else None
+        oldest = None
         tnow = now()
         for r in open_rows:
-            tl = r.get("timeline") or []
-            opened = None
-            for ev in tl:
-                if ev.get("to") == "open" and opened is None:
-                    opened = _parse_ts(ev.get("ts"))
-                    break
-            if opened:
-                oldest = max(oldest, tnow - opened)
+            opened = _opened_ts(r)
+            if opened is not None:
+                age = tnow - opened
+                oldest = age if oldest is None else max(oldest, age)
         return {
             "open": len(open_rows),
             "resolved": len(resolved_rows),
             "total": len(rows),
             "by_severity": by_sev,
-            "mttr_seconds": int(mttr),
-            "mttr_median_seconds": int(median),
-            "oldest_open_seconds": int(oldest),
+            "mttr_seconds": mttr,
+            "mttr_median_seconds": median,
+            "oldest_open_seconds": int(oldest) if oldest is not None else None,
         }
+
+
+def _opened_ts(row: dict) -> Optional[float]:
+    """Instante de apertura de un incidente.
+
+    Los incidentes derivados nacen en ``merge()`` con timeline vacío (solo las
+    transiciones del operador añaden entradas), así que la primera entrada
+    ``to == "open"`` solo existe tras una reapertura. Sin ella, la apertura es
+    ``first_seen`` del sensor; si tampoco existe, no se sabe (None).
+    """
+    for ev in row.get("timeline") or []:
+        if ev.get("to") == "open":
+            return _parse_ts(ev.get("ts"))
+    return _parse_ts(row.get("first_seen"))
 
 
 def _parse_ts(value: Optional[str]) -> Optional[float]:

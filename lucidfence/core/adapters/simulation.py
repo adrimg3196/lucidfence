@@ -20,6 +20,30 @@ class SimulationAdapter(MDMAdapter):
 
     def execute(self, device: Any, action: str, params: dict, dry_run: bool = False) -> dict:
         cmd_id = f"sim-{uuid.uuid4().hex[:12]}"
+
+        # DDM actions in mock mode return the same shape Jamf would (issue #71)
+        # so the engine can read the declarative path without a real Jamf tenant.
+        if action in ("ddm_status", "ddm_sync"):
+            from lucidfence.core.ddm import build_mock_status_result, build_mock_sync_result
+
+            if action == "ddm_sync":
+                ddm_out = build_mock_sync_result()
+            else:
+                ddm_out = build_mock_status_result()
+            return {
+                "adapter": self.name,
+                "ok": True,
+                "command_id": cmd_id,
+                "device_id": self._dev_id(device),
+                "device_name": self._dev_name(device),
+                "action": action,
+                "params": params,
+                "dry_run": dry_run,
+                "mode": "mock",
+                **ddm_out,
+                "note": "Simulated DDM action (no real MDM contacted; issue #71).",
+            }
+
         return {
             "adapter": self.name,
             "ok": True,

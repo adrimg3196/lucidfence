@@ -26,9 +26,14 @@ on:
   pull_request:
     branches: [ main ]
 
+# Grupo POR PR y cancelacion solo en PRs: con un grupo global y
+# cancel-in-progress: ${{ github.event_name == 'pull_request' }}, un force-push dejaba el run viejo corriendo
+# contra una ref muerta (correo de fallo vacio) y dos PRs se encolaban entre
+# si. Los pushes a main conservan su propio grupo estable y serializado, que
+# es lo que el comentario de arriba necesita del self-fix.
 concurrency:
-  group: regen-adapter-index
-  cancel-in-progress: false
+  group: regen-adapter-index-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write

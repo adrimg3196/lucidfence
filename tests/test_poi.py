@@ -5,10 +5,11 @@ import json
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lucidfence.core.poi import POI, POIService
+from lucidfence.core.poi import POI, POIService, _safe_seed_path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -106,3 +107,29 @@ def test_poi_to_dict_roundtrip() -> None:
         "id": "d", "name": "Dict", "lat": 1.5, "lng": -2.5,
         "category": "cat", "tags": ["t"], "metadata": {"k": "v"},
     }
+
+
+def test_safe_seed_path_preserves_relative_subdirectories() -> None:
+    old_cwd = Path.cwd()
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+        try:
+            os.chdir(base)
+            assert _safe_seed_path("data/pois.json") == base.resolve() / "data" / "pois.json"
+        finally:
+            os.chdir(old_cwd)
+
+
+def test_safe_seed_path_rejects_relative_traversal() -> None:
+    old_cwd = Path.cwd()
+    with tempfile.TemporaryDirectory() as td:
+        try:
+            os.chdir(td)
+            try:
+                _safe_seed_path("../escape.json")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("relative POI seed path escaped the trusted base")
+        finally:
+            os.chdir(old_cwd)

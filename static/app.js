@@ -208,7 +208,7 @@ async function logout(){
   stopPolling();
   const su = $("#sideUser"); if(su) su.style.display="none";
   $("#orgName").textContent="";
-  ["overview","map","devices","riesgo","inventory","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","intelligence","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
+  ["overview","map","devices","riesgo","inventory","federated","ai","events","incidents","soar","actions","alerts","fences","routes","workflows","goals","intelligence","settings"].forEach(v=>{ const n=$("#view-"+v); if(n) n.innerHTML=""; });
   showAuthModal();
 }
 function startApp(){
@@ -228,6 +228,7 @@ const NAV = [
   {id:"map",        label:"Mapa",        icon:"map"},
   {id:"devices",    label:"Dispositivos",icon:"devices"},
   {id:"inventory",  label:"Inventario",  icon:"box"},
+  {id:"federated",  label:"Flota federada", icon:"sitemap-4"},
   {id:"connectors", label:"Conectores UEM", icon:"link"},
   {id:"riesgo",     label:"Riesgo",       icon:"shield-alert"},
   {id:"ai",         label:"AI opcional",  icon:"cpu"},
@@ -301,6 +302,7 @@ function goView(id){
   if(id==="map") renderMapView();
   if(id==="devices") renderDevices();
   if(id==="inventory") renderInventory();
+  if(id==="federated") renderFederated();
   if(id==="connectors") renderConnectors();
   if(id==="riesgo") renderRisk();
   if(id==="ai") renderAI();
@@ -349,6 +351,7 @@ async function refresh(initial){
     else if(App.view==="map") renderMapView();
     else if(App.view==="devices") renderDevices();
     else if(App.view==="inventory") renderInventory();
+    else if(App.view==="federated") renderFederated();
     else if(App.view==="connectors") renderConnectors();
     else if(App.view==="riesgo") renderRisk();
     else if(App.view==="events") renderEvents();
@@ -510,15 +513,21 @@ function normalizeRisk(r){
   let reasons = Array.isArray(r.reasons) ? r.reasons : [];
   if(!reasons.length && Array.isArray(r.factors)) reasons = r.factors.map(f=>f.label||f).filter(Boolean);
   if(!reasons.length && Array.isArray(r.signals)) reasons = r.signals.map(s=>s.label||s).filter(Boolean);
-  // verified: campo explícito, o deducido de "hay reasons => señal real"
+  // verified: campo explícito, o deducido de "hay reasons => señal real".
+  // NULL-SCORE SENTINEL: si el backend no pudo evaluar (score:null / level:"unknown")
+  // la fila es riesgo DESCONOCIDO y NO debe mostrarse como verificada ni verde.
+  const isUnknown = (r.score==null) || (r.level==="unknown") || (r.severity==="unknown");
   let verified = r.verified;
-  if(verified===undefined) verified = reasons.length>0;
+  if(verified===undefined) verified = (!isUnknown && reasons.length>0);
+  if(isUnknown) verified = false;
   const score = r.risk_score!=null ? r.risk_score : (r.score!=null ? r.score : 0);
-  const severity = r.severity || r.level || sevFromScore(score);
+  // severity: si el backend marca unknown, respetarlo; si no, derivar del score.
+  const severity = (r.severity==="unknown"||r.level==="unknown") ? "unknown"
+                 : (r.severity || r.level || sevFromScore(score));
   return { score, severity, reasons, verified, signals: r.signals||{} };
 }
 function sevFromScore(s){ s=Number(s)||0; return s>=70?"critical":s>=40?"high":s>=20?"medium":"low"; }
-function severityLabel(s){ return ({low:"Bajo",medium:"Medio",high:"Alto",critical:"Crítico"})[s]||"—"; }
+function severityLabel(s){ return ({low:"Bajo",medium:"Medio",high:"Alto",critical:"Crítico",unknown:"Desconocido"})[s]||"—"; }
 function verifiedBadge(verified, opts={}){
   // verified=true => señal real (verde); false => sin señal / no verificado (ámbar)
   const cls = verified ? "in" : "unk";
@@ -570,10 +579,13 @@ async function renderRisk(){
   rows.forEach(({d, risk})=>{
     const item = el("div", "aitem");
     item.style.cursor = "pointer";
-    const sc = risk.score!=null ? Math.round(risk.score) : "—";
-    const sevCls = risk.score>=70?"bad":risk.score>=40?"warn":"ok";
+    const isUnknown = risk.severity==="unknown" || risk.score==null;
+    const sc = !isUnknown ? Math.round(risk.score) : "—";
+    // unknown (sin veredicto del engine) => muted, nunca verde "ok".
+    const sevCls = isUnknown ? "unk"
+                 : risk.score>=70 ? "bad" : risk.score>=40 ? "warn" : "ok";
     item.innerHTML = `
-      <div class="ic" style="color:var(--${sevCls==='bad'?'red':sevCls==='warn'?'amber':'green'})">${platformIcon(d.platform)}</div>
+      <div class="ic" style="color:var(--${sevCls==='bad'?'red':sevCls==='warn'?'amber':sevCls==='unk'?'muted':'green'})">${platformIcon(d.platform)}</div>
       <div class="grow"><div class="nm">${esc(d.name||d.device_id)}</div>
         <div class="ds">${risk.reasons.length? esc(risk.reasons[0]) + (risk.reasons.length>1?` · +${risk.reasons.length-1} más`:"") : "sin señales"}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -966,7 +978,7 @@ function renderDevices(){
     <div class="card"><table class="tt"><thead><tr>
       <th class="sort" data-s="name">Dispositivo</th><th class="sort" data-s="platform">Plataforma</th>
       <th class="sort" data-s="fence_state">Estado</th><th class="sort" data-s="compliant">Conformidad</th><th>iOS geocerca</th>
-      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Verif.</th><th></th>
+      <th>Ubicación</th><th class="sort" data-s="last_seen">Visto</th><th>Frescura</th><th>Verif.</th><th></th>
     </tr></thead><tbody id="devBody"></tbody></table></div>`;
   $$("#devFilters .chip").forEach(c=>c.onclick=()=>{
     $$("#devFilters .chip").forEach(x=>x.classList.remove("active")); c.classList.add("active");
@@ -977,6 +989,14 @@ function renderDevices(){
     App.devSort = h.dataset.s; renderDeviceRows();
   });
   renderDeviceRows();
+}
+function evidenceFreshnessBadge(d){
+  const f = ((d.evidence_freshness||{}).location)||{};
+  const status = f.status || "unverifiable";
+  const cls = status==="fresh" ? "in" : (status==="stale"||status==="future"||status==="replayed" ? "warn" : "unk");
+  const label = ({fresh:"Fresca",stale:"Caducada",future:"Futura",replayed:"Replay",unverifiable:"No verificable"})[status] || "No verificable";
+  const detail = [f.source, f.age_seconds==null?null:`edad ${f.age_seconds}s`, f.rule, f.reason].filter(Boolean).join(" · ");
+  return `<span class="tag ${cls}" title="${esc(detail||'evidencia sin reloj/nonce verificable')}"><span class="d"></span>${label}</span>`;
 }
 function renderDeviceRows(){
   const st = App.status; if(!st) return;
@@ -995,7 +1015,7 @@ function renderDeviceRows(){
   };
   devs.sort(sorters[App.devSort]||sorters.name);
   const tb = $("#devBody");
-  if(!devs.length){ tb.innerHTML = `<tr><td colspan="9">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
+  if(!devs.length){ tb.innerHTML = `<tr><td colspan="10">${emptyState("Sin dispositivos","No hay dispositivos para este filtro.")}</td></tr>`; return; }
   tb.innerHTML="";
   devs.forEach(d=>{
     const state = d.fence_state||"unknown";
@@ -1018,9 +1038,86 @@ function renderDeviceRows(){
       <td>${iosGeofenceBadge(d, {empty:true})}</td>
       <td class="mono">${esc(d.city||d.country|| (d.lat!=null&&d.lng!=null?d.lat.toFixed(2)+","+d.lng.toFixed(2):"—"))}</td>
       <td class="mono">${fmt.ago(d.last_seen)}</td>
+      <td>${evidenceFreshnessBadge(d)}</td>
       <td>${verifiedCell}</td>
       <td><span class="plat" style="cursor:pointer" onclick="openDeviceModal('${esc(d.device_id)}')">${I.act}</span></td>`;
     tr.onclick = ()=>openDeviceModal(d.device_id);
+    tb.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   VISTA: FLOTA FEDERADA (backlog #12) — un panel, N UEMs, mismo veredicto
+   ============================================================ */
+// Origen trazado como chip sobrio: el UEM que reportó el dispositivo + su
+// segmento de flota. Sin origen conocido → "desconocido" en muted (.unk),
+// jamás atribuido a un UEM por conjetura (honestidad del backend).
+function fedOriginChip(row){
+  const provs = row.providers||[];
+  if(!provs.length) return `<span class="tag unk"><span class="d"></span>desconocido</span>`;
+  return provs.map(p=>{
+    const seg = p.segment ? ` <span class="sub">· ${esc(p.segment)}</span>` : "";
+    return `<span class="tag out" title="reportado por ${esc(p.name)}"><span class="d"></span>${esc(p.name)}</span>${seg}`;
+  }).join(" ");
+}
+// Riesgo con color por nivel usando los tokens existentes de las etiquetas
+// de estado. null (el engine aún no tiene veredicto) → muted, nunca un 0
+// inventado.
+function fedRiskBadge(risk){
+  if(!risk || risk.score==null) return `<span class="sub" title="sin veredicto del engine todavía">—</span>`;
+  const cls = ({critical:"nocomp", high:"warn", medium:"out", low:"in"})[risk.level] || "unk";
+  return `<span class="tag ${cls}"><span class="d"></span>${Math.round(risk.score)} · ${esc(severityLabel(risk.level))}</span>`;
+}
+async function renderFederated(){
+  const node = $("#view-federated"); if(!node) return;
+  let data;
+  try{
+    const q = App.fedFilter && App.fedFilter!=="all" ? `?provider=${encodeURIComponent(App.fedFilter)}` : "";
+    data = await api("/api/fleet/federated"+q);
+  }catch(e){
+    node.innerHTML = `<div class="view-head"><div><h2>Flota federada</h2></div></div>
+      ${emptyState("Sin datos", e.message||"No se pudo cargar la flota federada.")}`;
+    return;
+  }
+  const provs = data.providers||[];
+  const chips = [
+    `<button type="button" class="chip ${!App.fedFilter||App.fedFilter==="all"?"active":""}" data-f="all">Todos (${data.fleet_total||0})</button>`,
+  ].concat(provs.map(p=>
+    `<button type="button" class="chip ${App.fedFilter===p.name?"active":""}" data-f="${esc(p.name)}">${esc(p.name)}${p.segment?` · ${esc(p.segment)}`:""} (${p.devices})</button>`));
+  node.innerHTML = `
+    <div class="view-head">
+      <div><h2>Flota federada</h2>
+        <div class="sub">Todos tus UEMs en una vista, con el mismo veredicto de riesgo explicable para cada dispositivo y su origen trazado. Clic en una fila abre el porqué.</div></div>
+      ${data.sin_origen?`<div class="acts"><span class="tag unk"><span class="d"></span>${data.sin_origen} sin origen trazado</span></div>`:""}
+    </div>
+    <div class="toolbar"><div class="filters" id="fedFilters">${chips.join("")}</div></div>
+    <div class="card"><table class="tt"><thead><tr>
+      <th>Dispositivo</th><th>Origen (UEM)</th><th>Plataforma</th>
+      <th>Riesgo</th><th>Por qué</th><th>Visto</th><th></th>
+    </tr></thead><tbody id="fedBody"></tbody></table></div>`;
+  $$("#fedFilters .chip").forEach(c=>c.onclick=()=>{
+    App.fedFilter = c.dataset.f; renderFederated();
+  });
+  const tb = $("#fedBody");
+  const rows = data.fleet||[];
+  if(!rows.length){
+    tb.innerHTML = `<tr><td colspan="7">${emptyState("Sin dispositivos", "Ningún UEM ha reportado dispositivos para este filtro.")}</td></tr>`;
+    return;
+  }
+  rows.forEach(r=>{
+    const reasons = (r.top_reasons||[]);
+    const tr = el("tr");
+    tr.innerHTML = `
+      <td><div class="dev"><div class="av" style="background:${avatarColor(r.device_id)}">${avatarText(r.name||r.device_id)}</div>
+        <div style="min-width:0"><div class="nm">${esc(r.name||r.device_id)}</div>
+        <div class="sub">${esc(r.device_id)}</div></div></div></td>
+      <td>${fedOriginChip(r)}</td>
+      <td><span class="plat">${platformIcon(r.platform)} ${esc(r.platform||"—")}</span></td>
+      <td>${fedRiskBadge(r.risk)}</td>
+      <td>${reasons.length? esc(reasons[0]) + (reasons.length>1?` <span class="sub">· +${reasons.length-1} más</span>`:"") : `<span class="sub">sin señales</span>`}</td>
+      <td class="mono">${fmt.ago(r.last_seen)}</td>
+      <td><span class="plat" style="cursor:pointer" title="Abrir explain-risk">${I.act}</span></td>`;
+    tr.onclick = ()=>openDeviceModal(r.device_id);
     tb.appendChild(tr);
   });
 }
@@ -1062,6 +1159,7 @@ async function openDeviceModal(id){
     ["Ubicación", d.lat!=null&&d.lng!=null? `${d.lat.toFixed(4)}, ${d.lng.toFixed(4)}`:"—"],
     ["Ciudad / País", (d.city||"—")+" / "+(d.country||"—")],
     ["IP", d.ip||"—"], ["Fuente", d.location_source||d.source||"—"],
+    ["Frescura evidencia", evidenceFreshnessBadge(d), true],
     ["Visto", fmt.date(d.last_seen)],
     // Postura DDM (Apple OS 27) + cifrado: campos reales de DeviceState.to_dict().
     ["Lockdown Mode", postureBadge(d.lockdown_mode, "Activado", "Desactivado"), true],

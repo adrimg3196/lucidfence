@@ -11,6 +11,7 @@ Runs locally, forever, on the configured interval (default 15 min).
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -24,11 +25,12 @@ from lucidfence.core.actions import build_adapter
 from lucidfence.core.actions import VALID_ACTIONS
 from lucidfence.core.adapters import build_bindings
 from lucidfence.core.fences import load_fences, fence_index, save_fences, Fence, validate_fences
-from lucidfence.core.geo import Point
+from lucidfence.core.geo import point_from
 from lucidfence.core.location_source import build_location_source
 from lucidfence.core.state_store import StateStore, DeviceState, now_iso
 from lucidfence.core.policies import RiskEngine, load_policies, Policy, save_policies
 from lucidfence.core.routes import load_routes, route_for_device, save_routes, Route
+from lucidfence.core.risk_levels import count_high_risk
 from lucidfence.core.declarative import resolve_declarative_subaction
 from lucidfence.core.incidents import IncidentStore
 from lucidfence.core.notifier import IncidentFanoutNotifier
@@ -37,6 +39,7 @@ from lucidfence.core.cve import enrich_apps
 from lucidfence.core.soar import evaluate_soar, DEFAULT_PLAYBOOKS
 from lucidfence.core.osquery_posture import OsqueryPostureProvider
 from lucidfence.core.location_integrity import assess as assess_location_integrity
+from lucidfence.core.evidence_freshness import build_verifier
 
 
 def _tag_route(res: Any, action: str, declarative: Optional[str],
@@ -172,10 +175,15 @@ class Engine:
         # Optional endpoint posture evidence. osquery observes; LucidFence
         # correlates the evidence with geofences and UEM policy.
         self.osquery = OsqueryPostureProvider(config.get("osquery"))
+        self.evidence_freshness = build_verifier(config.get("evidence_freshness"), self.data_dir)
         # Nutrir CVEs desde feed NVD vivo/cacheado. Best-effort: nunca rompe el
-        # arranque si la red/cache falla. Por defecto solo carga el cache local;
-        # los runners con red (p. ej. cloud_publisher en GitHub Actions) pueden
-        # activar `cve_feed_sync=True` para refrescarlo justo antes de cargarlo.
+        # --- CVE feed (NVD cache / sync) ----------------------------------
+        # SECURITY (fail-unknown, not fail-open): a broken or unavailable CVE
+        # feed must surface as an explicit, observable error — never silently
+        # degrade to "no vulnerabilities". A fail-open CVE loader would hide
+        # real risk and let the vitrina publish a falsely clean posture. Any
+        # exception here is logged and stored on status() so operators can see
+        # the feed is unhealthy instead of trusting a silent zero. (task t_6479d79a)
         try:
             from lucidfence.core.cve_feed_nvd import load_nvd_feed_into_cve, sync_nvd_feed
             cve_feed_path = config.get("cve_feed_path")
@@ -183,6 +191,7 @@ class Engine:
                 cve_feed_path = os.path.join(
                     self.data_dir, f"cve_feed_{self.org_id}.json"
                 )
+            loaded = 0
             if config.get("cve_feed_sync"):
                 sync_nvd_feed(
                     apps=config.get("cve_feed_apps"),
@@ -191,9 +200,24 @@ class Engine:
                     timeout=int(config.get("cve_feed_timeout", 30)),
                     sleep_s=float(config.get("cve_feed_sleep_s", 0.4)),
                 )
-            load_nvd_feed_into_cve(cve_feed_path)
-        except Exception:
-            pass
+            loaded = load_nvd_feed_into_cve(cve_feed_path)
+            self.cve_feed_load = {
+                "ok": True,
+                "entries": loaded,
+                "path": cve_feed_path,
+                "error": None,
+            }
+        except Exception as exc:  # fail-UNKNOWN: record, do NOT swallow silently
+            logging.getLogger(__name__).error(
+                "CVE feed load failed for org %s (path=%s): %s: %s",
+                self.org_id, config.get("cve_feed_path"), type(exc).__name__, exc,
+            )
+            self.cve_feed_load = {
+                "ok": False,
+                "entries": 0,
+                "path": config.get("cve_feed_path"),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
         pol_path = config.get("policies_path", Path(self.data_dir) / "policies.json")
         self.policies_path = Path(pol_path)
         self.policies = load_policies(self.policies_path)
@@ -283,7 +307,9 @@ class Engine:
             total = len(devices)
             outside = sum(1 for d in devices if d.get("fence_state") == "outside")
             noncompliant = sum(1 for d in devices if d.get("compliant") is False)
-            high_risk = sum(1 for d in devices if (d.get("risk_score") or 0) >= 70)
+            # count_high_risk NO cuenta risk_score=None como riesgo alto NI como bajo.
+            high_risk = count_high_risk(devices, 70)
+            unknown_risk = sum(1 for d in devices if d.get("risk_score") is None)
             lines = [
                 f"Resumen LucidFence — {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}",
                 "",
@@ -291,10 +317,13 @@ class Engine:
                 f"Fuera de geocerca: {outside}",
                 f"Non-compliant: {noncompliant}",
                 f"Riesgo alto (>=70): {high_risk}",
+                f"Riesgo desconocido (sin señal): {unknown_risk}",
                 "",
                 "Dispositivos en riesgo:",
             ]
             for d in sorted(devices, key=lambda x: -(x.get("risk_score") or 0))[:10]:
+                if d.get("risk_score") is None:
+                    continue  # no inflar lo desconocido en el ranking de riesgo
                 lines.append(
                     f"  - {d.get('name') or d.get('device_id')}: riesgo {d.get('risk_score') or 0} "
                     f"({d.get('fence_state')})"
@@ -375,7 +404,26 @@ class Engine:
 
         for rep in reports:
             try:
-                loc = Point(lat=rep.lat, lng=rep.lng) if rep.lat is not None and rep.lng is not None else None
+                evidence_observed_at = now_iso()
+                location_freshness = self.evidence_freshness.evaluate(
+                    signal_type="location",
+                    source=rep.location_source,
+                    observed_at=evidence_observed_at,
+                    evidence_ts=getattr(rep, "evidence_ts", None),
+                    nonce=getattr(rep, "evidence_nonce", None),
+                )
+                freshness_gates_location = "location" in getattr(self.evidence_freshness, "windows", {})
+                location_is_authoritative = (
+                    not freshness_gates_location
+                    or location_freshness.get("status") == "fresh"
+                )
+
+                loc = None
+                if location_is_authoritative and rep.lat is not None and rep.lng is not None:
+                    try:
+                        loc = point_from({"lat": rep.lat, "lng": rep.lng})
+                    except (TypeError, ValueError):
+                        loc = None  # NaN/fuera de rango = desconocido, nunca "outside"
                 inside_fence = None
                 fence_state = "unknown"
                 if loc is not None:
@@ -438,6 +486,12 @@ class Engine:
                     fence_id=inside_fence,
                     inside_fence=inside_fence,
                     fence_state=fence_state,
+                    # Sin señal se conserva la última cerca conocida; con señal
+                    # (inside/outside) la memoria es el propio veredicto.
+                    last_inside_fence=(
+                        ((prev.inside_fence or prev.last_inside_fence) if prev else None)
+                        if fence_state == "unknown" else inside_fence
+                    ),
                     location_source=rep.location_source,
                     last_report_ts=now_iso(),
                     route_id=(assigned_route.id if assigned_route else None),
@@ -477,12 +531,33 @@ class Engine:
                     posture_collected_at=posture.get("posture_collected_at"),
                     osquery_version=posture.get("osquery_version"),
                     osquery_config_valid=posture.get("osquery_config_valid"),
+                    evidence_freshness={"location": location_freshness},
+                    attestation=(
+                        rep.attestation
+                        if isinstance(rep.attestation, dict)
+                        else (prev.attestation if prev is not None else None)
+                    ),
                 )
                 geo_snap = getattr(self.adapter, "geofence_compliance_snapshot", None)
                 if callable(geo_snap):
                     snap = geo_snap(rep, fence_state=fence_state, fence_id=inside_fence)
                     if isinstance(snap, dict):
                         ds.geofence_compliance = snap
+                # Carry the prior persisted risk verdict (headline + EXPLAIN)
+                # into the freshly-built state. A transient evaluator crash in
+                # the block below must NOT overwrite a previously-good verdict
+                # with None — the cycle only refreshes these fields when the
+                # evaluator succeeds, so the prior values stay authoritative
+                # until then (the GET path falls back to a live recompute +
+                # honest sentinel if the prior verdict is also absent).
+                if prev is not None:
+                    ds.risk_score = prev.risk_score
+                    ds.risk_severity = prev.risk_severity
+                    ds.risk_reasons = prev.risk_reasons
+                    ds.risk_matched_policies = prev.risk_matched_policies
+                    ds.risk_evaluated_at = prev.risk_evaluated_at
+                    ds.risk_provenance = prev.risk_provenance
+                    ds.risk_verified = prev.risk_verified
                 # --- MOAT: riesgo compuesto + políticas ---
                 risk_ctx = {
                     "hour": self._ctx_hour(),
@@ -497,13 +572,40 @@ class Engine:
                     "route_id": assigned_route.id if assigned_route else None,
                     "route_state": route_state,
                     "route_deviation_m": route_dev_m,
+                    "evidence_freshness": ds.evidence_freshness,
                 })
                 risk_device.update(posture)
                 risk_device["location_integrity"] = integrity
-                risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
-                ds.risk_score = risk["risk_score"]
-                ds.risk_severity = risk["severity"]
-                fired_policies = self.risk.match_policies(self.policies, risk, ds.to_dict(), fence_state)
+                try:
+                    risk = self.risk.evaluate(risk_device, fence_state, risk_ctx)
+                except Exception as _eval_exc:
+                    # Defensive: a crashed evaluator must not break the whole
+                    # cycle. Leave the persisted verdict explaining fields as-is
+                    # (None on first cycle) so the GET path falls back to a live
+                    # recompute + honest sentinel rather than masking the failure.
+                    self.store.log_event({
+                        "ts": now_iso(), "device_id": rep.device_id,
+                        "kind": "risk_eval_error",
+                        "error": f"{type(_eval_exc).__name__}: {_eval_exc}",
+                    })
+                    risk = None
+                if risk is not None:
+                    ds.risk_score = risk["risk_score"]
+                    ds.risk_severity = risk["severity"]
+                    # --- Defect 2: persist the EXPLAIN of the verdict so the
+                    # GET path projects the exact "why" that fired actions. ---
+                    ds.risk_reasons = list(risk.get("reasons") or [])
+                    _fired = self.risk.match_policies(
+                        self.policies, risk, ds.to_dict(), fence_state)
+                    ds.risk_matched_policies = [fp["policy_id"] for fp in _fired]
+                    ds.risk_evaluated_at = now_iso()
+                    ds.risk_provenance = risk.get("provenance")
+                    ds.risk_verified = risk.get("verified")
+                    fired_policies = _fired
+                else:
+                    # Evaluator crashed: keep prior persisted fields so telemetry
+                    # is not clobbered; the GET sentinel covers the display.
+                    fired_policies = []
                 for fp in fired_policies:
                     for act in fp.get("actions", []):
                         self._dedupe_action(ds, act.get("action"), inside_fence,
@@ -919,7 +1021,16 @@ class Engine:
     def _fire_actions(self, rep: Any, ds: DeviceState, prev: Optional[DeviceState], cur_key: str) -> list[dict]:
         fired: list[dict] = []
         fence_id, state = cur_key.split(":", 1)
-        fence = self.fence_by_id.get(fence_id) if fence_id and fence_id != "none" else None
+        # Salto directo cerca A -> cerca B en un mismo ciclo: A se ABANDONA,
+        # así que sus on_exit disparan primero (antes solo salía on_enter(B)
+        # y el "avísame al salir del almacén" se perdía en silencio).
+        if state == "inside" and prev is not None and prev.inside_fence and prev.inside_fence != fence_id:
+            left = self.fence_by_id.get(prev.inside_fence)
+            if left is not None:
+                for act in left.actions:
+                    if act.enabled and act.when == "on_exit" and self._dedupe_action(
+                            ds, act.action, left.id, "on_exit", f"fence:{left.name}", "medium", act.params):
+                        fired.append(self._cycle_actions[-1])
         # Determine which 'when' this transition matches
         when = None
         if state == "inside":
@@ -932,12 +1043,28 @@ class Engine:
             # first sighting; only act on enter if a fence is known
             if state != "inside":
                 when = None
+        if state == "inside":
+            fence = self.fence_by_id.get(fence_id)
+        else:
+            # Al salir (o perder señal), cur_key es "None:outside": la cerca
+            # cuyo on_exit/on_unknown importa es la que se ABANDONA — la del
+            # estado anterior. Resolver por cur_key hacía que esas acciones
+            # no dispararan JAMAS (el bug que motivó este bloque).
+            # Si el dispositivo estuvo "unknown" entre medias (inside -> unknown
+            # -> outside), la cerca abandonada vive en last_inside_fence.
+            prev_fence_id = (prev.inside_fence or prev.last_inside_fence) if prev else None
+            fence = self.fence_by_id.get(prev_fence_id) if prev_fence_id else None
         if fence is None:
             return fired
         for act in fence.actions:
             if not act.enabled:
                 continue
             if act.when != when:
+                continue
+            if when == "on_unknown" and act.action in self.DESTRUCTIVE_ACTIONS:
+                # Desconocido nunca penaliza: perder señal no es evidencia y
+                # jamás justifica lock/wipe/reboot/clear_passcode (defensa en
+                # profundidad; validate_fences ya rechaza esa configuración).
                 continue
             if self._dedupe_action(ds, act.action, fence.id, when, f"fence:{fence.name}", "medium", act.params):
                 fired.append(self._cycle_actions[-1])
@@ -1026,7 +1153,7 @@ class Engine:
         if not waypoint_data:
             raise ValueError("waypoints o fence_ids con centro son obligatorios")
         rid = data.get("id") or f"route-{int(time.time()*1000)}"
-        wps = [Point(lat=float(w["lat"]), lng=float(w["lng"])) for w in waypoint_data]
+        wps = [point_from(w) for w in waypoint_data]  # NaN/fuera de rango -> ValueError (400)
         schedule = data.get("schedule")
         if schedule is None and (data.get("window_start") or data.get("window_end")):
             schedule = {"start": data.get("window_start"), "end": data.get("window_end")}
@@ -1205,6 +1332,11 @@ class Engine:
 
     # ---- risk context helpers -----------------------------------------
     def _ctx_hour(self):
+        # Hora LOCAL del servidor, a propósito: en un producto local-first el
+        # engine corre donde el admin, y "fuera de horario" significa SU
+        # horario. Caveat asumido: en un despliegue cloud (runner UTC) la
+        # señal off_hours se desplaza por el offset del huso; si eso importa,
+        # la corrección va en config, no aquí en silencio.
         return datetime.now().hour
 
     def _ctx_shift_zones(self) -> dict:
@@ -1260,6 +1392,7 @@ class Engine:
             ],
             "stats_history": self.store.stats_history(120),
             "cve_summary": self._cve_summary(),
+            "cve_feed_load": getattr(self, "cve_feed_load", None),
             "ios_geofence_summary": self._ios_geofence_summary(),
         }
 
@@ -1279,7 +1412,7 @@ class Engine:
     def _cve_summary(self) -> dict:
         """Fleet-wide CVE posture aggregated from persisted device apps."""
         devices = self.store.snapshot().values()
-        crit_apps = high_apps = vuln_apps = 0
+        crit_apps = high_apps = vuln_apps = unknown_apps = 0
         total_apps = 0
         for ds in devices:
             for a in (ds.apps or []):
@@ -1291,9 +1424,14 @@ class Engine:
                         crit_apps += 1
                     elif sev == "high":
                         high_apps += 1
+                    # "unknown" = no verifiable CVSS score: reported separately,
+                    # never counted as critical/high (attribution integrity).
+                    elif sev in (None, "unknown"):
+                        unknown_apps += 1
         return {
             "apps_total": total_apps,
             "vulnerable_apps": vuln_apps,
             "critical_cve_apps": crit_apps,
             "high_cve_apps": high_apps,
+            "unknown_cve_apps": unknown_apps,
         }

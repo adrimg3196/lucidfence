@@ -84,7 +84,47 @@ maintainer (or a loop run) and reviewed by humans. It is NOT auto-merged by bots
    lo habilitó: la postura de osquery **sobrescribía** `encryption_enabled` y
    borraba la afirmación del UEM — la contradicción era indetectable;
    `DeviceState.uem_claimed_encryption` conserva ahora las dos caras.
-   **Nº1 pendiente ahora: #12 panel único multi-UEM con riesgo normalizado.**
+   **#12 panel único multi-UEM — HECHO 2026-08-25** (heartbeat de producto):
+   `lucidfence/core/federated_fleet.py` (función pura stdlib) +
+   `GET /api/fleet/federated` (`device:read`, tenant-scoped, filtro
+   `?provider=` con 400 honesto) + vista "Flota federada" en el dashboard
+   (chip de origen por UEM + segmento, riesgo por nivel, clic → explain-risk)
+   + 11 tests + 3 checks runtime (57/57) + `docs/operations/federated_fleet.md`.
+   La flota de TODOS los UEMs del tenant en una lista con el MISMO veredicto
+   explicable; desconocido = null, jamás inventado ni penalizado; del registro
+   de providers solo viajan nombre y segmento (probado con secret inyectado).
+   **#16 auditor de mínimo privilegio UEM — HECHO 2026-08-27** (heartbeat de
+   producto): `lucidfence/core/least_privilege.py` (función pura stdlib) +
+   `GET /api/least-privilege` (cap `engine:config`, tenant-scoped) + 18 tests
+   + 3 checks runtime (60/60) + `docs/operations/least_privilege.md`. Compara
+   lo que el token de cada adapter PUEDE hacer contra lo que el modo actual
+   NECESITA: en `observe` sobra todo permiso de escritura (el engine fuerza
+   dry_run), y `wipe` solo deja de ser exceso con la doble llave. Honestidad:
+   un scope que no sabemos clasificar es `no_auditable`, jamás "correcto" —
+   con recuento de providers auditables para que "0 excesos" no se lea como
+   "todo bien". Los scopes son dato DECLARADO por el operador al conectar
+   (nunca una tabla de scopes inventada por la IA). De paso cerró la fuga que
+   la propia feature abría: los nombres de scope ya no salen por
+   `GET /api/providers` (sin cap), donde el veredicto se derivaría trivialmente.
+   **#17 eventos normalizados (OCSF) — HECHO 2026-08-29** (heartbeat de
+   producto): `lucidfence/core/ocsf.py` (serializador puro stdlib) + opt-in
+   `format: "ocsf"` en el canal `generic` del notifier YA existente + 5 tests
+   + 2 checks runtime (62/62) + `docs/operations/ocsf_events.md`. Los
+   incidentes salen como OCSF Detection Finding (class_uid 2004) que
+   Splunk/Sentinel/Chronicle ingieren sin parsers a medida: alimentamos las
+   herramientas que la organización YA tiene en vez de pedir otro panel.
+   Honestidad: severidad desconocida (incluido el `unknown` del evaluador
+   fallido) va a `0 Unknown`, JAMÁS a `1 Informational`; lo que no tiene
+   equivalente en el esquema va a `unmapped` en vez de inventar un campo que
+   rompería la ingesta. Privacidad: el evento se construye por lista blanca,
+   nunca copia el incidente — probado con lat/lng envenenados y sobre el body
+   HTTP real. Alcance declarado: el veredicto de riesgo llega como el
+   incidente `high_risk_device` que el motor ya deriva (un serializador de
+   `compute_risk()` no tendría llamador: código especulativo).
+   **Nº1 pendiente ahora: el backlog de la capa complemento queda drenado —
+   el siguiente trabajo sale de los SÍ restantes (#14 políticas portables,
+   con su matiz) o de lo que encuentren los especialistas del bench.**
+   sin parsers a medida; #14 políticas portables sigue detrás por su matiz).
 8b. ~~**Políticas y geocercas como código (`lucidfence apply`)**~~ — **HECHO
    2026-08-19** (backlog evaluado #1; tendencia GitHub validada: Fleet 4.90
    redobla en GitOps): validar → diff `+/~/-` → **what-if con replay del

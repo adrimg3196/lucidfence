@@ -1,551 +1,141 @@
 {
-  "source": "NVD",
-  "generated": "2026-08-09T01:24:13Z",
+  "source": "CVE_DB",
+  "generated": "2026-08-24T10:03:31Z",
   "apps": {
-    "google chrome": [
+    "acroread": [
       {
-        "id": "CVE-2007-0045",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Multiple cross-site scripting (XSS) vulnerabilities in Adobe Acrobat Reader Plugin before 8.0.0, and possibly the plugin distributed with Ad",
-        "epss": 0.0
+        "id": "CVE-2023-26369",
+        "source": "CVE_DB",
+        "severity": "critical",
+        "score": 9.8,
+        "title": "RCE en parser de PDF",
+        "epss": 0.91
       },
       {
-        "id": "CVE-2007-0048",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Adobe Acrobat Reader Plugin before 8.0.0, and possibly the plugin distributed with Adobe Reader 7.x before 7.1.4, 8.x before 8.1.7, and 9.x ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2008-4340",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Google Chrome 0.2.149.29 and 0.2.149.30 allows remote attackers to cause a denial of service (memory consumption) via an HTML document conta",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2008-4724",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Multiple cross-site scripting (XSS) vulnerabilities in Google Chrome 0.2.149.30 allow remote attackers to inject arbitrary web script or HTM",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2008-5749",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Argument injection vulnerability in Google Chrome 1.0.154.36 on Windows XP SP3 allows remote attackers to execute arbitrary commands via the",
-        "epss": 0.0
+        "id": "CVE-2021-44721",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 8.1,
+        "title": "Escritura fuera de limites",
+        "epss": 0.3
       }
     ],
-    "mozilla firefox": [
+    "adobe reader": [
       {
-        "id": "CVE-2004-0718",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "The (1) Mozilla 1.6, (2) Firebird 0.7, (3) Firefox 0.8, and (4) Netscape 7.1 web browsers do not properly prevent a frame in one domain from",
-        "epss": 0.0
+        "id": "CVE-2023-26369",
+        "source": "CVE_DB",
+        "severity": "critical",
+        "score": 9.8,
+        "title": "RCE en parser de PDF",
+        "epss": 0.91
+      }
+    ],
+    "chrome": [
+      {
+        "id": "CVE-2024-0519",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 8.8,
+        "title": "UAF en V8",
+        "epss": 0.62
       },
       {
-        "id": "CVE-2004-0648",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Mozilla (Suite) before 1.7.1, Firefox before 0.9.2, and Thunderbird before 0.7.2 allow remote attackers to launch arbitrary programs via a U",
-        "epss": 0.0
-      },
+        "id": "CVE-2023-7024",
+        "source": "CVE_DB",
+        "severity": "critical",
+        "score": 9.6,
+        "title": "Heap buffer overflow en WebRTC",
+        "epss": 0.88
+      }
+    ],
+    "google chrome": [
       {
-        "id": "CVE-2004-0757",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Heap-based buffer overflow in the SendUidl in the POP3 capability for Mozilla before 1.7, Firefox before 0.9, and Thunderbird before 0.7, ma",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2004-0761",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Mozilla before 1.7, Firefox before 0.9, and Thunderbird before 0.7, allow remote attackers to use certain redirect sequences to spoof the se",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2004-0762",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Mozilla before 1.7, Firefox before 0.9, and Thunderbird before 0.7, allow remote web sites to install arbitrary extensions by using interact",
-        "epss": 0.0
+        "id": "CVE-2024-0519",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 8.8,
+        "title": "UAF en V8",
+        "epss": 0.62
       }
     ],
     "whatsapp": [
       {
-        "id": "CVE-2015-1157",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "CoreText in Apple iOS 8.x through 8.3 allows remote attackers to cause a denial of service (reboot and messaging disruption) via crafted Uni",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2017-8769",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Facebook WhatsApp Messenger before 2.16.323 for Android uses the SD card for cleartext storage of files (Audio, Documents, Images, Video, an",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2018-11632",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "An issue was discovered in the MULTIDOTS Add Social Share Messenger Buttons Whatsapp and Viber plugin 1.0.8 for WordPress. If an admin user ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2018-6344",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "A heap corruption in WhatsApp can be caused by a malformed RTP packet being sent after a call is established. The vulnerability can be used ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2019-3566",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "A bug in WhatsApp for Android's messaging logic would potentially allow a malicious individual who has taken over over a WhatsApp user's acc",
-        "epss": 0.0
+        "id": "CVE-2022-36934",
+        "source": "CVE_DB",
+        "severity": "critical",
+        "score": 9.8,
+        "title": "Integer overflow en stack",
+        "epss": 0.95
       }
     ],
     "zoom": [
       {
-        "id": "CVE-2003-1498",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Cross-site scripting (XSS) vulnerability in search.php for WRENSOFT Zoom Search Engine 2.0 Build 1018 and earlier allows remote attackers to",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2004-0680",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Zoom X3 ADSL modem has a terminal running on port 254 that can be accessed using the default HTML management password, even if the password ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-1079",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "SQL injection vulnerability in index.php for zOOm Media Gallery 2.1.2 allows remote attackers to execute arbitrary SQL commands via the cati",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-3178",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in xloadimage 4.1 and earlier, and xli, might allow user-assisted attackers to execute arbitrary code via a long title name ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2006-3022",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Cross-site scripting (XSS) vulnerability in zoom.php in fipsGallery 1.5 and earlier allows remote attackers to inject arbitrary web script o",
-        "epss": 0.0
-      }
-    ],
-    "microsoft teams": [
-      {
-        "id": "CVE-2019-5922",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Untrusted search path vulnerability in The installer of Microsoft Teams allows an attacker to gain privileges via a Trojan horse DLL in an u",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2020-17091",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Teams Remote Code Execution Vulnerability",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2020-10146",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "The Microsoft Teams online service contains a stored cross-site scripting vulnerability in the displayName parameter that can be exploited o",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2021-24114",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Teams iOS Information Disclosure Vulnerability",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2022-21965",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Teams Denial of Service Vulnerability",
-        "epss": 0.0
+        "id": "CVE-2024-31449",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 7.5,
+        "title": "RCE en cliente de reuniones",
+        "epss": 0.41
       }
     ],
     "slack": [
       {
-        "id": "CVE-1999-1186",
-        "source": "NVD",
+        "id": "CVE-2023-24051",
+        "source": "CVE_DB",
         "severity": "medium",
-        "score": 0.0,
-        "title": "rxvt, when compiled with the PRINT_PIPE option in various Linux operating systems including Linux Slackware 3.0 and RedHat 2.1, allows local",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-0298",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "ypbind with -ypset and -ypsetme options activated in Linux Slackware and SunOS allows local and remote attackers to overwrite files via a ..",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-1489",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in TestChip function in XFree86 SuperProbe in Slackware Linux 3.1 allows local users to gain root privileges via a long -nop",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-0340",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in Linux Slackware crond program allows local users to gain root access.",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-1445",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Vulnerability in imapd and ipop3d in Slackware 3.4 and 3.3 with shadowing enabled, and possibly other operating systems, allows remote attac",
-        "epss": 0.0
+        "score": 6.1,
+        "title": "XSS en previsualizacion",
+        "epss": 0.12
       }
     ],
-    "microsoft outlook": [
+    "teams": [
       {
-        "id": "CVE-1999-1033",
-        "source": "NVD",
+        "id": "CVE-2023-29301",
+        "source": "CVE_DB",
         "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Outlook Express before 4.72.3612.1700 allows a malicious user to send a message that contains a .., which can inadvertently cause ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-1164",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Outlook client allows remote attackers to cause a denial of service by sending multiple email messages with the same X-UIDL header",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-1999-1016",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft HTML control as used in (1) Internet Explorer 5.0, (2) FrontPage Express, (3) Outlook Express 5, and (4) Eudora, and possibly othe",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2000-0216",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft email clients in Outlook, Exchange, and Windows Messaging automatically respond to Read Receipt and Delivery Receipt tags, which c",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2000-0524",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Microsoft Outlook and Outlook Express allow remote attackers to cause a denial of service by sending email messages with blank fields such a",
-        "epss": 0.0
+        "score": 6.5,
+        "title": "Elevacion de privilegios",
+        "epss": 0.18
       }
     ],
-    "winrar": [
+    "outlook": [
       {
-        "id": "CVE-2004-1495",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "The Repair Archive command in WinRAR 3.40 allows remote attackers to cause a denial of service (application crash) via a corrupt ZIP archive",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2004-1254",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "WinRAR 3.40, and possibly earlier versions, allows remote attackers to execute arbitrary code via a ZIP file containing a file with a long f",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-0331",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Directory traversal vulnerability in WinRAR 3.42 and earlier, when the user clicks on the ZIP file to extract it, allows remote attackers to",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-3210",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Multiple interpretation error in unspecified versions of Kaspersky Antivirus allows remote attackers to bypass virus detection via a malicio",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-3211",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Multiple interpretation error in unspecified versions of BitDefender Antivirus allows remote attackers to bypass virus detection via a malic",
-        "epss": 0.0
-      }
-    ],
-    "openvpn": [
-      {
-        "id": "CVE-2005-2531",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "OpenVPN before 2.0.1, when running with \"verb 0\" and without TLS authentication, does not properly flush the OpenSSL error queue when a clie",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-2532",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "OpenVPN before 2.0.1 does not properly flush the OpenSSL error queue when a packet can not be decrypted by the server, which allows remote a",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-2533",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "OpenVPN before 2.0.1, when running in \"dev tap\" Ethernet bridging mode, allows remote authenticated clients to cause a denial of service (me",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-2534",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Race condition in OpenVPN before 2.0.1, when --duplicate-cn is not enabled, allows remote attackers to cause a denial of service (server cra",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-3393",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Format string vulnerability in the foreign_option function in options.c for OpenVPN 2.0.x allows remote clients to execute arbitrary code vi",
-        "epss": 0.0
-      }
-    ],
-    "adobe acrobat reader": [
-      {
-        "id": "CVE-1999-1576",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in Adobe Acrobat ActiveX control (pdf.ocx, PDF.PdfCtrl.1) 1.3.188 for Acrobat Reader 4.0 allows remote attackers to execute ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2000-0713",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in Adobe Acrobat 4.05, Reader, Business Tools, and Fill In products that handle PDF files allows attackers to execute arbitr",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2002-1764",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "acroread in Adobe Acrobat Reader 4.05 on Linux allows local users to overwrite arbitrary files via a symlink attack on temporary files.",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2003-0508",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in the WWWLaunchNetscape function of Adobe Acrobat Reader (acroread) 5.0.7 and earlier allows remote attackers to execute ar",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2003-0142",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Adobe Acrobat Reader (acroread) 6, under certain circumstances when running with the \"Certified plug-ins only\" option disabled, loads plug-i",
-        "epss": 0.0
+        "id": "CVE-2023-23397",
+        "source": "CVE_DB",
+        "severity": "critical",
+        "score": 9.8,
+        "title": "Elevacion de privilegios via link de calendario",
+        "epss": 0.97
       }
     ],
     "filezilla": [
       {
-        "id": "CVE-2005-0850",
-        "source": "NVD",
+        "id": "CVE-2023-48795",
+        "source": "CVE_DB",
         "severity": "medium",
-        "score": 0.0,
-        "title": "FileZilla FTP server before 0.9.6 allows remote attackers to cause a denial of service via a request for a filename containing an MS-DOS dev",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-0851",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "FileZilla FTP server before 0.9.6, when using MODE Z (zlib compression), allows remote attackers to cause a denial of service (infinite loop",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-2898",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "NOTE: this issue has been disputed by the vendor.  FileZilla 2.2.14b and 2.2.15, and possibly earlier versions, when \"Use secure mode\" is di",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2005-3589",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in FileZilla Server Terminal 0.9.4d may allow remote attackers to cause a denial of service (terminal crash) via a long USER",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2006-2173",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Buffer overflow in FileZilla FTP Server 2.2.22 allows remote authenticated attackers to cause a denial of service and possibly execute arbit",
-        "epss": 0.0
+        "score": 5.9,
+        "title": "Bypass de integridad SSH",
+        "epss": 0.09
       }
     ],
-    "google android": [
+    "winrar": [
       {
-        "id": "CVE-2008-0985",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Heap-based buffer overflow in the GIF library in the WebKit framework for Google Android SDK m3-rc37a and earlier allows remote attackers to",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2008-0986",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Integer overflow in the BMP::readFromStream method in the libsgl.so library in Google Android SDK m3-rc37a and earlier, and m5-rc14, allows ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2009-1442",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Multiple integer overflows in Skia, as used in Google Chrome 1.x before 1.0.154.64 and 2.x, and possibly Android, might allow remote attacke",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2011-3881",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "WebKit, as used in Google Chrome before 15.0.874.102 and Android before 4.4, allows remote attackers to bypass the Same Origin Policy and co",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2011-4771",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "The Scan to PDF Free (com.scan.to.pdf.trial) application 2.0.4 for Android does not properly protect data, which allows remote attackers to ",
-        "epss": 0.0
+        "id": "CVE-2023-40477",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 7.8,
+        "title": "RCE via archivo ZIP malformado",
+        "epss": 0.73
       }
     ],
-    "apple ios": [
+    "openvpn": [
       {
-        "id": "CVE-2010-1387",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Use-after-free vulnerability in JavaScriptCore in WebKit in Apple iTunes before 9.2 on Windows, and Apple iOS before 4 on the iPhone and iPo",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2010-1769",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "WebKit in Apple iTunes before 9.2 on Windows, and Apple iOS before 4 on the iPhone and iPod touch, accesses out-of-bounds memory during the ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2010-1407",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "WebKit in Apple iOS before 4 on the iPhone and iPod touch does not properly implement the history.replaceState method in certain situations ",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2010-1751",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Application Sandbox in Apple iOS before 4 on the iPhone and iPod touch does not prevent photo-library access, which might allow remote attac",
-        "epss": 0.0
-      },
-      {
-        "id": "CVE-2010-1752",
-        "source": "NVD",
-        "severity": "medium",
-        "score": 0.0,
-        "title": "Stack-based buffer overflow in CFNetwork in Apple iOS before 4 on the iPhone and iPod touch allows remote attackers to execute arbitrary cod",
-        "epss": 0.0
+        "id": "CVE-2024-27903",
+        "source": "CVE_DB",
+        "severity": "high",
+        "score": 8.0,
+        "title": "Desbordamiento en configuracion",
+        "epss": 0.55
       }
     ]
   }

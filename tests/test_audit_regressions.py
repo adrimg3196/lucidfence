@@ -7,14 +7,16 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 import loop_improve
 
 ROOT = Path(__file__).resolve().parents[1]
+TEST_PORT = int(os.environ.get("LUCIDFENCE_TEST_PORT", "8765"))
 
 
 def _request(method: str, path: str, body=None, cookie: str = ""):
-    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=10)
+    connection = http.client.HTTPConnection("127.0.0.1", TEST_PORT, timeout=10)
     headers = {"Content-Type": "application/json"}
     if cookie:
         headers["Cookie"] = cookie
@@ -48,7 +50,7 @@ def test_roadmap_is_not_public_and_owner_can_read_without_mutating_it():
 
 
 def test_versioned_api_openapi_and_deprecation_contract():
-    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=10)
+    connection = http.client.HTTPConnection("127.0.0.1", TEST_PORT, timeout=10)
     connection.request("GET", "/api/v1/openapi.json")
     response = connection.getresponse()
     schema = json.loads(response.read())
@@ -58,7 +60,7 @@ def test_versioned_api_openapi_and_deprecation_contract():
     assert headers.get("X-API-Version") == "v1"
     assert headers.get("Deprecation") == "true" and "Sunset" in headers
 
-    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=10)
+    connection = http.client.HTTPConnection("127.0.0.1", TEST_PORT, timeout=10)
     connection.request("GET", "/api/v2/openapi.json")
     response = connection.getresponse(); schema = json.loads(response.read())
     headers = dict(response.getheaders()); connection.close()
@@ -75,6 +77,106 @@ def test_runner_treats_nonzero_and_string_system_exit_as_failures():
     assert module._system_exit_code(SystemExit(0)) == 0
     assert module._system_exit_code(SystemExit(1)) == 1
     assert module._system_exit_code(SystemExit("failed")) == 1
+
+
+def test_live_integration_mock_asks_kernel_for_ephemeral_port():
+    spec = importlib.util.spec_from_file_location(
+        "live_integration_port", ROOT / "tests" / "test_live_integration.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    captured = {}
+
+    class FakeServer:
+        server_port = 45123
+
+        def serve_forever(self):
+            return None
+
+    def fake_http_server(address, handler):
+        captured["address"] = address
+        captured["handler"] = handler
+        return FakeServer()
+
+    with mock.patch.object(module, "HTTPServer", side_effect=fake_http_server), mock.patch.object(
+        module.threading, "Thread"
+    ):
+        server = module._start_mock()
+
+    assert server.server_port == 45123
+    assert captured["address"] == ("127.0.0.1", 0)
+    assert module._MOCK_PORT == 45123
+
+
+def test_live_integration_removes_mock_env_when_no_original():
+    spec = importlib.util.spec_from_file_location(
+        "live_integration_env", ROOT / "tests" / "test_live_integration.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with tempfile.TemporaryDirectory() as directory:
+        env_path = Path(directory) / ".env"
+        env_path.write_text("APPLIVERY_API_KEY=mock-only\n")
+        setattr(module, "ENV_PATH", str(env_path))
+        setattr(module, "_ENV_BACKUP", None)
+        setattr(module, "_ENV_EXISTED", False)
+
+        module._restore_env()
+
+        assert not env_path.exists()
+
+
+def test_runner_allocates_an_ephemeral_qa_port():
+    spec = importlib.util.spec_from_file_location("honest_runner_port", ROOT / "tests" / "run_tests.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class FakeSocket:
+        def __init__(self):
+            self.bound = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def bind(self, address):
+            self.bound = address
+
+        def getsockname(self):
+            return ("127.0.0.1", 45123)
+
+    fake = FakeSocket()
+    with mock.patch.object(module.socket, "socket", return_value=fake):
+        assert module._allocate_qa_port() == 45123
+    assert fake.bound == ("127.0.0.1", 0)
+
+
+def test_http_acceptance_tests_follow_the_runner_port():
+    files = (
+        "test_api_keys_audit.py",
+        "test_audit_regressions.py",
+        "test_autonomous_company_api.py",
+        "test_demo_onboarding.py",
+        "test_enforcement_dashboard.py",
+        "test_health_endpoints.py",
+        "test_members_rbac.py",
+        "test_multiuem_register.py",
+        "test_observability_security.py",
+        "test_org_rbac.py",
+        "test_qa_e2e.py",
+        "test_qa_fences.py",
+        "test_qa_incidents.py",
+        "test_qa_workflows.py",
+        "test_soar_cve_endpoint.py",
+    )
+    for filename in files:
+        source = (ROOT / "tests" / filename).read_text(encoding="utf-8")
+        assert "LUCIDFENCE_TEST_PORT" in source, filename
 
 
 def test_loop_dry_run_does_not_write_history():
