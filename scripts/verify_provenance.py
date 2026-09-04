@@ -63,8 +63,8 @@ def canonical_json(obj) -> bytes:
 
 def dsse_pae(payload_type: str, payload: bytes) -> bytes:
     pt = payload_type.encode("utf-8")
-    return b" ".join([b"DSSEv1", str(len(pt)).encode("ascii"), pt,
-                      str(len(payload)).encode("ascii"), payload])
+    header = f"DSSEv1 {len(pt)} {payload_type} {len(payload)}".encode("ascii")
+    return header + payload
 
 
 def blank_volatile(obj: dict) -> dict:
