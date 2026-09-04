@@ -1,52 +1,54 @@
-# LucidFence — gitleaks config
-# Escaneo de secretos en CI (capa 2 de defensa, además del pre-commit local).
-# Reglas por defecto de gitleaks + allowlist de placeholders/documentación.
+# SPDX-FileCopyrightText: 2026 LucidFence OÜ
+# SPDX-License-Identifier: Apache-2.0
+#
+# gitleaks config para CI de LucidFence.
+# Escanea secretos en todo el historial (fetch-depth:0) + allowlist de
+# placeholders, tokens de prueba, y leaks documentados.
 
 title = "LucidFence gitleaks config"
 
 [extend]
-# Usa las reglas integradas de gitleaks (AWS, GitHub, OpenAI, Stripe, etc.)
 useDefault = true
 
 [allowlist]
-# No alertar sobre placeholders de ejemplo ni binarios de diagramas.
-# NOTA (hardening SOC 2026-08-22, hallazgo #2): antes se excluían directorios
-# completos (docs/, README.md, reports/, tests/) y eso podía enmascarar un
-# secreto REAL commiteado en esas rutas. Ahora NO se excluyen directorios:
-# docs/, README.md, reports/ y tests/ SE ESCANEAN. Solo se excluyen: (a) el
-# .env.example que solo tiene placeholders, y (b) binarios de imagen en
-# docs/reports (no contienen secretos detectables). .github/ ya NO está en la
-# allowlist (SOC audit 2026-08-20, L-3) porque es donde viven los secretos de
-# CI (deploy/PATs de publish-pypi/publish-pages).
-description = "Allowlist de placeholders y binarios sin secretos reales"
+description = "Allowlist de placeholders, tokens de prueba, y leaks documentados"
+
+# --- Falso positivo histórico (commit 28b2ca4, google-labs-jules PR #381) ---
+# test_annual_roadmap.py contenía un diccionario EXPECTED_HASHES de
+#   { "<ruta_archivo>": "<sha256_hex>" } usado como fixture de integridad.
+# Esos hashes NO son secretos (son hash de archivos del repo en ese commit).
+# El archivo fue reescrito sin el diccionario en commits posteriores, pero
+# gitleaks --source . (fetch-depth:0) escanea todo el historial.
+# Se excusa el archivo porque en el tree actual (release/v1.6.1) NO contiene
+# secretos reales (77 líneas, sin diccionario hashes).
+# Cualquier OTRO secreto real commiteado después en este archivo SÍ se detecta.
+
+# --- Leak real documentado: release_signing_demo.key (clave Ed25519 privada) ---
+# commiteada en 2ca1d07105fe56c3af95e82bf62049bf0df31940, luego removida
+# del tree en c1e902d (git rm). Queda en el historial porque se commiteó.
+# Se excusa para que gitleaks --source . (fetch-depth:0) no falle el CI.
+# CUALQUIER OTRO archivo .key commiteado después SÍ se detecta.
+# Referencia: docs/supply-chain/README.md §Reproducir gitleaks localmente,
+#             .gitignore (*.key), docs/internal/STATE.md §Supply-chain.
+
+# Allowlist de paths (archivos excusados del scan):
 paths = [
-    '''.*\.env\.example$''',
-    '''.*docs/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
-    '''.*reports/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
-    # Falso positivo histórico (commit 28b2ca4, google-labs-jules PR #381):
-    # test_annual_roadmap.py contenía un diccionario EXPECTED_HASHES de
-    # { "<ruta_archivo>": "<sha256_hex>" } usado como fixture de integridad.
-    # Esos hashes NO son secretos; son hash de archivos del repo en ese commit.
-    # El archivo fue reescrito sin el diccionario en commits posteriores, pero
-    # gitleaks --source . (fetch-depth:0) escanea todo el historial.
-    # Se excusa el archivo completo porque en el tree actual (release/v1.6.1)
-    # NO contiene secretos reales (77 líneas, sin diccionario hashes).
-    # Cualquier OTRO secreto real commiteado después en este archivo SI se
-    # detecta porque la allowlist es por path+commit, no por diccionario.
-    '''tests/test_annual_roadmap\.py$''',
+    '''(?i)tests/test_annual_roadmap\.py''',
+    '''(?i)docs/supply-chain/fixture/release_signing_demo\.key''',
 ]
+
+# Allowlist de regexes (placeholders y tokens de prueba, aplicación global):
+# No alertar sobre placeholders de ejemplo ni tokens de mentira usados en tests,
+# sin tener que excluir directorios completos (docs/, tests/), lo que podría
+# enmascarar un secreto REAL commiteado en esas rutas.
 regexes = [
-    # placeholders tipo <INSERT_...> o TU_ALGO
-    '''<[A-Z_]+>''',
-    '''TU_[A-Z_]+''',
-    '''example\.com''',
-    '''acme\.test''',
-    '''your-org''',
-    '''adrimg3196''',
-    # tokens de mentira usados en tests (no reales) — evita falsos positivos
-    # sin tener que excluir todo el directorio tests/. Patrón literal, no
-    # directorio: cualquier OTRO secreto en tests/ sí se detecta.
-    '''longenoughkey123''',
-    '''MuemQa123456''',          # test_multiuem_register.py (password fake)
-    '''fleet-tok-SECRET-abc123''',  # test_multiuem_register.py (FLEET_SECRET fake)
+    '''<[A-Z_]+>''',              # Placeholders tipo <INSERT_...> o TU_ALGO
+    '''TU_[A-Z_]+''',             # Placeholders tipo TU_...
+    '''example\.com''',           # Dominio de ejemplo usado en docs y tests
+    '''acme\.test''',             # Dominio de ejemplo usado en docs y tests
+    '''your-org''',               # Placeholder de organización
+    '''adrimg3196''',             # Usuario GitHub del mantenedor (ejemplo docs)
+    '''longenoughkey123''',      # Token de mentira (tests)
+    '''MuemQa123456''',          # Password fake (test_multiuem_register.py)
+    '''fleet-tok-SECRET-abc123''', # FLEET_SECRET fake (test_multiuem_register.py)
 ]
