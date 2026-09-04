@@ -4,6 +4,7 @@ All notable changes to LucidFence are documented here.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-04
 - governance(rulesets): Regla de Oro #1 anti-check-fantasma — nunca añadir un
   contexto a `required_status_checks` de un ruleset antes de que el workflow que
   lo emite esté mergeado en `origin/main` **y** tenga un run verde en `main`
