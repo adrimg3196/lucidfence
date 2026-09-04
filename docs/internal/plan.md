@@ -20,7 +20,7 @@ verificación runtime. La barra de calidad es `docs/references/definition-of-don
 
 ## T4 — Definition of Done + agent-skills framework ✅ DONE (este plan)
 - Obj: aplicar el marco agent-skills (addyosmani/agent-skills) a LucidFence.
-- Entregables: docs/architecture/SPEC.md, references/*, .claude/.gemini commands, agents/*, AGENTS.md, docs/internal/plan.md.
+- Entregables: docs/architecture/SPEC.md, references/*, ~/lucidfence-agents-tooling/.claude/.gemini commands, agents/*, AGENTS.md, docs/internal/plan.md.
 - Verif: `/review` y `/ship` corren sobre el estado actual (abajo).
 
 ## T5 — CI honesto + test runner (anteriores, consolidado)

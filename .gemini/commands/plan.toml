@@ -1,7 +1,0 @@
-description = "Plan LucidFence work into tasks with acceptance criteria"
-
-prompt = """
-Invoke planning-and-task-breakdown adapted to LucidFence.
-
-Read docs/architecture/SPEC.md first. Break work into tasks: objective, acceptance criteria, files touched, verification (runtime: python3 tests/run_tests.py, open cloud.html). Order by dependency. Respect docs/references/definition-of-done.md. Save as docs/internal/plan.md and confirm. Brownfield note: LucidFence is established code — write characterization tests before changing untested legacy (docs/references/testing-patterns.md).
-"""

@@ -1,6 +1,6 @@
 # LucidFence — Copy de Lanzamiento (open-source / multi-MDM)
 
-*Generado con skills de marketing (cro + copywriting) sobre `.agents/product-marketing.md` y dictamen del tribunal.*
+*Generado con skills de marketing (cro + copywriting) sobre `~/lucidfence-agents-tooling/.agents/product-marketing.md` y dictamen del tribunal.*
 *Principio del CMO: liderar con RIESGO EXPLICABLE + SOBERANÍA LOCAL, no con "geofencing open-source" (commodity).*
 
 ---

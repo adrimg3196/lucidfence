@@ -67,7 +67,7 @@
 - [ ] Interfaz `MDMAdapter` congelada + `ADAPTER.md` + starter mock
 - [ ] ≥2 adapters reales: Applivery (live) + Intune/Jamf (mock incluidos, listos para live) — ya cumplido; el claim es "multi-MDM ready por framework de adapters"
 - [ ] README con copy de `marketing-copy.md` (tagline, hero, objection handling)
-- [ ] `.agents/product-marketing.md` en repo
+- [ ] `~/lucidfence-agents-tooling/.agents/product-marketing.md` en repo
 - [ ] LICENSE Apache-2.0 + módulo Enterprise on-prem documentado
 - [ ] Discord + GitHub Discussions abiertos
 - [ ] Demo GIF de Risk Engine + comando remoto

@@ -5,7 +5,7 @@ intervención humana**: los agentes deciden, el propietario solo recibe el diges
 semanal y aprueba el outreach (propietario, 2026-08-16). Este fichero es el
 organigrama: cada loop es un **departamento**, y cada departamento delega las
 decisiones de dominio en un **bench de especialistas** vendido en
-`.claude/agents/` (Claude Code native subagents).
+`~/lucidfence-agents-tooling/.claude/agents/` (Claude Code native subagents).
 
 El bench adapta la taxonomía y estructura de personas de
 [agency-agents](https://github.com/msitarzewski/agency-agents) (msitarzewski) a
@@ -19,7 +19,7 @@ copiado literalmente.
 
 ## Cómo se usa el bench
 
-Toda sesión de loop clona el repo, así que hereda `.claude/agents/`. Un loop
+Toda sesión de loop clona el repo, así que hereda `~/lucidfence-agents-tooling/.claude/agents/`. Un loop
 **delega** invocando al especialista por su `subagent_type` (el slug del
 frontmatter, p. ej. `security-penetration-tester`). El loop es el gerente del
 departamento; el especialista toma la decisión de dominio y devuelve el

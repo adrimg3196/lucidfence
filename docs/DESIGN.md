@@ -102,7 +102,7 @@ la que más se olvida.
 
 ```sh
 python3 tests/run_tests.py            # incluye el guard del sistema de diseño
-node .claude/skills/impeccable/scripts/detect.mjs static/*.html
+node ~/lucidfence-agents-tooling/.claude/skills/impeccable/scripts/detect.mjs static/*.html
 ```
 
 El detector de Impeccable deja cinco hallazgos vivos a propósito; el porqué de
