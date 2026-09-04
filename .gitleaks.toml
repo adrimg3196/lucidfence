@@ -23,6 +23,17 @@ paths = [
     '''.*\.env\.example$''',
     '''.*docs/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
     '''.*reports/.*\.(png|svg|jpe?g|gif|webp|ico)$''',
+    # Falso positivo histórico (commit 28b2ca4, google-labs-jules PR #381):
+    # test_annual_roadmap.py contenía un diccionario EXPECTED_HASHES de
+    # { "<ruta_archivo>": "<sha256_hex>" } usado como fixture de integridad.
+    # Esos hashes NO son secretos; son hash de archivos del repo en ese commit.
+    # El archivo fue reescrito sin el diccionario en commits posteriores, pero
+    # gitleaks --source . (fetch-depth:0) escanea todo el historial.
+    # Se excusa el archivo completo porque en el tree actual (release/v1.6.1)
+    # NO contiene secretos reales (77 líneas, sin diccionario hashes).
+    # Cualquier OTRO secreto real commiteado después en este archivo SI se
+    # detecta porque la allowlist es por path+commit, no por diccionario.
+    '''tests/test_annual_roadmap\.py$''',
 ]
 regexes = [
     # placeholders tipo <INSERT_...> o TU_ALGO
