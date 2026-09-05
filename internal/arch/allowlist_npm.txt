@@ -22,6 +22,7 @@ radix-ui
 vite
 @vitejs/plugin-react
 typescript
+@typescript/native
 vitest
 @vitest/coverage-v8
 jsdom
