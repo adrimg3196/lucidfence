@@ -1,6 +1,6 @@
 {
   "service": "lucidfence-cloud",
-  "generated_at": "2026-09-05T15:40:36Z",
+  "generated_at": "2026-09-05T17:35:55Z",
   "mode": "simulation",
   "totals": {
     "devices": 18,
@@ -24,7 +24,7 @@
   "tenants": [
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-09-05T15:40:36Z",
+      "generated_at": "2026-09-05T17:35:54Z",
       "org_id": "",
       "mode": "simulation",
       "totals": {
@@ -234,7 +234,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-09-05T15:40:36Z",
+      "generated_at": "2026-09-05T17:35:55Z",
       "org_id": "acme-logistics",
       "mode": "simulation",
       "totals": {
@@ -435,7 +435,7 @@
     },
     {
       "service": "lucidfence-cloud",
-      "generated_at": "2026-09-05T15:40:36Z",
+      "generated_at": "2026-09-05T17:35:55Z",
       "org_id": "empresa-demo-xyz",
       "mode": "simulation",
       "totals": {
