@@ -17,3 +17,19 @@ Cualquier función que intente convertir a LucidFence en un enrolador/UEM sustit
 
 **Acción futura:**
 Toda propuesta de producto dentro del horizonte `EXPLORE` debe evaluar cómo capitaliza la neutralidad multi-UEM y amplifica la confianza/auditabilidad del CISO sin requerir infraestructura centralizada ni backend de pago.
+
+## 2026-08-31 — La simulación de radio de impacto en local elimina el riesgo operacional de GitOps en geofencing
+
+**Aprendizaje:**
+El mayor freno para la adopción de "Policy/Geofence-as-Code" en seguridad de endpoints no es la falta de sintaxis YAML/JSON ni la ausencia de pipelines CI/CD, sino el **miedo al falso positivo masivo** (p. ej., reducir un polígono o endurecer una política y bloquear accidentalmente a decenas de empleados autorizados). Las herramientas tradicionales de GitOps (como Fleet o Terraform) solo validan la sintaxis o el diff de configuración; no pueden proyectar el impacto funcional sobre dispositivos vivos. Integrar un simulador de radio de impacto (*blast-radius replay*) sobre la telemetría local residente (`events.jsonl`) transforma una decisión a ciegas en un despliegue cuantitativamente seguro.
+
+**Evidencia:**
+- `lucidfence/core/policy_replay.py` (Módulo nativo what-if replay).
+- `docs/internal/product/BACKLOG.md` (Ítem #1: Políticas y geocercas como código con replay).
+- `docs/product/PROPOSAL_gitops_policy_replay.md` (Propuesta de producto E2).
+
+**Implicación estratégica:**
+LucidFence puede ofrecer la experiencia GitOps más segura del mercado sin necesidad de backend centralizado de pago ni servidores intermedios, aprovechando el historial de eventos local de la arquitectura Local-First.
+
+**Acción futura:**
+Toda función de automatización o aplicación de políticas declarativas (`apply`) debe incluir un modo `--dry-run` con proyección de impacto histórico por defecto antes de efectuar mutaciones en caliente.
