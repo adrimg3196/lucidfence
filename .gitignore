@@ -1,0 +1,19 @@
+# binarios y artefactos
+/bin/
+/dist/
+coverage.out
+test.out
+# frontend
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+internal/web/dist/*
+!internal/web/dist/placeholder.html
+# datos locales de desarrollo
+/data/
+/config.json
+.env
+# sistema
+.DS_Store
+/.superpowers/
