@@ -48,7 +48,10 @@ func Handler(fsys fs.FS) http.Handler {
 		if name == "" {
 			name = fallback
 		}
-		if _, err := fs.Stat(fsys, name); err != nil {
+		if info, err := fs.Stat(fsys, name); err != nil || info.IsDir() {
+			// Un directorio real (p.ej. "assets" sin fichero "assets"
+			// propio) no es servible: cae al fallback igual que una
+			// ruta inexistente, en vez de intentar leerlo como fichero.
 			name = fallback
 		}
 		if strings.HasPrefix(name, "assets/") {
@@ -72,7 +75,15 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "error interno", http.StatusInternalServerError)
+		return
+	}
+	if info.IsDir() {
+		// No debería alcanzarse: Handler ya sustituye por el fallback
+		// cualquier name que resuelva a un directorio. Defensivo, para
+		// que serveFile nunca intente leer un directorio con
+		// io.ReadAll (que fallaría) ni filtre esa ruta interna.
+		http.NotFound(w, r)
 		return
 	}
 	if rs, ok := f.(io.ReadSeeker); ok {
@@ -81,7 +92,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) 
 	}
 	data, err := io.ReadAll(f)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "error interno", http.StatusInternalServerError)
 		return
 	}
 	http.ServeContent(w, r, name, info.ModTime(), bytes.NewReader(data))
