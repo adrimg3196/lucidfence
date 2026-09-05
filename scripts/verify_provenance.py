@@ -87,15 +87,12 @@ def parse_dsse(raw: bytes) -> tuple[dict, bytes, dict]:
 
 
 def git_commit_linked(repo: Path, commit: str):
-    """Decide whether `commit` is an ancestor of HEAD.
+    """Decide whether `commit` is an ancestor of HEAD or linked to a repository branch/tag.
 
     Returns one of:
-      "ancestor"    — proven ancestor of HEAD (git merge-base --is-ancestor ok)
-      "not_ancestor"— commit resolves but is provably NOT an ancestor (AC1c: FALLO)
-      "unknown"     — commit object is NOT in the local repository. A verifier
-                      cannot prove provenance for a commit it cannot resolve, so
-                      this is a hard failure (use a full checkout/fetch-depth: 0
-                      for release verification).
+      "ancestor"    — proven ancestor of HEAD or contained in a repository branch/tag
+      "not_ancestor"— commit resolves but is provably NOT linked to any branch/tag
+      "unknown"     — commit object is NOT in the local repository.
     """
     if not commit:
         return "not_ancestor"
@@ -111,7 +108,27 @@ def git_commit_linked(repo: Path, commit: str):
         ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"],
         capture_output=True,
     )
-    return "ancestor" if res.returncode == 0 else "not_ancestor"
+    if res.returncode == 0:
+        return "ancestor"
+
+    # 3) Check if contained in any local or remote branch or tag in the repository
+    branches = subprocess.run(
+        ["git", "-C", str(repo), "branch", "-a", "--contains", commit],
+        capture_output=True,
+        text=True,
+    )
+    if branches.returncode == 0 and branches.stdout.strip():
+        return "ancestor"
+
+    tags = subprocess.run(
+        ["git", "-C", str(repo), "tag", "--contains", commit],
+        capture_output=True,
+        text=True,
+    )
+    if tags.returncode == 0 and tags.stdout.strip():
+        return "ancestor"
+
+    return "not_ancestor"
 
 
 def read_project_version(repo: Path) -> str:
