@@ -1,0 +1,5 @@
+# Dependencias Go permitidas (spec §5.8). Una por línea. Cambiar este fichero exige aprobación del propietario (CODEOWNERS).
+github.com/coreos/go-oidc/v3
+golang.org/x/oauth2
+golang.org/x/crypto
+github.com/google/go-cmp

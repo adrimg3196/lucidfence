@@ -1,0 +1,60 @@
+# Arquitectura de LucidFence 2.0
+
+Un módulo Go, un binario. Este documento es normativo: `internal/arch` y
+`depguard` (`.golangci.yml`) fallan la CI si el código se desvía de él. La
+spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrite-design.md`.
+
+## Principios
+
+1. Local-first: el dato del tenant vive en la máquina del tenant. Cero telemetría.
+2. Complemento del UEM, nunca un UEM.
+3. El runtime lo decide el admin: `observe` por defecto, doble llave para `wipe`.
+4. Gratis y open source (Apache-2.0).
+5. Todo claim se verifica en vivo contra el binario (batería runtime).
+6. Estado en JSON/JSONL en disco, sin base de datos.
+
+## Paquetes
+
+| Paquete | Responsabilidad |
+|---------|-----------------|
+| `cmd/lucidfence` | `main()` y despacho de subcomandos. Sin lógica de negocio. |
+| `cmd/battery` | Ejecuta la batería runtime contra un binario compilado. Solo CI y desarrollo. |
+| `internal/version` | Versión y commit del binario, fijados por `-ldflags`. |
+| `internal/web` | `embed.FS` del frontend compilado y handler SPA con fallback. |
+| `internal/arch` | Tests que hacen cumplir límites físicos, allowlists y este documento. |
+| `internal/battery` | Checks en vivo (`RUNTIME: N/N`). Cada claim de producto añade uno. |
+
+Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
+`internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
+`internal/notify`, `internal/posture`, `internal/reports`, `internal/mcp`,
+`internal/config`, `internal/migrate`) se añaden a esta tabla en el commit que
+los crea; el test `TestArchitectureDocListsEveryPackage` lo exige.
+
+## Reglas de dependencia
+
+| Paquete | Puede importar del proyecto |
+|---------|-----------------------------|
+| `internal/domain` | nada (solo stdlib y otros subpaquetes de `domain`) |
+| `internal/uem` y conectores | `domain`, `uem` |
+| `internal/store` | `domain` |
+| `internal/notify`, `internal/posture`, `internal/reports` | `domain`, `store` |
+| `internal/engine` | `domain`, `uem`, `store`, `notify`, `posture`, `config` |
+| `internal/auth` | `domain`, `store` (+ `golang.org/x/crypto`) |
+| `internal/api` | `engine`, `auth`, `store`, `reports`, `domain`, `uem` (nunca un conector concreto), `config`, `version` |
+| `internal/mcp` | `api` (cliente HTTP local) |
+| `internal/web`, `internal/version`, `internal/config`, `internal/arch`, `internal/battery` | solo stdlib |
+| `cmd/*` | todo |
+
+## Límites físicos
+
+- Ficheros Go ≤ 400 líneas; componentes `.tsx` ≤ 300 líneas. Excepción solo con
+  `// limits:allow #<issue>` en la primera línea.
+- Funciones Go ≤ 60 líneas y ≤ 40 sentencias; complejidad ciclomática ≤ 15.
+- Dependencias externas solo las de `internal/arch/allowlist_go.txt` y
+  `internal/arch/allowlist_npm.txt`.
+
+## Ficheros protegidos (CODEOWNERS)
+
+`ARCHITECTURE.md`, `.github/`, `go.mod`, `web/package.json`,
+`internal/arch/allowlist_*.txt`, `internal/engine/guardrails*.go`. Cualquier
+cambio exige aprobación del propietario aunque la CI esté verde.

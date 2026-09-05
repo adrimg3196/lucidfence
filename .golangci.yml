@@ -1,0 +1,85 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - depguard
+    - funlen
+    - gocyclo
+    - misspell
+    - unparam
+  settings:
+    funlen:
+      lines: 60
+      statements: 40
+    gocyclo:
+      min-complexity: 15
+    misspell:
+      ignore-rules:
+        - dependencias
+        - producto
+    depguard:
+      rules:
+        domain:
+          list-mode: strict
+          files: ["**/internal/domain/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain"]
+        uem:
+          list-mode: strict
+          files: ["**/internal/uem/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/uem"]
+        store:
+          list-mode: strict
+          files: ["**/internal/store/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain"]
+        leaf-services:
+          list-mode: strict
+          files: ["**/internal/notify/**", "**/internal/posture/**", "**/internal/reports/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store"]
+        engine:
+          list-mode: strict
+          files: ["**/internal/engine/**"]
+          allow:
+            - "$gostd"
+            - "github.com/adrimg3196/lucidfence/internal/domain"
+            - "github.com/adrimg3196/lucidfence/internal/uem"
+            - "github.com/adrimg3196/lucidfence/internal/store"
+            - "github.com/adrimg3196/lucidfence/internal/notify"
+            - "github.com/adrimg3196/lucidfence/internal/posture"
+            - "github.com/adrimg3196/lucidfence/internal/config"
+        auth:
+          list-mode: strict
+          files: ["**/internal/auth/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store", "golang.org/x/crypto"]
+        api:
+          list-mode: strict
+          files: ["**/internal/api/**"]
+          allow:
+            - "$gostd"
+            - "github.com/adrimg3196/lucidfence/internal/engine"
+            - "github.com/adrimg3196/lucidfence/internal/auth"
+            - "github.com/adrimg3196/lucidfence/internal/store"
+            - "github.com/adrimg3196/lucidfence/internal/reports"
+            - "github.com/adrimg3196/lucidfence/internal/domain"
+            - "github.com/adrimg3196/lucidfence/internal/uem"
+            - "github.com/adrimg3196/lucidfence/internal/config"
+            - "github.com/adrimg3196/lucidfence/internal/version"
+          deny:
+            - pkg: "github.com/adrimg3196/lucidfence/internal/uem/"
+              desc: "api nunca importa un conector concreto (spec §5.2)"
+        mcp:
+          list-mode: strict
+          files: ["**/internal/mcp/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/api"]
+        leaf-utils:
+          list-mode: strict
+          files: ["**/internal/web/**", "**/internal/version/**", "**/internal/config/**", "**/internal/arch/**", "**/internal/battery/**"]
+          allow: ["$gostd"]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

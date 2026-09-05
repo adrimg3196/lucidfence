@@ -27,19 +27,19 @@ func commands() map[string]command {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
 	cmd, ok := commands()[args[0]]
 	if !ok {
-		fmt.Fprintf(stderr, "subcomando desconocido %q\n\n%s", args[0], usage)
+		_, _ = fmt.Fprintf(stderr, "subcomando desconocido %q\n\n%s", args[0], usage)
 		return 2
 	}
 	return cmd(args[1:], stdout, stderr)
 }
 
 func runVersion(_ []string, stdout, _ io.Writer) int {
-	fmt.Fprintln(stdout, version.String())
+	_, _ = fmt.Fprintln(stdout, version.String())
 	return 0
 }
 
