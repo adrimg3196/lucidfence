@@ -1,0 +1,10 @@
+# Ficheros que exigen aprobación del propietario aunque la CI esté verde (spec §9.2).
+/ARCHITECTURE.md              @adrimg3196
+/.github/                     @adrimg3196
+/go.mod                       @adrimg3196
+/go.sum                       @adrimg3196
+/.golangci.yml               @adrimg3196
+/web/package.json             @adrimg3196
+/internal/arch/               @adrimg3196
+/internal/engine/guardrails*  @adrimg3196
+/scripts/coverage.sh          @adrimg3196

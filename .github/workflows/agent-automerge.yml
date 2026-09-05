@@ -1,0 +1,41 @@
+name: agent-automerge
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: mergear si cumple los límites (spec §9.3)
+        env:
+          GH_TOKEN: ${{ secrets.AGENTS_GITHUB_PAT }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          num=$(gh pr list --search "$SHA" --state open --json number --jq '.[0].number // empty')
+          [ -n "$num" ] || { echo "sin PR abierta para $SHA"; exit 0; }
+          pr=$(gh pr view "$num" --json labels,additions,deletions,headRefName)
+          labels=$(jq -r '.labels[].name' <<<"$pr")
+          grep -qx agent <<<"$labels" || { echo "PR #$num no es de agente"; exit 0; }
+          if grep -qx needs-human <<<"$labels"; then gh pr comment "$num" -b "automerge: etiqueta needs-human presente, espera revisión humana."; exit 0; fi
+          size=$(( $(jq .additions <<<"$pr") + $(jq .deletions <<<"$pr") ))
+          if [ "$size" -gt 400 ]; then gh pr comment "$num" -b "automerge: $size líneas cambiadas > 400. Divide la PR (spec §9.3)."; exit 0; fi
+          protected=$(grep -vE '^\s*(#|$)' .github/CODEOWNERS | awk '{print $1}' | sed 's#^/##')
+          changed=$(gh pr diff "$num" --name-only)
+          for p in $protected; do
+            prefix="${p%\*}"
+            if grep -q "^${prefix}" <<<"$changed"; then
+              gh pr comment "$num" -b "automerge: toca ${p} (CODEOWNERS); requiere aprobación del propietario."; exit 0
+            fi
+          done
+          gh pr merge "$num" --squash --auto
+          echo "automerge: PR #$num en cola de merge"
