@@ -34,6 +34,7 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
 | `internal/config` | `config.json`: defaults seguros, validación con nombre de campo, guardado 0600. |
+| `internal/engine` | Ciclo de evaluación bajo TryLock, planificación de acciones, guardarraíles (observe por defecto), datos demo. |
 
 Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
 `internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
