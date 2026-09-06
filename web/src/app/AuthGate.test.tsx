@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router";
 import { renderWithProviders } from "@/test/render";
 import { AuthGate } from "./AuthGate";
 import * as hooks from "@/api/hooks";
+import { ApiError } from "@/api/client";
 
 vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useAuthStatus: vi.fn(), useMe: vi.fn() }));
 
@@ -44,4 +45,30 @@ test("muestra cargando mientras resuelve", () => {
   vi.mocked(hooks.useMe).mockReturnValue({ data: undefined, isPending: true, error: null } as never);
   renderWithProviders(tree());
   expect(screen.getByRole("status")).toBeInTheDocument();
+});
+
+test("muestra el error de /auth/me en vez de redirigir a login", () => {
+  vi.mocked(hooks.useAuthStatus).mockReturnValue({ data: { setup_required: false }, isPending: false, error: null } as never);
+  vi.mocked(hooks.useMe).mockReturnValue({
+    data: undefined,
+    isPending: false,
+    error: new ApiError(500, "internal_error", "Error interno"),
+    refetch: vi.fn(),
+  } as never);
+  renderWithProviders(tree());
+  expect(screen.getByText("Algo ha fallado")).toBeInTheDocument();
+  expect(screen.queryByText("LOGIN")).not.toBeInTheDocument();
+});
+
+test("muestra el error de /auth/status", () => {
+  vi.mocked(hooks.useAuthStatus).mockReturnValue({
+    data: undefined,
+    isPending: false,
+    error: new ApiError(500, "internal_error", "Error interno"),
+    refetch: vi.fn(),
+  } as never);
+  vi.mocked(hooks.useMe).mockReturnValue({ data: null, isPending: false, error: null } as never);
+  renderWithProviders(tree());
+  expect(screen.getByText("Algo ha fallado")).toBeInTheDocument();
+  expect(screen.queryByText("LOGIN")).not.toBeInTheDocument();
 });
