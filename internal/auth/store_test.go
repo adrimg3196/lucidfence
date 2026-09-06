@@ -255,6 +255,38 @@ func TestSetupNoMutaSiPersistenciaFalla(t *testing.T) {
 	}
 }
 
+// TestLoginConPersistenciaRotaNoDejaSesionHuerfana convierte sessions.json
+// en un directorio para que persistSessions falle con las credenciales
+// correctas: Login debe devolver un error que envuelve ErrPersistence (para
+// que la API lo distinga de unas credenciales malas) y no dejar la sesión
+// viva en memoria, que el cliente nunca llegaría a recibir (hallazgo C8).
+func TestLoginConPersistenciaRotaNoDejaSesionHuerfana(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "sessions.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.Login("a@x.com", "contraseña-larga-1", "default")
+	if !errors.Is(err, ErrPersistence) {
+		t.Fatalf("un fallo de escritura debe distinguirse de las credenciales: %v", err)
+	}
+	if sess.Token != "" {
+		t.Fatalf("no debe devolver sesión: %+v", sess)
+	}
+	if len(s.sessions) != 0 {
+		t.Fatalf("sesión huérfana en memoria: %v", s.sessions)
+	}
+	if errors.Is(err, ErrInvalidCredentials) || errors.Is(err, ErrThrottled) {
+		t.Fatalf("el error de persistencia no es de credenciales: %v", err)
+	}
+}
+
 // TestUserPublicoNoExponeElHash comprueba que el tipo público User (el que
 // devuelven Setup y UserByID) no serializa el hash de la contraseña: solo
 // userRecord, que es lo que se persiste en users.json, lo lleva.

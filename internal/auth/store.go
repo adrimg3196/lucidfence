@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ var (
 	ErrAlreadySetUp       = errors.New("la instalación ya tiene usuarios")
 	ErrInvalidCredentials = errors.New("credenciales incorrectas")
 	ErrInvalidUser        = errors.New("email y nombre obligatorios")
+	ErrPersistence        = errors.New("no se pudo guardar el estado de sesión")
 	ErrThrottled          = errors.New("demasiados intentos; espera un minuto")
 	ErrUnauthenticated    = errors.New("no autenticado")
 )
@@ -347,10 +349,23 @@ func (s *Store) Login(email, password, orgID string) (Session, error) {
 		s.registerFail(email)
 		return Session{}, ErrInvalidCredentials
 	}
+	return s.newSessionLocked(candidate.ID, orgID)
+}
+
+// newSessionLocked crea y persiste una sesión con s.mu tomado. Si la
+// escritura falla, la sesión se retira del mapa y el error sale envuelto en
+// ErrPersistence: dejarla viva en memoria acumulaba sesiones huérfanas que
+// el cliente nunca recibía, y confundir ese fallo con unas credenciales
+// malas daba un diagnóstico falso ante un problema de disco (hallazgo C8).
+func (s *Store) newSessionLocked(userID, orgID string) (Session, error) {
 	now := s.now().UTC()
-	sess := Session{Token: randomHex(32), UserID: candidate.ID, OrgID: orgID, CSRF: randomHex(16), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
+	sess := Session{Token: randomHex(32), UserID: userID, OrgID: orgID, CSRF: randomHex(16), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
 	s.sessions[sess.Token] = sess
-	return sess, s.persistSessions()
+	if err := s.persistSessions(); err != nil {
+		delete(s.sessions, sess.Token)
+		return Session{}, fmt.Errorf("%w: %w", ErrPersistence, err)
+	}
+	return sess, nil
 }
 
 // Logout cierra la sesión.

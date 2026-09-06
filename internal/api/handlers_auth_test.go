@@ -131,6 +131,30 @@ func TestSetupNoFiltraErrorDeUsuarios(t *testing.T) {
 	}
 }
 
+// TestLoginConPersistenciaRotaEs500 rompe sessions.json (directorio en vez
+// de fichero) y hace login con las credenciales correctas: el fallo de
+// escritura debe salir como 500 "error interno", no como 401 "email o
+// contraseña incorrectos", que daba al usuario y al operador un
+// diagnóstico falso ante un problema de disco o de permisos (hallazgo C8).
+func TestLoginConPersistenciaRotaEs500(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	sessions := filepath.Join(e.authDir, "sessions.json")
+	if err := os.Remove(sessions); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("POST", "/api/v1/auth/login", map[string]any{"email": "adri@example.com", "password": "contraseña-larga-1"}, false)
+	if res.StatusCode != 500 || out["code"] != "internal" || out["error"] != "error interno" {
+		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
+	}
+	if strings.Contains(fmt.Sprintf("%v", out), e.authDir) {
+		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
+	}
+}
+
 func TestSetupValidaYCSRF(t *testing.T) {
 	e := newTestEnv(t)
 	res, out := e.do("POST", "/api/v1/auth/setup", map[string]any{"email": "sin-arroba", "name": "", "password": "corta", "mode": "demo"}, false)

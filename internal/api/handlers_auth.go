@@ -90,6 +90,12 @@ func (s *server) openSession(w http.ResponseWriter, r *http.Request, email, pass
 	case errors.Is(err, auth.ErrThrottled):
 		writeError(w, http.StatusTooManyRequests, "throttled", err.Error())
 		return
+	// Un fallo al guardar sessions.json no es un problema de credenciales:
+	// sale como 500 "error interno" y se registra, en vez de acusar al
+	// usuario de equivocarse de contraseña (M1-R17, M1-R21).
+	case errors.Is(err, auth.ErrPersistence):
+		s.fail(w, "auth.login.persist", err)
+		return
 	case err != nil:
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email o contraseña incorrectos")
 		return
