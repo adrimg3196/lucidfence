@@ -30,6 +30,7 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/domain/poi` | Puntos de interés y su exportación GeoJSON. |
 | `internal/domain/device` | Dispositivo normalizado, inventario, veredicto de riesgo, trail. |
 | `internal/domain/transition` | Evaluación de geocerca por ciclo y detección de transiciones. |
+| `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700. |
 
 Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
 `internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
