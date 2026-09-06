@@ -99,21 +99,53 @@ func checkDevices(ctx context.Context, env *Env) error {
 	return fmt.Errorf("total=%v, quiero 6", total)
 }
 
+// items extrae out["items"] como una lista, o error si falta o no lo es.
+func items(out map[string]any) ([]any, error) {
+	v, ok := out["items"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("items ausente o no es una lista: %v", out)
+	}
+	return v, nil
+}
+
+// number extrae m[key] como float64 (así decodifica encoding/json los
+// números JSON), o error si falta o no lo es.
+func number(m map[string]any, key string) (float64, error) {
+	v, ok := m[key].(float64)
+	if !ok {
+		return 0, fmt.Errorf("%s ausente o no numérico: %v", key, m)
+	}
+	return v, nil
+}
+
 func checkRunOnce(ctx context.Context, env *Env) error {
 	var st map[string]any
 	code, err := env.PostJSON(ctx, "/api/v1/engine/run-once", nil, &st)
 	if err != nil || code != 200 {
 		return fmt.Errorf("code=%d err=%v body=%v", code, err, st)
 	}
-	if st["devices_total"].(float64) != 6 || st["inside"].(float64) < 2 {
+	devicesTotal, errTotal := number(st, "devices_total")
+	inside, errInside := number(st, "inside")
+	if errTotal != nil || errInside != nil {
+		return fmt.Errorf("respuesta inesperada de /api/v1/engine/run-once: %v", st)
+	}
+	if devicesTotal != 6 || inside < 2 {
 		return fmt.Errorf("stats=%v", st)
 	}
 	var devs map[string]any
 	if _, err := env.GetJSON(ctx, "/api/v1/devices?state=inside", &devs); err != nil {
 		return err
 	}
-	for _, it := range devs["items"].([]any) {
-		if d := it.(map[string]any); d["id"] == "dev-001" && d["inside_fence"] == "demo-hq" {
+	devItems, err := items(devs)
+	if err != nil {
+		return fmt.Errorf("respuesta inesperada de /api/v1/devices?state=inside: %v", devs)
+	}
+	for _, it := range devItems {
+		d, ok := it.(map[string]any)
+		if !ok {
+			return fmt.Errorf("respuesta inesperada de /api/v1/devices?state=inside: %v", devs)
+		}
+		if d["id"] == "dev-001" && d["inside_fence"] == "demo-hq" {
 			return nil
 		}
 	}
@@ -131,8 +163,15 @@ func checkTransition(ctx context.Context, env *Env) error {
 	if _, err := env.GetJSON(ctx, "/api/v1/events?limit=100", &out); err != nil {
 		return err
 	}
-	for _, it := range out["items"].([]any) {
-		ev := it.(map[string]any)
+	evItems, err := items(out)
+	if err != nil {
+		return fmt.Errorf("respuesta inesperada de /api/v1/events?limit=100: %v", out)
+	}
+	for _, it := range evItems {
+		ev, ok := it.(map[string]any)
+		if !ok {
+			return fmt.Errorf("respuesta inesperada de /api/v1/events?limit=100: %v", out)
+		}
 		if ev["device_id"] == "dev-001" && ev["to"] == "demo-hq:inside" {
 			return nil
 		}
@@ -145,12 +184,18 @@ func checkActionsDryRun(ctx context.Context, env *Env) error {
 	if _, err := env.GetJSON(ctx, "/api/v1/actions?limit=100", &out); err != nil {
 		return err
 	}
-	items := out["items"].([]any)
-	if len(items) == 0 {
+	actionItems, err := items(out)
+	if err != nil {
+		return fmt.Errorf("respuesta inesperada de /api/v1/actions?limit=100: %v", out)
+	}
+	if len(actionItems) == 0 {
 		return fmt.Errorf("sin acciones")
 	}
-	for _, it := range items {
-		a := it.(map[string]any)
+	for _, it := range actionItems {
+		a, ok := it.(map[string]any)
+		if !ok {
+			return fmt.Errorf("respuesta inesperada de /api/v1/actions?limit=100: %v", out)
+		}
 		if a["dry_run"] != true || a["simulated"] != true {
 			return fmt.Errorf("acción fuera de dry-run: %v", a)
 		}

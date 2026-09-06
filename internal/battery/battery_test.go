@@ -61,3 +61,64 @@ func TestCheckVersionConBinarioFalso(t *testing.T) {
 		t.Fatal("exit 1 debe fallar")
 	}
 }
+
+func TestItems(t *testing.T) {
+	cases := []struct {
+		name    string
+		out     map[string]any
+		want    int
+		wantErr bool
+	}{
+		{name: "campo ausente", out: map[string]any{}, wantErr: true},
+		{name: "tipo erróneo", out: map[string]any{"items": "no es una lista"}, wantErr: true},
+		{name: "correcto", out: map[string]any{"items": []any{"a", "b"}}, want: 2},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := items(c.out)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("items(%v) quiero error, got %v", c.out, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("items(%v) err inesperado: %v", c.out, err)
+			}
+			if len(got) != c.want {
+				t.Fatalf("items(%v) = %v, quiero %d elementos", c.out, got, c.want)
+			}
+		})
+	}
+}
+
+func TestNumber(t *testing.T) {
+	cases := []struct {
+		name    string
+		m       map[string]any
+		key     string
+		want    float64
+		wantErr bool
+	}{
+		{name: "campo ausente", m: map[string]any{}, key: "total", wantErr: true},
+		{name: "tipo erróneo", m: map[string]any{"total": "6"}, key: "total", wantErr: true},
+		{name: "correcto", m: map[string]any{"total": 6.0}, key: "total", want: 6},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := number(c.m, c.key)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("number(%v, %q) quiero error, got %v", c.m, c.key, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("number(%v, %q) err inesperado: %v", c.m, c.key, err)
+			}
+			if got != c.want {
+				t.Fatalf("number(%v, %q) = %v, quiero %v", c.m, c.key, got, c.want)
+			}
+		})
+	}
+}
