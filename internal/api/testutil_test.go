@@ -83,6 +83,17 @@ type testEnv struct {
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	// fakeFleet en vez de un conector real: internal/api nunca importa un
+	// conector concreto, ni siquiera en tests (spec §5.2, depguard), pero los
+	// handlers de dispositivos y motor sí necesitan un ciclo con flota real.
+	return newTestEnvWithFleet(t, &fakeFleet{now: func() time.Time { return now }}, now)
+}
+
+// newTestEnvWithFleet es newTestEnv con un uem.Adapter propio: lo usan los
+// tests que necesitan controlar cuándo termina un ciclo del motor (p. ej.
+// para provocar de forma determinista un 409 cycle_in_progress).
+func newTestEnvWithFleet(t *testing.T, fleet uem.Adapter, now time.Time) *testEnv {
+	t.Helper()
 	clock := func() time.Time { return now }
 	st, _ := store.Open(t.TempDir())
 	org, _ := st.Org("default")
@@ -90,10 +101,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// fakeFleet en vez de un conector real: internal/api nunca importa un
-	// conector concreto, ni siquiera en tests (spec §5.2, depguard), pero los
-	// handlers de dispositivos y motor sí necesitan un ciclo con flota real.
-	eng := engine.New(org, []uem.Adapter{&fakeFleet{now: clock}}, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
+	eng := engine.New(org, []uem.Adapter{fleet}, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
 	h, _ := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
