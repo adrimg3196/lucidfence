@@ -117,6 +117,72 @@ func checkPOIGeoJSON(t *testing.T, e *testEnv) {
 	}
 }
 
+// TestFencesPUTConservaCreatedAt cubre la ronda de corrección M1-R17: un PUT
+// cuyo cuerpo no lleva created_at (el caso normal de un cliente que solo
+// manda los campos editables) no debe borrar la fecha de alta original.
+func TestFencesPUTConservaCreatedAt(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	create := map[string]any{"id": "hq", "name": "HQ", "kind": "circle", "center": map[string]float64{"lat": 40.42, "lng": -3.71}, "radius_m": 300}
+	res, out := e.do("POST", "/api/v1/fences", create, true)
+	if res.StatusCode != 201 {
+		t.Fatalf("create: %d %v", res.StatusCode, out)
+	}
+	createdAt, _ := out["created_at"].(string)
+	if createdAt == "" {
+		t.Fatalf("create sin created_at: %v", out)
+	}
+
+	put := map[string]any{"id": "hq", "name": "HQ renombrada", "kind": "circle", "center": map[string]float64{"lat": 40.42, "lng": -3.71}, "radius_m": 300}
+	if _, has := put["created_at"]; has {
+		t.Fatal("el cuerpo del PUT no debe llevar created_at")
+	}
+	res, out = e.do("PUT", "/api/v1/fences/hq", put, true)
+	if res.StatusCode != 200 || out["name"] != "HQ renombrada" {
+		t.Fatalf("put: %d %v", res.StatusCode, out)
+	}
+
+	res, out = e.do("GET", "/api/v1/fences/hq", nil, true)
+	if res.StatusCode != 200 || out["created_at"] != createdAt {
+		t.Fatalf("created_at debía conservarse (%q): %v", createdAt, out)
+	}
+	if out["updated_at"] == "" {
+		t.Fatal("updated_at vacío tras el put")
+	}
+}
+
+// TestRoutesPUTConservaCreatedAt es la misma comprobación que
+// TestFencesPUTConservaCreatedAt para el registrador de rutas.
+func TestRoutesPUTConservaCreatedAt(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	create := map[string]any{"id": "r1", "name": "R", "corridor_m": 100,
+		"waypoints": []map[string]float64{{"lat": 40.42, "lng": -3.7}, {"lat": 40.43, "lng": -3.7}}, "device_ids": []string{"dev-001"}}
+	res, out := e.do("POST", "/api/v1/routes", create, true)
+	if res.StatusCode != 201 {
+		t.Fatalf("create: %d %v", res.StatusCode, out)
+	}
+	createdAt, _ := out["created_at"].(string)
+	if createdAt == "" {
+		t.Fatalf("create sin created_at: %v", out)
+	}
+
+	put := map[string]any{"id": "r1", "name": "R renombrada", "corridor_m": 100,
+		"waypoints": []map[string]float64{{"lat": 40.42, "lng": -3.7}, {"lat": 40.43, "lng": -3.7}}, "device_ids": []string{"dev-001"}}
+	res, out = e.do("PUT", "/api/v1/routes/r1", put, true)
+	if res.StatusCode != 200 || out["name"] != "R renombrada" {
+		t.Fatalf("put: %d %v", res.StatusCode, out)
+	}
+
+	res, out = e.do("GET", "/api/v1/routes/r1", nil, true)
+	if res.StatusCode != 200 || out["created_at"] != createdAt {
+		t.Fatalf("created_at debía conservarse (%q): %v", createdAt, out)
+	}
+	if out["updated_at"] == "" {
+		t.Fatal("updated_at vacío tras el put")
+	}
+}
+
 func TestFencesRequierenPermisoYCSRF(t *testing.T) {
 	e := newTestEnv(t)
 	e.setup("empty")

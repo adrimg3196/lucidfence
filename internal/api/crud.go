@@ -18,8 +18,12 @@ type crud[T any] struct {
 	load      func() ([]T, error)
 	save      func([]T) error
 	id        func(T) string
-	stamp     func(*T, time.Time, bool)
-	validate  func([]T) error
+	// stamp fija las fechas del registro. En create se llama con prev == nil
+	// (fija CreatedAt=UpdatedAt=now); en update, con prev apuntando al
+	// registro almacenado (copia prev.CreatedAt y fija UpdatedAt=now), para
+	// que un PUT cuyo cuerpo no incluya created_at no lo borre.
+	stamp    func(next *T, prev *T, now time.Time)
+	validate func([]T) error
 }
 
 var errConflict = errors.New("ya existe")
@@ -85,7 +89,7 @@ func (c crud[T]) create(w http.ResponseWriter, r *http.Request, now time.Time) {
 		writeError(w, http.StatusConflict, "conflict", errConflict.Error())
 		return
 	}
-	c.stamp(&item, now, true)
+	c.stamp(&item, nil, now)
 	items = append(items, item)
 	if err := c.validate(items); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid", err.Error())
@@ -118,7 +122,7 @@ func (c crud[T]) update(w http.ResponseWriter, r *http.Request, now time.Time) {
 		writeError(w, http.StatusBadRequest, "invalid", "el id del cuerpo no coincide con la ruta")
 		return
 	}
-	c.stamp(&item, now, false)
+	c.stamp(&item, &items[i], now)
 	items[i] = item
 	if err := c.validate(items); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid", err.Error())

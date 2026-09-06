@@ -14,7 +14,7 @@ func (s *server) registerPOIs() {
 		path: "/api/v1/pois", readCap: auth.FenceRead, writeCap: auth.FenceWrite, deleteCap: auth.FenceDelete,
 		load: s.org().POIs, save: s.org().SavePOIs,
 		id:       func(p poi.POI) string { return p.ID },
-		stamp:    func(*poi.POI, time.Time, bool) {},
+		stamp:    func(*poi.POI, *poi.POI, time.Time) {},
 		validate: poi.ValidateAll,
 	}.register(s)
 }

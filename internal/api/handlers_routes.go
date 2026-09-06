@@ -13,16 +13,18 @@ func (s *server) registerRoutes() {
 		path: "/api/v1/routes", readCap: auth.RouteRead, writeCap: auth.RouteWrite, deleteCap: auth.RouteDelete,
 		load: s.org().Routes, save: s.org().SaveRoutes,
 		id: func(r route.Route) string { return r.ID },
-		stamp: func(r *route.Route, now time.Time, created bool) {
-			if created {
-				r.CreatedAt = now
+		stamp: func(next *route.Route, prev *route.Route, now time.Time) {
+			if prev == nil {
+				next.CreatedAt = now
+			} else {
+				next.CreatedAt = prev.CreatedAt
 			}
-			r.UpdatedAt = now
-			if r.Actions == nil {
-				r.Actions = []fence.Action{}
+			next.UpdatedAt = now
+			if next.Actions == nil {
+				next.Actions = []fence.Action{}
 			}
-			if r.DeviceIDs == nil {
-				r.DeviceIDs = []string{}
+			if next.DeviceIDs == nil {
+				next.DeviceIDs = []string{}
 			}
 		},
 		validate: route.ValidateAll,
