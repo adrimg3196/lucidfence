@@ -62,6 +62,40 @@ func TestHandlerRutaDeDirectorioHaceFallback(t *testing.T) {
 	}
 }
 
+func TestHandlerAssetAusenteDevuelve404(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.html":    {Data: []byte(`<div id="root"></div>`)},
+		"assets/app.js": {Data: []byte(`console.log(1)`)},
+	}
+	h := Handler(fsys)
+	for _, path := range []string{"/assets/no-existe.js", "/fonts/no-existe.woff2", "/robots.txt"} {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("%s: code=%d, quería 404", path, rr.Code)
+		}
+	}
+	// Una ruta de cliente sin extensión (spec §I3) sigue haciendo fallback SPA.
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/devices/abc", nil))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `id="root"`) {
+		t.Fatalf("/devices/abc: code=%d body=%q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandlerMetodoNoPermitidoDevuelve405(t *testing.T) {
+	fsys := fstest.MapFS{"index.html": {Data: []byte(`<div id="root"></div>`)}}
+	h := Handler(fsys)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/", nil))
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("code=%d, quería 405", rr.Code)
+	}
+	if got := rr.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("Allow=%q", got)
+	}
+}
+
 func TestHandlerSinBuildSirvePlaceholder(t *testing.T) {
 	h := Handler(Dist())
 	rr := httptest.NewRecorder()
