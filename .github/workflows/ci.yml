@@ -87,3 +87,26 @@ jobs:
       # Las devDependencies (build/test tooling, no código que se sirve) se
       # auditan aparte en un job programado (M5); aquí solo el runtime.
       - run: cd web && npm ci --ignore-scripts && npm audit --audit-level=high --omit=dev
+
+  e2e:
+    name: e2e
+    needs: [web]
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: npm, cache-dependency-path: web/package-lock.json }
+      - uses: actions/download-artifact@v7
+        with: { name: web-dist, path: internal/web/dist }
+      - name: compilar binario con dashboard
+        working-directory: .
+        run: CGO_ENABLED=0 go build -trimpath -o bin/lucidfence ./cmd/lucidfence
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with: { name: playwright-report, path: web/playwright-report, retention-days: 7 }

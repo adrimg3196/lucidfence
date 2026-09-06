@@ -9,6 +9,8 @@ web/dist/
 web/playwright-report/
 web/test-results/
 web/public/fonts/
+.e2e-data/
+.e2e-config.json
 internal/web/dist/*
 !internal/web/dist/placeholder.html
 # datos locales de desarrollo

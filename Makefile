@@ -5,7 +5,7 @@ LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/i
 
 .DEFAULT_GOAL := verify
 
-.PHONY: build web lint test cover battery verify clean
+.PHONY: build web lint test cover battery e2e verify clean
 
 web:
 	cd web && npm ci && npm run build
@@ -27,7 +27,10 @@ cover:
 battery: web build
 	scripts/battery.sh bin/lucidfence
 
-verify: lint cover web battery
+e2e: web build
+	cd web && npx playwright install chromium && npm run e2e
+
+verify: lint cover web battery e2e
 	@echo "verify: OK"
 
 clean:
