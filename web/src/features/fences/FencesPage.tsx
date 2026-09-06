@@ -75,11 +75,17 @@ export function FencesPage() {
         description={pending ? t("fences.delete.confirm", { name: pending.name }) : undefined}
         confirmLabel={t("fences.delete")}
         cancelLabel={t("fence.cancel")}
+        confirmDisabled={del.isPending}
         onConfirm={() => {
-          if (pending) del.mutate(pending.id);
-          setPending(null);
+          // M1-R27 (C13): el diálogo solo se cierra si el borrado tiene
+          // éxito; si falla, se queda abierto con el error visible (el
+          // fondo de la página queda aria-hidden mientras el diálogo está
+          // abierto, así que el error tiene que mostrarse dentro de él).
+          if (pending) del.mutate(pending.id, { onSuccess: () => setPending(null) });
         }}
-      />
+      >
+        {del.error && <ErrorState error={del.error} />}
+      </ConfirmDialog>
     </div>
   );
 }
