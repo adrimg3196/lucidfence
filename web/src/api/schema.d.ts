@@ -1057,6 +1057,11 @@ export interface components {
                 interval_seconds: number;
                 last_error?: string;
             };
+            /** @description Salud del store según el último ciclo del motor (spec §11) */
+            persistence: {
+                ok: boolean;
+                last_error?: string;
+            };
             map: {
                 enabled: boolean;
                 tiles_url: string;

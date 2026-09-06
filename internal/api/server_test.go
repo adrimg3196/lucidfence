@@ -55,6 +55,57 @@ func TestTokenLocalPorBearerDesdeLoopback(t *testing.T) {
 	}
 }
 
+// healthPersistence devuelve el objeto persistence de /api/v1/health.
+func healthPersistence(t *testing.T, e *testEnv) map[string]any {
+	t.Helper()
+	_, out := e.do("GET", "/api/v1/health", nil, false)
+	p, ok := out["persistence"].(map[string]any)
+	if !ok {
+		t.Fatalf("health debe llevar el objeto persistence: %v", out)
+	}
+	return p
+}
+
+// TestHealthExponeLosFallosDePersistenciaDelCiclo convierte trail.jsonl en
+// un directorio: el ciclo termina bien pero cada AppendTrail falla y solo se
+// cuenta en persistence_errors (M1-R11), así que /health debe declarar la
+// persistencia degradada en vez de seguir respondiendo verde mientras no se
+// guarda nada (spec §11, hallazgo C21).
+func TestHealthExponeLosFallosDePersistenciaDelCiclo(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	if p := healthPersistence(t, e); p["ok"] != true {
+		t.Fatalf("sin ciclos la persistencia está sana: %v", p)
+	}
+	if err := os.Mkdir(e.org.Path("trail.jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if res, out := e.do("POST", "/api/v1/engine/run-once", nil, true); res.StatusCode != 200 {
+		t.Fatalf("el ciclo termina aunque falle el trail: %d %v", res.StatusCode, out)
+	}
+	if p := healthPersistence(t, e); p["ok"] != false || p["last_error"] == "" {
+		t.Fatalf("degradación no expuesta: %v", p)
+	}
+}
+
+// TestHealthExponeElErrorDeStoreDelCiclo rompe devices.json: el ciclo falla
+// entero (no cuenta como completado y su error queda en Status().LastError),
+// y ese error es siempre del store —leer la entrada o guardar devices.json—,
+// así que /health debe declarar la persistencia degradada (hallazgo C21).
+func TestHealthExponeElErrorDeStoreDelCiclo(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	if err := os.Mkdir(e.org.Path("devices.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := e.do("POST", "/api/v1/engine/run-once", nil, true); res.StatusCode != 500 {
+		t.Fatalf("el ciclo debe fallar: %d", res.StatusCode)
+	}
+	if p := healthPersistence(t, e); p["ok"] != false || p["last_error"] == "" {
+		t.Fatalf("degradación no expuesta: %v", p)
+	}
+}
+
 // TestErrorInternoRegistraElIdDePeticion rompe fences.json (directorio en
 // vez de fichero) para provocar un 500 y comprueba que la línea de log lleva
 // el mismo id de petición que la cabecera X-Request-ID de la respuesta. Sin

@@ -540,6 +540,15 @@ components:
             last_error:
               type: string
           required: [running, cycles, interval_seconds]
+        persistence:
+          type: object
+          description: Salud del store según el último ciclo del motor (spec §11)
+          properties:
+            ok:
+              type: boolean
+            last_error:
+              type: string
+          required: [ok]
         map:
           type: object
           properties:
@@ -548,7 +557,7 @@ components:
             tiles_url:
               type: string
           required: [enabled, tiles_url]
-      required: [status, version, mode, enforcement, web_built, setup_required, engine, map]
+      required: [status, version, mode, enforcement, web_built, setup_required, engine, persistence, map]
     SetupRequest:
       type: object
       properties:
