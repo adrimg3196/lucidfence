@@ -26,6 +26,8 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/domain/geo` | Geometría esférica: distancias, punto en polígono, distancia a polilínea. Sin I/O. |
 | `internal/domain/action` | Enum de acciones UEM y resultado normalizado de ejecución. |
 | `internal/domain/fence` | Geocercas círculo/polígono, pertenencia, validación y acciones por evento. |
+| `internal/domain/route` | Rutas con corredor: distancia a la polilínea, asignación por dispositivo. |
+| `internal/domain/poi` | Puntos de interés y su exportación GeoJSON. |
 
 Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
 `internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
