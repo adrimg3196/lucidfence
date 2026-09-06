@@ -1,151 +1,19 @@
-// Tests de fronteras de dependencias: allowlists de Go y npm, y directivas
-// de go.mod que se saltarían la allowlist (spec §5.8, §7.2). Separado de
-// arch_test.go (límites físicos y cobertura de ARCHITECTURE.md) para que
-// ningún fichero supere el límite de 400 líneas (spec §9.1).
+// Tests de fronteras de dependencias: allowlist de npm (spec §7.2) y
+// cobertura de depguard sobre los paquetes internos (spec §5.2). La
+// allowlist de Go y la ruling M1-R13 viven en arch_gomod_test.go, y los
+// límites físicos y la cobertura de ARCHITECTURE.md en arch_test.go, para
+// que ningún fichero supere el límite de 400 líneas (spec §9.1).
 package arch
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 )
-
-// goModDirectiveRe detecta una línea "replace" o "exclude", en forma de una
-// línea o de apertura de bloque ("replace (" / "exclude ("): ninguna de las
-// dos se gestiona con la allowlist (spec §5.8), así que su sola presencia es
-// un fallo.
-var goModDirectiveRe = regexp.MustCompile(`(?m)^\s*(replace|exclude)\s+\S`)
-
-// goModRequireLineRe es el regex adicional del brief C2 para cazar un
-// require de una línea ("require mod v1.2.3") o una línea de un bloque
-// require ("\tmod v1.2.3"), en paralelo a "go list -m all".
-var goModRequireLineRe = regexp.MustCompile(`(?m)^\s*(?:require\s+)?([\w./-]+)\s+v[0-9][^\s]*`)
-
-// goModDirectives devuelve, en orden, cada directiva "replace"/"exclude"
-// encontrada en el go.mod de modPath.
-func goModDirectives(modPath string) ([]string, error) {
-	data, err := os.ReadFile(modPath)
-	if err != nil {
-		return nil, err
-	}
-	var found []string
-	for _, m := range goModDirectiveRe.FindAllStringSubmatch(string(data), -1) {
-		found = append(found, m[1])
-	}
-	return found, nil
-}
-
-// goModRequireLines devuelve los módulos que goModRequireLineRe encuentra en
-// el go.mod de modPath.
-func goModRequireLines(modPath string) ([]string, error) {
-	data, err := os.ReadFile(modPath)
-	if err != nil {
-		return nil, err
-	}
-	var mods []string
-	for _, m := range goModRequireLineRe.FindAllStringSubmatch(string(data), -1) {
-		mods = append(mods, m[1])
-	}
-	return mods, nil
-}
-
-// goListModules ejecuta "go list -m -f {{.Path}} all" desde root y devuelve
-// las rutas de módulo que no son el propio módulo del repo.
-func goListModules(t *testing.T, root string) []string {
-	t.Helper()
-	self := goList(t, root, "-f", "{{.Path}}")
-	out := goList(t, root, "-f", "{{.Path}}", "all")
-	var mods []string
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || line == self {
-			continue
-		}
-		mods = append(mods, line)
-	}
-	return mods
-}
-
-// goList ejecuta "go list -m <args...>" desde root y devuelve su salida.
-func goList(t *testing.T, root string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("go", append([]string{"list", "-m"}, args...)...)
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("go list -m %v: %v", args, err)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func TestGoDependencyAllowlist(t *testing.T) {
-	root := repoRoot(t)
-	allowed := readAllowlist(t, filepath.Join(root, "internal/arch/allowlist_go.txt"))
-	goModPath := filepath.Join(root, "go.mod")
-
-	directives, err := goModDirectives(goModPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, d := range directives {
-		t.Errorf("go.mod contiene una directiva %q; las dependencias solo se gestionan con require + allowlist (spec §5.8)", d)
-	}
-
-	for _, mod := range goListModules(t, root) {
-		if !allowed[mod] {
-			t.Errorf("go.mod requiere (go list) %q, que no está en internal/arch/allowlist_go.txt (spec §5.8)", mod)
-		}
-	}
-
-	reqs, err := goModRequireLines(goModPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, mod := range reqs {
-		if !allowed[mod] {
-			t.Errorf("go.mod requiere (línea) %q, que no está en internal/arch/allowlist_go.txt (spec §5.8)", mod)
-		}
-	}
-}
-
-func TestGoAllowlistDetectaRequireDeUnaLineaYReplace(t *testing.T) {
-	modPath := filepath.Join(t.TempDir(), "go.mod")
-	writeTempFile(t, modPath, `module example.com/temp
-
-go 1.27
-
-require example.com/onelineref v1.2.3
-
-replace example.com/onelineref => example.com/fork v1.2.3
-`)
-
-	directives, err := goModDirectives(modPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(directives) == 0 {
-		t.Fatal("un go.mod con replace debería detectarse como directiva prohibida")
-	}
-
-	mods, err := goModRequireLines(modPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, m := range mods {
-		if m == "example.com/onelineref" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("el require de una línea debería detectarse, mods=%v", mods)
-	}
-}
 
 // npmAliasTarget resuelve el paquete real al que apunta una dependencia de
 // package.json cuando su versión es un alias (spec §7.2): "npm:<nombre>@<v>"
