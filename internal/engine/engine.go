@@ -74,6 +74,7 @@ type Engine struct {
 	cycleMu    sync.Mutex
 	stateMu    sync.RWMutex
 	running    bool
+	cancel     context.CancelFunc
 	cycles     int
 	last       *CycleStats
 	nextAt     *time.Time
@@ -97,8 +98,13 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	e := &Engine{org: org, adapters: map[string]uem.Adapter{}, opts: opts, guard: Guardrails{Enforcement: EnforcementObserve},
 		providers: map[string]ProviderHealth{}, violations: map[string]int{}, fired: map[string]bool{}}
 	for _, a := range adapters {
-		e.adapters[a.Name()] = a
-		e.order = append(e.order, a.Name())
+		name := a.Name()
+		if _, dup := e.adapters[name]; dup {
+			opts.Logger.Warn("conector duplicado", "name", name)
+			continue
+		}
+		e.adapters[name] = a
+		e.order = append(e.order, name)
 	}
 	return e
 }
@@ -123,16 +129,24 @@ func (e *Engine) RunOnce(ctx context.Context) (CycleStats, error) {
 }
 
 // Start lanza el bucle periódico: un ciclo inmediato y luego cada Interval.
+// Reentrante: si ya hay un bucle en marcha, la llamada no hace nada. Deriva
+// su propio contexto cancelable para que Stop no dependa de que el llamante
+// cancele el contexto externo.
 func (e *Engine) Start(ctx context.Context) {
 	e.stateMu.Lock()
-	e.running = true
+	if e.running {
+		e.stateMu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	e.running, e.cancel = true, cancel
 	e.stateMu.Unlock()
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()
 		defer func() {
 			e.stateMu.Lock()
-			e.running, e.nextAt = false, nil
+			e.running, e.nextAt, e.cancel = false, nil, nil
 			e.stateMu.Unlock()
 		}()
 		t := time.NewTicker(e.opts.Interval)
@@ -154,8 +168,19 @@ func (e *Engine) Start(ctx context.Context) {
 	}()
 }
 
-// Stop espera a que el bucle termine (tras cancelar el contexto de Start).
-func (e *Engine) Stop() { e.wg.Wait() }
+// Stop cancela el bucle lanzado por Start (con su propio contexto derivado,
+// sin depender de que el llamante cancele el externo) y espera a que
+// termine. Es idempotente: llamarlo sin un bucle en marcha, o varias veces,
+// no bloquea ni hace panic.
+func (e *Engine) Stop() {
+	e.stateMu.RLock()
+	cancel := e.cancel
+	e.stateMu.RUnlock()
+	if cancel != nil {
+		cancel()
+	}
+	e.wg.Wait()
+}
 
 // Status devuelve el estado actual.
 func (e *Engine) Status() Status {

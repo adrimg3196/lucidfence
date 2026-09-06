@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -173,4 +176,64 @@ func TestErroresDePersistenciaSeCuentan(t *testing.T) {
 	if len(acts) == 0 || st.ActionsExecuted != len(acts) {
 		t.Fatalf("las acciones deben seguir ejecutándose y persistiéndose: %d vs %d", st.ActionsExecuted, len(acts))
 	}
+}
+
+// namedAdapter permite dar el mismo Name() a dos instancias distintas para
+// probar la deduplicación de conectores en New.
+type namedAdapter struct {
+	uem.Adapter
+	name string
+	tag  string
+}
+
+func (n namedAdapter) Name() string { return n.name }
+
+func TestNewIgnoraConectoresDuplicados(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	sim := simulation.New(simulation.DefaultSeed(), time.Now)
+	first := namedAdapter{Adapter: sim, name: "dup", tag: "first"}
+	second := namedAdapter{Adapter: sim, name: "dup", tag: "second"}
+	e := New(nil, []uem.Adapter{first, second}, Options{Logger: logger})
+	if len(e.order) != 1 || e.order[0] != "dup" {
+		t.Fatalf("order debe tener una sola entrada por nombre: %v", e.order)
+	}
+	if got := e.adapters["dup"].(namedAdapter).tag; got != "first" {
+		t.Fatalf("el primer conector registrado debe prevalecer, got %q", got)
+	}
+	if !strings.Contains(buf.String(), "conector duplicado") {
+		t.Fatalf("debe avisar del duplicado: %s", buf.String())
+	}
+}
+
+// TestStartReentranteYStopAutosuficiente cubre M1-R (menores 4): una segunda
+// llamada a Start no debe lanzar otro bucle, y Stop debe terminar sin que el
+// llamante cancele el contexto externo (Start deriva su propio cancel).
+func TestStartReentranteYStopAutosuficiente(t *testing.T) {
+	e, _ := newEngine(t)
+	e.Start(context.Background())
+	e.Start(context.Background()) // reentrante: si lanzara un segundo bucle, Stop se quedaría colgado esperando el primero.
+	deadline := time.Now().Add(2 * time.Second)
+	for e.Status().Cycles < 1 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !e.Status().Running {
+		t.Fatal("debería seguir en marcha")
+	}
+	done := make(chan struct{})
+	go func() { e.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop no debe depender de que el llamante cancele el contexto externo")
+	}
+	if e.Status().Running {
+		t.Fatal("tras Stop no debe seguir corriendo")
+	}
+	cyclesAfterStop := e.Status().Cycles
+	time.Sleep(100 * time.Millisecond)
+	if e.Status().Cycles != cyclesAfterStop {
+		t.Fatal("el bucle debe haberse detenido de verdad, no solo la bandera running")
+	}
+	e.Stop() // idempotente: no debe panicar ni bloquear.
 }
