@@ -1,0 +1,23 @@
+import { fenceFormSchema, parsePolygon, toFence, fromFence, emptyForm } from "./fenceForm";
+
+test("parsePolygon acepta 'lat, lng' por línea y rechaza basura", () => {
+  expect(parsePolygon("40.40, -3.72\n40.40,-3.70\n 40.44 , -3.70 ")).toEqual([{ lat: 40.4, lng: -3.72 }, { lat: 40.4, lng: -3.7 }, { lat: 40.44, lng: -3.7 }]);
+  expect(parsePolygon("40.40, -3.72\nabc")).toBeNull();
+  expect(parsePolygon("1,2\n3,4")).toBeNull();
+});
+
+test("schema exige centro y radio en círculo, y 3 vértices en polígono", () => {
+  const circle = { ...emptyForm, name: "HQ", id: "hq", kind: "circle" as const, centerLat: 40.42, centerLng: -3.71, radiusM: 300 };
+  expect(fenceFormSchema.safeParse(circle).success).toBe(true);
+  expect(fenceFormSchema.safeParse({ ...circle, radiusM: 0 }).success).toBe(false);
+  const poly = { ...emptyForm, name: "P", id: "p", kind: "polygon" as const, polygonText: "0,0\n0,1\n1,1" };
+  expect(fenceFormSchema.safeParse(poly).success).toBe(true);
+  expect(fenceFormSchema.safeParse({ ...poly, polygonText: "0,0\n0,1" }).success).toBe(false);
+});
+
+test("toFence y fromFence son inversas", () => {
+  const form = { ...emptyForm, name: "HQ", id: "hq", kind: "circle" as const, centerLat: 40.42, centerLng: -3.71, radiusM: 300, actions: [{ action: "message" as const, when: "on_enter" as const, text: "hola", enabled: true }] };
+  const fence = toFence(form);
+  expect(fence).toMatchObject({ id: "hq", kind: "circle", center: { lat: 40.42, lng: -3.71 }, radius_m: 300, actions: [{ action: "message", when: "on_enter", enabled: true, params: { text: "hola" } }] });
+  expect(fromFence(fence)).toMatchObject({ name: "HQ", id: "hq", kind: "circle", centerLat: 40.42, radiusM: 300, actions: [{ action: "message", text: "hola" }] });
+});
