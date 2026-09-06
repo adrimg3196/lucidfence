@@ -32,6 +32,12 @@ const (
 	// fallos: sin límite, un atacante que pruebe un email distinto por
 	// intento haría crecer s.fails sin fin.
 	maxTrackedFailEmails = 10000
+	// maxConcurrentKDF acota cuántas derivaciones argon2id (el
+	// verifyPassword de Login, el HashPassword de Setup) pueden estar en
+	// curso a la vez: cada una reserva argonMemory (64 MiB), así que el
+	// límite de 4 mantiene el consumo del KDF en 4 × 64 MiB = 256 MiB como
+	// máximo, sin importar cuántos Login/Setup lleguen de golpe.
+	maxConcurrentKDF = 4
 )
 
 // User es un usuario local tal como se expone hacia la API. Nunca lleva el
@@ -87,12 +93,23 @@ type Store struct {
 	sessions   map[string]Session
 	localToken string
 	fails      map[string][]time.Time
+	// kdf es el semáforo de las derivaciones argon2id: un canal con buffer
+	// de maxConcurrentKDF huecos. acquireKDF/releaseKDF son los únicos que
+	// lo tocan; nada más lee ni escribe s.kdf.
+	kdf chan struct{}
 	// verifyPassword deriva y compara la contraseña; por defecto es
 	// VerifyPassword. Es inyectable (campo no exportado) para que los tests
 	// puedan bloquearla de forma controlada y comprobar que Login nunca la
 	// llama con s.mu tomado (ver TestLoginNoBloqueaResolve).
 	verifyPassword func(pw, hash string) bool
 }
+
+// acquireKDF bloquea hasta que haya hueco para una derivación argon2id más
+// (como máximo maxConcurrentKDF a la vez); releaseKDF libera el hueco.
+// Envuelven las dos únicas derivaciones del paquete: el verifyPassword de
+// Login y el HashPassword de Setup.
+func (s *Store) acquireKDF() { s.kdf <- struct{}{} }
+func (s *Store) releaseKDF() { <-s.kdf }
 
 // Open carga usuarios y sesiones y garantiza el token local.
 func Open(dir string, now func() time.Time) (*Store, error) {
@@ -102,7 +119,7 @@ func Open(dir string, now func() time.Time) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir, now: now, sessions: map[string]Session{}, fails: map[string][]time.Time{}, verifyPassword: VerifyPassword}
+	s := &Store{dir: dir, now: now, sessions: map[string]Session{}, fails: map[string][]time.Time{}, kdf: make(chan struct{}, maxConcurrentKDF), verifyPassword: VerifyPassword}
 	var users collection[userRecord]
 	if err := store.ReadJSON(filepath.Join(dir, "users.json"), &users); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
@@ -166,20 +183,37 @@ func (s *Store) HasUsers() bool {
 	return len(s.users) > 0
 }
 
-// Setup crea el primer usuario como owner de la organización.
+// Setup crea el primer usuario como owner de la organización. El hash de la
+// contraseña (derivación argon2id, cara en CPU/memoria por diseño) se
+// calcula fuera de s.mu, igual que el verifyPassword de Login: se prepara y
+// valida bajo el lock, se deriva fuera (acotado por acquireKDF/releaseKDF)
+// y se vuelve a bloquear para insertar y persistir.
 func (s *Store) Setup(email, name, password, orgID string) (User, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if len(s.users) > 0 {
+		s.mu.Unlock()
 		return User{}, ErrAlreadySetUp
 	}
 	email = normalizeEmail(email)
 	if email == "" || !strings.Contains(email, "@") || strings.TrimSpace(name) == "" {
+		s.mu.Unlock()
 		return User{}, errors.New("email y nombre obligatorios")
 	}
+	s.mu.Unlock()
+
+	s.acquireKDF()
 	hash, err := HashPassword(password)
+	s.releaseKDF()
 	if err != nil {
 		return User{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Repetir la comprobación: entre soltar el lock para derivar y volver a
+	// tomarlo, otro Setup pudo haber ganado la carrera y creado ya el owner.
+	if len(s.users) > 0 {
+		return User{}, ErrAlreadySetUp
 	}
 	rec := userRecord{
 		User: User{ID: "usr_" + randomHex(8), Email: email, Name: strings.TrimSpace(name),
@@ -229,9 +263,10 @@ func (s *Store) registerFail(email string) {
 }
 
 // Login valida credenciales y abre una sesión. La derivación de la clave
-// (verifyPassword, cara en CPU/memoria por diseño de argon2id) se ejecuta
-// fuera de s.mu: solo el throttle, la copia del usuario candidato y el
-// registro final de fallo o sesión están protegidos por el lock, así
+// (verifyPassword, cara en CPU/memoria por diseño de argon2id, acotada a
+// maxConcurrentKDF derivaciones a la vez por acquireKDF/releaseKDF) se
+// ejecuta fuera de s.mu: solo el throttle, la copia del usuario candidato y
+// el registro final de fallo o sesión están protegidos por el lock, así
 // Resolve y otros Login no esperan a que termine argon2id.
 func (s *Store) Login(email, password, orgID string) (Session, error) {
 	email = normalizeEmail(email)
@@ -252,7 +287,9 @@ func (s *Store) Login(email, password, orgID string) (Session, error) {
 	verify := s.verifyPassword
 	s.mu.Unlock()
 
+	s.acquireKDF()
 	ok := found && verify(password, candidate.PasswordHash)
+	s.releaseKDF()
 	if ok {
 		if _, hasOrg := candidate.OrgRoles[orgID]; !hasOrg {
 			ok = false
