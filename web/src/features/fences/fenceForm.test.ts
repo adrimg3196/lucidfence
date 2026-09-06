@@ -1,4 +1,9 @@
-import { fenceFormSchema, parsePolygon, toFence, fromFence, emptyForm } from "./fenceForm";
+import { makeFenceFormSchema, parsePolygon, toFence, fromFence, emptyForm } from "./fenceForm";
+
+// Identidad: estos tests solo comprueban success/failure de validación, no
+// el texto de los mensajes (eso lo cubre FenceEditorPage.test.tsx, M1-R27 C15).
+const t = (key: string) => key;
+const fenceFormSchema = makeFenceFormSchema(t);
 
 test("parsePolygon acepta 'lat, lng' por línea y rechaza basura", () => {
   expect(parsePolygon("40.40, -3.72\n40.40,-3.70\n 40.44 , -3.70 ")).toEqual([{ lat: 40.4, lng: -3.72 }, { lat: 40.4, lng: -3.7 }, { lat: 40.44, lng: -3.7 }]);

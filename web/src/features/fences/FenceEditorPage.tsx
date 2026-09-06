@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import { ErrorState } from "@/components/states/ErrorState";
 import { useCreateFence, useFence, useUpdateFence } from "@/api/hooks";
 import { useT } from "@/lib/i18n";
 import { slugify } from "@/lib/slug";
-import { actionValues, whenValues, emptyForm, fenceFormSchema, fromFence, toFence, type FenceForm } from "./fenceForm";
+import { actionValues, whenValues, emptyForm, makeFenceFormSchema, fromFence, toFence, type FenceForm } from "./fenceForm";
 
 // M1-R12: el backend rechaza el id reservado "none"; el slug autogenerado
 // desde el nombre nunca debe producirlo (la edición manual del id sigue
@@ -42,6 +42,10 @@ export function FenceEditorPage() {
   const existing = useFence(id ?? "");
   const create = useCreateFence();
   const update = useUpdateFence();
+  // M1-R27 (C15): fenceFormSchema depende de `t` (sus mensajes ya no están
+  // fijos en español), así que se reconstruye con useMemo en vez de
+  // importarse como un const.
+  const fenceFormSchema = useMemo(() => makeFenceFormSchema(t), [t]);
   // centerLat/centerLng/radiusM usan z.coerce, así que el tipo de entrada del
   // formulario difiere del tipo validado (FenceForm); se lo indicamos a
   // useForm con los tres genéricos para que zodResolver tipe correctamente.
@@ -124,6 +128,8 @@ export function FenceEditorPage() {
           <FieldError message={errs.dwellSeconds?.message} />
         </div>
       </div>
+      {/* M1-R27: el motor todavía no aplica estas reglas (C3 diferido a M2). */}
+      <p className="text-sm text-muted">{t("fence.rules.help")}</p>
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">
           <legend className="text-sm font-medium text-fg-2">{t("fence.actions")}</legend>
@@ -138,7 +144,7 @@ export function FenceEditorPage() {
               <NativeSelect id={`action-${i}`} {...form.register(`actions.${i}.action`)}>
                 {actionValues.map((a) => (
                   <option key={a} value={a}>
-                    {a}
+                    {t(`fence.action.${a}`)}
                   </option>
                 ))}
               </NativeSelect>

@@ -120,6 +120,60 @@ test("errores de validación se muestran en línea para nombre y radio", async (
   expect(mutateAsync).not.toHaveBeenCalled();
 });
 
+// M1-R27 (C15): el desplegable de acción renderizaba el valor crudo del
+// enum ("clear_passcode", "set_compliance"...) en vez de una etiqueta
+// traducida, mientras el desplegable de al lado ("Cuándo") sí traduce.
+test("el desplegable de acción usa etiquetas traducidas, no el valor crudo del enum (M1-R27, C15)", async () => {
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Añadir acción" }));
+  expect(screen.getByRole("option", { name: "Borrar código de acceso" })).toBeInTheDocument();
+  expect(screen.queryByText("clear_passcode")).toBeNull();
+  expect(screen.queryByText("set_compliance")).toBeNull();
+});
+
+// M1-R27 (C15): los mensajes de validación de fenceFormSchema estaban fijos
+// en español, así que un formulario en inglés mostraba un error en español.
+test("los mensajes de validación respetan el idioma activo (M1-R27, C15)", async () => {
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new", lang: "en" },
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByText("Name is required")).toBeInTheDocument();
+  expect(screen.queryByText("El nombre es obligatorio")).toBeNull();
+});
+
+// M1-R27: las reglas (violationIntervalCycles/dwellSeconds) aún no las
+// aplica el motor (C3 diferido a M2); el editor debe avisarlo junto a esos
+// campos para que no parezca que ya tienen efecto.
+test("avisa de que el motor aún no aplica las reglas (M1-R27)", () => {
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  expect(screen.getByText("El motor aplicará estas reglas a partir de M2")).toBeInTheDocument();
+});
+
 test("evita el id reservado 'none' al generar el slug desde el nombre (M1-R12)", async () => {
   vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
   vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
