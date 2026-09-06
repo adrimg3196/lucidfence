@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StateBadge } from "@/components/StateBadge";
 import { Loading } from "@/components/states/Loading";
 import { ErrorState } from "@/components/states/ErrorState";
+import { Empty } from "@/components/states/Empty";
 import { useDevice, useDeviceTrail, useEvents } from "@/api/hooks";
 import { useT, useLang } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
@@ -74,7 +75,9 @@ export function DeviceDetailPage() {
           </CardHeader>
           <CardContent>
             {trail.isPending && <Loading rows={3} />}
-            {trail.data && (
+            {trail.error && <ErrorState error={trail.error} onRetry={() => trail.refetch()} />}
+            {trail.data && trail.data.items.length === 0 && <Empty title={t("device.trail.empty")} />}
+            {trail.data && trail.data.items.length > 0 && (
               <ul className="space-y-1 font-mono text-xs text-fg-2">
                 {[...trail.data.items].reverse().map((p, i) => (
                   <li key={i}>
@@ -91,7 +94,9 @@ export function DeviceDetailPage() {
           </CardHeader>
           <CardContent>
             {events.isPending && <Loading rows={3} />}
-            {events.data && (
+            {events.error && <ErrorState error={events.error} onRetry={() => events.refetch()} />}
+            {events.data && mine.length === 0 && <Empty title={t("device.events.empty")} />}
+            {events.data && mine.length > 0 && (
               <ul className="divide-y divide-border text-sm">
                 {mine.map((ev, i) => (
                   <li key={i} className="flex justify-between py-2">
