@@ -136,6 +136,26 @@ func goAllowlistViolations(allowed map[string]bool, gomod, graph string, all []s
 	return violations
 }
 
+// goWorkFiles son los ficheros de un workspace de Go que TestGoDependencyAllowlist
+// prohíbe sin excepción (ruling M1-R27, C18): un go.work en la raíz activa
+// sus "use"/"replace" para cualquier build o test lanzado desde ahí,
+// redirigiendo un módulo a código arbitrario sin tocar go.mod ni pasar por
+// goAllowlistViolations, que solo lee go.mod.
+var goWorkFiles = []string{"go.work", "go.work.sum"}
+
+// goWorkForbidden devuelve, para cada fichero de goWorkFiles presente bajo
+// root, un mensaje de violación (ruling M1-R27, C18).
+func goWorkForbidden(root string) []string {
+	var violations []string
+	for _, name := range goWorkFiles {
+		if _, err := os.Stat(filepath.Join(root, name)); err == nil {
+			violations = append(violations, fmt.Sprintf(
+				"%s existe en la raíz del repo; go.work está prohibido (ruling M1-R27, C18): sus directivas use/replace esquivan go.mod y la allowlist de dependencias Go", name))
+		}
+	}
+	return violations
+}
+
 // goModule es el subconjunto de "go list -m -json" que necesitamos: su ruta
 // y si es el módulo principal del repo, que no se compara ni con la
 // allowlist ni con el grafo.
@@ -191,6 +211,10 @@ func TestGoDependencyAllowlist(t *testing.T) {
 	root := repoRoot(t)
 	allowed := readAllowlist(t, filepath.Join(root, "internal/arch/allowlist_go.txt"))
 	goModPath := filepath.Join(root, "go.mod")
+
+	for _, v := range goWorkForbidden(root) {
+		t.Error(v)
+	}
 
 	directives, err := goModDirectives(goModPath)
 	if err != nil {
@@ -284,5 +308,29 @@ require (
 	}
 	if !strings.Contains(joined, "evil.example/x") {
 		t.Fatalf("evil.example/x solo cuelga del módulo principal (no de un módulo permitido) y debería reportarse; violations=%v", violations)
+	}
+}
+
+// TestGoWorkProhibido fija la ruling M1-R27 (C18): un go.work en la raíz
+// puede redirigir cualquier módulo con "replace" sin tocar go.mod, esquivando
+// por completo goAllowlistViolations (comprobado empíricamente: con go.work
+// presente, TestGoDependencyAllowlist seguía en verde pese al replace
+// activo). go.work/go.work.sum quedan prohibidos sin excepción.
+func TestGoWorkProhibido(t *testing.T) {
+	limpio := t.TempDir()
+	if violations := goWorkForbidden(limpio); len(violations) != 0 {
+		t.Fatalf("un directorio sin go.work/go.work.sum no debería fallar: %v", violations)
+	}
+
+	conWork := t.TempDir()
+	writeTempFile(t, filepath.Join(conWork, "go.work"), "go 1.27\n\nuse .\n")
+	if violations := goWorkForbidden(conWork); len(violations) == 0 {
+		t.Fatal("un go.work en la raíz debería estar prohibido (ruling M1-R27, C18)")
+	}
+
+	conWorkSum := t.TempDir()
+	writeTempFile(t, filepath.Join(conWorkSum, "go.work.sum"), "")
+	if violations := goWorkForbidden(conWorkSum); len(violations) == 0 {
+		t.Fatal("un go.work.sum en la raíz debería estar prohibido (ruling M1-R27, C18)")
 	}
 }

@@ -3,6 +3,10 @@
 /dist/
 coverage.out
 test.out
+# go.work está prohibido (ruling M1-R27, C18): esquiva la allowlist de
+# dependencias Go con directivas use/replace fuera de go.mod.
+/go.work
+/go.work.sum
 # frontend
 web/node_modules/
 web/dist/
