@@ -2,4 +2,4 @@
 useDefault = true
 
 [allowlist]
-paths = ['''web/package-lock.json''', '''internal/web/dist/''']
+paths = ['''web/package-lock.json''']
