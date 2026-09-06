@@ -139,8 +139,8 @@ func randomHex(n int) string {
 
 func normalizeEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
 
-func (s *Store) persistUsers() error {
-	return store.WriteJSON(filepath.Join(s.dir, "users.json"), collection[User]{SchemaVersion: 1, Items: s.users})
+func (s *Store) persistUsers(users []User) error {
+	return store.WriteJSON(filepath.Join(s.dir, "users.json"), collection[User]{SchemaVersion: 1, Items: users})
 }
 
 func (s *Store) persistSessions() error {
@@ -175,8 +175,15 @@ func (s *Store) Setup(email, name, password, orgID string) (User, error) {
 	}
 	u := User{ID: "usr_" + randomHex(8), Email: email, Name: strings.TrimSpace(name), PasswordHash: hash,
 		OrgRoles: map[string]Role{orgID: Owner}, CreatedAt: s.now().UTC()}
-	s.users = append(s.users, u)
-	return u, s.persistUsers()
+	// Persistir sobre una copia y asignar a s.users solo si tiene éxito: un
+	// error de escritura (disco lleno, permisos) no debe dejar el owner
+	// "creado" en memoria sin estar en disco.
+	candidate := append(append([]User{}, s.users...), u)
+	if err := s.persistUsers(candidate); err != nil {
+		return User{}, err
+	}
+	s.users = candidate
+	return u, nil
 }
 
 // throttled poda del email los intentos fuera de failWindow y decide si

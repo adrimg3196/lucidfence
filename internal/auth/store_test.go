@@ -194,6 +194,35 @@ func TestRegistrarFalloPodaMapaGrande(t *testing.T) {
 	}
 }
 
+// TestSetupNoMutaSiPersistenciaFalla comprueba que, si persistUsers falla
+// (directorio de solo lectura), Setup no deja el usuario en memoria: debe
+// persistir sobre una copia y solo asignarla a s.users si tiene éxito, así
+// HasUsers() sigue siendo false y un reintento puede volver a crear el
+// owner.
+func TestSetupNoMutaSiPersistenciaFalla(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("los permisos POSIX de solo lectura no aplican en Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root ignora los permisos de solo lectura del directorio")
+	}
+	dir := t.TempDir()
+	s, err := Open(dir, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(dir, 0o700) }() // para que TempDir pueda limpiar
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err == nil {
+		t.Fatal("esperaba un error de persistencia con el directorio en solo lectura")
+	}
+	if s.HasUsers() {
+		t.Fatal("Setup no debe mutar el estado en memoria si persistUsers falla")
+	}
+}
+
 func TestSesionCaducaYPersiste(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
