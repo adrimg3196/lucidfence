@@ -148,9 +148,10 @@ ARTIFACT_VERSION = "1.6.1"
 
 
 def test_provenance_verifier_with_key_works_without_site_packages():
+    import sys
     fixture = ROOT / "docs" / "supply-chain" / "fixture"
     result = subprocess.run(
-        ["python3.11", "-S", str(ROOT / "scripts" / "verify_provenance.py"),
+        [sys.executable, "-S", str(ROOT / "scripts" / "verify_provenance.py"),
          "--artifact", str(fixture / f"lucidfence-{ARTIFACT_VERSION}.tar.gz"),
          "--sbom", str(fixture / "sbom.cdx.json"),
          "--dsse", str(fixture / "provenance.dsse.json"),
@@ -253,8 +254,9 @@ def test_provenance_verifier_without_key_is_not_apto():
         }
         dsse.write_text(json.dumps(_dsse_with_statement(statement)), encoding="utf-8")
 
+        import sys
         result = subprocess.run(
-            ["python3.11", str(ROOT / "scripts" / "verify_provenance.py"),
+            [sys.executable, str(ROOT / "scripts" / "verify_provenance.py"),
              "--artifact", str(artifact), "--sbom", str(sbom), "--dsse", str(dsse),
              "--repo", str(root)],
             cwd=str(ROOT), capture_output=True, text=True,
