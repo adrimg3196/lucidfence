@@ -7,15 +7,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"strings"
 )
 
 // Env es el entorno compartido por los checks.
 type Env struct {
-	Bin     string // ruta al binario lucidfence compilado
-	Tmp     string // directorio temporal para datos
-	BaseURL string // http://127.0.0.1:<port> cuando hay servidor (M1+)
+	Bin     string       // ruta al binario lucidfence compilado
+	Tmp     string       // directorio temporal para datos
+	BaseURL string       // http://127.0.0.1:<port> cuando hay servidor
+	Client  *http.Client // con cookie jar; lo rellena StartServer
+	CSRF    string       // token CSRF de la sesión abierta por el check de setup
+	stop    func()
 }
 
 // Check es un claim verificable.
@@ -41,7 +45,7 @@ func Run(ctx context.Context, env *Env, checks []Check, w io.Writer) (passed, to
 
 // Checks devuelve todos los checks registrados, en orden.
 func Checks() []Check {
-	return checksM0()
+	return append(checksM0(), checksM1()...)
 }
 
 func runBin(ctx context.Context, env *Env, args ...string) (string, error) {

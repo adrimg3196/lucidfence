@@ -24,7 +24,7 @@ test:
 cover:
 	scripts/coverage.sh
 
-battery: build
+battery: web build
 	scripts/battery.sh bin/lucidfence
 
 verify: lint cover web battery
