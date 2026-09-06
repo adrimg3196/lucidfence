@@ -59,6 +59,7 @@ type Status struct {
 	Running         bool                      `json:"running"`
 	Cycles          int                       `json:"cycles"`
 	LastCycle       *CycleStats               `json:"last_cycle,omitempty"`
+	LastError       string                    `json:"last_error,omitempty"`
 	NextCycleAt     *time.Time                `json:"next_cycle_at,omitempty"`
 	Providers       map[string]ProviderHealth `json:"providers"`
 }
@@ -77,6 +78,7 @@ type Engine struct {
 	cancel     context.CancelFunc
 	cycles     int
 	last       *CycleStats
+	lastErr    string
 	nextAt     *time.Time
 	providers  map[string]ProviderHealth
 	violations map[string]int
@@ -112,7 +114,10 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 // Guardrails expone la configuración de enforcement vigente.
 func (e *Engine) Guardrails() Guardrails { return e.guard }
 
-// RunOnce ejecuta un ciclo si no hay otro en curso.
+// RunOnce ejecuta un ciclo si no hay otro en curso. Si runCycle falla (p. ej.
+// el store no puede leer o guardar), el ciclo no cuenta como completado: no
+// se incrementa Cycles ni se sustituye LastCycle, y el error queda expuesto
+// en Status().LastError hasta que un ciclo correcto lo vacíe.
 func (e *Engine) RunOnce(ctx context.Context) (CycleStats, error) {
 	if !e.cycleMu.TryLock() {
 		return CycleStats{}, ErrCycleInProgress
@@ -121,9 +126,14 @@ func (e *Engine) RunOnce(ctx context.Context) (CycleStats, error) {
 	e.fired = map[string]bool{}
 	st, err := e.runCycle(ctx)
 	e.stateMu.Lock()
-	e.cycles++
-	e.last = &st
 	e.providers = st.Providers
+	if err != nil {
+		e.lastErr = err.Error()
+	} else {
+		e.cycles++
+		e.last = &st
+		e.lastErr = ""
+	}
 	e.stateMu.Unlock()
 	return st, err
 }
@@ -187,5 +197,5 @@ func (e *Engine) Status() Status {
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
 	return Status{Mode: e.opts.Mode, Enforcement: e.guard.Enforcement, IntervalSeconds: int(e.opts.Interval / time.Second),
-		Running: e.running, Cycles: e.cycles, LastCycle: e.last, NextCycleAt: e.nextAt, Providers: e.providers}
+		Running: e.running, Cycles: e.cycles, LastCycle: e.last, LastError: e.lastErr, NextCycleAt: e.nextAt, Providers: e.providers}
 }

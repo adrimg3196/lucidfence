@@ -237,3 +237,44 @@ func TestStartReentranteYStopAutosuficiente(t *testing.T) {
 	}
 	e.Stop() // idempotente: no debe panicar ni bloquear.
 }
+
+// TestUltimoErrorDeCicloVisibleEnStatus rompe SaveDevices (devices.json es un
+// directorio) para comprobar que un ciclo fallido no incrementa Cycles ni
+// sustituye LastCycle, pero deja el error en Status().LastError; un ciclo
+// correcto posterior lo vacía.
+func TestUltimoErrorDeCicloVisibleEnStatus(t *testing.T) {
+	s, _ := store.Open(t.TempDir())
+	org, _ := s.Org("default")
+	now := time.Now()
+	if err := SeedDemo(org, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(org.Path("devices.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := New(org, nil, Options{Now: func() time.Time { return now }})
+	if _, err := e.RunOnce(context.Background()); err == nil {
+		t.Fatal("SaveDevices debe fallar con devices.json como directorio")
+	}
+	if e.Status().Cycles != 0 {
+		t.Fatalf("un ciclo fallido no debe incrementar Cycles: %d", e.Status().Cycles)
+	}
+	if e.Status().LastCycle != nil {
+		t.Fatalf("un ciclo fallido no debe sustituir LastCycle: %+v", e.Status().LastCycle)
+	}
+	if e.Status().LastError == "" {
+		t.Fatal("LastError debe reflejar el fallo")
+	}
+	if err := os.Remove(org.Path("devices.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if e.Status().Cycles != 1 {
+		t.Fatalf("el primer ciclo correcto debe contar como 1: %d", e.Status().Cycles)
+	}
+	if e.Status().LastError != "" {
+		t.Fatal("un ciclo correcto debe vaciar LastError")
+	}
+}
