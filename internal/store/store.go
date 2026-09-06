@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 )
 
 // ErrNotFound indica que el fichero o documento no existe.
@@ -18,7 +19,11 @@ var ErrNotFound = errors.New("no existe")
 var orgIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 // Store es la raíz del directorio de datos.
-type Store struct{ root string }
+type Store struct {
+	root string
+	mu   sync.Mutex
+	orgs map[string]*OrgStore
+}
 
 // Open crea la estructura de directorios si falta.
 func Open(root string) (*Store, error) {
@@ -27,7 +32,7 @@ func Open(root string) (*Store, error) {
 			return nil, fmt.Errorf("crear %s: %w", filepath.Join(root, d), err)
 		}
 	}
-	return &Store{root: root}, nil
+	return &Store{root: root, orgs: make(map[string]*OrgStore)}, nil
 }
 
 // Root devuelve el directorio de datos.
@@ -39,16 +44,24 @@ func (s *Store) AuthDir() string { return filepath.Join(s.root, "auth") }
 // CacheDir devuelve el directorio de cachés (CVE).
 func (s *Store) CacheDir() string { return filepath.Join(s.root, "cache") }
 
-// Org abre (creando si falta) el almacén de una organización.
+// Org abre (creando si falta) el almacén de una organización. Devuelve
+// siempre la misma instancia para un id; el lock es por organización.
 func (s *Store) Org(id string) (*OrgStore, error) {
 	if !orgIDPattern.MatchString(id) {
 		return nil, fmt.Errorf("id de organización %q inválido", id)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o, ok := s.orgs[id]; ok {
+		return o, nil
 	}
 	dir := filepath.Join(s.root, "orgs", id)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	return &OrgStore{id: id, dir: dir}, nil
+	o := &OrgStore{id: id, dir: dir}
+	s.orgs[id] = o
+	return o, nil
 }
 
 // WriteJSON escribe v de forma atómica con permisos 0600.

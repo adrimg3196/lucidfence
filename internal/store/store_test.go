@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 )
 
@@ -73,6 +74,89 @@ func TestWriteJSONAtomicoYReadJSON(t *testing.T) {
 	}
 	if err := ReadJSON(path, &got); err != nil || got["a"] != 1 {
 		t.Fatal("el fichero previo debe seguir intacto")
+	}
+}
+
+func TestOrgDevuelveLaMismaInstancia(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o1, err := s.Org("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	o2, err := s.Org("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o1 != o2 {
+		t.Fatal("Org debería devolver la misma instancia para el mismo id")
+	}
+	o3, err := s.Org("otra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o1 == o3 {
+		t.Fatal("Org debería devolver instancias distintas para ids distintos")
+	}
+}
+
+func TestOrgConcurrenteNoDuplica(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const n = 20
+	results := make([]*OrgStore, n)
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			results[i], errs[i] = s.Org("default")
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d: %v", i, err)
+		}
+	}
+	for i := 1; i < n; i++ {
+		if results[i] != results[0] {
+			t.Fatalf("goroutine %d obtuvo una instancia distinta de OrgStore", i)
+		}
+	}
+}
+
+func TestOpenFallaSiLaRaizEsUnFichero(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "no-es-un-dir")
+	if err := os.WriteFile(root, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(root); err == nil {
+		t.Fatal("Open debería fallar si la raíz es un fichero regular")
+	}
+}
+
+func TestReadJSONMalformado(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x.json")
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]int
+	err := ReadJSON(path, &got)
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("esperaba error de parseo distinto de ErrNotFound, got %v", err)
+	}
+}
+
+func TestAppendJSONLSinDirectorio(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "no-existe", "e.jsonl")
+	if err := AppendJSONL(path, map[string]int{"n": 1}); err == nil {
+		t.Fatal("AppendJSONL debería fallar si el directorio padre no existe")
 	}
 }
 
