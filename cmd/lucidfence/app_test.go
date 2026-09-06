@@ -54,6 +54,20 @@ func TestAppForServeRespetaLogLevel(t *testing.T) {
 	}
 }
 
+func TestDialAddrSustituyeHostComodin(t *testing.T) {
+	cases := map[string]string{
+		":8765":          "127.0.0.1:8765",
+		"0.0.0.0:8765":   "127.0.0.1:8765",
+		"[::]:8765":      "127.0.0.1:8765",
+		"127.0.0.1:8765": "127.0.0.1:8765",
+	}
+	for in, want := range cases {
+		if got := dialAddr(in); got != want {
+			t.Errorf("dialAddr(%q) = %q, quiero %q", in, got, want)
+		}
+	}
+}
+
 func TestParseCommonFlags(t *testing.T) {
 	var errb bytes.Buffer
 	f, _, err := parseCommon("serve", []string{"-data", "/tmp/x", "-listen", "127.0.0.1:1"}, &errb, nil)

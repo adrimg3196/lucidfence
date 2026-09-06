@@ -34,7 +34,7 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "lucidfence open: %v\n", err)
 		return 1
 	}
-	url := "http://" + cfg.Listen + "/"
+	url := "http://" + dialAddr(cfg.Listen) + "/"
 	if !healthy(cfg.Listen, 2*time.Second) {
 		_, _ = fmt.Fprintf(stderr, "lucidfence open: el servidor no responde en %s; arranca con `lucidfence serve`\n", url)
 		return 1

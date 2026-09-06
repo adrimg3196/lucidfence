@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -122,6 +123,23 @@ func appForServe(f commonFlags, stderr io.Writer) (*app, error) {
 		return nil, err
 	}
 	return buildApp(f, newLogger(cfg.LogLevel, stderr))
+}
+
+// dialAddr traduce un listen de config (que puede ser un host comodín como
+// "", "0.0.0.0" o "::" para escuchar en todas las interfaces) a una
+// dirección a la que de verdad se puede conectar desde este mismo host;
+// cualquier otro host se devuelve tal cual.
+func dialAddr(listen string) string {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return listen
+	}
+	switch host {
+	case "", "0.0.0.0", "::":
+		return net.JoinHostPort("127.0.0.1", port)
+	default:
+		return listen
+	}
 }
 
 func newLogger(level string, w io.Writer) *slog.Logger {

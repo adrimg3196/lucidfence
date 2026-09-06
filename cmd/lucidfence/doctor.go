@@ -23,7 +23,7 @@ type check struct {
 
 func healthy(listen string, timeout time.Duration) bool {
 	c := http.Client{Timeout: timeout}
-	res, err := c.Get("http://" + listen + "/api/v1/health")
+	res, err := c.Get("http://" + dialAddr(listen) + "/api/v1/health")
 	if err != nil {
 		return false
 	}
@@ -74,9 +74,9 @@ func doctorChecks(f commonFlags) []check {
 		out = append(out, check{Name: "usuarios", Severity: "error", Detail: err.Error()})
 	}
 	if healthy(cfg.Listen, 2*time.Second) {
-		out = append(out, check{Name: "servidor", OK: true, Detail: "responde en http://" + cfg.Listen})
+		out = append(out, check{Name: "servidor", OK: true, Detail: "responde en http://" + dialAddr(cfg.Listen)})
 	} else {
-		out = append(out, check{Name: "servidor", Severity: "warning", Detail: "no responde en http://" + cfg.Listen + "; arranca con lucidfence serve"})
+		out = append(out, check{Name: "servidor", Severity: "warning", Detail: "no responde en http://" + dialAddr(cfg.Listen) + "; arranca con lucidfence serve"})
 	}
 	return out
 }
