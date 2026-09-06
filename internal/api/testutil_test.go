@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,9 +12,64 @@ import (
 
 	"github.com/adrimg3196/lucidfence/internal/auth"
 	"github.com/adrimg3196/lucidfence/internal/config"
+	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 	"github.com/adrimg3196/lucidfence/internal/engine"
 	"github.com/adrimg3196/lucidfence/internal/store"
+	"github.com/adrimg3196/lucidfence/internal/uem"
 )
+
+// fakeFleet es un uem.Adapter de prueba: depguard prohíbe a internal/api
+// (tests incluidos) importar internal/uem/simulation, así que la flota demo
+// vive aquí, con las mismas seis fichas que usaría un conector real.
+type fakeFleet struct {
+	now func() time.Time
+}
+
+func (f *fakeFleet) Name() string { return "fake" }
+
+func (f *fakeFleet) Capabilities() uem.Capabilities {
+	return uem.Capabilities{Actions: action.All, Inventory: true, Location: true}
+}
+
+func fakeDevice(id, name, platform string, lat, lng float64, inv device.Inventory, at time.Time) device.Device {
+	return device.Device{
+		ID: id, Name: name, Platform: platform, Provider: "fake", ProviderRefs: map[string]string{"fake": id},
+		Location:  device.Location{Point: &geo.Point{Lat: lat, Lng: lng}, AccuracyM: ptrF(12), Source: "fake", ObservedAt: at},
+		Inventory: inv, FenceState: device.Unknown, RouteState: device.Unassigned,
+		Risk: device.Verdict{Reasons: []string{}, MatchedPolicies: []string{}}, LastReportAt: at,
+	}
+}
+
+func ptrF(v float64) *float64 { return &v }
+
+func (f *fakeFleet) FetchDevices(context.Context) ([]device.Device, error) {
+	at := f.now()
+	return []device.Device{
+		fakeDevice("dev-001", "Tablet Campo A1", "android", 40.4205, -3.7085,
+			device.Inventory{Model: "Samsung Galaxy Tab Active5", AssignedUser: "Lucía Fernández", Department: "Operaciones", OSVersion: "Android 14"}, at),
+		fakeDevice("dev-002", "Móvil Reparto B7", "android", 40.4300, -3.6900,
+			device.Inventory{Model: "Zebra TC22", AssignedUser: "Marcos Gil"}, at),
+		fakeDevice("dev-003", "iPad Recepción", "ios", 40.4212, -3.7078,
+			device.Inventory{Model: "iPad Air", AssignedUser: "Recepción"}, at),
+		fakeDevice("dev-004", "Portátil Ventas", "macos", 40.4500, -3.6500,
+			device.Inventory{Model: "MacBook Air M3", AssignedUser: "Sara López"}, at),
+		fakeDevice("dev-005", "Escáner Almacén", "android", 40.4050, -3.7100,
+			device.Inventory{Model: "Honeywell CT45"}, at),
+		fakeDevice("dev-006", "Portátil Soporte", "windows", 40.4210, -3.7080,
+			device.Inventory{Model: "Dell Latitude 5450", AssignedUser: "Diego Ruiz"}, at),
+	}, nil
+}
+
+func (f *fakeFleet) Execute(_ context.Context, dev device.Device, a action.Action, params map[string]any, dryRun bool) action.Result {
+	return action.Result{Adapter: "fake", OK: true, DeviceID: dev.ID, DeviceName: dev.Name, Action: a, Params: params,
+		DryRun: dryRun, Simulated: true, CommandID: "fake-" + string(a), At: f.now()}
+}
+
+func (f *fakeFleet) TestConnection(context.Context) uem.ConnectionResult {
+	return uem.ConnectionResult{OK: true, Verified: "fake"}
+}
 
 type testEnv struct {
 	t      *testing.T
@@ -34,11 +90,10 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Sin conectores: internal/api nunca importa un conector concreto, ni
-	// siquiera en tests (spec §5.2, depguard); estos tests solo ejercen la
-	// capa HTTP, no el ciclo del motor, así que un motor sin adaptadores
-	// basta para ejercitar health/auth.
-	eng := engine.New(org, nil, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
+	// fakeFleet en vez de un conector real: internal/api nunca importa un
+	// conector concreto, ni siquiera en tests (spec §5.2, depguard), pero los
+	// handlers de dispositivos y motor sí necesitan un ciclo con flota real.
+	eng := engine.New(org, []uem.Adapter{&fakeFleet{now: clock}}, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
 	h, _ := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)

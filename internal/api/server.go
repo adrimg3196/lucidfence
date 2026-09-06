@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/auth"
@@ -56,3 +57,6 @@ func New(d Deps) (http.Handler, *Registry) {
 }
 
 func (s *server) org() *store.OrgStore { return s.d.Org }
+
+// pathID extrae el {id} de la ruta.
+func pathID(r *http.Request) string { return strings.TrimSpace(r.PathValue("id")) }
