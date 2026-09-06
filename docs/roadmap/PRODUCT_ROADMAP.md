@@ -51,9 +51,14 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Motor Declarativo GitOps (`lucidfence apply`) con Simulación Replay Pre-Fly** (Gestión de políticas y geocercas como código con replay predictivo pre-despliegue sobre telemetría real) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #1) | EXPLORE | `docs/product/PROPOSAL_gitops_replay_engine.md` |
+| E3 | **Radar de Puntos Ciegos y Dispositivos Huérfanos** (Detección de dispositivos desprotegidos, geocercas vacías y ovejas perdidas cross-UEM) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #15) | EXPLORE | `docs/product/PROPOSAL_coverage_gap_radar.md` |
+| E4 | **Auditor de Mínimo Privilegio para Credenciales UEM y API Tokens** (Análisis preventivo y alerta de tokens UEM con scopes/permisos excesivos o destructivos) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #16) | EXPLORE | `docs/product/PROPOSAL_least_privilege_auditor.md` |
+| E5 | **Compilador Transversal de Políticas Portables Cross-UEM** (Compilador export-only de reglas LucidFence a primitivas nativas de Intune JSON, Jamf Smart Groups y Fleet YAML) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #14) | EXPLORE | `docs/product/PROPOSAL_portable_policy_compiler.md` |
 
 ## Bitácora de reconciliación
 
+- **2026-08-31 (propuestas de descubrimiento por NOVA ✨).** Creadas 4 propuestas de producto visionarias en `docs/product/` (E2: Motor GitOps con Replay Pre-Fly, E3: Radar de Puntos Ciegos, E4: Auditor de Mínimo Privilegio de Credenciales, E5: Compilador Transversal de Políticas Portables), registradas en la sección `Explore`.
 - **2026-08-18 (decisión del propietario).** Posicionamiento fijado: **"nunca
   seremos un UEM, somos el complemento"** — sube a principio no negociable.
   El loop PM lo aterrizó en `docs/internal/product/BACKLOG.md` (§Posicionamiento
@@ -64,7 +69,7 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 - **2026-08-16 (ciclo 2, decisión del propietario).** El propietario declaró el
   modelo: **LucidFence es 100% free open-source (Apache-2.0), sin pricing, sin
   enterprise, sin funciones de pago.** Cierra el gap "Pricing / modelo de
-  negocio" (era el #3): declarado en `README.md` §Modelo. En la misma PR se
+  negocio" (era el #3): declaredo en `README.md` §Modelo. En la misma PR se
   corrigió la tabla "No está terminado" del README (el antiguo #2): las 4
   entregas ya hechas (release v1.5.0, guía de adaptadores, CONTRIBUTING,
   SECURITY.md) marcadas como completas. Queda como único gap de producto el
