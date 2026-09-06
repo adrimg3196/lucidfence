@@ -38,6 +38,9 @@ func TestValidate(t *testing.T) {
 		"waypoints": {ID: "r", Name: "x", CorridorM: 10, Waypoints: []geo.Point{{}}},
 		"coords":    {ID: "r", Name: "x", CorridorM: 10, Waypoints: []geo.Point{{}, {Lat: 99}}},
 		"when":      {ID: "r", Name: "x", CorridorM: 10, Waypoints: []geo.Point{{}, {Lat: 1}}, Actions: []fence.Action{{Action: action.Notify, When: fence.OnEnter}}},
+		// La acción desconocida debe rechazarse igual que en fence.Validate:
+		// route.ValidateAll es el único guardián de POST/PUT /api/v1/routes.
+		"acción": {ID: "r", Name: "x", CorridorM: 10, Waypoints: []geo.Point{{}, {Lat: 1}}, Actions: []fence.Action{{Action: "format_c", When: fence.OnExit, Enabled: true}}},
 	}
 	for name, r := range bad {
 		if err := r.Validate(); err == nil {

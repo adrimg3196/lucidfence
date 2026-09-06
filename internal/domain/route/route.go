@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 )
@@ -30,7 +31,8 @@ func (r Route) DistanceM(p geo.Point) float64 {
 	return geo.DistanceToPolylineM(p, r.Waypoints)
 }
 
-// Validate comprueba id, nombre, corredor, waypoints y acciones (solo on_exit).
+// Validate comprueba id, nombre, corredor, waypoints y acciones (nombre de
+// acción conocido y solo on_exit, como fence.Validate).
 func (r Route) Validate() error {
 	if !fence.IDPattern.MatchString(r.ID) {
 		return fmt.Errorf("id %q inválido", r.ID)
@@ -50,6 +52,9 @@ func (r Route) Validate() error {
 		}
 	}
 	for i, a := range r.Actions {
+		if _, err := action.Parse(string(a.Action)); err != nil {
+			return fmt.Errorf("acción %d: %w", i, err)
+		}
 		if a.When != fence.OnExit {
 			return fmt.Errorf("acción %d: las rutas solo admiten on_exit", i)
 		}
