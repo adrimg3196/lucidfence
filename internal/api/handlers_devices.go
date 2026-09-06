@@ -59,8 +59,22 @@ func (s *server) deviceGet(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 	writeError(w, http.StatusNotFound, "not_found", "dispositivo no encontrado")
 }
 
+// deviceTrail comprueba primero que el id exista en Devices(): trail.jsonl
+// no distingue "dispositivo inexistente" de "sin posiciones todavía", así
+// que sin esta comprobación un id inventado devolvía 200 con una lista
+// vacía en vez de 404.
 func (s *server) deviceTrail(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
-	tr, err := s.org().Trail(pathID(r), queryInt(r, "limit", 200, 2000))
+	ds, err := s.org().Devices()
+	if err != nil {
+		s.fail(w, "devices.trail.load", err)
+		return
+	}
+	id := pathID(r)
+	if _, ok := device.Index(ds)[id]; !ok {
+		writeError(w, http.StatusNotFound, "not_found", "dispositivo no encontrado")
+		return
+	}
+	tr, err := s.org().Trail(id, queryInt(r, "limit", 200, 2000))
 	if err != nil {
 		s.fail(w, "devices.trail", err)
 		return

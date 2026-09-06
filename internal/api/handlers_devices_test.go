@@ -76,3 +76,15 @@ func checkDeviceTrail(t *testing.T, e *testEnv) {
 		t.Fatalf("trail: %d %v", res.StatusCode, out)
 	}
 }
+
+// TestDeviceTrailInexistenteDevuelve404 cubre la ronda de corrección
+// M1-R17: el trail de un id que no está en Devices() debe ser un 404, no un
+// 200 con items vacíos (Trail lee un log JSONL que no sabe si el id existe).
+func TestDeviceTrailInexistenteDevuelve404(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("demo")
+	res, out := e.do("GET", "/api/v1/devices/nope/trail", nil, true)
+	if res.StatusCode != 404 || out["code"] != "not_found" {
+		t.Fatalf("trail inexistente: %d %v", res.StatusCode, out)
+	}
+}
