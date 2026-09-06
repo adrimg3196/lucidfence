@@ -9,18 +9,19 @@ linters:
     - depguard
     - funlen
     - gocyclo
-    - misspell
     - unparam
+  # misspell no está habilitado: el código y sus comentarios están en
+  # español (spec, "textos ... en español"), y misspell asume inglés incluso
+  # con locale: US e ignore-rules vacío (marca "dependencias" y "producto"
+  # como erratas de palabras inglesas). No hay forma de decirle "este
+  # fichero es español" sin una lista de excepciones que crece con cada
+  # comentario nuevo, así que se apaga en vez de perseguir falsos positivos.
   settings:
     funlen:
       lines: 60
       statements: 40
     gocyclo:
       min-complexity: 15
-    misspell:
-      ignore-rules:
-        - dependencias
-        - producto
     depguard:
       rules:
         domain:
