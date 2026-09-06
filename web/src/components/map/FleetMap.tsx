@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Device, Fence } from "@/api/hooks";
-import { devicesToGeoJSON, fencesToGeoJSON } from "@/lib/geo";
+import { devicesToGeoJSON, devicePopupContent, fencesToGeoJSON } from "@/lib/geo";
 import { rasterStyle } from "./style";
 
 const colors = { inside: "#346538", outside: "#956400", unknown: "#5E635C" };
@@ -55,7 +55,9 @@ export function FleetMap({ fences, devices, tilesUrl, onDeviceClick }: { fences:
         const f = e.features?.[0];
         if (!f) return;
         const p = f.properties as { id: string; name: string; fence_state: string };
-        new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br/>${p.fence_state}`).addTo(m);
+        // M1-R27 (C14): setDOMContent con un nodo construido vía textContent
+        // en vez de setHTML con una plantilla interpolada (sumidero XSS).
+        new maplibregl.Popup().setLngLat(e.lngLat).setDOMContent(devicePopupContent(p.name, p.fence_state)).addTo(m);
         onDeviceClick?.(p.id);
       });
       m.on("mouseenter", "devices", () => (m.getCanvas().style.cursor = "pointer"));

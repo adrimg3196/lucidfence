@@ -42,3 +42,16 @@ export function devicesToGeoJSON(devices: Device[]): GeoJSON.FeatureCollection {
       })),
   };
 }
+
+// M1-R27 (C14): el popup del mapa pasaba el nombre del dispositivo a
+// Popup.setHTML sin escapar; hoy solo lo alimenta la seed de la demo, pero en
+// M2 el primer conector real trae nombres del UEM sin sanear (sumidero XSS
+// clásico). Se construye el nodo con textContent, que nunca interpreta su
+// contenido como marcado, y se pasa a Popup.setDOMContent en vez de setHTML.
+export function devicePopupContent(name: string, fenceState: string): HTMLElement {
+  const el = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = name;
+  el.append(strong, document.createElement("br"), document.createTextNode(fenceState));
+  return el;
+}

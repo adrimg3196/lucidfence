@@ -1,4 +1,4 @@
-import { circleToPolygon, fencesToGeoJSON, devicesToGeoJSON } from "./geo";
+import { circleToPolygon, fencesToGeoJSON, devicesToGeoJSON, devicePopupContent } from "./geo";
 import type { Device, Fence } from "@/api/hooks";
 
 test("circleToPolygon devuelve un anillo cerrado de steps+1 puntos alrededor del centro", () => {
@@ -38,4 +38,16 @@ test("devicesToGeoJSON omite dispositivos sin ubicación", () => {
   const fc = devicesToGeoJSON(devices);
   expect(fc.features).toHaveLength(1);
   expect(fc.features[0].properties).toEqual({ id: "a", name: "A", fence_state: "inside" });
+});
+
+// M1-R27 (C14): el popup del mapa pasaba p.name/p.fence_state a Popup.setHTML
+// sin escapar (sumidero XSS si el nombre viene de un UEM real en M2).
+// devicePopupContent debe construir el nodo con textContent para que
+// cualquier HTML en el nombre se muestre como texto, nunca se ejecute.
+test("devicePopupContent escapa HTML crudo del nombre del dispositivo", () => {
+  const el = devicePopupContent('<img src=x onerror="alert(1)">', "outside");
+  expect(el.querySelector("img")).toBeNull();
+  expect(el.innerHTML).not.toContain("<img");
+  expect(el.querySelector("strong")?.textContent).toBe('<img src=x onerror="alert(1)">');
+  expect(el.textContent).toContain("outside");
 });

@@ -19,7 +19,7 @@ vi.mock("maplibre-gl", () => {
     getSource(id: string) { return { setData: (d: GeoJSON.FeatureCollection) => { this.sources[id] = d; } }; }
     addLayer() {} addControl() {} fitBounds() {} remove() {} getCanvas() { return { style: {} }; }
   }
-  class Popup { setLngLat() { return this; } setHTML() { return this; } addTo() { return this; } }
+  class Popup { setLngLat() { return this; } setHTML() { return this; } setDOMContent() { return this; } addTo() { return this; } }
   class NavigationControl {}
   class LngLatBounds { extend() { return this; } isEmpty() { return false; } }
   return { default: { Map, Popup, NavigationControl, LngLatBounds }, Map, Popup, NavigationControl, LngLatBounds };
