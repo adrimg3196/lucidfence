@@ -12,14 +12,32 @@ export function FleetMap({ fences, devices, tilesUrl, onDeviceClick }: { fences:
   const map = useRef<maplibregl.Map | null>(null);
   const loaded = useRef(false);
   const fitted = useRef(false);
+  const latest = useRef({ fences, devices });
+  const sync = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    latest.current = { fences, devices };
+  });
 
   useEffect(() => {
     if (!container.current || map.current) return;
     const m = new maplibregl.Map({ container: container.current, style: rasterStyle(tilesUrl), center: [-3.708, 40.421], zoom: 12, attributionControl: {} });
     m.addControl(new maplibregl.NavigationControl(), "top-right");
+    sync.current = () => {
+      const fSrc = m.getSource("fences") as maplibregl.GeoJSONSource | undefined;
+      const dSrc = m.getSource("devices") as maplibregl.GeoJSONSource | undefined;
+      fSrc?.setData(fencesToGeoJSON(latest.current.fences));
+      dSrc?.setData(devicesToGeoJSON(latest.current.devices));
+      if (!fitted.current && latest.current.devices.some((d) => d.location?.point)) {
+        const b = new maplibregl.LngLatBounds();
+        for (const d of latest.current.devices) if (d.location?.point) b.extend([d.location.point.lng, d.location.point.lat]);
+        m.fitBounds(b, { padding: 60, maxZoom: 14, duration: 0 });
+        fitted.current = true;
+      }
+    };
     m.on("load", () => {
-      m.addSource("fences", { type: "geojson", data: fencesToGeoJSON([]) });
-      m.addSource("devices", { type: "geojson", data: devicesToGeoJSON([]) });
+      m.addSource("fences", { type: "geojson", data: fencesToGeoJSON(latest.current.fences) });
+      m.addSource("devices", { type: "geojson", data: devicesToGeoJSON(latest.current.devices) });
       m.addLayer({ id: "fences-fill", type: "fill", source: "fences", paint: { "fill-color": "#3E7A5E", "fill-opacity": 0.12 } });
       m.addLayer({ id: "fences-line", type: "line", source: "fences", paint: { "line-color": "#3E7A5E", "line-width": 2 } });
       m.addLayer({
@@ -42,6 +60,7 @@ export function FleetMap({ fences, devices, tilesUrl, onDeviceClick }: { fences:
       });
       m.on("mouseenter", "devices", () => (m.getCanvas().style.cursor = "pointer"));
       m.on("mouseleave", "devices", () => (m.getCanvas().style.cursor = ""));
+      sync.current();
       loaded.current = true;
     });
     map.current = m;
@@ -54,18 +73,8 @@ export function FleetMap({ fences, devices, tilesUrl, onDeviceClick }: { fences:
   }, []);
 
   useEffect(() => {
-    const m = map.current;
-    if (!m || !loaded.current) return;
-    const fSrc = m.getSource("fences") as maplibregl.GeoJSONSource | undefined;
-    const dSrc = m.getSource("devices") as maplibregl.GeoJSONSource | undefined;
-    fSrc?.setData(fencesToGeoJSON(fences));
-    dSrc?.setData(devicesToGeoJSON(devices));
-    if (!fitted.current && devices.some((d) => d.location?.point)) {
-      const b = new maplibregl.LngLatBounds();
-      for (const d of devices) if (d.location?.point) b.extend([d.location.point.lng, d.location.point.lat]);
-      m.fitBounds(b, { padding: 60, maxZoom: 14, duration: 0 });
-      fitted.current = true;
-    }
+    if (!loaded.current) return;
+    sync.current();
   }, [fences, devices]);
 
   return <div ref={container} className="h-full min-h-[520px] w-full rounded-[var(--radius-ui)] border border-border" />;
