@@ -83,17 +83,8 @@ linters:
           list-mode: strict
           files: ["**/internal/web/**", "**/internal/version/**", "**/internal/config/**", "**/internal/arch/**", "**/internal/battery/**"]
           allow: ["$gostd"]
-        # catch-all: red de seguridad para que ningún paquete bajo internal/
-        # quede sin ninguna regla depguard explícita (I2). No añade
-        # restricción real por sí sola (su allow ya incluye cualquier
-        # subpaquete de internal/), pero garantiza que un paquete nuevo sin
-        # regla propia siga sin poder importar terceros directamente; la
-        # garantía de cobertura real la hace cumplir
-        # TestDepguardCubreTodosLosPaquetes en internal/arch.
-        catch-all:
-          list-mode: strict
-          files: ["**/internal/**"]
-          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal"]
+        # Sin regla comodín: cada paquete bajo internal/ debe tener su regla
+        # explícita; lo exige TestDepguardCubreTodosLosPaquetes.
 
 formatters:
   enable:
