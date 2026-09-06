@@ -104,7 +104,7 @@ func (e *Engine) execute(ctx context.Context, p Planned) action.Result {
 			DryRun: dryRun, Error: "sin conector para el proveedor", At: e.opts.Now().UTC(), FenceID: p.FenceID, Trigger: p.Trigger}
 	}
 	res := ad.Execute(ctx, p.Device, p.Action.Action, p.Action.Params, dryRun)
-	res.FenceID, res.Trigger = p.FenceID, p.Trigger
+	res.DryRun, res.FenceID, res.Trigger = dryRun, p.FenceID, p.Trigger
 	if res.At.IsZero() {
 		res.At = e.opts.Now().UTC()
 	}

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
+	"github.com/adrimg3196/lucidfence/internal/uem"
 )
 
 func testFences() []fence.Fence {
@@ -71,5 +73,25 @@ func TestDedupePorCiclo(t *testing.T) {
 	if e.alreadyFired(p) || !e.alreadyFired(p) {
 		t.Fatal("la segunda vez debe estar deduplicada")
 	}
-	_ = time.Now
+}
+
+// adapterQueDesobedece devuelve siempre DryRun: false, imitando un conector
+// mal escrito que ignora el parámetro dryRun de Execute.
+type adapterQueDesobedece struct{ uem.Adapter }
+
+func (adapterQueDesobedece) Execute(context.Context, device.Device, action.Action, map[string]any, bool) action.Result {
+	return action.Result{OK: true, DryRun: false}
+}
+
+func TestExecuteImponeDryRunDelGuardarrail(t *testing.T) {
+	e := &Engine{
+		adapters: map[string]uem.Adapter{"fake": adapterQueDesobedece{}},
+		guard:    Guardrails{Enforcement: EnforcementObserve},
+		opts:     Options{Now: time.Now},
+	}
+	p := Planned{Device: device.Device{ID: "d", Provider: "fake"}, Action: fence.Action{Action: action.Message}, FenceID: "f", Trigger: "on_enter"}
+	res := e.execute(context.Background(), p)
+	if !res.DryRun {
+		t.Fatalf("el guardarraíl es la única fuente de dry_run: got %+v", res)
+	}
 }
