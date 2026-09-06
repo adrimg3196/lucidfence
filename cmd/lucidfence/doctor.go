@@ -61,6 +61,8 @@ func doctorChecks(f commonFlags) []check {
 		} else {
 			out = append(out, check{Name: "seed de simulación", Severity: "warning", Detail: "sin seed.json; se usará la flota demo embebida"})
 		}
+	} else {
+		out = append(out, check{Name: "seed de simulación", Severity: "error", Detail: err.Error()})
 	}
 	if as, err := auth.Open(st.AuthDir(), time.Now); err == nil {
 		if as.HasUsers() {
@@ -68,6 +70,8 @@ func doctorChecks(f commonFlags) []check {
 		} else {
 			out = append(out, check{Name: "usuarios", Severity: "warning", Detail: "pendiente el asistente inicial (abre el dashboard)"})
 		}
+	} else {
+		out = append(out, check{Name: "usuarios", Severity: "error", Detail: err.Error()})
 	}
 	if healthy(cfg.Listen, 2*time.Second) {
 		out = append(out, check{Name: "servidor", OK: true, Detail: "responde en http://" + cfg.Listen})
