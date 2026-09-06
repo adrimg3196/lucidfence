@@ -55,6 +55,8 @@ los crea; el test `TestArchitectureDocListsEveryPackage` lo exige.
 
 ## Ficheros protegidos (CODEOWNERS)
 
-`ARCHITECTURE.md`, `.github/`, `go.mod`, `web/package.json`,
-`internal/arch/allowlist_*.txt`, `internal/engine/guardrails*.go`. Cualquier
-cambio exige aprobación del propietario aunque la CI esté verde.
+`ARCHITECTURE.md`, `.github/`, `go.mod`, `go.sum`, `.golangci.yml`,
+`web/package.json`, `web/package-lock.json`, `internal/arch/`,
+`internal/battery/`, `internal/engine/guardrails*`, `scripts/`,
+`scripts/coverage.sh`, `.gitleaks.toml`. Cualquier cambio exige aprobación
+del propietario aunque la CI esté verde.

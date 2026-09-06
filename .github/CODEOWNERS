@@ -3,8 +3,12 @@
 /.github/                     @adrimg3196
 /go.mod                       @adrimg3196
 /go.sum                       @adrimg3196
-/.golangci.yml               @adrimg3196
+/.golangci.yml                @adrimg3196
 /web/package.json             @adrimg3196
+/web/package-lock.json        @adrimg3196
 /internal/arch/               @adrimg3196
+/internal/battery/            @adrimg3196
 /internal/engine/guardrails*  @adrimg3196
+/scripts/                     @adrimg3196
 /scripts/coverage.sh          @adrimg3196
+/.gitleaks.toml               @adrimg3196
