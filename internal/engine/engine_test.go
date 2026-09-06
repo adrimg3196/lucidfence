@@ -13,6 +13,7 @@ import (
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 	"github.com/adrimg3196/lucidfence/internal/uem/simulation"
@@ -32,18 +33,37 @@ func newEngine(t *testing.T, adapters ...uem.Adapter) (*Engine, *store.OrgStore)
 	return New(org, adapters, Options{Mode: "simulation", Interval: 50 * time.Millisecond, Now: func() time.Time { return now }}), org
 }
 
-//nolint:gocyclo // aserciones secuenciales sobre un único ciclo demo, no lógica de producción.
+// TestRunOnceEvaluaFlotaDemo corre un único ciclo sobre la fixture demo y
+// comprueba cada faceta del resultado en su propio subtest (cada assertXxx es
+// una función con nombre, no una clausura: gocyclo suma la complejidad de
+// las clausuras anidadas a la de la función que las contiene).
 func TestRunOnceEvaluaFlotaDemo(t *testing.T) {
 	e, org := newEngine(t)
 	st, err := e.RunOnce(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+	ds, _ := org.Devices()
+	idx := device.Index(ds)
+
+	t.Run("stats", func(t *testing.T) { assertDemoStats(t, st) })
+	t.Run("estado por dispositivo", func(t *testing.T) { assertDemoDeviceStates(t, idx) })
+	t.Run("eventos", func(t *testing.T) { assertDemoEvents(t, org) })
+	t.Run("acciones dry-run", func(t *testing.T) { assertDemoActions(t, org, st) })
+	t.Run("trail", func(t *testing.T) { assertDemoTrail(t, org) })
+	t.Run("segundo ciclo", func(t *testing.T) { assertDemoSegundoCiclo(t, e) })
+	t.Run("status", func(t *testing.T) { assertDemoStatus(t, e) })
+}
+
+func assertDemoStats(t *testing.T, st CycleStats) {
+	t.Helper()
 	if st.DevicesTotal != 6 || st.Inside < 2 || st.Transitions != 6 || st.Providers["simulation"].Devices != 6 || !st.Providers["simulation"].OK {
 		t.Fatalf("stats: %+v", st)
 	}
-	ds, _ := org.Devices()
-	idx := device.Index(ds)
+}
+
+func assertDemoDeviceStates(t *testing.T, idx map[string]device.Device) {
+	t.Helper()
 	if idx["dev-001"].FenceState != device.Inside || idx["dev-001"].InsideFence != "demo-hq" {
 		t.Fatalf("dev-001 debe estar en demo-hq: %+v", idx["dev-001"])
 	}
@@ -53,6 +73,10 @@ func TestRunOnceEvaluaFlotaDemo(t *testing.T) {
 	if idx["dev-002"].RouteState != device.OnRoute || idx["dev-002"].RouteID != "route-centro" {
 		t.Fatalf("dev-002 en ruta: %+v", idx["dev-002"])
 	}
+}
+
+func assertDemoEvents(t *testing.T, org *store.OrgStore) {
+	t.Helper()
 	evs, _ := org.RecentEvents(100)
 	found := false
 	for _, ev := range evs {
@@ -63,6 +87,10 @@ func TestRunOnceEvaluaFlotaDemo(t *testing.T) {
 	if !found {
 		t.Fatalf("falta la transición de dev-001: %+v", evs)
 	}
+}
+
+func assertDemoActions(t *testing.T, org *store.OrgStore, st CycleStats) {
+	t.Helper()
 	acts, _ := org.RecentActions(100)
 	if len(acts) == 0 || st.ActionsExecuted != len(acts) {
 		t.Fatalf("acciones: %d vs %d", len(acts), st.ActionsExecuted)
@@ -72,14 +100,29 @@ func TestRunOnceEvaluaFlotaDemo(t *testing.T) {
 			t.Fatalf("en observe todo es dry-run: %+v", a)
 		}
 	}
+}
+
+func assertDemoTrail(t *testing.T, org *store.OrgStore) {
+	t.Helper()
 	tr, _ := org.Trail("dev-001", 10)
 	if len(tr) != 1 {
 		t.Fatalf("trail: %d", len(tr))
 	}
-	st2, _ := e.RunOnce(context.Background())
+}
+
+func assertDemoSegundoCiclo(t *testing.T, e *Engine) {
+	t.Helper()
+	st2, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if st2.Transitions >= 6 {
 		t.Fatalf("segundo ciclo no repite las transiciones iniciales: %+v", st2)
 	}
+}
+
+func assertDemoStatus(t *testing.T, e *Engine) {
+	t.Helper()
 	if e.Status().Cycles != 2 || e.Status().Enforcement != "observe" || e.Status().LastCycle == nil {
 		t.Fatalf("status: %+v", e.Status())
 	}
@@ -151,7 +194,6 @@ func TestStartStopEjecutaCiclosPeriodicos(t *testing.T) {
 	if e.Status().Running || e.Status().Cycles < 2 {
 		t.Fatalf("tras Stop: %+v", e.Status())
 	}
-	_ = action.All
 }
 
 // TestErroresDePersistenciaSeCuentan convierte events.jsonl en un directorio
@@ -276,5 +318,46 @@ func TestUltimoErrorDeCicloVisibleEnStatus(t *testing.T) {
 	}
 	if e.Status().LastError != "" {
 		t.Fatal("un ciclo correcto debe vaciar LastError")
+	}
+}
+
+// TestPanicoPorDispositivoNoTumbaElCiclo usa el hook de test evalHook (solo
+// fijado por tests) para forzar un pánico al evaluar un dispositivo
+// concreto: el ciclo debe seguir, contar el fallo y dejar el resto de la
+// flota evaluada con normalidad.
+func TestPanicoPorDispositivoNoTumbaElCiclo(t *testing.T) {
+	e, org := newEngine(t)
+	e.evalHook = func(d *device.Device) {
+		if d.ID == "dev-004" {
+			panic("boom")
+		}
+	}
+	st, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.EvaluationErrors != 1 {
+		t.Fatalf("evaluation_errors: %d", st.EvaluationErrors)
+	}
+	ds, _ := org.Devices()
+	idx := device.Index(ds)
+	broken := idx["dev-004"]
+	if broken.EvaluationError == "" || broken.Risk.Score != nil {
+		t.Fatalf("dev-004 debe quedar en evaluation_error con riesgo nulo: %+v", broken)
+	}
+	if other := idx["dev-001"]; other.FenceState != device.Inside {
+		t.Fatalf("el resto de la flota debe seguir evaluándose: %+v", other)
+	}
+}
+
+// TestExecuteSinConectorDevuelveResultadoDryRun cubre el dispositivo cuyo
+// proveedor no tiene conector registrado: la ejecución no puede llegar al
+// UEM real, así que el resultado es siempre dry-run con error.
+func TestExecuteSinConectorDevuelveResultadoDryRun(t *testing.T) {
+	e := &Engine{adapters: map[string]uem.Adapter{}, guard: Guardrails{Enforcement: EnforcementObserve}, opts: Options{Now: time.Now}}
+	p := Planned{Device: device.Device{ID: "d", Provider: "nope"}, Action: fence.Action{Action: action.Message}, FenceID: "f", Trigger: "on_enter"}
+	res := e.execute(context.Background(), p)
+	if res.OK || !res.DryRun || res.Error == "" {
+		t.Fatalf("sin conector debe ser OK=false, DryRun=true y con error: %+v", res)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 )
@@ -84,6 +85,12 @@ type Engine struct {
 	violations map[string]int
 	fired      map[string]bool
 	wg         sync.WaitGroup
+
+	// evalHook, si no es nil, se llama al principio de evaluateDevice. Solo
+	// lo fijan los tests, para provocar de forma determinista un pánico por
+	// dispositivo y comprobar que el ciclo no se cae (no hay ruta natural de
+	// producción a un pánico ahí).
+	evalHook func(*device.Device)
 }
 
 // New crea el motor. El enforcement nace en observe y M1 no ofrece forma de cambiarlo.

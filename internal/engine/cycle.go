@@ -76,6 +76,9 @@ func (e *Engine) evaluateDevice(in cycleInput, cur *device.Device, now time.Time
 			cur.Risk.Score = nil
 		}
 	}()
+	if e.evalHook != nil {
+		e.evalHook(cur)
+	}
 	var prev *device.Device
 	if p, ok := in.prev[cur.ID]; ok {
 		prev = &p
