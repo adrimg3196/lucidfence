@@ -287,6 +287,40 @@ func TestLoginConPersistenciaRotaNoDejaSesionHuerfana(t *testing.T) {
 	}
 }
 
+// TestStartSessionNoPasaPorElLimitador comprueba que StartSession abre
+// sesión con el email ya bloqueado por el limitador de intentos (el
+// asistente inicial no adivina ninguna contraseña: la acaba de fijar el
+// servidor) y que sigue exigiendo un usuario existente con rol en la
+// organización.
+func TestStartSessionNoPasaPorElLimitador(t *testing.T) {
+	s, _ := openStore(t)
+	u, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxFails; i++ {
+		if _, err := s.Login("a@x.com", "mal", "default"); !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("intento %d: %v", i, err)
+		}
+	}
+	if _, err := s.Login("a@x.com", "contraseña-larga-1", "default"); !errors.Is(err, ErrThrottled) {
+		t.Fatalf("el limitador sigue vigente para Login: %v", err)
+	}
+	sess, err := s.StartSession(u.ID, "default")
+	if err != nil || sess.Token == "" || sess.CSRF == "" {
+		t.Fatalf("StartSession: %v %+v", err, sess)
+	}
+	if p, err := s.Resolve(sess.Token); err != nil || p.Role != Owner {
+		t.Fatalf("la sesión del asistente debe resolver al owner: %v %+v", err, p)
+	}
+	if _, err := s.StartSession("usr_inventado", "default"); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("usuario inexistente: %v", err)
+	}
+	if _, err := s.StartSession(u.ID, "otra"); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("organización sin rol: %v", err)
+	}
+}
+
 // TestUserPublicoNoExponeElHash comprueba que el tipo público User (el que
 // devuelven Setup y UserByID) no serializa el hash de la contraseña: solo
 // userRecord, que es lo que se persiste en users.json, lo lleva.

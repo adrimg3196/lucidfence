@@ -155,6 +155,32 @@ func TestLoginConPersistenciaRotaEs500(t *testing.T) {
 	}
 }
 
+// TestSetupNoPasaPorElLimitadorDeLogin precarga el contador de intentos del
+// email del owner con cinco logins fallidos (login es público y anota
+// también emails inexistentes) y luego completa el asistente: el setup debe
+// devolver 201 con cookie y csrf. Antes creaba el owner y devolvía 429 sin
+// sesión, dejando la instalación sin salida por la UI —el segundo intento
+// ya era 409— y bastaba con equivocarse al probar el login antes de
+// terminar el asistente (hallazgo C10). El limitador es para adivinar
+// contraseñas en Login; aquí la contraseña acaba de fijarla el servidor.
+func TestSetupNoPasaPorElLimitadorDeLogin(t *testing.T) {
+	e := newTestEnv(t)
+	for i := 0; i < 5; i++ {
+		res, out := e.do("POST", "/api/v1/auth/login", map[string]any{"email": "adri@example.com", "password": "loquesea"}, false)
+		if res.StatusCode != 401 {
+			t.Fatalf("intento %d antes del setup: %d %v", i, res.StatusCode, out)
+		}
+	}
+	out := e.setup("empty")
+	if out["user"].(map[string]any)["email"] != "adri@example.com" {
+		t.Fatalf("setup: %v", out)
+	}
+	res, out := e.do("GET", "/api/v1/auth/me", nil, true)
+	if res.StatusCode != 200 {
+		t.Fatalf("la sesión del asistente debe valer: %d %v", res.StatusCode, out)
+	}
+}
+
 func TestSetupValidaYCSRF(t *testing.T) {
 	e := newTestEnv(t)
 	res, out := e.do("POST", "/api/v1/auth/setup", map[string]any{"email": "sin-arroba", "name": "", "password": "corta", "mode": "demo"}, false)

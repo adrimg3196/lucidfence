@@ -55,7 +55,8 @@ func (s *server) authSetup(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 	// mensaje; cualquier otro fallo de Setup (persistencia de users.json,
 	// entropía del hash) es de clase 500 y su mensaje lleva rutas del
 	// directorio de datos, así que va al log y no a la respuesta (M1-R17).
-	if _, err := s.d.Auth.Setup(b.Email, b.Name, b.Password, s.d.Config.Org); err != nil {
+	user, err := s.d.Auth.Setup(b.Email, b.Name, b.Password, s.d.Config.Org)
+	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrAlreadySetUp):
 			writeError(w, http.StatusConflict, "conflict", err.Error())
@@ -72,7 +73,17 @@ func (s *server) authSetup(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 			return
 		}
 	}
-	s.openSession(w, r, b.Email, b.Password, http.StatusCreated)
+	// El asistente abre la sesión por StartSession, sin volver a pasar por
+	// el limitador de intentos de Login: como /auth/login es público y
+	// anota los fallos de emails que aún no existen, cualquiera podía
+	// precargar el contador del email del owner y dejar la instalación
+	// creada pero sin sesión ni salida por la UI (hallazgo C10).
+	sess, err := s.d.Auth.StartSession(user.ID, s.d.Config.Org)
+	if err != nil {
+		s.fail(w, "auth.setup.session", err)
+		return
+	}
+	s.writeSession(w, r, sess, http.StatusCreated)
 }
 
 func (s *server) authLogin(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
@@ -81,10 +92,10 @@ func (s *server) authLogin(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 		writeError(w, http.StatusBadRequest, "invalid", err.Error())
 		return
 	}
-	s.openSession(w, r, b.Email, b.Password, http.StatusOK)
+	s.openSession(w, r, b.Email, b.Password)
 }
 
-func (s *server) openSession(w http.ResponseWriter, r *http.Request, email, password string, status int) {
+func (s *server) openSession(w http.ResponseWriter, r *http.Request, email, password string) {
 	sess, err := s.d.Auth.Login(email, password, s.d.Config.Org)
 	switch {
 	case errors.Is(err, auth.ErrThrottled):
@@ -100,9 +111,16 @@ func (s *server) openSession(w http.ResponseWriter, r *http.Request, email, pass
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "email o contraseña incorrectos")
 		return
 	}
+	s.writeSession(w, r, sess, http.StatusOK)
+}
+
+// writeSession fija la cookie de sesión y devuelve el usuario resuelto con
+// sus capacidades. La comparten el login y el asistente inicial, que abren
+// la sesión por caminos distintos.
+func (s *server) writeSession(w http.ResponseWriter, r *http.Request, sess auth.Session, status int) {
 	p, err := s.d.Auth.Resolve(sess.Token)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", "sesión no resoluble")
+		s.fail(w, "auth.session.resolve", err)
 		return
 	}
 	s.setCookie(w, r, sess.Token, int(auth.SessionTTL.Seconds()))

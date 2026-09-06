@@ -368,6 +368,27 @@ func (s *Store) newSessionLocked(userID, orgID string) (Session, error) {
 	return sess, nil
 }
 
+// StartSession abre una sesión para un usuario ya identificado, sin
+// contraseña y sin pasar por el limitador de intentos: lo usa el asistente
+// inicial, que acaba de fijar en el propio servidor la contraseña del owner
+// recién creado. El limitador protege el adivinado de contraseñas en Login
+// y ahí sigue; aquí no hay nada que adivinar, y hacerle caso dejaba una
+// instalación con owner creado y sin sesión (spec §6.2, hallazgo C10).
+// Falla con ErrUnauthenticated si el usuario no existe o no tiene rol en la
+// organización.
+func (s *Store) StartSession(userID, orgID string) (Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.userByIDLocked(userID)
+	if !ok {
+		return Session{}, ErrUnauthenticated
+	}
+	if _, hasRole := u.OrgRoles[orgID]; !hasRole {
+		return Session{}, ErrUnauthenticated
+	}
+	return s.newSessionLocked(u.ID, orgID)
+}
+
 // Logout cierra la sesión.
 func (s *Store) Logout(token string) error {
 	s.mu.Lock()

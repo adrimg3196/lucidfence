@@ -151,6 +151,7 @@ export interface paths {
                 };
                 400: components["responses"]["Error"];
                 409: components["responses"]["Error"];
+                500: components["responses"]["Error"];
             };
         };
         delete?: never;
@@ -193,6 +194,7 @@ export interface paths {
                 };
                 401: components["responses"]["Error"];
                 429: components["responses"]["Error"];
+                500: components["responses"]["Error"];
             };
         };
         delete?: never;
