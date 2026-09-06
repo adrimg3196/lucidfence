@@ -1,6 +1,11 @@
 package api
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+)
 
 // TestFencesCRUDYValidacion delega cada paso en una función con nombre
 // propio (como TestSetupLoginMeLogout): un closure anidado en t.Run cuenta
@@ -180,6 +185,25 @@ func TestRoutesPUTConservaCreatedAt(t *testing.T) {
 	}
 	if out["updated_at"] == "" {
 		t.Fatal("updated_at vacío tras el put")
+	}
+}
+
+// TestFencesListErrorInternoNoFiltraRutas convierte fences.json en un
+// directorio para forzar un fallo de lectura real del store: el 500 debe
+// llevar "error interno" en el cuerpo, nunca el error de os.ReadFile (que
+// incluye la ruta absoluta del fichero en la organización).
+func TestFencesListErrorInternoNoFiltraRutas(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	if err := os.Mkdir(e.org.Path("fences.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("GET", "/api/v1/fences", nil, true)
+	if res.StatusCode != 500 || out["code"] != "internal" || out["error"] != "error interno" {
+		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
+	}
+	if strings.Contains(fmt.Sprintf("%v", out), e.org.Dir()) {
+		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
 	}
 }
 

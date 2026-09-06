@@ -25,7 +25,7 @@ func (s *server) engineRunOnce(w http.ResponseWriter, r *http.Request, _ *auth.P
 	case errors.Is(err, engine.ErrCycleInProgress):
 		writeError(w, http.StatusConflict, "cycle_in_progress", err.Error())
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "engine.run_once", err)
 	default:
 		writeJSON(w, http.StatusOK, st)
 	}
@@ -34,7 +34,7 @@ func (s *server) engineRunOnce(w http.ResponseWriter, r *http.Request, _ *auth.P
 func (s *server) eventsList(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	evs, err := s.org().RecentEvents(queryInt(r, "limit", 100, 1000))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "events.list", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": evs})
@@ -43,7 +43,7 @@ func (s *server) eventsList(w http.ResponseWriter, r *http.Request, _ *auth.Prin
 func (s *server) actionsList(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	acts, err := s.org().RecentActions(queryInt(r, "limit", 100, 1000))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "actions.list", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": acts})

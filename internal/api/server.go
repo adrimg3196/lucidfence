@@ -58,5 +58,11 @@ func New(d Deps) (http.Handler, *Registry) {
 
 func (s *server) org() *store.OrgStore { return s.d.Org }
 
+// fail registra un error interno (con el nombre del paso donde ocurrió) en
+// el logger del servidor y responde sin filtrar sus detalles al cliente.
+func (s *server) fail(w http.ResponseWriter, op string, err error) {
+	writeInternalError(w, s.d.Logger, op, err)
+}
+
 // pathID extrae el {id} de la ruta.
 func pathID(r *http.Request) string { return strings.TrimSpace(r.PathValue("id")) }

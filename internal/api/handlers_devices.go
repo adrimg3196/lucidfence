@@ -33,7 +33,7 @@ func matchDevice(d device.Device, state, q string) bool {
 func (s *server) devicesList(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	ds, err := s.org().Devices()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "devices.list", err)
 		return
 	}
 	state, q := r.URL.Query().Get("state"), r.URL.Query().Get("q")
@@ -49,7 +49,7 @@ func (s *server) devicesList(w http.ResponseWriter, r *http.Request, _ *auth.Pri
 func (s *server) deviceGet(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	ds, err := s.org().Devices()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "devices.get", err)
 		return
 	}
 	if d, ok := device.Index(ds)[pathID(r)]; ok {
@@ -62,7 +62,7 @@ func (s *server) deviceGet(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 func (s *server) deviceTrail(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	tr, err := s.org().Trail(pathID(r), queryInt(r, "limit", 200, 2000))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "devices.trail", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": tr})

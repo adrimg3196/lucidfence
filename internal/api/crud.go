@@ -2,7 +2,9 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/auth"
@@ -24,11 +26,13 @@ type crud[T any] struct {
 	// que un PUT cuyo cuerpo no incluya created_at no lo borre.
 	stamp    func(next *T, prev *T, now time.Time)
 	validate func([]T) error
+	logger   *slog.Logger
 }
 
 var errConflict = errors.New("ya existe")
 
 func (c crud[T]) register(s *server) {
+	c.logger = s.d.Logger
 	s.reg.Add(Route{Method: "GET", Path: c.path, Cap: c.readCap, Handler: c.list})
 	s.reg.Add(Route{Method: "POST", Path: c.path, Cap: c.writeCap, Handler: s.withNow(c.create)})
 	s.reg.Add(Route{Method: "GET", Path: c.path + "/{id}", Cap: c.readCap, Handler: c.get})
@@ -42,10 +46,17 @@ func (s *server) withNow(h nowHandler) HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request, _ *auth.Principal) { h(w, r, s.d.Now().UTC()) }
 }
 
+// fail registra el error real (con la ruta del recurso y el paso donde
+// ocurrió) en el logger del servidor y responde sin filtrar detalles
+// internos del store (rutas de fichero, mensajes de os) al cliente.
+func (c crud[T]) fail(w http.ResponseWriter, step string, err error) {
+	writeInternalError(w, c.logger, strings.TrimPrefix(c.path, "/api/v1/")+"."+step, err)
+}
+
 func (c crud[T]) list(w http.ResponseWriter, _ *http.Request, _ *auth.Principal) {
 	items, err := c.load()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "list", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
@@ -63,7 +74,7 @@ func (c crud[T]) find(items []T, id string) int {
 func (c crud[T]) get(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	items, err := c.load()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "get", err)
 		return
 	}
 	i := c.find(items, pathID(r))
@@ -82,7 +93,7 @@ func (c crud[T]) create(w http.ResponseWriter, r *http.Request, now time.Time) {
 	}
 	items, err := c.load()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "create.load", err)
 		return
 	}
 	if c.find(items, c.id(item)) >= 0 {
@@ -96,7 +107,7 @@ func (c crud[T]) create(w http.ResponseWriter, r *http.Request, now time.Time) {
 		return
 	}
 	if err := c.save(items); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "create.save", err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
@@ -110,7 +121,7 @@ func (c crud[T]) update(w http.ResponseWriter, r *http.Request, now time.Time) {
 	}
 	items, err := c.load()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "update.load", err)
 		return
 	}
 	i := c.find(items, pathID(r))
@@ -129,7 +140,7 @@ func (c crud[T]) update(w http.ResponseWriter, r *http.Request, now time.Time) {
 		return
 	}
 	if err := c.save(items); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "update.save", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -138,7 +149,7 @@ func (c crud[T]) update(w http.ResponseWriter, r *http.Request, now time.Time) {
 func (c crud[T]) remove(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
 	items, err := c.load()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "remove.load", err)
 		return
 	}
 	i := c.find(items, pathID(r))
@@ -148,7 +159,7 @@ func (c crud[T]) remove(w http.ResponseWriter, r *http.Request, _ *auth.Principa
 	}
 	items = append(items[:i], items[i+1:]...)
 	if err := c.save(items); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		c.fail(w, "remove.save", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

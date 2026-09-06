@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 )
@@ -32,6 +33,14 @@ func writeError(w http.ResponseWriter, status int, code, msg string) {
 
 func writeErrorDetail(w http.ResponseWriter, status int, code, msg string, detail any) {
 	writeJSON(w, status, errorBody{Error: msg, Code: code, Detail: detail})
+}
+
+// writeInternalError registra el error real del store (que puede llevar
+// rutas de fichero u otros detalles internos) en el logger del servidor y
+// responde al cliente sin filtrar nada de eso.
+func writeInternalError(w http.ResponseWriter, logger *slog.Logger, op string, err error) {
+	logger.Error("api", "op", op, "error", err)
+	writeError(w, http.StatusInternalServerError, "internal", "error interno")
 }
 
 const maxBody = 1 << 20
