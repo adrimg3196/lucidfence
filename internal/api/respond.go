@@ -37,9 +37,12 @@ func writeErrorDetail(w http.ResponseWriter, status int, code, msg string, detai
 
 // writeInternalError registra el error real del store (que puede llevar
 // rutas de fichero u otros detalles internos) en el logger del servidor y
-// responde al cliente sin filtrar nada de eso.
+// responde al cliente sin filtrar nada de eso. El log lleva el id de
+// petición que securityHeaders ya fijó en la cabecera (y que el cliente ve
+// en X-Request-ID), única forma de correlacionar el id que reporta el
+// usuario con la línea del error real (spec §11).
 func writeInternalError(w http.ResponseWriter, logger *slog.Logger, op string, err error) {
-	logger.Error("api", "op", op, "error", err)
+	logger.Error("api", "op", op, "request_id", w.Header().Get("X-Request-ID"), "error", err)
 	writeError(w, http.StatusInternalServerError, "internal", "error interno")
 }
 

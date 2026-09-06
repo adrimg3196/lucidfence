@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -77,8 +78,12 @@ type testEnv struct {
 	auth    *auth.Store
 	authDir string
 	org     *store.OrgStore
-	cookie  *http.Cookie
-	csrf    string
+	// logs recoge lo que el servidor escribe en su logger, para que los
+	// tests puedan comprobar lo que se registra de un error interno sin
+	// ensuciar la salida de la suite.
+	logs   *bytes.Buffer
+	cookie *http.Cookie
+	csrf   string
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -103,10 +108,12 @@ func newTestEnvWithFleet(t *testing.T, fleet uem.Adapter, now time.Time) *testEn
 		t.Fatal(err)
 	}
 	eng := engine.New(org, []uem.Adapter{fleet}, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
-	h, _ := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock})
+	logs := &bytes.Buffer{}
+	h, _ := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock,
+		Logger: slog.New(slog.NewTextHandler(logs, nil))})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org}
+	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, logs: logs}
 }
 
 func (e *testEnv) do(method, path string, body any, authed bool) (*http.Response, map[string]any) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -51,6 +52,35 @@ func TestTokenLocalPorBearerDesdeLoopback(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer incorrecto")
 	if res, _ := send(e, req); res.StatusCode != 401 {
 		t.Fatal("bearer incorrecto → 401")
+	}
+}
+
+// TestErrorInternoRegistraElIdDePeticion rompe fences.json (directorio en
+// vez de fichero) para provocar un 500 y comprueba que la línea de log lleva
+// el mismo id de petición que la cabecera X-Request-ID de la respuesta. Sin
+// él no hay forma de correlacionar el id que reporta el usuario con el error
+// real del store, que es justo para lo que se genera (spec §11: "5xx con id
+// de petición en log", hallazgo C9).
+func TestErrorInternoRegistraElIdDePeticion(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	if err := os.Mkdir(e.org.Path("fences.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("GET", "/api/v1/fences", nil, true)
+	if res.StatusCode != 500 || out["code"] != "internal" {
+		t.Fatalf("%d %v", res.StatusCode, out)
+	}
+	id := res.Header.Get("X-Request-ID")
+	if id == "" {
+		t.Fatal("la respuesta debe llevar X-Request-ID")
+	}
+	logs := e.logs.String()
+	if !strings.Contains(logs, "request_id="+id) {
+		t.Fatalf("el log del 500 debe llevar el id de petición %q:\n%s", id, logs)
+	}
+	if !strings.Contains(logs, "op=fences.list") {
+		t.Fatalf("el log del 500 debe decir en qué paso ocurrió:\n%s", logs)
 	}
 }
 
