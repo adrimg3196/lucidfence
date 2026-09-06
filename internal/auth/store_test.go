@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -148,6 +149,48 @@ func TestThrottleTrasCincoFallos(t *testing.T) {
 	}
 	if _, err := s.Login("a@x.com", "contraseña-larga-1", "default"); !errors.Is(err, ErrThrottled) {
 		t.Fatalf("sexto intento bloqueado aunque sea correcto: %v", err)
+	}
+}
+
+// TestFailsSePodaTrasLaVentana comprueba que, pasada failWindow, la entrada
+// del email desaparece del mapa de fallos en vez de quedar con una lista
+// vacía indefinidamente (fuga de memoria con un email distinto por
+// atacante).
+func TestFailsSePodaTrasLaVentana(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	s, err := Open(t.TempDir(), func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Login("a@x.com", "mal", "default"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("login mal: %v", err)
+	}
+	if len(s.fails["a@x.com"]) != 1 {
+		t.Fatalf("esperaba un fallo registrado, got %v", s.fails["a@x.com"])
+	}
+	now = now.Add(failWindow + time.Second)
+	if s.throttled("a@x.com") {
+		t.Fatal("no debería seguir bloqueado tras la ventana")
+	}
+	if _, ok := s.fails["a@x.com"]; ok {
+		t.Fatal("la clave debería haberse podado del mapa tras la ventana")
+	}
+}
+
+// TestRegistrarFalloPodaMapaGrande comprueba que el mapa de fallos no crece
+// sin límite: superado maxTrackedFailEmails se descarta por completo
+// (comportamiento documentado en registerFail) en vez de acumular una
+// entrada por cada email distinto que un atacante pueda enviar.
+func TestRegistrarFalloPodaMapaGrande(t *testing.T) {
+	s, _ := openStore(t)
+	for i := 0; i < maxTrackedFailEmails+1; i++ {
+		s.registerFail(fmt.Sprintf("u%d@x.com", i))
+	}
+	if len(s.fails) > maxTrackedFailEmails {
+		t.Fatalf("mapa de fallos sin podar: %d entradas", len(s.fails))
 	}
 }
 

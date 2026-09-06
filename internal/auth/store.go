@@ -28,6 +28,10 @@ const SessionTTL = 12 * time.Hour
 const (
 	maxFails   = 5
 	failWindow = time.Minute
+	// maxTrackedFailEmails acota la memoria que puede consumir el mapa de
+	// fallos: sin límite, un atacante que pruebe un email distinto por
+	// intento haría crecer s.fails sin fin.
+	maxTrackedFailEmails = 10000
 )
 
 // User es un usuario local. password_hash nunca se serializa hacia la API.
@@ -175,6 +179,9 @@ func (s *Store) Setup(email, name, password, orgID string) (User, error) {
 	return u, s.persistUsers()
 }
 
+// throttled poda del email los intentos fuera de failWindow y decide si
+// sigue bloqueado. Si no quedan intentos recientes, la clave se borra del
+// mapa en vez de dejar una entrada vacía indefinidamente.
 func (s *Store) throttled(email string) bool {
 	cutoff := s.now().Add(-failWindow)
 	var recent []time.Time
@@ -183,8 +190,24 @@ func (s *Store) throttled(email string) bool {
 			recent = append(recent, t)
 		}
 	}
-	s.fails[email] = recent
+	if len(recent) == 0 {
+		delete(s.fails, email)
+	} else {
+		s.fails[email] = recent
+	}
 	return len(recent) >= maxFails
+}
+
+// registerFail anota un intento fallido. Si el mapa ha crecido más allá de
+// maxTrackedFailEmails (una avalancha de emails distintos, típica de un
+// intento de agotar memoria) se descarta entero en vez de mantener un
+// índice adicional de antigüedad solo para podarlo: es una salvaguarda de
+// memoria, no una garantía de precisión del throttle a esa escala.
+func (s *Store) registerFail(email string) {
+	if len(s.fails) >= maxTrackedFailEmails {
+		s.fails = make(map[string][]time.Time)
+	}
+	s.fails[email] = append(s.fails[email], s.now())
 }
 
 // Login valida credenciales y abre una sesión. La derivación de la clave
@@ -221,7 +244,7 @@ func (s *Store) Login(email, password, orgID string) (Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !ok {
-		s.fails[email] = append(s.fails[email], s.now())
+		s.registerFail(email)
 		return Session{}, ErrInvalidCredentials
 	}
 	now := s.now().UTC()
