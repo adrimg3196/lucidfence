@@ -67,7 +67,7 @@ func checkSetup(ctx context.Context, env *Env) error {
 }
 
 func checkUnauthenticated(ctx context.Context, env *Env) error {
-	anon := &Env{BaseURL: env.BaseURL, Client: &http.Client{}}
+	anon := &Env{BaseURL: env.BaseURL, Client: &http.Client{Timeout: 30 * time.Second}}
 	var out map[string]any
 	code, err := anon.GetJSON(ctx, "/api/v1/devices", &out)
 	if err != nil || code != 401 || out["code"] != "unauthenticated" || out["error"] == "" {
