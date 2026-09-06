@@ -86,8 +86,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return 2
 	}
-	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "lucidfence doctor: argumento inesperado %q\n", fs.Arg(0))
+	if rejectPositional("doctor", fs, stderr) {
 		return 2
 	}
 	code := 0

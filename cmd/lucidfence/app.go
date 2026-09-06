@@ -142,6 +142,16 @@ func dialAddr(listen string) string {
 	}
 }
 
+// rejectPositional imprime un error y devuelve true si fs tiene argumentos
+// posicionales sobrantes; serve, doctor y open no aceptan ninguno.
+func rejectPositional(name string, fs *flag.FlagSet, stderr io.Writer) bool {
+	if fs.NArg() == 0 {
+		return false
+	}
+	_, _ = fmt.Fprintf(stderr, "lucidfence %s: argumento inesperado %q\n", name, fs.Arg(0))
+	return true
+}
+
 func newLogger(level string, w io.Writer) *slog.Logger {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(level))

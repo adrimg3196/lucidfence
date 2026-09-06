@@ -25,8 +25,7 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return 2
 	}
-	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "lucidfence open: argumento inesperado %q\n", fs.Arg(0))
+	if rejectPositional("open", fs, stderr) {
 		return 2
 	}
 	cfg, err := loadConfig(f)

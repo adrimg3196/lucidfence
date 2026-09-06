@@ -74,8 +74,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return 2
 	}
-	if fs.NArg() > 0 {
-		_, _ = fmt.Fprintf(stderr, "lucidfence serve: argumento inesperado %q\n", fs.Arg(0))
+	if rejectPositional("serve", fs, stderr) {
 		return 2
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -68,6 +68,17 @@ func TestDialAddrSustituyeHostComodin(t *testing.T) {
 	}
 }
 
+func TestPosicionalesRechazados(t *testing.T) {
+	for _, cmd := range []string{"serve", "doctor", "open"} {
+		var out, errb bytes.Buffer
+		code := run([]string{cmd, "extra"}, &out, &errb)
+		want := `lucidfence ` + cmd + `: argumento inesperado "extra"`
+		if code != 2 || !strings.Contains(errb.String(), want) {
+			t.Fatalf("%s: exit=%d stderr=%q, quiero exit=2 y %q", cmd, code, errb.String(), want)
+		}
+	}
+}
+
 func TestParseCommonFlags(t *testing.T) {
 	var errb bytes.Buffer
 	f, _, err := parseCommon("serve", []string{"-data", "/tmp/x", "-listen", "127.0.0.1:1"}, &errb, nil)

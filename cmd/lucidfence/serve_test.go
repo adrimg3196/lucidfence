@@ -114,7 +114,10 @@ func TestStopOnServeErrorParaElMotorYCierraElListener(t *testing.T) {
 func TestServePuertoOcupadoFalla(t *testing.T) {
 	dir := t.TempDir()
 	var out, errb bytes.Buffer
-	ln, _ := (&netListenConfig{}).listen("127.0.0.1:0")
+	ln, err := (&netListenConfig{}).listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = ln.Close() }()
 	code := serve(context.Background(), commonFlags{ConfigPath: filepath.Join(dir, "config.json"), DataDir: filepath.Join(dir, "data"), Listen: ln.Addr().String()}, false, &out, &errb)
 	if code != 1 || !bytes.Contains(errb.Bytes(), []byte("no se puede escuchar")) {
