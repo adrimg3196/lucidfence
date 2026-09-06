@@ -76,11 +76,11 @@ export function FenceEditorPage() {
       {kind === "circle" ? (
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <Label htmlFor="centerLat">Latitud</Label>
+            <Label htmlFor="centerLat">{t("fence.lat")}</Label>
             <Input id="centerLat" type="number" step="any" aria-invalid={!!errs.centerLat} {...form.register("centerLat")} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="centerLng">Longitud</Label>
+            <Label htmlFor="centerLng">{t("fence.lng")}</Label>
             <Input id="centerLng" type="number" step="any" aria-invalid={!!errs.centerLng} {...form.register("centerLng")} />
           </div>
           <div className="space-y-1.5">
@@ -135,7 +135,7 @@ export function FenceEditorPage() {
               </NativeSelect>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`text-${i}`}>Texto</Label>
+              <Label htmlFor={`text-${i}`}>{t("fence.action.text")}</Label>
               <Input id={`text-${i}`} {...form.register(`actions.${i}.text`)} />
             </div>
             <Button type="button" variant="ghost" size="icon" aria-label={t("fences.delete")} onClick={() => actions.remove(i)}>
