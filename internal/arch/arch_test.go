@@ -3,6 +3,7 @@ package arch
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,11 +99,10 @@ func TestFileLimits(t *testing.T) {
 	}
 }
 
-func readAllowlist(t *testing.T, path string) map[string]bool {
-	t.Helper()
+func loadAllowlist(path string) (map[string]bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 	out := map[string]bool{}
@@ -113,6 +113,15 @@ func readAllowlist(t *testing.T, path string) map[string]bool {
 			continue
 		}
 		out[line] = true
+	}
+	return out, sc.Err()
+}
+
+func readAllowlist(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	out, err := loadAllowlist(path)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return out
 }
@@ -136,27 +145,100 @@ func TestGoDependencyAllowlist(t *testing.T) {
 	}
 }
 
-func TestNpmDependencyAllowlist(t *testing.T) {
-	root := repoRoot(t)
-	pkgPath := filepath.Join(root, "web/package.json")
+// npmAliasTarget resuelve el paquete real al que apunta una dependencia de
+// package.json cuando su versión es un alias (spec §7.2): "npm:<nombre>@<v>"
+// apunta a <nombre>; "git+", "file:", "http" y "github:" no tienen un nombre
+// real verificable, así que se etiquetan con la clave + " (alias)" para que
+// nunca casen por accidente con una entrada legítima de la allowlist.
+func npmAliasTarget(name, version string) string {
+	if rest, ok := strings.CutPrefix(version, "npm:"); ok {
+		if i := strings.LastIndex(rest, "@"); i > 0 {
+			return rest[:i]
+		}
+		return rest
+	}
+	for _, prefix := range []string{"git+", "file:", "http", "github:"} {
+		if strings.HasPrefix(version, prefix) {
+			return name + " (alias)"
+		}
+	}
+	return name
+}
+
+// npmAllowlistViolations lista, como "clave -> destino real", cada
+// dependencia de pkgPath cuyo destino resuelto no está en allowlistPath.
+func npmAllowlistViolations(pkgPath, allowlistPath string) ([]string, error) {
 	data, err := os.ReadFile(pkgPath)
 	if err != nil {
-		t.Skipf("web/package.json no existe todavía: %v", err)
+		return nil, err
 	}
-	allowed := readAllowlist(t, filepath.Join(root, "internal/arch/allowlist_npm.txt"))
 	var pkg struct {
 		Dependencies    map[string]string `json:"dependencies"`
 		DevDependencies map[string]string `json:"devDependencies"`
 	}
 	if err := json.Unmarshal(data, &pkg); err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
+	allowed, err := loadAllowlist(allowlistPath)
+	if err != nil {
+		return nil, err
+	}
+	var violations []string
 	for _, deps := range []map[string]string{pkg.Dependencies, pkg.DevDependencies} {
-		for name := range deps {
-			if !allowed[name] {
-				t.Errorf("web/package.json depende de %q, que no está en internal/arch/allowlist_npm.txt (spec §7.2)", name)
+		for name, version := range deps {
+			target := npmAliasTarget(name, version)
+			if !allowed[target] {
+				violations = append(violations, fmt.Sprintf("%s -> %s", name, target))
 			}
 		}
+	}
+	return violations, nil
+}
+
+func TestNpmDependencyAllowlist(t *testing.T) {
+	root := repoRoot(t)
+	pkgPath := filepath.Join(root, "web/package.json")
+	if _, err := os.Stat(pkgPath); err != nil {
+		t.Skipf("web/package.json no existe todavía: %v", err)
+	}
+	violations, err := npmAllowlistViolations(pkgPath, filepath.Join(root, "internal/arch/allowlist_npm.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range violations {
+		t.Errorf("web/package.json depende de %s, que no está en internal/arch/allowlist_npm.txt (spec §7.2)", v)
+	}
+}
+
+func TestNpmAllowlistDetectaAlias(t *testing.T) {
+	root := repoRoot(t)
+	allowlistPath := filepath.Join(root, "internal/arch/allowlist_npm.txt")
+
+	malicious := filepath.Join(t.TempDir(), "package.json")
+	writeTempFile(t, malicious, `{"dependencies":{"react":"npm:paquete-malicioso@1.0.0"}}`)
+	violations, err := npmAllowlistViolations(malicious, allowlistPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) == 0 {
+		t.Fatal("un alias npm: hacia un paquete no listado debería fallar la allowlist")
+	}
+
+	legit := filepath.Join(t.TempDir(), "package.json")
+	writeTempFile(t, legit, `{"dependencies":{"@typescript/native":"npm:typescript@7.0.2"}}`)
+	violations, err = npmAllowlistViolations(legit, allowlistPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("un alias npm: hacia un paquete ya permitido no debería fallar: %v", violations)
+	}
+}
+
+func writeTempFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

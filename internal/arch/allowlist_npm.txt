@@ -23,6 +23,7 @@ vite
 @vitejs/plugin-react
 typescript
 @typescript/native
+@typescript/typescript6
 vitest
 @vitest/coverage-v8
 jsdom
