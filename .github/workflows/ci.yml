@@ -62,6 +62,8 @@ jobs:
         with: { go-version-file: go.mod }
       - uses: actions/download-artifact@v7
         with: { name: web-dist, path: internal/web/dist }
+      - name: el artefacto web-dist trae el dashboard
+        run: test -f internal/web/dist/index.html
       - name: compilar binario con dashboard embebido
         run: CGO_ENABLED=0 go build -trimpath -o bin/lucidfence ./cmd/lucidfence
       - name: batería runtime
