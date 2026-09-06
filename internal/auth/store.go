@@ -289,6 +289,9 @@ func (s *Store) Resolve(token string) (*Principal, error) {
 	}
 	if !sess.ExpiresAt.After(s.now()) {
 		delete(s.sessions, token)
+		// Borrado best-effort: si falla, la sesión ya expiró y sigue
+		// siendo inválida en memoria; el fichero se limpiará en el
+		// siguiente Login/Logout que sí compruebe el error de persistSessions.
 		_ = s.persistSessions()
 		return nil, ErrUnauthenticated
 	}
