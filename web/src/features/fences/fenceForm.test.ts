@@ -63,3 +63,38 @@ test("toFence conserva íntegros los params de una acción ajenos al campo de te
   expect(form.actions[0]).toMatchObject({ text: "Dispositivo ha salido de HQ" });
   expect(toFence(form).actions).toEqual(fence.actions);
 });
+
+test("toFence no inventa params en acciones sin texto y omite params vacío (M1-R28)", () => {
+  const fence = {
+    id: "warehouse-poly",
+    name: "Almacén Sur",
+    kind: "polygon" as const,
+    polygon: [
+      { lat: 40.4, lng: -3.7 },
+      { lat: 40.41, lng: -3.7 },
+      { lat: 40.41, lng: -3.69 },
+    ],
+    rules: {},
+    actions: [{ action: "locate" as const, when: "on_exit" as const, enabled: true }],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+  expect(toFence(fromFence(fence)).actions).toEqual(fence.actions);
+});
+
+test("vaciar el texto elimina la clave de texto y conserva el resto de params (M1-R28)", () => {
+  const fence = {
+    id: "demo-hq",
+    name: "Demo HQ",
+    kind: "circle" as const,
+    center: { lat: 40.42, lng: -3.71 },
+    radius_m: 300,
+    rules: {},
+    actions: [{ action: "notify" as const, when: "on_exit" as const, enabled: true, params: { channel: "security", msg: "Fuera" } }],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+  const form = fromFence(fence);
+  form.actions[0].text = "";
+  expect(toFence(form).actions[0].params).toEqual({ channel: "security" });
+});

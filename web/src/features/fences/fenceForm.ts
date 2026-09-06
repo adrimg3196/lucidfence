@@ -87,12 +87,26 @@ export function toFence(form: FenceForm): Fence {
     // M1-R27 (C11): se sobrescribe solo la clave que edita el formulario
     // (a.textKey, "text" por defecto); el resto de `params` viaja intacto en
     // vez de reconstruirse desde cero, así PUT no borra claves como `channel`.
-    actions: form.actions.map((a) => ({ action: a.action, when: a.when, enabled: a.enabled, params: { ...(a.params ?? {}), [a.textKey ?? "text"]: a.text } })),
+    actions: form.actions.map((a) => toAction(a)),
     created_at: now,
     updated_at: now,
   };
   if (form.kind === "circle") return { ...base, center: { lat: form.centerLat, lng: form.centerLng }, radius_m: form.radiusM } as Fence;
   return { ...base, polygon: parsePolygon(form.polygonText) ?? [] } as Fence;
+}
+
+// M1-R28: la clave de texto solo se escribe cuando hay texto; con texto vacío
+// se elimina (así el operador puede quitar un parámetro) y `params` se omite
+// si queda vacío, de modo que guardar sin cambios devuelve exactamente la
+// acción original (incluidas las que no tienen params, como locate).
+function toAction(a: FenceForm["actions"][number]): Fence["actions"][number] {
+  const params: Record<string, unknown> = { ...(a.params ?? {}) };
+  const key = a.textKey ?? "text";
+  if (a.text) params[key] = a.text;
+  else delete params[key];
+  const out: Fence["actions"][number] = { action: a.action, when: a.when, enabled: a.enabled };
+  if (Object.keys(params).length > 0) out.params = params;
+  return out;
 }
 
 export function fromFence(f: Fence): FenceForm {
