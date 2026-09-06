@@ -3,6 +3,8 @@ VERSION ?= 2.0.0-dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/internal/version.Commit=$(COMMIT)
 
+.DEFAULT_GOAL := verify
+
 .PHONY: build web lint test cover battery verify clean
 
 web:
@@ -12,7 +14,7 @@ build:
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/lucidfence ./cmd/lucidfence
 
 lint:
-	gofmt -l . | tee /dev/stderr | test -z "$$(cat)"
+	gofmt -l cmd internal | tee /dev/stderr | test -z "$$(cat)"
 	go vet ./...
 	golangci-lint run ./...
 
