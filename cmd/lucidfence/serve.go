@@ -20,13 +20,11 @@ func (netListenConfig) listen(addr string) (net.Listener, error) { return net.Li
 
 // serve arranca el servidor y el motor; termina cuando ctx se cancela.
 func serve(ctx context.Context, f commonFlags, autostart bool, stdout, stderr io.Writer) int {
-	logger := newLogger("info", stderr)
-	a, err := buildApp(f, logger)
+	a, err := appForServe(f, stderr)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "lucidfence serve: %v\n", err)
 		return 1
 	}
-	logger = newLogger(a.cfg.LogLevel, stderr)
 	ln, err := netListenConfig{}.listen(a.cfg.Listen)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "lucidfence serve: no se puede escuchar en %s: %v\n", a.cfg.Listen, err)
@@ -51,7 +49,7 @@ func serve(ctx context.Context, f commonFlags, autostart bool, stdout, stderr io
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Warn("apagado forzado", "error", err)
+		a.logger.Warn("apagado forzado", "error", err)
 	}
 	a.engine.Stop()
 	_, _ = fmt.Fprintln(stdout, "parado")

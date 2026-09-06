@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,30 @@ func TestBuildAppModoLiveNoDisponibleEnM1(t *testing.T) {
 	_, err := buildApp(commonFlags{ConfigPath: cfg, DataDir: filepath.Join(dir, "data")}, slog.Default())
 	if err == nil || !strings.Contains(err.Error(), "live") {
 		t.Fatalf("esperaba error de modo live: %v", err)
+	}
+}
+
+func TestAppForServeRespetaLogLevel(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config.json")
+	writeFile(t, cfg, `{"log_level":"debug"}`)
+	a, err := appForServe(commonFlags{ConfigPath: cfg, DataDir: filepath.Join(dir, "data")}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.logger.Enabled(context.Background(), slog.LevelDebug) {
+		t.Fatal("con log_level=debug el logger debería aceptar Debug")
+	}
+
+	dir2 := t.TempDir()
+	cfg2 := filepath.Join(dir2, "config.json")
+	writeFile(t, cfg2, `{"log_level":"error"}`)
+	a2, err := appForServe(commonFlags{ConfigPath: cfg2, DataDir: filepath.Join(dir2, "data")}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a2.logger.Enabled(context.Background(), slog.LevelInfo) {
+		t.Fatal("con log_level=error el logger no debería aceptar Info")
 	}
 }
 

@@ -109,6 +109,19 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 	return &app{cfg: cfg, store: st, org: org, auth: as, engine: eng, handler: handler, logger: logger}, nil
 }
 
+// appForServe construye la app para serve(): el nivel de log solo se conoce
+// tras leer config.json, así que carga la config una vez para crear el
+// logger con cfg.LogLevel y se la pasa a buildApp, que la vuelve a cargar
+// (la doble carga es aceptable; buildApp conserva su firma sin logger
+// propio).
+func appForServe(f commonFlags, stderr io.Writer) (*app, error) {
+	cfg, err := loadConfig(f)
+	if err != nil {
+		return nil, err
+	}
+	return buildApp(f, newLogger(cfg.LogLevel, stderr))
+}
+
 func newLogger(level string, w io.Writer) *slog.Logger {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(level))
