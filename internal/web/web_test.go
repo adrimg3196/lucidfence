@@ -78,7 +78,7 @@ func TestHandlerAssetAusenteDevuelve404(t *testing.T) {
 			t.Fatalf("%s: code=%d, quería 404", path, rr.Code)
 		}
 	}
-	// Una ruta de cliente sin extensión (spec §I3) sigue haciendo fallback SPA.
+	// Una ruta de cliente sin extensión sigue haciendo fallback SPA.
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/devices/abc", nil))
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `id="root"`) {
