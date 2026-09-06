@@ -1,6 +1,11 @@
 package api
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+)
 
 // TestSetupLoginMeLogout delega cada paso en una función con nombre propio
 // para mantener la complejidad ciclomática de cada una bajo el umbral de
@@ -80,6 +85,26 @@ func checkLogoutInvalidaCookie(t *testing.T, e *testEnv) {
 	res, _ = e.do("GET", "/api/v1/auth/me", nil, true)
 	if res.StatusCode != 401 {
 		t.Fatal("tras logout la cookie no vale")
+	}
+}
+
+// TestSetupNoFiltraErrorDeSiembra convierte fences.json en un directorio
+// antes del setup en modo demo: engine.SeedDemo falla al leer/escribir esa
+// colección y el 500 resultante debe llevar "error interno" en el cuerpo,
+// nunca el mensaje de os.ReadFile/os.Rename (que incluye la ruta absoluta
+// del fichero en la organización). Ronda de corrección M1-R17 (fugas
+// residuales).
+func TestSetupNoFiltraErrorDeSiembra(t *testing.T) {
+	e := newTestEnv(t)
+	if err := os.Mkdir(e.org.Path("fences.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("POST", "/api/v1/auth/setup", map[string]any{"email": "adri@example.com", "name": "Adri", "password": "contraseña-larga-1", "mode": "demo"}, false)
+	if res.StatusCode != 500 || out["code"] != "internal" || out["error"] != "error interno" {
+		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
+	}
+	if strings.Contains(fmt.Sprintf("%v", out), e.org.Dir()) {
+		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
 	}
 }
 

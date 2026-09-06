@@ -207,6 +207,26 @@ func TestFencesListErrorInternoNoFiltraRutas(t *testing.T) {
 	}
 }
 
+// TestPoisGeoJSONNoFiltraErroresInternos es la misma comprobación que
+// TestFencesListErrorInternoNoFiltraRutas pero para /api/v1/pois/geojson:
+// convierte pois.json en un directorio para forzar el fallo de OrgStore.POIs,
+// y el 500 debe llevar "error interno" en el cuerpo, nunca la ruta absoluta
+// del fichero. Ronda de corrección M1-R17 (fugas residuales).
+func TestPoisGeoJSONNoFiltraErroresInternos(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("empty")
+	if err := os.Mkdir(e.org.Path("pois.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("GET", "/api/v1/pois/geojson", nil, true)
+	if res.StatusCode != 500 || out["code"] != "internal" || out["error"] != "error interno" {
+		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
+	}
+	if strings.Contains(fmt.Sprintf("%v", out), e.org.Dir()) {
+		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
+	}
+}
+
 func TestFencesRequierenPermisoYCSRF(t *testing.T) {
 	e := newTestEnv(t)
 	e.setup("empty")

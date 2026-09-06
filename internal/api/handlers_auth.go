@@ -62,7 +62,7 @@ func (s *server) authSetup(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 	}
 	if b.Mode == "demo" {
 		if err := engine.SeedDemo(s.org(), s.d.Now()); err != nil {
-			writeError(w, http.StatusInternalServerError, "internal", "no se pudieron escribir los datos demo: "+err.Error())
+			s.fail(w, "auth.setup.seed", err)
 			return
 		}
 	}

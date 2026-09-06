@@ -22,7 +22,7 @@ func (s *server) registerPOIs() {
 func (s *server) poisGeoJSON(w http.ResponseWriter, _ *http.Request, _ *auth.Principal) {
 	ps, err := s.org().POIs()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal", err.Error())
+		s.fail(w, "pois.geojson", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, poi.ToGeoJSON(ps))
