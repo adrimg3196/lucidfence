@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/adrimg3196/lucidfence/internal/web"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -57,6 +61,10 @@ func TestServeArrancaImprimeDireccionYParaConContexto(t *testing.T) {
 	}
 	if url == "" {
 		t.Fatalf("no imprimió la dirección: %q %q", out.String(), errb.String())
+	}
+	wantDashboard := "dashboard=" + strconv.FormatBool(web.IsBuilt(web.Dist()))
+	if !strings.Contains(out.String(), wantDashboard) {
+		t.Fatalf("cabecera sin %q: %q", wantDashboard, out.String())
 	}
 	res, err := http.Get(url + "/api/v1/health")
 	if err != nil || res.StatusCode != 200 {

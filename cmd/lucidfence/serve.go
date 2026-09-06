@@ -31,7 +31,7 @@ func serve(ctx context.Context, f commonFlags, autostart bool, stdout, stderr io
 		return 1
 	}
 	_, _ = fmt.Fprintf(stdout, "listening on http://%s\n", ln.Addr())
-	_, _ = fmt.Fprintf(stdout, "modo=%s enforcement=observe datos=%s dashboard=%v\n", a.cfg.Mode, a.cfg.DataDir, a.engine != nil)
+	_, _ = fmt.Fprintf(stdout, "modo=%s enforcement=observe datos=%s dashboard=%v\n", a.cfg.Mode, a.cfg.DataDir, a.webBuilt)
 	if autostart {
 		a.engine.Start(ctx)
 	}

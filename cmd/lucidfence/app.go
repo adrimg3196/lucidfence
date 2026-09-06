@@ -42,13 +42,14 @@ func parseCommon(name string, args []string, stderr io.Writer, extra func(*flag.
 }
 
 type app struct {
-	cfg     config.Config
-	store   *store.Store
-	org     *store.OrgStore
-	auth    *auth.Store
-	engine  *engine.Engine
-	handler http.Handler
-	logger  *slog.Logger
+	cfg      config.Config
+	store    *store.Store
+	org      *store.OrgStore
+	auth     *auth.Store
+	engine   *engine.Engine
+	handler  http.Handler
+	logger   *slog.Logger
+	webBuilt bool // true si el binario lleva el dashboard compilado (no el placeholder)
 }
 
 func loadConfig(f commonFlags) (config.Config, error) {
@@ -105,8 +106,9 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 	}
 	eng := engine.New(org, adapters, engine.Options{Mode: cfg.Mode, Interval: cfg.Interval(), Logger: logger})
 	dist := web.Dist()
-	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Auth: as, Web: web.Handler(dist), WebBuilt: web.IsBuilt(dist), Config: cfg, Logger: logger})
-	return &app{cfg: cfg, store: st, org: org, auth: as, engine: eng, handler: handler, logger: logger}, nil
+	webBuilt := web.IsBuilt(dist)
+	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Auth: as, Web: web.Handler(dist), WebBuilt: webBuilt, Config: cfg, Logger: logger})
+	return &app{cfg: cfg, store: st, org: org, auth: as, engine: eng, handler: handler, logger: logger, webBuilt: webBuilt}, nil
 }
 
 // appForServe construye la app para serve(): el nivel de log solo se conoce
