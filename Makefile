@@ -8,7 +8,7 @@ LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $(MODULE)/i
 .PHONY: build web lint test cover battery e2e verify clean
 
 web:
-	cd web && npm ci && npm run build
+	cd web && npm ci && npm run lint && npm run typecheck && npm test && npm run gen:api && git diff --exit-code src/api/schema.d.ts && npm run build
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/lucidfence ./cmd/lucidfence

@@ -1,7 +1,12 @@
 # Contribuir
 
 1. `make verify` debe estar en verde antes de abrir la PR. Es el mismo gate que
-   corre la CI (`.github/workflows/ci.yml`).
+   corre la CI (`.github/workflows/ci.yml`): `gofmt`/`go vet`/`golangci-lint`,
+   `go test -race` con los suelos de cobertura por paquete, y en `web/` —
+   `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run gen:api`
+   (falla si `git diff --exit-code src/api/schema.d.ts` detecta que el schema
+   generado quedó desactualizado) y `npm run build` — además de la batería
+   runtime (`internal/battery`) y los e2e de Playwright.
 2. Lee `ARCHITECTURE.md`: las fronteras entre paquetes y los límites de tamaño
    los valida la CI. Un paquete nuevo se documenta en la tabla de paquetes en el
    mismo commit.
