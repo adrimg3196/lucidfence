@@ -95,6 +95,16 @@ export function FenceEditorPage() {
           {errs.polygonText && <p role="alert" className="text-xs text-sev-high">{t("fence.error.polygon")}</p>}
         </div>
       )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="violationIntervalCycles">{t("fence.rules.violationInterval")}</Label>
+          <Input id="violationIntervalCycles" type="number" step="1" min="0" aria-invalid={!!errs.violationIntervalCycles} {...form.register("violationIntervalCycles")} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="dwellSeconds">{t("fence.rules.dwell")}</Label>
+          <Input id="dwellSeconds" type="number" step="1" min="0" aria-invalid={!!errs.dwellSeconds} {...form.register("dwellSeconds")} />
+        </div>
+      </div>
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">
           <legend className="text-sm font-medium text-fg-2">{t("fence.actions")}</legend>

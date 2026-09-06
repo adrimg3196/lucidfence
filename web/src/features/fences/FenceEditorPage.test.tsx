@@ -37,6 +37,37 @@ test("crea un círculo con una acción al entrar", async () => {
   expect(navigate).toHaveBeenCalledWith("/fences");
 });
 
+// Fix round 1 (M1-R25, punto 1): PUT reemplaza el registro completo; editar
+// sin tocar los campos de rules no debe borrarlas en el payload enviado.
+test("editar una geocerca con rules y guardar sin tocarlas conserva las rules originales", async () => {
+  const existing = {
+    id: "hq",
+    name: "HQ",
+    kind: "circle" as const,
+    center: { lat: 40.42, lng: -3.71 },
+    radius_m: 300,
+    rules: { violation_interval_cycles: 3, dwell_seconds: 60 },
+    actions: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+  const mutateAsync = vi.fn().mockResolvedValue({});
+  vi.mocked(hooks.useFence).mockReturnValue({ data: existing, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync, isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/:id" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/hq" },
+  );
+  const user = userEvent.setup();
+  await waitFor(() => expect(screen.getByLabelText("Nombre")).toHaveValue("HQ"));
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0]).toMatchObject({ rules: { violation_interval_cycles: 3, dwell_seconds: 60 } });
+});
+
 test("evita el id reservado 'none' al generar el slug desde el nombre (M1-R12)", async () => {
   vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
   vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);

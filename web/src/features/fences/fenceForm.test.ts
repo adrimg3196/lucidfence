@@ -21,3 +21,19 @@ test("toFence y fromFence son inversas", () => {
   expect(fence).toMatchObject({ id: "hq", kind: "circle", center: { lat: 40.42, lng: -3.71 }, radius_m: 300, actions: [{ action: "message", when: "on_enter", enabled: true, params: { text: "hola" } }] });
   expect(fromFence(fence)).toMatchObject({ name: "HQ", id: "hq", kind: "circle", centerLat: 40.42, radiusM: 300, actions: [{ action: "message", text: "hola" }] });
 });
+
+// Fix round 1 (M1-R25, punto 1): PUT reemplaza el registro completo, así que
+// editar sin conservar `rules` las borraba. fromFence debe exponerlas y
+// toFence debe devolverlas intactas.
+test("fromFence expone rules y toFence las conserva sin tocarlas", () => {
+  const fence = { ...toFence({ ...emptyForm, name: "HQ", id: "hq" }), rules: { violation_interval_cycles: 3, dwell_seconds: 60 } };
+  const form = fromFence(fence);
+  expect(form.violationIntervalCycles).toBe(3);
+  expect(form.dwellSeconds).toBe(60);
+  expect(toFence(form).rules).toEqual({ violation_interval_cycles: 3, dwell_seconds: 60 });
+});
+
+test("toFence emite rules vacío cuando el formulario no las define", () => {
+  const form = { ...emptyForm, name: "HQ", id: "hq" };
+  expect(toFence(form).rules).toEqual({});
+});

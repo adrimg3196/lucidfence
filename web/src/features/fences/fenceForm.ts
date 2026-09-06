@@ -20,6 +20,16 @@ export function parsePolygon(text: string): { lat: number; lng: number }[] | nul
   return pts.length >= 3 ? pts : null;
 }
 
+// nonNegativeIntOrEmpty valida un entero >= min, tratando "" (input vacío)
+// como "sin definir" en vez de forzarlo a 0 (M1-R25 punto 1: distingue "no
+// tocar la regla" de "ponerla a cero").
+function nonNegativeIntOrEmpty(min: number) {
+  return z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(min).optional(),
+  );
+}
+
 export const fenceFormSchema = z
   .object({
     name: z.string().trim().min(1),
@@ -30,21 +40,30 @@ export const fenceFormSchema = z
     radiusM: z.coerce.number(),
     polygonText: z.string(),
     actions: z.array(actionSchema),
+    // M1-R25 punto 1: opcionales para no perder `rules` al reeditar una
+    // geocerca que no las usa; "" en el input se trata como "sin definir".
+    violationIntervalCycles: nonNegativeIntOrEmpty(0),
+    dwellSeconds: nonNegativeIntOrEmpty(0),
   })
   .refine((f) => f.kind !== "circle" || f.radiusM > 0, { path: ["radiusM"], message: "radius" })
   .refine((f) => f.kind !== "polygon" || parsePolygon(f.polygonText) !== null, { path: ["polygonText"], message: "polygon" });
 
 export type FenceForm = z.infer<typeof fenceFormSchema>;
 
-export const emptyForm: FenceForm = { name: "", id: "", kind: "circle", centerLat: 40.4168, centerLng: -3.7038, radiusM: 300, polygonText: "", actions: [] };
+export const emptyForm: FenceForm = { name: "", id: "", kind: "circle", centerLat: 40.4168, centerLng: -3.7038, radiusM: 300, polygonText: "", actions: [], violationIntervalCycles: undefined, dwellSeconds: undefined };
 
 export function toFence(form: FenceForm): Fence {
   const now = new Date().toISOString();
+  // M1-R25 punto 1: PUT reemplaza el registro completo, así que `rules` solo
+  // debe llevar las claves que el formulario define explícitamente.
+  const rules: Fence["rules"] = {};
+  if (form.violationIntervalCycles !== undefined) rules.violation_interval_cycles = form.violationIntervalCycles;
+  if (form.dwellSeconds !== undefined) rules.dwell_seconds = form.dwellSeconds;
   const base = {
     id: form.id,
     name: form.name.trim(),
     kind: form.kind,
-    rules: {},
+    rules,
     actions: form.actions.map((a) => ({ action: a.action, when: a.when, enabled: a.enabled, params: a.text ? { text: a.text } : {} })),
     created_at: now,
     updated_at: now,
@@ -68,5 +87,7 @@ export function fromFence(f: Fence): FenceForm {
       text: typeof a.params?.text === "string" ? a.params.text : typeof a.params?.msg === "string" ? a.params.msg : "",
       enabled: a.enabled,
     })),
+    violationIntervalCycles: f.rules?.violation_interval_cycles,
+    dwellSeconds: f.rules?.dwell_seconds,
   };
 }
