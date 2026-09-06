@@ -227,6 +227,9 @@ export const en: Record<Key, string> = {
 
 const dicts: Record<Lang, Record<Key, string>> = { es, en };
 
+// M1-R20: español por defecto, sin autodetección del navegador
+// (constraints.md: la UI arranca en español; el inglés solo llega vía el
+// toggle. navigator.language no se consulta nunca).
 export function detectLang(): Lang {
   try {
     const saved = localStorage.getItem("lf.lang");
@@ -234,7 +237,7 @@ export function detectLang(): Lang {
   } catch {
     /* sin storage */
   }
-  return typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
+  return "es";
 }
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (key: Key, vars?: Record<string, string | number>) => string };

@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { I18nProvider, useT, useLang, es, en } from "./i18n";
+import { I18nProvider, useT, useLang, es, en, detectLang } from "./i18n";
 
 test("traduce, interpola y cambia de idioma", () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => <I18nProvider initial="es">{children}</I18nProvider>;
@@ -12,4 +12,21 @@ test("traduce, interpola y cambia de idioma", () => {
 
 test("los diccionarios tienen las mismas claves", () => {
   expect(Object.keys(en).sort()).toEqual(Object.keys(es).sort());
+});
+
+test("detectLang ignora el navegador y usa español por defecto (M1-R20)", () => {
+  localStorage.clear();
+  const original = Object.getOwnPropertyDescriptor(window.navigator, "language");
+  Object.defineProperty(window.navigator, "language", { value: "en-US", configurable: true });
+  try {
+    expect(detectLang()).toBe("es");
+  } finally {
+    if (original) Object.defineProperty(window.navigator, "language", original);
+  }
+});
+
+test("detectLang respeta la preferencia guardada", () => {
+  localStorage.setItem("lf.lang", "en");
+  expect(detectLang()).toBe("en");
+  localStorage.clear();
 });
