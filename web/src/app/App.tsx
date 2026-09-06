@@ -1,8 +1,20 @@
+import { useState } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { RouterProvider } from "react-router";
+import { I18nProvider } from "@/lib/i18n";
+import { createQueryClient } from "@/lib/query";
+import { ThemeProvider } from "./theme";
+import { router } from "./router";
+
 export function App() {
+  const [qc] = useState(createQueryClient);
   return (
-    <main className="mx-auto max-w-[1400px] p-8">
-      <h1 className="text-3xl font-semibold tracking-tight">LucidFence 2.0</h1>
-      <p className="mt-2 max-w-[65ch] text-muted">Dashboard en construcción. La API responde en /api/v1/health.</p>
-    </main>
+    <QueryClientProvider client={qc}>
+      <I18nProvider>
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
+      </I18nProvider>
+    </QueryClientProvider>
   );
 }
