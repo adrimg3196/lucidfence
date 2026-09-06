@@ -1,11 +1,14 @@
 package web
 
 import (
+	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 func TestHandlerSirveIndexYFallbackSPA(t *testing.T) {
@@ -97,15 +100,84 @@ func TestHandlerMetodoNoPermitidoDevuelve405(t *testing.T) {
 }
 
 func TestHandlerSinBuildSirvePlaceholder(t *testing.T) {
-	h := Handler(Dist())
+	fsys := fstest.MapFS{
+		"placeholder.html": {Data: []byte("<h1>LucidFence: frontend no compilado</h1>")},
+	}
+	h := Handler(fsys)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rr.Code != 200 {
 		t.Fatalf("code=%d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "LucidFence") {
+	if !strings.Contains(body, "frontend no compilado") {
 		t.Fatalf("body=%q", body)
+	}
+}
+
+// statFailFS envuelve un fs.FS real: Open funciona, pero el fichero que
+// devuelve falla siempre en Stat. Ejercita la rama de serveFile que no
+// filtra el error real al cliente.
+type statFailFS struct{ fs.FS }
+
+func (s statFailFS) Open(name string) (fs.File, error) {
+	f, err := s.FS.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return statFailFile{f}, nil
+}
+
+type statFailFile struct{ fs.File }
+
+func (statFailFile) Stat() (fs.FileInfo, error) {
+	return nil, errors.New("stat roto a propósito")
+}
+
+func TestServeFileStatFallaDevuelveErrorInterno(t *testing.T) {
+	fsys := statFailFS{fstest.MapFS{"index.html": {Data: []byte("<html></html>")}}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/index.html", nil)
+	serveFile(rr, req, fsys, "index.html")
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("code=%d, quería 500", rr.Code)
+	}
+	if body := strings.TrimSpace(rr.Body.String()); body != "error interno" {
+		t.Fatalf("body=%q filtra detalle interno", body)
+	}
+}
+
+// readFailFS es un fs.FS mínimo cuyo único fichero abre y hace Stat sin
+// error, pero cuyo Read siempre falla; al no implementar io.ReadSeeker,
+// serveFile toma la vía io.ReadAll y encuentra ese error ahí.
+type readFailFS struct{}
+
+func (readFailFS) Open(string) (fs.File, error) { return readFailFile{}, nil }
+
+type readFailFile struct{}
+
+func (readFailFile) Stat() (fs.FileInfo, error) { return fakeFileInfo{}, nil }
+func (readFailFile) Read([]byte) (int, error)   { return 0, errors.New("read roto a propósito") }
+func (readFailFile) Close() error               { return nil }
+
+type fakeFileInfo struct{}
+
+func (fakeFileInfo) Name() string       { return "index.html" }
+func (fakeFileInfo) Size() int64        { return 0 }
+func (fakeFileInfo) Mode() fs.FileMode  { return 0 }
+func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
+func (fakeFileInfo) IsDir() bool        { return false }
+func (fakeFileInfo) Sys() any           { return nil }
+
+func TestServeFileReadFallaDevuelveErrorInterno(t *testing.T) {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/index.html", nil)
+	serveFile(rr, req, readFailFS{}, "index.html")
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("code=%d, quería 500", rr.Code)
+	}
+	if body := strings.TrimSpace(rr.Body.String()); body != "error interno" {
+		t.Fatalf("body=%q filtra detalle interno", body)
 	}
 }
 
