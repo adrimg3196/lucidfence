@@ -30,8 +30,8 @@ beforeEach(() => {
   mapInstances.length = 0;
 });
 
-function mock(mapEnabled: boolean) {
-  vi.mocked(hooks.useHealth).mockReturnValue({ data: { map: { enabled: mapEnabled, tiles_url: "https://t/{z}/{x}/{y}.png" } }, isPending: false, error: null } as never);
+function mock(mapEnabled: boolean, tilesUrl = "https://t/{z}/{x}/{y}.png") {
+  vi.mocked(hooks.useHealth).mockReturnValue({ data: { map: { enabled: mapEnabled, tiles_url: tilesUrl } }, isPending: false, error: null } as never);
   vi.mocked(hooks.useFences).mockReturnValue({ data: { items: [], total: 0 }, isPending: false, error: null } as never);
   vi.mocked(hooks.useDevices).mockReturnValue({ data: { items: [], total: 0 }, isPending: false, error: null } as never);
 }
@@ -47,6 +47,13 @@ test("mapa desactivado por configuración", () => {
   mock(false);
   renderWithProviders(<MapPage />);
   expect(screen.getByText(/map.enabled=false/)).toBeInTheDocument();
+});
+
+test("mapa desactivado cuando tiles_url está vacío", () => {
+  mock(true, "");
+  renderWithProviders(<MapPage />);
+  expect(screen.getByText(/map.enabled=false/)).toBeInTheDocument();
+  expect(mapInstances.length).toBe(0);
 });
 
 test("siembra las fuentes fences y devices con los datos vigentes tras el load asíncrono", async () => {
