@@ -51,12 +51,18 @@ func (s *server) authSetup(w http.ResponseWriter, r *http.Request, _ *auth.Princ
 		writeError(w, http.StatusBadRequest, "invalid", "mode debe ser demo o empty")
 		return
 	}
+	// Solo los errores de validación del propio usuario son 400 con su
+	// mensaje; cualquier otro fallo de Setup (persistencia de users.json,
+	// entropía del hash) es de clase 500 y su mensaje lleva rutas del
+	// directorio de datos, así que va al log y no a la respuesta (M1-R17).
 	if _, err := s.d.Auth.Setup(b.Email, b.Name, b.Password, s.d.Config.Org); err != nil {
 		switch {
 		case errors.Is(err, auth.ErrAlreadySetUp):
 			writeError(w, http.StatusConflict, "conflict", err.Error())
-		default:
+		case errors.Is(err, auth.ErrInvalidUser), errors.Is(err, auth.ErrWeakPassword):
 			writeError(w, http.StatusBadRequest, "invalid", err.Error())
+		default:
+			s.fail(w, "auth.setup.persist", err)
 		}
 		return
 	}

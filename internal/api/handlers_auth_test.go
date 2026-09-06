@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -104,6 +105,28 @@ func TestSetupNoFiltraErrorDeSiembra(t *testing.T) {
 		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
 	}
 	if strings.Contains(fmt.Sprintf("%v", out), e.org.Dir()) {
+		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
+	}
+}
+
+// TestSetupNoFiltraErrorDeUsuarios convierte users.json en un directorio: el
+// fallo de auth.Setup deja de ser de validación y pasa a ser de
+// persistencia, así que debe salir como 500 "error interno" y nunca como un
+// 400 con el mensaje de os.Rename, que lleva la ruta absoluta del
+// directorio de datos. Simétrico de TestSetupNoFiltraErrorDeSiembra por la
+// otra vía de fallo del asistente (M1-R17, hallazgo C6): /auth/setup es
+// público, así que la fuga la ve cualquiera que alcance el puerto antes de
+// que exista un usuario.
+func TestSetupNoFiltraErrorDeUsuarios(t *testing.T) {
+	e := newTestEnv(t)
+	if err := os.Mkdir(filepath.Join(e.authDir, "users.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("POST", "/api/v1/auth/setup", map[string]any{"email": "adri@example.com", "name": "Adri", "password": "contraseña-larga-1", "mode": "empty"}, false)
+	if res.StatusCode != 500 || out["code"] != "internal" || out["error"] != "error interno" {
+		t.Fatalf("500 error interno esperado: %d %v", res.StatusCode, out)
+	}
+	if strings.Contains(fmt.Sprintf("%v", out), e.authDir) {
 		t.Fatalf("el cuerpo filtra la ruta del store: %v", out)
 	}
 }

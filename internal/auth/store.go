@@ -18,6 +18,7 @@ import (
 var (
 	ErrAlreadySetUp       = errors.New("la instalación ya tiene usuarios")
 	ErrInvalidCredentials = errors.New("credenciales incorrectas")
+	ErrInvalidUser        = errors.New("email y nombre obligatorios")
 	ErrThrottled          = errors.New("demasiados intentos; espera un minuto")
 	ErrUnauthenticated    = errors.New("no autenticado")
 )
@@ -197,7 +198,7 @@ func (s *Store) Setup(email, name, password, orgID string) (User, error) {
 	email = normalizeEmail(email)
 	if email == "" || !strings.Contains(email, "@") || strings.TrimSpace(name) == "" {
 		s.mu.Unlock()
-		return User{}, errors.New("email y nombre obligatorios")
+		return User{}, ErrInvalidUser
 	}
 	s.mu.Unlock()
 
