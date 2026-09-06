@@ -1,0 +1,1012 @@
+# Contrato de la API de LucidFence 2.0. Estilo restringido: 2 espacios de
+# indentación, rutas en columna 2, métodos en columna 4 y x-capability en
+# columna 6. internal/api/openapi_test.go exige paridad con el registro;
+# web/ genera sus tipos desde aquí (npm run gen:api).
+openapi: 3.1.0
+info:
+  title: LucidFence API
+  version: 2.0.0-dev
+  description: Geofencing multi-UEM local-first. Toda ruta declara x-capability (public o la capacidad RBAC exigida).
+servers:
+  - url: http://127.0.0.1:8765
+paths:
+  /api/v1/health:
+    get:
+      x-capability: public
+      summary: Estado del servicio, sin secretos
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /api/v1/readyz:
+    get:
+      x-capability: public
+      summary: Disponibilidad (directorio de datos escribible)
+      responses:
+        "200":
+          description: Listo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                required: [ready]
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/status:
+    get:
+      x-capability: public
+      summary: Indica si falta el asistente inicial
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  setup_required:
+                    type: boolean
+                required: [setup_required]
+  /api/v1/auth/setup:
+    post:
+      x-capability: public
+      summary: Crea el owner (solo si no hay usuarios) y abre sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "201":
+          description: Sesión abierta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/login:
+    post:
+      x-capability: public
+      summary: Abre sesión con cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Sesión abierta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/logout:
+    post:
+      x-capability: org:read
+      summary: Cierra la sesión
+      responses:
+        "204":
+          description: Cerrada
+  /api/v1/auth/me:
+    get:
+      x-capability: org:read
+      summary: Usuario, org, rol, csrf y capacidades
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+  /api/v1/devices:
+    get:
+      x-capability: device:read
+      summary: Lista de dispositivos
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [inside, outside, unknown]
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceList"
+  /api/v1/devices/{id}:
+    get:
+      x-capability: device:read
+      summary: Detalle de dispositivo
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/devices/{id}/trail:
+    get:
+      x-capability: device:read
+      summary: Últimas posiciones
+      parameters:
+        - $ref: "#/components/parameters/ID"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrailPoint"
+                required: [items]
+  /api/v1/fences:
+    get:
+      x-capability: fence:read
+      summary: Lista de geocercas
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FenceList"
+    post:
+      x-capability: fence:write
+      summary: Crea una geocerca
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Fence"
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fence"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/fences/{id}:
+    get:
+      x-capability: fence:read
+      summary: Detalle de geocerca
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fence"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: fence:write
+      summary: Sustituye una geocerca
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Fence"
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fence"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      x-capability: fence:delete
+      summary: Elimina una geocerca
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminada
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/routes:
+    get:
+      x-capability: route:read
+      summary: Lista de rutas
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteList"
+    post:
+      x-capability: route:write
+      summary: Crea una ruta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Route"
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/routes/{id}:
+    get:
+      x-capability: route:read
+      summary: Detalle de ruta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: route:write
+      summary: Sustituye una ruta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Route"
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      x-capability: route:delete
+      summary: Elimina una ruta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminada
+  /api/v1/pois:
+    get:
+      x-capability: fence:read
+      summary: Lista de puntos de interés
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POIList"
+    post:
+      x-capability: fence:write
+      summary: Crea un POI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/POI"
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POI"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/pois/geojson:
+    get:
+      x-capability: fence:read
+      summary: POIs como FeatureCollection
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/v1/pois/{id}:
+    get:
+      x-capability: fence:read
+      summary: Detalle de POI
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POI"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: fence:write
+      summary: Sustituye un POI
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/POI"
+      responses:
+        "200":
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POI"
+    delete:
+      x-capability: fence:delete
+      summary: Elimina un POI
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminado
+  /api/v1/engine/status:
+    get:
+      x-capability: device:read
+      summary: Estado del motor
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineStatus"
+  /api/v1/engine/run-once:
+    post:
+      x-capability: engine:run
+      summary: Ejecuta un ciclo ahora
+      responses:
+        "200":
+          description: Ciclo ejecutado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleStats"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/events:
+    get:
+      x-capability: device:read
+      summary: Últimas transiciones
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Transition"
+                required: [items]
+  /api/v1/actions:
+    get:
+      x-capability: device:read
+      summary: Últimas acciones ejecutadas
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActionResult"
+                required: [items]
+components:
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    Error:
+      description: Error con forma única
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        detail: {}
+      required: [error, code]
+    Point:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+      required: [lat, lng]
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        version:
+          type: string
+        mode:
+          type: string
+        enforcement:
+          type: string
+        web_built:
+          type: boolean
+        setup_required:
+          type: boolean
+        engine:
+          type: object
+          properties:
+            running:
+              type: boolean
+            cycles:
+              type: integer
+            last_cycle_at:
+              type: [string, "null"]
+              format: date-time
+            interval_seconds:
+              type: integer
+            last_error:
+              type: string
+          required: [running, cycles, interval_seconds]
+        map:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            tiles_url:
+              type: string
+          required: [enabled, tiles_url]
+      required: [status, version, mode, enforcement, web_built, setup_required, engine, map]
+    SetupRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        name:
+          type: string
+        password:
+          type: string
+        mode:
+          type: string
+          enum: [demo, empty]
+      required: [email, name, password, mode]
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        org:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, operator, viewer, auditor]
+        via:
+          type: string
+      required: [id, email, name, org, role, via]
+    SessionResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        csrf:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+      required: [user, csrf, capabilities]
+    Inventory:
+      type: object
+      properties:
+        os_version:
+          type: string
+        model:
+          type: string
+        manufacturer:
+          type: string
+        serial_number:
+          type: string
+        imei:
+          type: string
+        battery_level:
+          type: integer
+        battery_state:
+          type: string
+        storage_total_gb:
+          type: number
+        storage_free_gb:
+          type: number
+        encryption_enabled:
+          type: boolean
+        carrier:
+          type: string
+        assigned_user:
+          type: string
+        department:
+          type: string
+        device_tag:
+          type: string
+        enrolled_at:
+          type: string
+          format: date-time
+        last_checkin:
+          type: string
+          format: date-time
+        management_mode:
+          type: string
+        ownership:
+          type: string
+        supervised:
+          type: boolean
+        lockdown_mode:
+          type: boolean
+        apps:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              version:
+                type: string
+            required: [name, version]
+    Verdict:
+      type: object
+      properties:
+        score:
+          type: [number, "null"]
+        severity:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+        matched_policies:
+          type: array
+          items:
+            type: string
+        evaluated_at:
+          type: string
+          format: date-time
+        provenance:
+          type: string
+        verified:
+          type: boolean
+      required: [score, severity, reasons, matched_policies, provenance, verified]
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        platform:
+          type: string
+        status:
+          type: string
+        compliant:
+          type: [boolean, "null"]
+        provider:
+          type: string
+        provider_refs:
+          type: object
+          additionalProperties:
+            type: string
+        location:
+          type: object
+          properties:
+            point:
+              $ref: "#/components/schemas/Point"
+            accuracy_m:
+              type: number
+            source:
+              type: string
+            observed_at:
+              type: string
+              format: date-time
+          required: [source, observed_at]
+        network:
+          type: object
+          properties:
+            ip:
+              type: string
+            ssid:
+              type: string
+            bssid:
+              type: string
+        inventory:
+          $ref: "#/components/schemas/Inventory"
+        fence_state:
+          type: string
+          enum: [inside, outside, unknown]
+        inside_fence:
+          type: string
+        last_inside_fence:
+          type: string
+        route_id:
+          type: string
+        route_state:
+          type: string
+          enum: [on_route, off_route, unassigned]
+        route_deviation_m:
+          type: number
+        risk:
+          $ref: "#/components/schemas/Verdict"
+        evaluation_error:
+          type: string
+        last_report_at:
+          type: string
+          format: date-time
+      required: [id, name, platform, compliant, provider, location, network, inventory, fence_state, inside_fence, last_inside_fence, route_state, risk, last_report_at]
+    DeviceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+        total:
+          type: integer
+      required: [items, total]
+    TrailPoint:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        point:
+          $ref: "#/components/schemas/Point"
+      required: [at, point]
+    FenceAction:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [lock, wipe, message, locate, reboot, clear_passcode, set_compliance, custom, notify]
+        when:
+          type: string
+          enum: [on_enter, on_exit, on_violation, on_unknown]
+        params:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+      required: [action, when, enabled]
+    Fence:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [circle, polygon]
+        center:
+          $ref: "#/components/schemas/Point"
+        radius_m:
+          type: number
+        polygon:
+          type: array
+          items:
+            $ref: "#/components/schemas/Point"
+        rules:
+          type: object
+          properties:
+            violation_interval_cycles:
+              type: integer
+            dwell_seconds:
+              type: integer
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FenceAction"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, kind, rules, actions, created_at, updated_at]
+    FenceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Fence"
+        total:
+          type: integer
+      required: [items, total]
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        corridor_m:
+          type: number
+        waypoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/Point"
+        device_ids:
+          type: array
+          items:
+            type: string
+        color:
+          type: string
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FenceAction"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, corridor_m, waypoints, device_ids, actions, created_at, updated_at]
+    RouteList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+        total:
+          type: integer
+      required: [items, total]
+    POI:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        point:
+          $ref: "#/components/schemas/Point"
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+      required: [id, name, category, point]
+    POIList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/POI"
+        total:
+          type: integer
+      required: [items, total]
+    ProviderHealth:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+        devices:
+          type: integer
+        latency_ms:
+          type: integer
+        last_ok:
+          type: string
+          format: date-time
+      required: [ok, devices, latency_ms]
+    CycleStats:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+        mode:
+          type: string
+        devices_total:
+          type: integer
+        inside:
+          type: integer
+        outside:
+          type: integer
+        unknown:
+          type: integer
+        transitions:
+          type: integer
+        actions_planned:
+          type: integer
+        actions_executed:
+          type: integer
+        evaluation_errors:
+          type: integer
+        persistence_errors:
+          type: integer
+        providers:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ProviderHealth"
+      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, evaluation_errors, persistence_errors, providers]
+    EngineStatus:
+      type: object
+      properties:
+        mode:
+          type: string
+        enforcement:
+          type: string
+        interval_seconds:
+          type: integer
+        running:
+          type: boolean
+        cycles:
+          type: integer
+        last_cycle:
+          $ref: "#/components/schemas/CycleStats"
+        last_error:
+          type: string
+        next_cycle_at:
+          type: string
+          format: date-time
+        providers:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ProviderHealth"
+      required: [mode, enforcement, interval_seconds, running, cycles, providers]
+    Transition:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        device_id:
+          type: string
+        device_name:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+      required: [at, device_id, device_name, from, to]
+    ActionResult:
+      type: object
+      properties:
+        adapter:
+          type: string
+        ok:
+          type: boolean
+        device_id:
+          type: string
+        device_name:
+          type: string
+        action:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+        dry_run:
+          type: boolean
+        simulated:
+          type: boolean
+        error:
+          type: string
+        command_id:
+          type: string
+        note:
+          type: string
+        at:
+          type: string
+          format: date-time
+        fence_id:
+          type: string
+        trigger:
+          type: string
+      required: [adapter, ok, device_id, device_name, action, dry_run, simulated, at]
