@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,7 +43,7 @@ func TestSetupLoginResolveLogout(t *testing.T) {
 func assertSetupCreaOwnerYRechazaRepetido(t *testing.T, s *Store) {
 	t.Helper()
 	u, err := s.Setup("Adri@Example.com", "Adri", "contraseña-larga-1", "default")
-	if err != nil || u.Email != "adri@example.com" || u.OrgRoles["default"] != Owner || u.PasswordHash == "" || u.ID == "" {
+	if err != nil || u.Email != "adri@example.com" || u.OrgRoles["default"] != Owner || u.ID == "" {
 		t.Fatalf("setup: %v %+v", err, u)
 	}
 	if _, err := s.Setup("otro@example.com", "Otro", "contraseña-larga-1", "default"); !errors.Is(err, ErrAlreadySetUp) {
@@ -220,6 +222,40 @@ func TestSetupNoMutaSiPersistenciaFalla(t *testing.T) {
 	}
 	if s.HasUsers() {
 		t.Fatal("Setup no debe mutar el estado en memoria si persistUsers falla")
+	}
+}
+
+// TestUserPublicoNoExponeElHash comprueba que el tipo público User (el que
+// devuelven Setup y UserByID) no serializa el hash de la contraseña: solo
+// userRecord, que es lo que se persiste en users.json, lo lleva.
+func TestUserPublicoNoExponeElHash(t *testing.T) {
+	u := User{ID: "usr_1", Email: "a@x.com", Name: "A", OrgRoles: map[string]Role{"default": Owner}, CreatedAt: time.Now()}
+	data, err := json.Marshal(u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "password_hash") {
+		t.Fatalf("User no debe serializar el hash de la contraseña: %s", data)
+	}
+}
+
+// TestUsersJSONPersisteElHash comprueba que el fichero users.json sí lleva
+// el hash (vía userRecord), aunque el tipo público User no lo exponga.
+func TestUsersJSONPersisteElHash(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "users.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "password_hash") {
+		t.Fatalf("users.json debería persistir el hash: %s", data)
 	}
 }
 

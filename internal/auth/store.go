@@ -34,14 +34,22 @@ const (
 	maxTrackedFailEmails = 10000
 )
 
-// User es un usuario local. password_hash nunca se serializa hacia la API.
+// User es un usuario local tal como se expone hacia la API. Nunca lleva el
+// hash de la contraseña: ese dato solo existe en userRecord, el tipo
+// interno que se persiste en users.json.
 type User struct {
-	ID           string          `json:"id"`
-	Email        string          `json:"email"`
-	Name         string          `json:"name"`
-	PasswordHash string          `json:"password_hash"`
-	OrgRoles     map[string]Role `json:"org_roles"`
-	CreatedAt    time.Time       `json:"created_at"`
+	ID        string          `json:"id"`
+	Email     string          `json:"email"`
+	Name      string          `json:"name"`
+	OrgRoles  map[string]Role `json:"org_roles"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+// userRecord es la forma persistida en users.json: el usuario público más
+// el hash de la contraseña. No sale nunca de este paquete.
+type userRecord struct {
+	User
+	PasswordHash string `json:"password_hash"`
 }
 
 // Session es una sesión de cookie.
@@ -75,7 +83,7 @@ type Store struct {
 	dir        string
 	now        func() time.Time
 	mu         sync.Mutex
-	users      []User
+	users      []userRecord
 	sessions   map[string]Session
 	localToken string
 	fails      map[string][]time.Time
@@ -95,7 +103,7 @@ func Open(dir string, now func() time.Time) (*Store, error) {
 		return nil, err
 	}
 	s := &Store{dir: dir, now: now, sessions: map[string]Session{}, fails: map[string][]time.Time{}, verifyPassword: VerifyPassword}
-	var users collection[User]
+	var users collection[userRecord]
 	if err := store.ReadJSON(filepath.Join(dir, "users.json"), &users); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
 	}
@@ -139,8 +147,8 @@ func randomHex(n int) string {
 
 func normalizeEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
 
-func (s *Store) persistUsers(users []User) error {
-	return store.WriteJSON(filepath.Join(s.dir, "users.json"), collection[User]{SchemaVersion: 1, Items: users})
+func (s *Store) persistUsers(records []userRecord) error {
+	return store.WriteJSON(filepath.Join(s.dir, "users.json"), collection[userRecord]{SchemaVersion: 1, Items: records})
 }
 
 func (s *Store) persistSessions() error {
@@ -173,17 +181,20 @@ func (s *Store) Setup(email, name, password, orgID string) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
-	u := User{ID: "usr_" + randomHex(8), Email: email, Name: strings.TrimSpace(name), PasswordHash: hash,
-		OrgRoles: map[string]Role{orgID: Owner}, CreatedAt: s.now().UTC()}
+	rec := userRecord{
+		User: User{ID: "usr_" + randomHex(8), Email: email, Name: strings.TrimSpace(name),
+			OrgRoles: map[string]Role{orgID: Owner}, CreatedAt: s.now().UTC()},
+		PasswordHash: hash,
+	}
 	// Persistir sobre una copia y asignar a s.users solo si tiene éxito: un
 	// error de escritura (disco lleno, permisos) no debe dejar el owner
 	// "creado" en memoria sin estar en disco.
-	candidate := append(append([]User{}, s.users...), u)
+	candidate := append(append([]userRecord{}, s.users...), rec)
 	if err := s.persistUsers(candidate); err != nil {
 		return User{}, err
 	}
 	s.users = candidate
-	return u, nil
+	return rec.User, nil
 }
 
 // throttled poda del email los intentos fuera de failWindow y decide si
@@ -230,7 +241,7 @@ func (s *Store) Login(email, password, orgID string) (Session, error) {
 		s.mu.Unlock()
 		return Session{}, ErrThrottled
 	}
-	var candidate User
+	var candidate userRecord
 	found := false
 	for _, u := range s.users {
 		if u.Email == email {
@@ -299,18 +310,19 @@ func (s *Store) ResolveLocal(token, orgID string) (*Principal, error) {
 	return &Principal{UserID: "local", Email: "local@lucidfence", Name: "Token local", OrgID: orgID, Role: Admin, Via: "local-token"}, nil
 }
 
-func (s *Store) userByIDLocked(id string) (User, bool) {
+func (s *Store) userByIDLocked(id string) (userRecord, bool) {
 	for _, u := range s.users {
 		if u.ID == id {
 			return u, true
 		}
 	}
-	return User{}, false
+	return userRecord{}, false
 }
 
-// UserByID busca un usuario.
+// UserByID busca un usuario. Devuelve el tipo público (sin el hash).
 func (s *Store) UserByID(id string) (User, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.userByIDLocked(id)
+	rec, ok := s.userByIDLocked(id)
+	return rec.User, ok
 }
