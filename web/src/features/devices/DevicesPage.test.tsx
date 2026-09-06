@@ -11,14 +11,19 @@ const items = [
   { id: "dev-004", name: "Portátil Ventas", platform: "macos", fence_state: "outside", inventory: { assigned_user: "Sara" }, last_report_at: "2026-09-05T12:00:00Z" },
 ];
 
-test("lista, filtra por estado y busca", async () => {
+test("lista, filtra por estado y busca con debounce de 250 ms", async () => {
   vi.mocked(hooks.useDevices).mockReturnValue({ data: { items, total: 2 }, isPending: false, error: null } as never);
   renderWithProviders(<DevicesPage />);
   expect(screen.getByRole("link", { name: /Tablet Campo A1/ })).toHaveAttribute("href", "/devices/dev-001");
+
   const user = userEvent.setup();
   await user.click(screen.getByRole("tab", { name: "dentro" }));
   await waitFor(() => expect(vi.mocked(hooks.useDevices)).toHaveBeenLastCalledWith({ state: "inside", q: "" }));
+
   await user.type(screen.getByRole("searchbox"), "sara");
+  // justo tras escribir, el debounce (250 ms) todavía no ha vencido.
+  expect(vi.mocked(hooks.useDevices)).not.toHaveBeenLastCalledWith({ state: "inside", q: "sara" });
+  // waitFor absorbe los 250 ms del debounce antes de que useDevices vea "sara".
   await waitFor(() => expect(vi.mocked(hooks.useDevices)).toHaveBeenLastCalledWith({ state: "inside", q: "sara" }));
 });
 

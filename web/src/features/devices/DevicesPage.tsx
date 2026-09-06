@@ -11,6 +11,7 @@ import { ErrorState } from "@/components/states/ErrorState";
 import { useDevices } from "@/api/hooks";
 import { useT, useLang } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 
 const states = ["", "inside", "outside", "unknown"] as const;
 
@@ -19,7 +20,8 @@ export function DevicesPage() {
   const { lang } = useLang();
   const [state, setState] = useState<string>("");
   const [q, setQ] = useState("");
-  const devices = useDevices({ state, q });
+  const debouncedQ = useDebouncedValue(q, 250);
+  const devices = useDevices({ state, q: debouncedQ });
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
