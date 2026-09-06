@@ -9,7 +9,7 @@ linters:
     - depguard
     - funlen
     - gocyclo
-    - misspell
+    # misspell desactivado: el código y los comentarios están en español.
     - unparam
   settings:
     funlen:
@@ -17,10 +17,6 @@ linters:
       statements: 40
     gocyclo:
       min-complexity: 15
-    misspell:
-      ignore-rules:
-        - dependencias
-        - producto
     depguard:
       rules:
         domain:
