@@ -212,6 +212,75 @@ func TestNpmDependencyAllowlist(t *testing.T) {
 	}
 }
 
+// depguardFilesLineRe casa una línea "files: [...]" de una regla depguard en
+// .golangci.yml (spec §5.2); depguardGlobItemRe extrae cada glob entrecomillado
+// de esa lista.
+var (
+	depguardFilesLineRe = regexp.MustCompile(`files:\s*\[(.*)\]`)
+	depguardGlobItemRe  = regexp.MustCompile(`"([^"]+)"`)
+)
+
+// depguardFileGlobs lee, línea a línea y sin depender de un parser YAML, cada
+// glob "files" de las reglas depguard en golangciPath.
+func depguardFileGlobs(golangciPath string) ([]string, error) {
+	data, err := os.ReadFile(golangciPath)
+	if err != nil {
+		return nil, err
+	}
+	var globs []string
+	for _, line := range strings.Split(string(data), "\n") {
+		m := depguardFilesLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		for _, item := range depguardGlobItemRe.FindAllStringSubmatch(m[1], -1) {
+			globs = append(globs, item[1])
+		}
+	}
+	return globs, nil
+}
+
+// globCoversPackage decide si un glob "**/<dir>/**" de depguard cubre el
+// paquete pkg (p.ej. "internal/arch"): cubre tanto el propio directorio como
+// cualquier subpaquete suyo.
+func globCoversPackage(glob, pkg string) bool {
+	dir := strings.TrimSuffix(strings.TrimPrefix(glob, "**/"), "/**")
+	return pkg == dir || strings.HasPrefix(pkg, dir+"/")
+}
+
+// internalPackages filtra goPackages a los que viven bajo internal/, que son
+// los que depguard debe cubrir (cmd/* puede importar cualquier cosa).
+func internalPackages(t *testing.T, root string) []string {
+	t.Helper()
+	var out []string
+	for _, pkg := range goPackages(t, root) {
+		if strings.HasPrefix(pkg, "internal/") {
+			out = append(out, pkg)
+		}
+	}
+	return out
+}
+
+func TestDepguardCubreTodosLosPaquetes(t *testing.T) {
+	root := repoRoot(t)
+	globs, err := depguardFileGlobs(filepath.Join(root, ".golangci.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range internalPackages(t, root) {
+		covered := false
+		for _, g := range globs {
+			if globCoversPackage(g, pkg) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			t.Errorf("%s no está cubierto por ninguna regla depguard en .golangci.yml (spec §5.2)", pkg)
+		}
+	}
+}
+
 func TestNpmAllowlistDetectaAlias(t *testing.T) {
 	root := repoRoot(t)
 	allowlistPath := filepath.Join(root, "internal/arch/allowlist_npm.txt")
