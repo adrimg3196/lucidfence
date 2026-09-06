@@ -51,6 +51,7 @@ hallazgos de la auditoría Strix sin verificar desde julio.
 | # | Ítem | Impacto | Origen (señal real) | Estado | Proposal |
 |---|------|---------|---------------------|--------|----------|
 | E1 | **Matriz Adaptativa de Confianza Multi-UEM y Segunda Opinión Auditable** (Panel interactivo y evidencia de auditoría que compara afirmaciones UEM vs observaciones de osquery/DDM/CVE/anti-spoofing) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #13 y #12) | EXPLORE | `docs/product/PROPOSAL_trust_assurance_matrix.md` |
+| E2 | **Geocercas y Políticas como Código con Simulación de Impacto Previo** (`lucidfence apply` con diff declarativo y pre-flight blast radius replay sobre trazas históricas) | p1 | Discovery por NOVA ✨ · `docs/internal/product/BACKLOG.md` (Ítem #1) | EXPLORE | `docs/product/PROPOSAL_declarative_policy_gitops.md` |
 
 ## Bitácora de reconciliación
 
