@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -81,6 +82,60 @@ func assertLogoutInvalidaLaSesion(t *testing.T, s *Store, sess Session) {
 	if _, err := s.Resolve("token-inventado"); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatal("token inventado")
 	}
+}
+
+// TestLoginNoBloqueaResolve prueba que la derivación de la clave (cara en
+// CPU/memoria por diseño) se ejecuta fuera de s.mu: sustituye verifyPassword
+// por una función que se bloquea en un canal y comprueba que Resolve sigue
+// respondiendo mientras varios Login están atascados dentro de ella. Con el
+// mutex tomado durante todo Login (implementación previa a este fix) este
+// test agota el timeout porque Resolve no puede tomar el lock.
+func TestLoginNoBloqueaResolve(t *testing.T) {
+	s, _ := openStore(t)
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.Login("a@x.com", "contraseña-larga-1", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	release := make(chan struct{})
+	entered := make(chan struct{}, 4)
+	s.verifyPassword = func(_, _ string) bool {
+		entered <- struct{}{}
+		<-release
+		return false
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = s.Login("a@x.com", "mal", "default")
+		}()
+	}
+	<-entered // al menos un Login está bloqueado dentro de verifyPassword
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 20; i++ {
+			if _, err := s.Resolve(sess.Token); err != nil {
+				t.Errorf("resolve %d: %v", i, err)
+			}
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Resolve se bloqueó mientras verifyPassword estaba en curso")
+	}
+
+	close(release)
+	wg.Wait()
 }
 
 func TestThrottleTrasCincoFallos(t *testing.T) {

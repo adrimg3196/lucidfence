@@ -75,6 +75,11 @@ type Store struct {
 	sessions   map[string]Session
 	localToken string
 	fails      map[string][]time.Time
+	// verifyPassword deriva y compara la contraseña; por defecto es
+	// VerifyPassword. Es inyectable (campo no exportado) para que los tests
+	// puedan bloquearla de forma controlada y comprobar que Login nunca la
+	// llama con s.mu tomado (ver TestLoginNoBloqueaResolve).
+	verifyPassword func(pw, hash string) bool
 }
 
 // Open carga usuarios y sesiones y garantiza el token local.
@@ -85,7 +90,7 @@ func Open(dir string, now func() time.Time) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	s := &Store{dir: dir, now: now, sessions: map[string]Session{}, fails: map[string][]time.Time{}}
+	s := &Store{dir: dir, now: now, sessions: map[string]Session{}, fails: map[string][]time.Time{}, verifyPassword: VerifyPassword}
 	var users collection[User]
 	if err := store.ReadJSON(filepath.Join(dir, "users.json"), &users); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return nil, err
@@ -182,27 +187,47 @@ func (s *Store) throttled(email string) bool {
 	return len(recent) >= maxFails
 }
 
-// Login valida credenciales y abre una sesión.
+// Login valida credenciales y abre una sesión. La derivación de la clave
+// (verifyPassword, cara en CPU/memoria por diseño de argon2id) se ejecuta
+// fuera de s.mu: solo el throttle, la copia del usuario candidato y el
+// registro final de fallo o sesión están protegidos por el lock, así
+// Resolve y otros Login no esperan a que termine argon2id.
 func (s *Store) Login(email, password, orgID string) (Session, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	email = normalizeEmail(email)
+
+	s.mu.Lock()
 	if s.throttled(email) {
+		s.mu.Unlock()
 		return Session{}, ErrThrottled
 	}
+	var candidate User
+	found := false
 	for _, u := range s.users {
-		if u.Email == email && VerifyPassword(password, u.PasswordHash) {
-			if _, ok := u.OrgRoles[orgID]; !ok {
-				break
-			}
-			now := s.now().UTC()
-			sess := Session{Token: randomHex(32), UserID: u.ID, OrgID: orgID, CSRF: randomHex(16), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
-			s.sessions[sess.Token] = sess
-			return sess, s.persistSessions()
+		if u.Email == email {
+			candidate, found = u, true
+			break
 		}
 	}
-	s.fails[email] = append(s.fails[email], s.now())
-	return Session{}, ErrInvalidCredentials
+	verify := s.verifyPassword
+	s.mu.Unlock()
+
+	ok := found && verify(password, candidate.PasswordHash)
+	if ok {
+		if _, hasOrg := candidate.OrgRoles[orgID]; !hasOrg {
+			ok = false
+		}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !ok {
+		s.fails[email] = append(s.fails[email], s.now())
+		return Session{}, ErrInvalidCredentials
+	}
+	now := s.now().UTC()
+	sess := Session{Token: randomHex(32), UserID: candidate.ID, OrgID: orgID, CSRF: randomHex(16), CreatedAt: now, ExpiresAt: now.Add(SessionTTL)}
+	s.sessions[sess.Token] = sess
+	return sess, s.persistSessions()
 }
 
 // Logout cierra la sesión.
