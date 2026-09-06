@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "devices": [
+    {"id": "dev-001", "name": "Tablet Campo A1", "platform": "android", "status": "active", "compliant": true, "country": "ES", "city": "Madrid", "ip": "10.0.0.21",
+     "waypoints": [{"lat": 40.4205, "lng": -3.7085}, {"lat": 40.4215, "lng": -3.7075}, {"lat": 40.4210, "lng": -3.7090}],
+     "inventory": {"os_version": "Android 14", "model": "Samsung Galaxy Tab Active5", "manufacturer": "Samsung", "serial_number": "RZ8T40EMBPD", "imei": "354679110234567", "battery_level": 87, "battery_state": "discharging", "storage_total_gb": 128, "storage_free_gb": 64.5, "encryption_enabled": true, "carrier": "Movistar", "assigned_user": "Lucía Fernández", "department": "Operaciones", "device_tag": "OPS-TAB-001", "management_mode": "device_owner", "ownership": "company", "apps": [{"name": "Chrome", "version": "120.0.0"}, {"name": "Slack", "version": "4.30"}]}},
+    {"id": "dev-002", "name": "Móvil Reparto B7", "platform": "android", "status": "active", "compliant": true, "country": "ES", "city": "Madrid", "ip": "10.0.0.22",
+     "waypoints": [{"lat": 40.4300, "lng": -3.6900}, {"lat": 40.4250, "lng": -3.7000}, {"lat": 40.4210, "lng": -3.7080}],
+     "inventory": {"os_version": "Android 13", "model": "Zebra TC22", "manufacturer": "Zebra", "serial_number": "ZTC22-00913", "imei": "356789012345678", "battery_level": 54, "battery_state": "discharging", "storage_total_gb": 64, "storage_free_gb": 21, "encryption_enabled": true, "carrier": "Vodafone", "assigned_user": "Marcos Gil", "department": "Logística", "device_tag": "LOG-MOV-007", "management_mode": "device_owner", "ownership": "company", "apps": [{"name": "Maps", "version": "11.2"}]}},
+    {"id": "dev-003", "name": "iPad Recepción", "platform": "ios", "status": "active", "compliant": true, "country": "ES", "city": "Madrid", "ip": "10.0.0.23",
+     "waypoints": [{"lat": 40.4212, "lng": -3.7078}],
+     "inventory": {"os_version": "iOS 18.6", "model": "iPad Air", "manufacturer": "Apple", "serial_number": "DMPX2K3LHG7F", "battery_level": 100, "battery_state": "full", "storage_total_gb": 256, "storage_free_gb": 180, "encryption_enabled": true, "assigned_user": "Recepción", "department": "Oficina", "device_tag": "OFI-IPAD-001", "management_mode": "mdm", "ownership": "company", "supervised": true, "lockdown_mode": false, "apps": [{"name": "Safari", "version": "18.6"}]}},
+    {"id": "dev-004", "name": "Portátil Ventas", "platform": "macos", "status": "active", "compliant": false, "country": "ES", "city": "Madrid", "ip": "10.0.0.24",
+     "waypoints": [{"lat": 40.4500, "lng": -3.6500}],
+     "inventory": {"os_version": "macOS 15.6", "model": "MacBook Air M3", "manufacturer": "Apple", "serial_number": "C02XL9ZQMD6T", "battery_level": 32, "battery_state": "discharging", "storage_total_gb": 512, "storage_free_gb": 120, "encryption_enabled": false, "assigned_user": "Sara López", "department": "Ventas", "device_tag": "VEN-MAC-004", "management_mode": "mdm", "ownership": "company", "apps": [{"name": "Zoom", "version": "6.1.0"}]}},
+    {"id": "dev-005", "name": "Escáner Almacén", "platform": "android", "status": "active", "compliant": true, "country": "ES", "city": "Madrid", "ip": "10.0.1.5",
+     "waypoints": [{"lat": 40.4050, "lng": -3.7100}, {"lat": 40.4060, "lng": -3.7120}],
+     "inventory": {"os_version": "Android 12", "model": "Honeywell CT45", "manufacturer": "Honeywell", "serial_number": "HW-CT45-2210", "battery_level": 71, "battery_state": "charging", "storage_total_gb": 64, "storage_free_gb": 40, "encryption_enabled": true, "assigned_user": "Almacén turno A", "department": "Logística", "device_tag": "LOG-SCN-005", "management_mode": "device_owner", "ownership": "company", "apps": [{"name": "WMS", "version": "3.4"}]}},
+    {"id": "dev-006", "name": "Portátil Soporte", "platform": "windows", "status": "active", "compliant": true, "country": "ES", "city": "Madrid", "ip": "10.0.0.26",
+     "waypoints": [{"lat": 40.4210, "lng": -3.7080}, {"lat": 40.4350, "lng": -3.7000}],
+     "inventory": {"os_version": "Windows 11 24H2", "model": "Dell Latitude 5450", "manufacturer": "Dell", "serial_number": "7Q2M3X4", "battery_level": 95, "battery_state": "charging", "storage_total_gb": 512, "storage_free_gb": 300, "encryption_enabled": true, "assigned_user": "Diego Ruiz", "department": "IT", "device_tag": "IT-WIN-006", "management_mode": "mdm", "ownership": "company", "apps": [{"name": "Teams", "version": "24.1"}]}}
+  ]
+}
