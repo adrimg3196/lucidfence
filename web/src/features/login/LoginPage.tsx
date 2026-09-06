@@ -7,6 +7,7 @@ import { AuthLayout } from "@/features/auth/AuthLayout";
 import { Field } from "@/features/setup/SetupPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ErrorState } from "@/components/states/ErrorState";
 import { ApiError } from "@/api/client";
 import { useLogin } from "@/api/hooks";
 import { useT } from "@/lib/i18n";
@@ -33,7 +34,15 @@ export function LoginPage() {
     }
   });
   const err = submitError ?? login.error;
-  const message = err instanceof ApiError ? (err.code === "throttled" ? t("login.throttled") : t("login.invalid")) : err ? String(err) : null;
+  // M1-R27 (C12): antes cualquier ApiError distinto de "throttled" se
+  // colapsaba en el mensaje de credenciales inválidas (incluido un 500 del
+  // backend), ocultando el fallo real. Solo 401/invalid_credentials y
+  // 429/throttled tienen un mensaje propio; el resto se muestra tal cual con
+  // ErrorState, que ya sabe presentar el mensaje y código de una ApiError.
+  const isInvalidCredentials = err instanceof ApiError && (err.status === 401 || err.code === "invalid_credentials");
+  const isThrottled = err instanceof ApiError && (err.status === 429 || err.code === "throttled");
+  const message = isInvalidCredentials ? t("login.invalid") : isThrottled ? t("login.throttled") : null;
+  const showGenericError = !!err && !isInvalidCredentials && !isThrottled;
   return (
     <AuthLayout title={t("login.title")}>
       <form onSubmit={onSubmit} noValidate className="space-y-5">
@@ -48,6 +57,7 @@ export function LoginPage() {
             {message}
           </p>
         )}
+        {showGenericError && <ErrorState error={err} />}
         <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
           {t("login.submit")}
         </Button>
