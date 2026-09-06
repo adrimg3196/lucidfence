@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -148,4 +149,28 @@ func TestStartStopEjecutaCiclosPeriodicos(t *testing.T) {
 		t.Fatalf("tras Stop: %+v", e.Status())
 	}
 	_ = action.All
+}
+
+// TestErroresDePersistenciaSeCuentan convierte events.jsonl en un directorio
+// para que AppendEvent falle con EISDIR en cada transición: el ciclo debe
+// seguir, registrar los fallos y no perder las acciones ejecutadas.
+func TestErroresDePersistenciaSeCuentan(t *testing.T) {
+	e, org := newEngine(t)
+	if err := os.Mkdir(org.Path("events.jsonl"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Transitions != 6 {
+		t.Fatalf("transitions: %d", st.Transitions)
+	}
+	if st.PersistenceErrors < 6 {
+		t.Fatalf("persistence_errors: %d", st.PersistenceErrors)
+	}
+	acts, _ := org.RecentActions(100)
+	if len(acts) == 0 || st.ActionsExecuted != len(acts) {
+		t.Fatalf("las acciones deben seguir ejecutándose y persistiéndose: %d vs %d", st.ActionsExecuted, len(acts))
+	}
 }

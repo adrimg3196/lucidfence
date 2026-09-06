@@ -110,11 +110,15 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 		st.Unknown++
 	}
 	if cur.Location.Point != nil {
-		_ = e.org.AppendTrail(cur.ID, *cur.Location.Point, now)
+		if err := e.org.AppendTrail(cur.ID, *cur.Location.Point, now); err != nil {
+			e.logPersistenceError(st, "trail", cur.ID, err)
+		}
 	}
 	if tr != nil {
 		st.Transitions++
-		_ = e.org.AppendEvent(*tr)
+		if err := e.org.AppendEvent(*tr); err != nil {
+			e.logPersistenceError(st, "event", cur.ID, err)
+		}
 	}
 	var results []action.Result
 	planned := append(PlanTransition(*cur, tr, in.fences), e.planStanding(*cur, in.fences)...)
@@ -145,12 +149,22 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 	if err := e.org.SaveDevices(devices); err != nil {
 		return st, err
 	}
+	st.ActionsExecuted = len(results)
 	for _, r := range results {
-		if err := e.org.AppendAction(r); err == nil {
-			st.ActionsExecuted++
+		if err := e.org.AppendAction(r); err != nil {
+			e.logPersistenceError(&st, "action", r.DeviceID, err)
 		}
 	}
 	st.DurationMS = time.Since(start).Milliseconds()
-	_ = e.org.AppendStats(st)
+	if err := e.org.AppendStats(st); err != nil {
+		e.logPersistenceError(&st, "stats", "", err)
+	}
 	return st, nil
+}
+
+// logPersistenceError registra un fallo de persistencia y lo cuenta en las
+// estadísticas del ciclo; el ciclo sigue (M1-R11).
+func (e *Engine) logPersistenceError(st *CycleStats, op, deviceID string, err error) {
+	st.PersistenceErrors++
+	e.opts.Logger.Warn("persistencia", "op", op, "device", deviceID, "error", err)
 }

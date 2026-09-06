@@ -36,18 +36,19 @@ type ProviderHealth struct {
 
 // CycleStats resume un ciclo.
 type CycleStats struct {
-	At               time.Time                 `json:"at"`
-	DurationMS       int64                     `json:"duration_ms"`
-	Mode             string                    `json:"mode"`
-	DevicesTotal     int                       `json:"devices_total"`
-	Inside           int                       `json:"inside"`
-	Outside          int                       `json:"outside"`
-	Unknown          int                       `json:"unknown"`
-	Transitions      int                       `json:"transitions"`
-	ActionsPlanned   int                       `json:"actions_planned"`
-	ActionsExecuted  int                       `json:"actions_executed"`
-	EvaluationErrors int                       `json:"evaluation_errors"`
-	Providers        map[string]ProviderHealth `json:"providers"`
+	At                time.Time                 `json:"at"`
+	DurationMS        int64                     `json:"duration_ms"`
+	Mode              string                    `json:"mode"`
+	DevicesTotal      int                       `json:"devices_total"`
+	Inside            int                       `json:"inside"`
+	Outside           int                       `json:"outside"`
+	Unknown           int                       `json:"unknown"`
+	Transitions       int                       `json:"transitions"`
+	ActionsPlanned    int                       `json:"actions_planned"`
+	ActionsExecuted   int                       `json:"actions_executed"`
+	EvaluationErrors  int                       `json:"evaluation_errors"`
+	PersistenceErrors int                       `json:"persistence_errors"`
+	Providers         map[string]ProviderHealth `json:"providers"`
 }
 
 // Status es lo que expone /api/v1/engine/status.
