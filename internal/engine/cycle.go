@@ -16,7 +16,10 @@ import (
 type cycleInput struct {
 	fences []fence.Fence
 	routes []route.Route
-	prev   map[string]device.Device
+	// prevAll es devices.json tal cual se leyó (con su orden); prev lo
+	// indexa por id para buscar el estado previo de cada dispositivo.
+	prevAll []device.Device
+	prev    map[string]device.Device
 }
 
 func (e *Engine) loadInput() (cycleInput, error) {
@@ -32,7 +35,7 @@ func (e *Engine) loadInput() (cycleInput, error) {
 	if err != nil {
 		return cycleInput{}, err
 	}
-	return cycleInput{fences: fs, routes: rs, prev: device.Index(ds)}, nil
+	return cycleInput{fences: fs, routes: rs, prevAll: ds, prev: device.Index(ds)}, nil
 }
 
 func fetchSafe(ctx context.Context, ad uem.Adapter) (ds []device.Device, err error) {
@@ -64,6 +67,25 @@ func (e *Engine) fetchAll(ctx context.Context, st *CycleStats) []device.Device {
 		st.Providers[name] = h
 	}
 	return all
+}
+
+// staleDevices devuelve los dispositivos del ciclo anterior cuyo conector
+// falló en este: se conservan tal cual en devices.json, sin evaluarlos ni
+// planificar acciones para ellos, para que una caída pasajera del proveedor
+// no borre su estado ni provoque transiciones espurias (ni un segundo
+// on_enter) cuando vuelva a responder.
+func staleDevices(in cycleInput, providers map[string]ProviderHealth, fetched []device.Device) []device.Device {
+	seen := make(map[string]bool, len(fetched))
+	for _, d := range fetched {
+		seen[d.ID] = true
+	}
+	var out []device.Device
+	for _, d := range in.prevAll {
+		if h, ok := providers[d.Provider]; ok && !h.OK && !seen[d.ID] {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // evaluateDevice evalúa un dispositivo con recover: un fallo deja el
@@ -149,6 +171,9 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 		results = append(results, e.processDevice(ctx, in, &devices[i], now, &st)...)
 	}
 	st.DevicesTotal = len(devices)
+	// devices.json guarda lo evaluado en este ciclo más los dispositivos de
+	// los conectores caídos, que se conservan tal cual (ver staleDevices).
+	devices = append(devices, staleDevices(in, st.Providers, devices)...)
 	// Un fallo al guardar devices.json no puede borrar el rastro de las
 	// acciones ya ejecutadas contra el conector: se cuenta como error de
 	// persistencia (M1-R11), la auditoría y las estadísticas se escriben
