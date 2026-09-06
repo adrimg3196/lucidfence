@@ -18,13 +18,15 @@ export function circleToPolygon(center: { lat: number; lng: number }, radiusM: n
 export function fencesToGeoJSON(fences: Fence[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: fences.map((f) => {
-      const ring =
-        f.kind === "circle" && f.center
-          ? circleToPolygon(f.center, f.radius_m ?? 0)
-          : [...(f.polygon ?? []).map((p) => [p.lng, p.lat] as [number, number]), ...(f.polygon?.length ? [[f.polygon[0].lng, f.polygon[0].lat] as [number, number]] : [])];
-      return { type: "Feature", properties: { id: f.id, name: f.name, kind: f.kind }, geometry: { type: "Polygon", coordinates: [ring] } };
-    }),
+    features: fences
+      .filter((f) => f.kind !== "polygon" || (f.polygon?.length ?? 0) >= 3)
+      .map((f) => {
+        const ring =
+          f.kind === "circle" && f.center
+            ? circleToPolygon(f.center, f.radius_m ?? 0)
+            : [...(f.polygon ?? []).map((p) => [p.lng, p.lat] as [number, number]), ...(f.polygon?.length ? [[f.polygon[0].lng, f.polygon[0].lat] as [number, number]] : [])];
+        return { type: "Feature", properties: { id: f.id, name: f.name, kind: f.kind }, geometry: { type: "Polygon", coordinates: [ring] } };
+      }),
   };
 }
 

@@ -21,6 +21,15 @@ test("fencesToGeoJSON convierte círculos y polígonos", () => {
   expect(fc.features[1].geometry).toEqual({ type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] });
 });
 
+test("fencesToGeoJSON omite geocercas poligonales con menos de 3 puntos", () => {
+  const fences = [
+    { id: "e", name: "E", kind: "polygon", polygon: [], rules: {}, actions: [] },
+    { id: "d", name: "D", kind: "polygon", polygon: [{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }], rules: {}, actions: [] },
+  ] as unknown as Fence[];
+  const fc = fencesToGeoJSON(fences);
+  expect(fc.features).toHaveLength(0);
+});
+
 test("devicesToGeoJSON omite dispositivos sin ubicación", () => {
   const devices = [
     { id: "a", name: "A", fence_state: "inside", location: { point: { lat: 1, lng: 2 } } },
