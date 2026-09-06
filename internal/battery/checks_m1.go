@@ -183,6 +183,5 @@ func checkCSRF(ctx context.Context, env *Env) error {
 }
 
 func checkStop(_ context.Context, env *Env) error {
-	env.StopServer()
-	return nil
+	return env.StopServer()
 }

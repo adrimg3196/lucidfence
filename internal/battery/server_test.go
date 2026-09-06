@@ -3,6 +3,7 @@ package battery
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,7 +56,13 @@ func TestStartServerYChecksM1(t *testing.T) {
 	if err := env.StartServer(ctx); err != nil {
 		t.Fatal(err)
 	}
-	defer env.StopServer()
+	defer func() {
+		// checkStop ya para el servidor dentro de checksM1ParaTest; esta
+		// segunda llamada debe ser idempotente (apagado limpio real).
+		if err := env.StopServer(); err != nil {
+			t.Errorf("StopServer tras el test: %v", err)
+		}
+	}()
 	var health map[string]any
 	if code, err := env.GetJSON(ctx, "/api/v1/health", &health); err != nil || code != 200 || health["status"] != "ok" {
 		t.Fatalf("%d %v %v", code, err, health)
@@ -67,5 +74,34 @@ func TestStartServerYChecksM1(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(env.Tmp, "data", "orgs", "default", "devices.json")); err != nil {
 		t.Fatal("run-once debe persistir devices.json")
+	}
+}
+
+// TestStopServerReportaMuerteForzada comprueba, sin binario real, que
+// checkStop propaga el error de apagado tal cual lo devuelve env.stop.
+func TestStopServerReportaMuerteForzada(t *testing.T) {
+	want := errors.New("el servidor no atendió SIGINT en 10 s; se mató a la fuerza")
+	env := &Env{stop: func() error { return want }}
+	if err := checkStop(context.Background(), env); !errors.Is(err, want) {
+		t.Fatalf("checkStop = %v, quiero %v", err, want)
+	}
+}
+
+// TestStopServerIdempotente comprueba que una segunda llamada a StopServer,
+// tras haberse ya invocado stop una vez, no vuelve a llamarlo y devuelve nil.
+func TestStopServerIdempotente(t *testing.T) {
+	calls := 0
+	env := &Env{stop: func() error {
+		calls++
+		return errors.New("boom")
+	}}
+	if err := env.StopServer(); err == nil {
+		t.Fatal("la primera llamada debe propagar el error de stop")
+	}
+	if err := env.StopServer(); err != nil {
+		t.Fatalf("la segunda llamada debe ser idempotente y devolver nil, got %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("stop debe invocarse una sola vez, calls=%d", calls)
 	}
 }

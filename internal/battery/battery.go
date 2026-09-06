@@ -19,7 +19,7 @@ type Env struct {
 	BaseURL string       // http://127.0.0.1:<port> cuando hay servidor
 	Client  *http.Client // con cookie jar; lo rellena StartServer
 	CSRF    string       // token CSRF de la sesión abierta por el check de setup
-	stop    func()
+	stop    func() error
 }
 
 // Check es un claim verificable.

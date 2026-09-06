@@ -20,6 +20,16 @@ import (
 
 var listenRe = regexp.MustCompile(`listening on (http://127\.0\.0\.1:\d+)`)
 
+// lastLines devuelve como mucho las últimas n líneas de s, para adjuntar el
+// final del stderr capturado a un error de apagado sin volcarlo entero.
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // StartServer lanza el binario en un puerto libre con datos temporales.
 func (env *Env) StartServer(ctx context.Context) error {
 	dataDir := filepath.Join(env.Tmp, "data")
@@ -33,14 +43,19 @@ func (env *Env) StartServer(ctx context.Context) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	env.stop = func() {
+	env.stop = func() error {
 		_ = cmd.Process.Signal(os.Interrupt)
-		done := make(chan struct{})
-		go func() { _ = cmd.Wait(); close(done) }()
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
 		select {
-		case <-done:
+		case waitErr := <-done:
+			if waitErr != nil {
+				return fmt.Errorf("%w; stderr:\n%s", waitErr, lastLines(stderr.String(), 20))
+			}
+			return nil
 		case <-time.After(10 * time.Second):
 			_ = cmd.Process.Kill()
+			return fmt.Errorf("el servidor no atendió SIGINT en 10 s; se mató a la fuerza")
 		}
 	}
 	lines := make(chan string, 1)
@@ -58,7 +73,7 @@ func (env *Env) StartServer(ctx context.Context) error {
 	case url := <-lines:
 		env.BaseURL = url
 	case <-time.After(15 * time.Second):
-		env.StopServer()
+		_ = env.StopServer()
 		return fmt.Errorf("el servidor no imprimió su dirección en 15 s; stderr: %s", stderr.String())
 	case <-ctx.Done():
 		return ctx.Err()
@@ -68,12 +83,17 @@ func (env *Env) StartServer(ctx context.Context) error {
 	return nil
 }
 
-// StopServer para el binario (SIGINT, kill a los 10 s).
-func (env *Env) StopServer() {
-	if env.stop != nil {
-		env.stop()
-		env.stop = nil
+// StopServer para el binario (SIGINT, kill a los 10 s) y devuelve el error
+// de apagado: nil si el proceso salió limpio, o el motivo si hubo que
+// matarlo a la fuerza o salió con estado distinto de 0. Idempotente: una
+// llamada tras la primera no vuelve a invocar el cierre y devuelve nil.
+func (env *Env) StopServer() error {
+	if env.stop == nil {
+		return nil
 	}
+	err := env.stop()
+	env.stop = nil
+	return err
 }
 
 func (env *Env) do(ctx context.Context, method, path string, body, out any) (int, error) {
