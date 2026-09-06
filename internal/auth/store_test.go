@@ -182,10 +182,40 @@ func TestFailsSePodaTrasLaVentana(t *testing.T) {
 	}
 }
 
+// TestInundarElMapaNoReiniciaElThrottle deja a una víctima con maxFails
+// intentos recientes y luego inunda el mapa de fallos con más de
+// maxTrackedFailEmails emails inexistentes: la víctima debe seguir
+// bloqueada. Vaciar el mapa entero al llegar al tope (implementación
+// previa) convertía el límite de la spec §6.2 en algo que se salta a
+// voluntad —5 intentos, inundación, 5 intentos, ...— y la inundación es
+// barata porque un login de email inexistente ni siquiera deriva argon2
+// (hallazgo C7).
+func TestInundarElMapaNoReiniciaElThrottle(t *testing.T) {
+	s, _ := openStore(t)
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxFails; i++ {
+		if _, err := s.Login("a@x.com", "mal", "default"); !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("intento %d: %v", i, err)
+		}
+	}
+	for i := 0; i < maxTrackedFailEmails+10; i++ {
+		s.registerFail(fmt.Sprintf("flood%d@x.com", i))
+	}
+	if len(s.fails) > maxTrackedFailEmails {
+		t.Fatalf("mapa de fallos sin acotar: %d entradas", len(s.fails))
+	}
+	if _, err := s.Login("a@x.com", "contraseña-larga-1", "default"); !errors.Is(err, ErrThrottled) {
+		t.Fatalf("la víctima debe seguir bloqueada tras la inundación: %v", err)
+	}
+}
+
 // TestRegistrarFalloPodaMapaGrande comprueba que el mapa de fallos no crece
-// sin límite: superado maxTrackedFailEmails se descarta por completo
-// (comportamiento documentado en registerFail) en vez de acumular una
-// entrada por cada email distinto que un atacante pueda enviar.
+// sin límite: superado maxTrackedFailEmails se hace hueco expulsando
+// entradas (comportamiento documentado en registerFail/makeRoomForFail) en
+// vez de acumular una entrada por cada email distinto que un atacante pueda
+// enviar.
 func TestRegistrarFalloPodaMapaGrande(t *testing.T) {
 	s, _ := openStore(t)
 	for i := 0; i < maxTrackedFailEmails+1; i++ {

@@ -251,16 +251,54 @@ func (s *Store) throttled(email string) bool {
 	return len(recent) >= maxFails
 }
 
-// registerFail anota un intento fallido. Si el mapa ha crecido más allá de
-// maxTrackedFailEmails (una avalancha de emails distintos, típica de un
-// intento de agotar memoria) se descarta entero en vez de mantener un
-// índice adicional de antigüedad solo para podarlo: es una salvaguarda de
-// memoria, no una garantía de precisión del throttle a esa escala.
+// registerFail anota un intento fallido. El mapa sigue acotado a
+// maxTrackedFailEmails claves (una avalancha de emails distintos no puede
+// hacerlo crecer sin fin), pero hacer hueco nunca reinicia el contador de
+// un email ya bloqueado: vaciar el mapa entero al llegar al tope permitía
+// saltarse el límite de la spec §6.2 a voluntad, porque inundar con emails
+// inexistentes es barato (ese camino ni siquiera deriva argon2). Un email
+// ya seguido siempre se anota; uno nuevo, solo si makeRoomForFail
+// encuentra sitio.
 func (s *Store) registerFail(email string) {
-	if len(s.fails) >= maxTrackedFailEmails {
-		s.fails = make(map[string][]time.Time)
+	if _, tracked := s.fails[email]; !tracked && !s.makeRoomForFail() {
+		return
 	}
 	s.fails[email] = append(s.fails[email], s.now())
+}
+
+// makeRoomForFail deja hueco para una clave nueva en el mapa de fallos:
+// primero borra las entradas caducadas (su último intento cae fuera de
+// failWindow, así que ya no cuentan para throttled) y, si el mapa sigue
+// lleno, expulsa la más antigua de entre las que todavía no bloquean
+// (menos de maxFails intentos). Devuelve false si todas las entradas están
+// bloqueando: antes que soltar a una víctima, se prefiere no seguir la
+// clave nueva.
+func (s *Store) makeRoomForFail() bool {
+	if len(s.fails) < maxTrackedFailEmails {
+		return true
+	}
+	cutoff := s.now().Add(-failWindow)
+	for email, ts := range s.fails {
+		if len(ts) == 0 || !ts[len(ts)-1].After(cutoff) {
+			delete(s.fails, email)
+		}
+	}
+	for len(s.fails) >= maxTrackedFailEmails {
+		oldest, at, found := "", time.Time{}, false
+		for email, ts := range s.fails {
+			if len(ts) >= maxFails {
+				continue
+			}
+			if last := ts[len(ts)-1]; !found || last.Before(at) {
+				oldest, at, found = email, last, true
+			}
+		}
+		if !found {
+			return false
+		}
+		delete(s.fails, oldest)
+	}
+	return true
 }
 
 // Login valida credenciales y abre una sesión. La derivación de la clave
