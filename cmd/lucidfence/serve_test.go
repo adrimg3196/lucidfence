@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -79,6 +81,33 @@ func TestServeArrancaImprimeDireccionYParaConContexto(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("serve no terminó tras cancelar")
+	}
+}
+
+func TestStopOnServeErrorParaElMotorYCierraElListener(t *testing.T) {
+	dir := t.TempDir()
+	a, err := buildApp(commonFlags{ConfigPath: filepath.Join(dir, "config.json"), DataDir: filepath.Join(dir, "data")}, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.engine.Start(context.Background())
+	if !a.engine.Status().Running {
+		t.Fatal("el motor debería estar en marcha antes del error")
+	}
+	ln, err := (&netListenConfig{}).listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var errb bytes.Buffer
+	code := stopOnServeError(a, ln, errors.New("boom"), &errb)
+	if code != 1 || !strings.Contains(errb.String(), "boom") {
+		t.Fatalf("exit=%d stderr=%q", code, errb.String())
+	}
+	if a.engine.Status().Running {
+		t.Fatal("el motor debería haberse parado tras el error de Serve")
+	}
+	if _, err := ln.Accept(); err == nil {
+		t.Fatal("el listener debería haberse cerrado tras el error de Serve")
 	}
 }
 

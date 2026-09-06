@@ -42,8 +42,7 @@ func serve(ctx context.Context, f commonFlags, autostart bool, stdout, stderr io
 	case <-ctx.Done():
 	case err := <-errCh:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			_, _ = fmt.Fprintf(stderr, "lucidfence serve: %v\n", err)
-			return 1
+			return stopOnServeError(a, ln, err, stderr)
 		}
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -54,6 +53,17 @@ func serve(ctx context.Context, f commonFlags, autostart bool, stdout, stderr io
 	a.engine.Stop()
 	_, _ = fmt.Fprintln(stdout, "parado")
 	return 0
+}
+
+// stopOnServeError responde a un srv.Serve() que termina con un error real
+// (no el ErrServerClosed de un apagado ordenado): si no se para el motor y
+// se cierra el listener aquí, ambos quedan huérfanos porque el flujo normal
+// de apagado (srv.Shutdown + a.engine.Stop más abajo) nunca se alcanza.
+func stopOnServeError(a *app, ln net.Listener, err error, stderr io.Writer) int {
+	a.engine.Stop()
+	_ = ln.Close()
+	_, _ = fmt.Fprintf(stderr, "lucidfence serve: %v\n", err)
+	return 1
 }
 
 func runServe(args []string, stdout, stderr io.Writer) int {
