@@ -26,18 +26,22 @@ export function parsePolygon(text: string): { lat: number; lng: number }[] | nul
 function nonNegativeIntOrEmpty(min: number) {
   return z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
-    z.coerce.number().int().min(min).optional(),
+    z.coerce.number("Debe ser un número").int("Debe ser un número entero").min(min, `Debe ser mayor o igual que ${min}`).optional(),
   );
 }
 
+// Fix round 1 (M1-R25 punto 5): fenceFormSchema no recibe `t` (es un const
+// exportado, no una función), así que estos mensajes van fijos en español;
+// si en un hito futuro el esquema pasa a construirse con `t`, deberían
+// sustituirse por claves i18n.
 export const fenceFormSchema = z
   .object({
-    name: z.string().trim().min(1),
-    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+    name: z.string().trim().min(1, "El nombre es obligatorio"),
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "Usa minúsculas, dígitos y guiones, empezando por letra o dígito"),
     kind: z.enum(["circle", "polygon"]),
-    centerLat: z.coerce.number().min(-90).max(90),
-    centerLng: z.coerce.number().min(-180).max(180),
-    radiusM: z.coerce.number(),
+    centerLat: z.coerce.number("La latitud debe ser un número").min(-90, "La latitud debe estar entre -90 y 90").max(90, "La latitud debe estar entre -90 y 90"),
+    centerLng: z.coerce.number("La longitud debe ser un número").min(-180, "La longitud debe estar entre -180 y 180").max(180, "La longitud debe estar entre -180 y 180"),
+    radiusM: z.coerce.number("El radio debe ser un número"),
     polygonText: z.string(),
     actions: z.array(actionSchema),
     // M1-R25 punto 1: opcionales para no perder `rules` al reeditar una
@@ -45,7 +49,7 @@ export const fenceFormSchema = z
     violationIntervalCycles: nonNegativeIntOrEmpty(0),
     dwellSeconds: nonNegativeIntOrEmpty(0),
   })
-  .refine((f) => f.kind !== "circle" || f.radiusM > 0, { path: ["radiusM"], message: "radius" })
+  .refine((f) => f.kind !== "circle" || f.radiusM > 0, { path: ["radiusM"], message: "El radio debe ser mayor que 0" })
   .refine((f) => f.kind !== "polygon" || parsePolygon(f.polygonText) !== null, { path: ["polygonText"], message: "polygon" });
 
 export type FenceForm = z.infer<typeof fenceFormSchema>;

@@ -95,6 +95,31 @@ test("editar una geocerca con rules y guardar sin tocarlas conserva las rules or
   expect(mutateAsync.mock.calls[0][0]).toMatchObject({ rules: { violation_interval_cycles: 3, dwell_seconds: 60 } });
 });
 
+// Fix round 1 (M1-R25, punto 5): cada campo con aria-invalid debe mostrar su
+// mensaje de zod en un <p role="alert"> debajo, al menos para nombre y radio.
+test("errores de validación se muestran en línea para nombre y radio", async () => {
+  const mutateAsync = vi.fn().mockResolvedValue({});
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync, isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  const user = userEvent.setup();
+  await user.clear(screen.getByLabelText("Radio (m)"));
+  await user.type(screen.getByLabelText("Radio (m)"), "0");
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(screen.getByLabelText("Nombre")).toHaveAttribute("aria-invalid", "true"));
+  expect(screen.getByLabelText("Radio (m)")).toHaveAttribute("aria-invalid", "true");
+  const alerts = screen.getAllByRole("alert");
+  expect(alerts.length).toBeGreaterThanOrEqual(2);
+  for (const alert of alerts) expect(alert).not.toHaveTextContent("");
+  expect(mutateAsync).not.toHaveBeenCalled();
+});
+
 test("evita el id reservado 'none' al generar el slug desde el nombre (M1-R12)", async () => {
   vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
   vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);

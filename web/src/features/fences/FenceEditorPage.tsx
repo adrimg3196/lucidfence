@@ -23,6 +23,17 @@ function slugAvoidingReserved(name: string): string {
   return slug === "none" ? `${slug}-1` : slug;
 }
 
+// Fix round 1 (M1-R25 punto 5): mensaje inline bajo un campo con aria-invalid,
+// reutilizado por todos los campos del formulario.
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="text-xs text-sev-high">
+      {message}
+    </p>
+  );
+}
+
 export function FenceEditorPage() {
   const { id } = useParams();
   const editing = !!id;
@@ -60,17 +71,20 @@ export function FenceEditorPage() {
         <div className="space-y-1.5">
           <Label htmlFor="name">{t("fence.name")}</Label>
           <Input id="name" aria-invalid={!!errs.name} {...form.register("name")} />
+          <FieldError message={errs.name?.message} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="id">{t("fence.id")}</Label>
           <Input id="id" aria-invalid={!!errs.id} readOnly={editing} {...form.register("id")} />
+          <FieldError message={errs.id?.message} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="kind">{t("fence.kind")}</Label>
-          <NativeSelect id="kind" {...form.register("kind")}>
+          <NativeSelect id="kind" aria-invalid={!!errs.kind} {...form.register("kind")}>
             <option value="circle">{t("fence.kind.circle")}</option>
             <option value="polygon">{t("fence.kind.polygon")}</option>
           </NativeSelect>
+          <FieldError message={errs.kind?.message} />
         </div>
       </div>
       {kind === "circle" ? (
@@ -78,14 +92,17 @@ export function FenceEditorPage() {
           <div className="space-y-1.5">
             <Label htmlFor="centerLat">{t("fence.lat")}</Label>
             <Input id="centerLat" type="number" step="any" aria-invalid={!!errs.centerLat} {...form.register("centerLat")} />
+            <FieldError message={errs.centerLat?.message} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="centerLng">{t("fence.lng")}</Label>
             <Input id="centerLng" type="number" step="any" aria-invalid={!!errs.centerLng} {...form.register("centerLng")} />
+            <FieldError message={errs.centerLng?.message} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="radiusM">{t("fence.radius")}</Label>
             <Input id="radiusM" type="number" step="1" aria-invalid={!!errs.radiusM} {...form.register("radiusM")} />
+            <FieldError message={errs.radiusM?.message} />
           </div>
         </div>
       ) : (
@@ -99,10 +116,12 @@ export function FenceEditorPage() {
         <div className="space-y-1.5">
           <Label htmlFor="violationIntervalCycles">{t("fence.rules.violationInterval")}</Label>
           <Input id="violationIntervalCycles" type="number" step="1" min="0" aria-invalid={!!errs.violationIntervalCycles} {...form.register("violationIntervalCycles")} />
+          <FieldError message={errs.violationIntervalCycles?.message} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="dwellSeconds">{t("fence.rules.dwell")}</Label>
           <Input id="dwellSeconds" type="number" step="1" min="0" aria-invalid={!!errs.dwellSeconds} {...form.register("dwellSeconds")} />
+          <FieldError message={errs.dwellSeconds?.message} />
         </div>
       </div>
       <fieldset className="space-y-3">
@@ -125,7 +144,7 @@ export function FenceEditorPage() {
               </NativeSelect>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={`when-${i}`}>{t("fence.when.on_enter").split(" ")[0]}</Label>
+              <Label htmlFor={`when-${i}`}>{t("fence.when")}</Label>
               <NativeSelect id={`when-${i}`} {...form.register(`actions.${i}.when`)}>
                 {whenValues.map((w) => (
                   <option key={w} value={w}>
