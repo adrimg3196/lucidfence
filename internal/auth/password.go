@@ -58,6 +58,13 @@ func VerifyPassword(pw, encoded string) bool {
 	if err != nil {
 		return false
 	}
+	// argon2.IDKey entra en pánico con t<1 o p<1 ("number of rounds too
+	// small" / "parallelism degree too low"); un hash manipulado con
+	// parámetros fuera de rango debe fallar la verificación, no tumbar el
+	// proceso. mem/salt/hash demasiado pequeños tampoco son un hash válido.
+	if t < 1 || p < 1 || mem < 8*uint32(p) || len(want) < 16 || len(salt) < 8 {
+		return false
+	}
 	got := argon2.IDKey([]byte(pw), salt, t, mem, p, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
