@@ -37,6 +37,33 @@ test("crea un círculo con una acción al entrar", async () => {
   expect(navigate).toHaveBeenCalledWith("/fences");
 });
 
+// Fix round 1 (M1-R25, punto 3): quitar una acción debe eliminar su fila del
+// formulario y no debe aparecer en el payload enviado al guardar.
+test("quitar una acción la elimina del formulario y del payload enviado", async () => {
+  const mutateAsync = vi.fn().mockResolvedValue({});
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync, isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Nombre"), "Oficina Norte");
+  await user.click(screen.getByRole("button", { name: "Añadir acción" }));
+  await user.click(screen.getByRole("button", { name: "Añadir acción" }));
+  const textInputs = screen.getAllByLabelText("Texto");
+  await user.type(textInputs[0], "Primera");
+  await user.type(textInputs[1], "Segunda");
+  await user.click(screen.getAllByRole("button", { name: "Eliminar" })[0]);
+  expect(screen.getAllByLabelText("Texto")).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+  expect(mutateAsync.mock.calls[0][0].actions).toEqual([{ action: "message", when: "on_enter", enabled: true, params: { text: "Segunda" } }]);
+});
+
 // Fix round 1 (M1-R25, punto 1): PUT reemplaza el registro completo; editar
 // sin tocar los campos de rules no debe borrarlas en el payload enviado.
 test("editar una geocerca con rules y guardar sin tocarlas conserva las rules originales", async () => {
