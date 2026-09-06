@@ -149,8 +149,13 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 		results = append(results, e.processDevice(ctx, in, &devices[i], now, &st)...)
 	}
 	st.DevicesTotal = len(devices)
-	if err := e.org.SaveDevices(devices); err != nil {
-		return st, err
+	// Un fallo al guardar devices.json no puede borrar el rastro de las
+	// acciones ya ejecutadas contra el conector: se cuenta como error de
+	// persistencia (M1-R11), la auditoría y las estadísticas se escriben
+	// igualmente y el error se sigue devolviendo como error del ciclo.
+	saveErr := e.org.SaveDevices(devices)
+	if saveErr != nil {
+		e.logPersistenceError(&st, "devices", "", saveErr)
 	}
 	st.ActionsExecuted = len(results)
 	for _, r := range results {
@@ -162,7 +167,7 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 	if err := e.org.AppendStats(st); err != nil {
 		e.logPersistenceError(&st, "stats", "", err)
 	}
-	return st, nil
+	return st, saveErr
 }
 
 // logPersistenceError registra un fallo de persistencia y lo cuenta en las
