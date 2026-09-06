@@ -9,6 +9,10 @@
    de API actualiza `docs/openapi.yaml`.
 4. Dependencias nuevas: solo con entrada en `internal/arch/allowlist_*.txt` y
    aprobación del propietario (CODEOWNERS).
+   `tsc` es TypeScript 7 (`@typescript/native`); el paquete `typescript` en
+   `package.json` apunta a `@typescript/typescript6` únicamente para que
+   `typescript-eslint` cumpla su rango de peer dependency. No "corrijas" esa
+   versión.
 5. Agentes: rama `agent/<tema>`, PR automática, automerge si CI verde, ≤ 400
    líneas y sin tocar ficheros CODEOWNERS. Todo lo demás lleva `needs-human`.
 6. Commits: Conventional Commits en español (`feat(engine): ...`).

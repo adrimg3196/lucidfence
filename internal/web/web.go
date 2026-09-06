@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -44,14 +45,25 @@ func Handler(fsys fs.FS) http.Handler {
 		fallback = "placeholder.html"
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "método no permitido", http.StatusMethodNotAllowed)
+			return
+		}
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if name == "" {
 			name = fallback
 		}
 		if info, err := fs.Stat(fsys, name); err != nil || info.IsDir() {
 			// Un directorio real (p.ej. "assets" sin fichero "assets"
-			// propio) no es servible: cae al fallback igual que una
-			// ruta inexistente, en vez de intentar leerlo como fichero.
+			// propio) no es servible: cae al fallback igual que una ruta
+			// inexistente. La excepción es un asset ausente (bajo
+			// assets/ o fonts/, o con extensión de fichero): eso es un
+			// 404 real, no una ruta de cliente que resolver por SPA.
+			if isStaticAsset(name) {
+				http.NotFound(w, r)
+				return
+			}
 			name = fallback
 		}
 		if strings.HasPrefix(name, "assets/") {
@@ -61,6 +73,19 @@ func Handler(fsys fs.FS) http.Handler {
 		}
 		serveFile(w, r, fsys, name)
 	})
+}
+
+// isStaticAsset distingue un fichero estático ausente (404 real) de una ruta
+// de cliente sin extensión (fallback SPA): assets/ y fonts/ solo contienen
+// ficheros generados en el build, y cualquier nombre con extensión de
+// fichero (p.ej. robots.txt) tampoco es una ruta de React Router.
+func isStaticAsset(name string) bool {
+	for _, prefix := range []string{"assets/", "fonts/"} {
+		if rest, ok := strings.CutPrefix(name, prefix); ok && rest != "" {
+			return true
+		}
+	}
+	return path.Ext(name) != ""
 }
 
 // serveFile abre name dentro de fsys y lo escribe con http.ServeContent,

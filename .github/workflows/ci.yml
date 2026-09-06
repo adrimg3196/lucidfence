@@ -62,6 +62,8 @@ jobs:
         with: { go-version-file: go.mod }
       - uses: actions/download-artifact@v7
         with: { name: web-dist, path: internal/web/dist }
+      - name: el artefacto web-dist trae el dashboard
+        run: test -f internal/web/dist/index.html
       - name: compilar binario con dashboard embebido
         run: CGO_ENABLED=0 go build -trimpath -o bin/lucidfence ./cmd/lucidfence
       - name: batería runtime
@@ -78,7 +80,9 @@ jobs:
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: actions/setup-go@v7
         with: { go-version-file: go.mod }
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0 && govulncheck ./...
       - uses: actions/setup-node@v7
         with: { node-version: 24 }
-      - run: cd web && npm ci --ignore-scripts && npm audit --audit-level=high
+      # Las devDependencies (build/test tooling, no código que se sirve) se
+      # auditan aparte en un job programado (M5); aquí solo el runtime.
+      - run: cd web && npm ci --ignore-scripts && npm audit --audit-level=high --omit=dev

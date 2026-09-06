@@ -23,7 +23,6 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/web` | `embed.FS` del frontend compilado y handler SPA con fallback. |
 | `internal/arch` | Tests que hacen cumplir límites físicos, allowlists y este documento. |
 | `internal/battery` | Checks en vivo (`RUNTIME: N/N`). Cada claim de producto añade uno. |
-| `internal/config` | `config.json`: defaults seguros, validación con nombre de campo, guardado 0600. |
 | `internal/domain/geo` | Geometría esférica: distancias, punto en polígono, distancia a polilínea. Sin I/O. |
 | `internal/domain/action` | Enum de acciones UEM y resultado normalizado de ejecución. |
 | `internal/domain/fence` | Geocercas círculo/polígono, pertenencia, validación y acciones por evento. |
@@ -34,6 +33,7 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700. |
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
+| `internal/config` | `config.json`: defaults seguros, validación con nombre de campo, guardado 0600. |
 
 Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
 `internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
@@ -66,6 +66,8 @@ los crea; el test `TestArchitectureDocListsEveryPackage` lo exige.
 
 ## Ficheros protegidos (CODEOWNERS)
 
-`ARCHITECTURE.md`, `.github/`, `go.mod`, `web/package.json`,
-`internal/arch/allowlist_*.txt`, `internal/engine/guardrails*.go`. Cualquier
-cambio exige aprobación del propietario aunque la CI esté verde.
+`ARCHITECTURE.md`, `.github/`, `go.mod`, `go.sum`, `.golangci.yml`,
+`web/package.json`, `web/package-lock.json`, `internal/arch/`,
+`internal/battery/`, `internal/engine/guardrails*`, `scripts/`,
+`scripts/coverage.sh`, `.gitleaks.toml`. Cualquier cambio exige aprobación
+del propietario aunque la CI esté verde.

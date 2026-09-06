@@ -9,8 +9,13 @@ linters:
     - depguard
     - funlen
     - gocyclo
-    # misspell desactivado: el código y los comentarios están en español.
     - unparam
+  # misspell no está habilitado: el código y sus comentarios están en
+  # español (spec, "textos ... en español"), y misspell asume inglés incluso
+  # con locale: US e ignore-rules vacío (marca "dependencias" y "producto"
+  # como erratas de palabras inglesas). No hay forma de decirle "este
+  # fichero es español" sin una lista de excepciones que crece con cada
+  # comentario nuevo, así que se apaga en vez de perseguir falsos positivos.
   settings:
     funlen:
       lines: 60
@@ -70,10 +75,16 @@ linters:
           list-mode: strict
           files: ["**/internal/mcp/**"]
           allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/api"]
+        migrate:
+          list-mode: strict
+          files: ["**/internal/migrate/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store", "github.com/adrimg3196/lucidfence/internal/uem"]
         leaf-utils:
           list-mode: strict
           files: ["**/internal/web/**", "**/internal/version/**", "**/internal/config/**", "**/internal/arch/**", "**/internal/battery/**"]
           allow: ["$gostd"]
+        # Sin regla comodín: cada paquete bajo internal/ debe tener su regla
+        # explícita; lo exige TestDepguardCubreTodosLosPaquetes.
 
 formatters:
   enable:

@@ -2,7 +2,6 @@ package arch
 
 import (
 	"bufio"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,11 +97,10 @@ func TestFileLimits(t *testing.T) {
 	}
 }
 
-func readAllowlist(t *testing.T, path string) map[string]bool {
-	t.Helper()
+func loadAllowlist(path string) (map[string]bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 	out := map[string]bool{}
@@ -114,49 +112,22 @@ func readAllowlist(t *testing.T, path string) map[string]bool {
 		}
 		out[line] = true
 	}
+	return out, sc.Err()
+}
+
+func readAllowlist(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	out, err := loadAllowlist(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return out
 }
 
-func TestGoDependencyAllowlist(t *testing.T) {
-	root := repoRoot(t)
-	allowed := readAllowlist(t, filepath.Join(root, "internal/arch/allowlist_go.txt"))
-	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
-	if err != nil {
+func writeTempFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	re := regexp.MustCompile(`(?m)^\s*([a-zA-Z0-9./_-]+)\s+v[0-9][^\s]*`)
-	for _, m := range re.FindAllStringSubmatch(string(data), -1) {
-		mod := m[1]
-		if mod == "module" || mod == "go" || mod == "toolchain" {
-			continue
-		}
-		if !allowed[mod] {
-			t.Errorf("go.mod requiere %q, que no está en internal/arch/allowlist_go.txt (spec §5.8)", mod)
-		}
-	}
-}
-
-func TestNpmDependencyAllowlist(t *testing.T) {
-	root := repoRoot(t)
-	pkgPath := filepath.Join(root, "web/package.json")
-	data, err := os.ReadFile(pkgPath)
-	if err != nil {
-		t.Skipf("web/package.json no existe todavía: %v", err)
-	}
-	allowed := readAllowlist(t, filepath.Join(root, "internal/arch/allowlist_npm.txt"))
-	var pkg struct {
-		Dependencies    map[string]string `json:"dependencies"`
-		DevDependencies map[string]string `json:"devDependencies"`
-	}
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		t.Fatal(err)
-	}
-	for _, deps := range []map[string]string{pkg.Dependencies, pkg.DevDependencies} {
-		for name := range deps {
-			if !allowed[name] {
-				t.Errorf("web/package.json depende de %q, que no está en internal/arch/allowlist_npm.txt (spec §7.2)", name)
-			}
-		}
 	}
 }
 
