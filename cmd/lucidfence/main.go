@@ -14,7 +14,12 @@ import (
 const usage = `uso: lucidfence <subcomando> [opciones]
 
 subcomandos:
+  serve     arranca el servidor y el dashboard (127.0.0.1:8765 por defecto)
+  doctor    diagnostica la instalación local
+  open      abre el dashboard en el navegador si el servidor responde
   version   imprime la versión del binario
+
+opciones comunes: -config config.json  -data <dir>  -listen host:puerto
 `
 
 type command func(args []string, stdout, stderr io.Writer) int
@@ -22,6 +27,9 @@ type command func(args []string, stdout, stderr io.Writer) int
 func commands() map[string]command {
 	return map[string]command{
 		"version": runVersion,
+		"serve":   runServe,
+		"doctor":  runDoctor,
+		"open":    runOpen,
 	}
 }
 
