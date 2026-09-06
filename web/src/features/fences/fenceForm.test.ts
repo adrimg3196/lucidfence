@@ -37,3 +37,24 @@ test("toFence emite rules vacío cuando el formulario no las define", () => {
   const form = { ...emptyForm, name: "HQ", id: "hq" };
   expect(toFence(form).rules).toEqual({});
 });
+
+// M1-R27 (C11): fromFence/toFence colapsaban params a un único `text`,
+// borrando cualquier otra clave (p. ej. `channel`) y renombrando `msg` a
+// `text`. Reproduce la acción de la seed demo (internal/engine/demo.go:52):
+// guardar sin tocar nada debe devolver exactamente los mismos params.
+test("toFence conserva íntegros los params de una acción ajenos al campo de texto editable (M1-R27, C11)", () => {
+  const fence = {
+    id: "demo-hq",
+    name: "Demo HQ",
+    kind: "circle" as const,
+    center: { lat: 40.42, lng: -3.71 },
+    radius_m: 300,
+    rules: {},
+    actions: [{ action: "notify" as const, when: "on_exit" as const, enabled: true, params: { channel: "security", msg: "Dispositivo ha salido de HQ" } }],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+  const form = fromFence(fence);
+  expect(form.actions[0]).toMatchObject({ text: "Dispositivo ha salido de HQ" });
+  expect(toFence(form).actions).toEqual(fence.actions);
+});

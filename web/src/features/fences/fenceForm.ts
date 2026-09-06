@@ -4,7 +4,19 @@ import type { Fence } from "@/api/hooks";
 export const actionValues = ["message", "notify", "locate", "lock", "reboot", "clear_passcode", "wipe", "set_compliance", "custom"] as const;
 export const whenValues = ["on_enter", "on_exit", "on_violation", "on_unknown"] as const;
 
-const actionSchema = z.object({ action: z.enum(actionValues), when: z.enum(whenValues), text: z.string(), enabled: z.boolean() });
+// M1-R27 (C11): el formulario solo edita una clave de texto de `params`
+// ("text", o "msg" si la acción ya la traía); `params` guarda el objeto
+// completo tal cual llegó, y `textKey` recuerda qué clave sobrescribir al
+// reconstruirlo en toFence. El resto de claves (p. ej. `channel`) viaja
+// intacto y nunca pasa por la UI.
+const actionSchema = z.object({
+  action: z.enum(actionValues),
+  when: z.enum(whenValues),
+  text: z.string(),
+  textKey: z.string().optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  enabled: z.boolean(),
+});
 
 export function parsePolygon(text: string): { lat: number; lng: number }[] | null {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -68,7 +80,10 @@ export function toFence(form: FenceForm): Fence {
     name: form.name.trim(),
     kind: form.kind,
     rules,
-    actions: form.actions.map((a) => ({ action: a.action, when: a.when, enabled: a.enabled, params: a.text ? { text: a.text } : {} })),
+    // M1-R27 (C11): se sobrescribe solo la clave que edita el formulario
+    // (a.textKey, "text" por defecto); el resto de `params` viaja intacto en
+    // vez de reconstruirse desde cero, así PUT no borra claves como `channel`.
+    actions: form.actions.map((a) => ({ action: a.action, when: a.when, enabled: a.enabled, params: { ...(a.params ?? {}), [a.textKey ?? "text"]: a.text } })),
     created_at: now,
     updated_at: now,
   };
@@ -85,12 +100,22 @@ export function fromFence(f: Fence): FenceForm {
     centerLng: f.center?.lng ?? emptyForm.centerLng,
     radiusM: f.radius_m ?? emptyForm.radiusM,
     polygonText: (f.polygon ?? []).map((p) => `${p.lat}, ${p.lng}`).join("\n"),
-    actions: (f.actions ?? []).map((a) => ({
-      action: a.action as (typeof actionValues)[number],
-      when: a.when as (typeof whenValues)[number],
-      text: typeof a.params?.text === "string" ? a.params.text : typeof a.params?.msg === "string" ? a.params.msg : "",
-      enabled: a.enabled,
-    })),
+    // M1-R27 (C11): se conserva el objeto `params` completo y se recuerda en
+    // `textKey` cuál de sus claves es la que el formulario edita como texto
+    // ("text" si existe, si no "msg" cuando la acción ya la trae, si no
+    // "text" por defecto para una acción nueva sin params).
+    actions: (f.actions ?? []).map((a) => {
+      const params = a.params ?? {};
+      const textKey = typeof params.text === "string" ? "text" : typeof params.msg === "string" ? "msg" : "text";
+      return {
+        action: a.action as (typeof actionValues)[number],
+        when: a.when as (typeof whenValues)[number],
+        text: typeof params[textKey] === "string" ? (params[textKey] as string) : "",
+        textKey,
+        params,
+        enabled: a.enabled,
+      };
+    }),
     violationIntervalCycles: f.rules?.violation_interval_cycles,
     dwellSeconds: f.rules?.dwell_seconds,
   };
