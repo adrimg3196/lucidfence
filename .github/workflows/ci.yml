@@ -80,7 +80,9 @@ jobs:
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: actions/setup-go@v7
         with: { go-version-file: go.mod }
-      - run: go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0 && govulncheck ./...
       - uses: actions/setup-node@v7
         with: { node-version: 24 }
-      - run: cd web && npm ci --ignore-scripts && npm audit --audit-level=high
+      # Las devDependencies (build/test tooling, no código que se sirve) se
+      # auditan aparte en un job programado (M5); aquí solo el runtime.
+      - run: cd web && npm ci --ignore-scripts && npm audit --audit-level=high --omit=dev
