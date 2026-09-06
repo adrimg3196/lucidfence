@@ -259,6 +259,23 @@ func TestUsersJSONPersisteElHash(t *testing.T) {
 	}
 }
 
+// TestLoginRechazaOrgAjena comprueba que un usuario con rol solo en una
+// organización no puede iniciar sesión en otra: Login debe devolver
+// ErrInvalidCredentials (no filtrar que las credenciales eran correctas
+// para otra organización) y contar como fallo de throttle.
+func TestLoginRechazaOrgAjena(t *testing.T) {
+	s, _ := openStore(t)
+	if _, err := s.Setup("a@x.com", "A", "contraseña-larga-1", "default"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Login("a@x.com", "contraseña-larga-1", "otra"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("login de organización ajena: %v", err)
+	}
+	if len(s.fails["a@x.com"]) != 1 {
+		t.Fatalf("debería contar como fallo de throttle: %v", s.fails["a@x.com"])
+	}
+}
+
 func TestSesionCaducaYPersiste(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
