@@ -101,6 +101,9 @@ jobs:
         with: { node-version: 24, cache: npm, cache-dependency-path: web/package-lock.json }
       - uses: actions/download-artifact@v7
         with: { name: web-dist, path: internal/web/dist }
+      - name: comprobar dashboard descargado
+        working-directory: .
+        run: test -f internal/web/dist/index.html
       - name: compilar binario con dashboard
         working-directory: .
         run: CGO_ENABLED=0 go build -trimpath -o bin/lucidfence ./cmd/lucidfence

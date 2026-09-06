@@ -7,7 +7,9 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
-  retries: process.env.CI ? 1 : 0,
+  // Sin reintentos: el servidor (y su directorio de datos) se arranca una vez por ejecución,
+  // así que un segundo intento vería el asistente ya completado y fallaría siempre (M1-R26).
+  retries: 0,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: `http://127.0.0.1:${port}`,
