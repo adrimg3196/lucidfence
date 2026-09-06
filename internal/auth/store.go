@@ -267,7 +267,11 @@ func (s *Store) registerFail(email string) {
 // maxConcurrentKDF derivaciones a la vez por acquireKDF/releaseKDF) se
 // ejecuta fuera de s.mu: solo el throttle, la copia del usuario candidato y
 // el registro final de fallo o sesión están protegidos por el lock, así
-// Resolve y otros Login no esperan a que termine argon2id.
+// Resolve y otros Login no esperan a que termine argon2id. El rol también
+// se lee bajo el lock (hasRole, más abajo): candidate.OrgRoles es el mismo
+// mapa que el guardado en s.users (los mapas se comparten por referencia al
+// copiar el struct), así que tocarlo después de soltar el lock sería una
+// lectura sin sincronizar frente a una futura escritura concurrente.
 func (s *Store) Login(email, password, orgID string) (Session, error) {
 	email = normalizeEmail(email)
 
@@ -284,16 +288,18 @@ func (s *Store) Login(email, password, orgID string) (Session, error) {
 			break
 		}
 	}
+	var hasRole bool
+	if found {
+		_, hasRole = candidate.OrgRoles[orgID]
+	}
 	verify := s.verifyPassword
 	s.mu.Unlock()
 
 	s.acquireKDF()
 	ok := found && verify(password, candidate.PasswordHash)
 	s.releaseKDF()
-	if ok {
-		if _, hasOrg := candidate.OrgRoles[orgID]; !hasOrg {
-			ok = false
-		}
+	if ok && !hasRole {
+		ok = false
 	}
 
 	s.mu.Lock()
