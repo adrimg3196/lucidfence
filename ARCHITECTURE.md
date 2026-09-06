@@ -24,6 +24,8 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/arch` | Tests que hacen cumplir límites físicos, allowlists y este documento. |
 | `internal/battery` | Checks en vivo (`RUNTIME: N/N`). Cada claim de producto añade uno. |
 | `internal/domain/geo` | Geometría esférica: distancias, punto en polígono, distancia a polilínea. Sin I/O. |
+| `internal/domain/action` | Enum de acciones UEM y resultado normalizado de ejecución. |
+| `internal/domain/fence` | Geocercas círculo/polígono, pertenencia, validación y acciones por evento. |
 
 Los paquetes de M1 en adelante (`internal/domain/...`, `internal/engine`,
 `internal/uem/...`, `internal/store`, `internal/auth`, `internal/api`,
