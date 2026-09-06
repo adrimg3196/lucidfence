@@ -76,6 +76,9 @@ func (f Fence) Validate() error {
 	if !IDPattern.MatchString(f.ID) {
 		return fmt.Errorf("id %q inválido: usa minúsculas, dígitos y guiones", f.ID)
 	}
+	if f.ID == "none" {
+		return fmt.Errorf("id %q reservado", f.ID)
+	}
 	if f.Name == "" {
 		return errors.New("nombre obligatorio")
 	}

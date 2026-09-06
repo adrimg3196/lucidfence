@@ -46,6 +46,7 @@ func TestContainsPoligono(t *testing.T) {
 func TestValidate(t *testing.T) {
 	cases := map[string]Fence{
 		"id inválido":           {ID: "Demo HQ", Name: "x", Kind: Circle, Center: &geo.Point{}, RadiusM: 10},
+		"id reservado none":     {ID: "none", Name: "x", Kind: Circle, Center: &geo.Point{}, RadiusM: 10},
 		"sin nombre":            {ID: "a", Kind: Circle, Center: &geo.Point{}, RadiusM: 10},
 		"círculo sin centro":    {ID: "a", Name: "x", Kind: Circle, RadiusM: 10},
 		"radio cero":            {ID: "a", Name: "x", Kind: Circle, Center: &geo.Point{}, RadiusM: 0},
