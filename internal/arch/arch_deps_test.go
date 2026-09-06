@@ -240,12 +240,41 @@ func depguardFileGlobs(golangciPath string) ([]string, error) {
 	return globs, nil
 }
 
+// globDir reduce un glob "**/<dir>/**" de depguard a su directorio "<dir>".
+func globDir(glob string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(glob, "**/"), "/**")
+}
+
 // globCoversPackage decide si un glob "**/<dir>/**" de depguard cubre el
 // paquete pkg (p.ej. "internal/arch"): cubre tanto el propio directorio como
 // cualquier subpaquete suyo.
 func globCoversPackage(glob, pkg string) bool {
-	dir := strings.TrimSuffix(strings.TrimPrefix(glob, "**/"), "/**")
+	dir := globDir(glob)
 	return pkg == dir || strings.HasPrefix(pkg, dir+"/")
+}
+
+// depguardCoverageGlobs son los globs de depguardFileGlobs que aportan
+// cobertura real por paquete: se excluye cualquier glob reducido a
+// "internal" (el comodín catch-all de I2, "**/internal/**"). Ese glob cubre
+// cualquier paquete bajo internal/ por definición de globCoversPackage, así
+// que si se contara como cobertura, TestDepguardCubreTodosLosPaquetes sería
+// una tautología que nunca puede fallar mientras el catch-all exista
+// (hallazgo #1 de la revisión final de M0): un paquete sin ninguna regla
+// propia (p.ej. borrando "**/internal/battery/**" de leaf-utils) seguiría
+// marcándose como cubierto solo por el comodín.
+func depguardCoverageGlobs(golangciPath string) ([]string, error) {
+	globs, err := depguardFileGlobs(golangciPath)
+	if err != nil {
+		return nil, err
+	}
+	var coverage []string
+	for _, g := range globs {
+		if globDir(g) == "internal" {
+			continue
+		}
+		coverage = append(coverage, g)
+	}
+	return coverage, nil
 }
 
 // internalPackages filtra goPackages a los que viven bajo internal/, que son
@@ -263,7 +292,7 @@ func internalPackages(t *testing.T, root string) []string {
 
 func TestDepguardCubreTodosLosPaquetes(t *testing.T) {
 	root := repoRoot(t)
-	globs, err := depguardFileGlobs(filepath.Join(root, ".golangci.yml"))
+	globs, err := depguardCoverageGlobs(filepath.Join(root, ".golangci.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,6 +307,60 @@ func TestDepguardCubreTodosLosPaquetes(t *testing.T) {
 		if !covered {
 			t.Errorf("%s no está cubierto por ninguna regla depguard en .golangci.yml (spec §5.2)", pkg)
 		}
+	}
+}
+
+// TestDepguardComodinNoCuentaComoCobertura es la regresión del hallazgo #1
+// de la ola de correcciones de la revisión final de M0: el comodín
+// catch-all ("**/internal/**") no debe contar como cobertura real en
+// TestDepguardCubreTodosLosPaquetes, porque globCoversPackage lo reduce a
+// dir="internal" y eso casa con cualquier paquete de prefijo "internal/",
+// convirtiendo el test en una tautología que nunca puede fallar mientras el
+// catch-all exista.
+func TestDepguardComodinNoCuentaComoCobertura(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), ".golangci.yml")
+	writeTempFile(t, cfgPath, `
+linters:
+  settings:
+    depguard:
+      rules:
+        domain:
+          list-mode: strict
+          files: ["**/internal/domain/**"]
+          allow: ["$gostd"]
+        catch-all:
+          list-mode: strict
+          files: ["**/internal/**"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal"]
+`)
+	globs, err := depguardCoverageGlobs(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range globs {
+		if globDir(g) == "internal" {
+			t.Fatalf("depguardCoverageGlobs no debe incluir el comodín catch-all, globs=%v", globs)
+		}
+	}
+
+	// "internal/battery" no tiene regla propia en este YAML de prueba (solo
+	// domain y catch-all): sin el filtro, catch-all lo cubriría igualmente y
+	// el hallazgo se reproduciría.
+	for _, g := range globs {
+		if globCoversPackage(g, "internal/battery") {
+			t.Fatalf("internal/battery no debería contar como cubierto sin una regla explícita, glob=%q", g)
+		}
+	}
+
+	// "internal/domain" sí debe seguir cubierto por su propia regla.
+	coveredDomain := false
+	for _, g := range globs {
+		if globCoversPackage(g, "internal/domain") {
+			coveredDomain = true
+		}
+	}
+	if !coveredDomain {
+		t.Fatal("internal/domain debería seguir cubierto por su regla explícita")
 	}
 }
 
