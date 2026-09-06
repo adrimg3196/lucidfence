@@ -62,8 +62,8 @@ func TestStandingViolationCadaNCiclos(t *testing.T) {
 	}
 	in := device.Device{ID: "d", FenceState: device.Inside, InsideFence: "demo-hq"}
 	e.planStanding(in, fs)
-	if e.violations["d|demo-hq"] != 0 {
-		t.Fatal("dentro resetea el contador")
+	if _, exists := e.violations["d|demo-hq"]; exists {
+		t.Fatal("dentro debe borrar la clave del mapa, no ponerla a cero")
 	}
 }
 

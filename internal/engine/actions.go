@@ -19,6 +19,10 @@ type Planned struct {
 	Trigger string
 }
 
+// fenceOfKey extrae el id de geocerca de una clave de transición con
+// gramática "<id>:<estado>" (p. ej. "demo-hq:inside", "none:unknown"). Los
+// ids de geocerca siguen fence.IDPattern, que nunca admite ":", así que
+// SplitN con límite 2 basta y "none" (sin geocerca) se traduce a "".
 func fenceOfKey(key string) string {
 	id := strings.SplitN(key, ":", 2)[0]
 	if id == "none" {
@@ -67,7 +71,7 @@ func (e *Engine) planStanding(cur device.Device, fences []fence.Fence) []Planned
 		acts := f.ActionsFor(fence.OnViolation)
 		key := cur.ID + "|" + f.ID
 		if cur.FenceState != device.Outside || len(acts) == 0 {
-			e.violations[key] = 0
+			delete(e.violations, key)
 			continue
 		}
 		e.violations[key]++
