@@ -24,6 +24,7 @@ func checksM1WithoutServer() []Check {
 		{Name: "sin sesión /devices devuelve 401 con forma de error", Run: checkUnauthenticated},
 		{Name: "run-once evalúa la flota y hay dispositivos inside", Run: checkRunOnce},
 		{Name: "flota demo visible vía /devices", Run: checkDevices},
+		{Name: "postura desconocida explícita en dispositivo demo", Run: checkPostureUnknown},
 		{Name: "transición none:unknown → demo-hq:inside registrada", Run: checkTransition},
 		{Name: "acciones on_enter ejecutadas en dry-run (observe)", Run: checkActionsDryRun},
 		{Name: "dashboard real embebido en /", Run: checkDashboard},
@@ -97,6 +98,21 @@ func checkDevices(ctx context.Context, env *Env) error {
 		}
 	}
 	return fmt.Errorf("total=%v, quiero 6", total)
+}
+
+// checkPostureUnknown comprueba el JSON real de la seed M1, sin observaciones
+// de postura. No acredita ingesta osquery ni evaluación de riesgo (pendientes).
+func checkPostureUnknown(ctx context.Context, env *Env) error {
+	var out map[string]any
+	code, err := env.GetJSON(ctx, "/api/v1/devices/dev-001", &out)
+	if err != nil || code != 200 {
+		return fmt.Errorf("code=%d err=%v", code, err)
+	}
+	posture, ok := out["posture"].(map[string]any)
+	if !ok || len(posture) != 0 {
+		return fmt.Errorf("seed sin postura debe emitir posture:{}: %v", out["posture"])
+	}
+	return nil
 }
 
 // items extrae out["items"] como una lista, o error si falta o no lo es.

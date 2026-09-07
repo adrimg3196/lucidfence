@@ -1120,6 +1120,17 @@ export interface components {
                 version: string;
             }[];
         };
+        /** @description Observaciones; ausente equivale a desconocido, no a false. País/sitio vacíos y mapa sin métricas se omiten. */
+        Posture: {
+            rooted?: boolean;
+            os_outdated?: boolean;
+            hardware_health?: {
+                [key: string]: string;
+            };
+            osquery_config_valid?: boolean;
+            country?: string;
+            site?: string;
+        };
         Verdict: {
             score: number | null;
             severity: string;
@@ -1153,6 +1164,8 @@ export interface components {
                 bssid?: string;
             };
             inventory: components["schemas"]["Inventory"];
+            /** @description Siempre emitido por D01a (vacío si desconocido); opcional para admitir respuestas M1. */
+            posture?: components["schemas"]["Posture"];
             /** @enum {string} */
             fence_state: "inside" | "outside" | "unknown";
             inside_fence: string;
@@ -1304,6 +1317,13 @@ export interface components {
             at: string;
             fence_id?: string;
             trigger?: string;
+            route_id?: string;
+            policy_id?: string;
+            playbook_id?: string;
+            severity?: string;
+            /** @description Solo se emite si true; su ausencia no acredita autorización ni ejecución. */
+            blocked?: boolean;
+            error_type?: string;
         };
     };
     responses: {

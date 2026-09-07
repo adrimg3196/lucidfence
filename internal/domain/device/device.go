@@ -72,6 +72,18 @@ type Inventory struct {
 	Apps              []App      `json:"apps,omitempty"`
 }
 
+// Posture contiene observaciones, no inferencias: nil en booleanos o mapa
+// significa desconocido; country/site vacíos significan no informados.
+// El JSON omite lo desconocido pero conserva un false explícito.
+type Posture struct {
+	Rooted             *bool             `json:"rooted,omitempty"`
+	OSOutdated         *bool             `json:"os_outdated,omitempty"`
+	HardwareHealth     map[string]string `json:"hardware_health,omitempty"`
+	OsqueryConfigValid *bool             `json:"osquery_config_valid,omitempty"`
+	Country            string            `json:"country,omitempty"`
+	Site               string            `json:"site,omitempty"`
+}
+
 // Verdict es el veredicto de riesgo explicable. Score nil = sin evaluar o
 // evaluación fallida (nunca 0 por defecto).
 type Verdict struct {
@@ -96,6 +108,7 @@ type Device struct {
 	Location        Location          `json:"location"`
 	Network         Network           `json:"network"`
 	Inventory       Inventory         `json:"inventory"`
+	Posture         Posture           `json:"posture"`
 	FenceState      FenceState        `json:"fence_state"`
 	InsideFence     string            `json:"inside_fence"`
 	LastInsideFence string            `json:"last_inside_fence"`

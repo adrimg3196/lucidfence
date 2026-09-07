@@ -61,4 +61,10 @@ type Result struct {
 	At         time.Time      `json:"at"`
 	FenceID    string         `json:"fence_id,omitempty"`
 	Trigger    string         `json:"trigger,omitempty"`
+	RouteID    string         `json:"route_id,omitempty"`
+	PolicyID   string         `json:"policy_id,omitempty"`
+	PlaybookID string         `json:"playbook_id,omitempty"`
+	Severity   string         `json:"severity,omitempty"`
+	Blocked    bool           `json:"blocked,omitempty"`
+	ErrorType  string         `json:"error_type,omitempty"`
 }
