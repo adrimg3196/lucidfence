@@ -38,6 +38,15 @@ func TestChecksM0IncluyeVersion(t *testing.T) {
 	}
 }
 
+func TestChecksIncluyePosturaDesconocida(t *testing.T) {
+	for _, c := range Checks() {
+		if c.Name == "postura desconocida explícita en dispositivo demo" {
+			return
+		}
+	}
+	t.Fatal("falta check runtime D01a de postura desconocida")
+}
+
 func fakeBin(t *testing.T, script string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "lucidfence")
