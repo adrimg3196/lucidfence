@@ -32,6 +32,10 @@ jsdom
 @testing-library/user-event
 @playwright/test
 openapi-typescript
+# Excepción DEV transitoria #434: override de seguridad del generador OpenAPI.
+# Retirar al adoptar un Redocly compatible corregido, previa revisión CTO/QA.
+@redocly/openapi-core
+js-yaml
 eslint
 typescript-eslint
 @eslint/js
