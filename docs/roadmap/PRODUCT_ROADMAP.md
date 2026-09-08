@@ -20,7 +20,7 @@ Este documento rastrea la evolución estratégica de LucidFence 2.0 a través de
 
 ## 1. NOW (Horizonte Inmediato) — M0 a M2
 - [x] **M0: Corte de `main`**: Migración de legado Python a Go 2.0 estático.
-- [x] **M1: Núcleo Demo**: Binario Go unificado (`cmd/lucidfence`), servidor de API REST, geocercas/rutas/POIs y UI React embebida.
+- [x] **M1: Núcleo Demo**: Binario Go unificado (`cmd/lucidfence`), servidor de API REST, geocercas, rutas y puntos de interés (POIs) con UI React embebida.
 - [ ] **M2: Riesgo y Acciones**: Engine loop determinista, guardarraíles inviolables (`observe`/`enforce`, `allow_wipe`), SOAR y handoffs.
 
 ## 2. NEXT (Próximo Horizonte) — M3 a M4
