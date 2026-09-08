@@ -772,6 +772,14 @@ components:
           type: string
         last_inside_fence:
           type: string
+        fence_state_since:
+          type: string
+          format: date-time
+          description: Origen del reloj de la clave geocerca/estado; ausente si no evaluado.
+        dwell_seconds:
+          type: integer
+          minimum: 0
+          description: Segundos completos en la misma clave, incluido unknown; siempre emitido por D01c, opcional para M1. No acredita permanencia física ni ejecuta acciones.
         route_id:
           type: string
         route_state:
@@ -784,6 +792,12 @@ components:
         location_integrity:
           $ref: "#/components/schemas/Integrity"
           description: Siempre emitido por D01b; opcional para admitir respuestas M1.
+        signals:
+          type: object
+          description: Contenedor pasivo por nombre de señal; ausente si no informado. Sin evaluación de riesgo implícita.
+          additionalProperties:
+            type: [object, "null"]
+            additionalProperties: true
         evaluation_error:
           type: string
         last_report_at:

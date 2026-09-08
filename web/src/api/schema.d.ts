@@ -1177,6 +1177,13 @@ export interface components {
             fence_state: "inside" | "outside" | "unknown";
             inside_fence: string;
             last_inside_fence: string;
+            /**
+             * Format: date-time
+             * @description Origen del reloj de la clave geocerca/estado; ausente si no evaluado.
+             */
+            fence_state_since?: string;
+            /** @description Segundos completos en la misma clave, incluido unknown; siempre emitido por D01c, opcional para M1. No acredita permanencia física ni ejecuta acciones. */
+            dwell_seconds?: number;
             route_id?: string;
             /** @enum {string} */
             route_state: "on_route" | "off_route" | "unassigned";
@@ -1184,6 +1191,12 @@ export interface components {
             risk: components["schemas"]["Verdict"];
             /** @description Siempre emitido por D01b; opcional para admitir respuestas M1. */
             location_integrity?: components["schemas"]["Integrity"];
+            /** @description Contenedor pasivo por nombre de señal; ausente si no informado. Sin evaluación de riesgo implícita. */
+            signals?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                } | null;
+            };
             evaluation_error?: string;
             /** Format: date-time */
             last_report_at: string;

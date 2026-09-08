@@ -42,7 +42,7 @@ func Key(insideID string, state device.FenceState) string {
 	return insideID + ":" + string(state)
 }
 
-// Evaluate rellena los campos de geocerca de cur a partir de prev y devuelve
+// Evaluate rellena geocerca y permanencia de cur a partir de prev y devuelve
 // la transición si la clave cambia. prev puede ser nil (primer ciclo).
 func Evaluate(prev *device.Device, cur *device.Device, fences []fence.Fence, at time.Time) *Transition {
 	state, inside := EvaluateFence(cur.Location.Point, fences)
@@ -63,8 +63,21 @@ func Evaluate(prev *device.Device, cur *device.Device, fences []fence.Fence, at 
 		prevKey = Key(prev.InsideFence, prev.FenceState)
 	}
 	curKey := Key(inside, state)
+	dwell(prev, cur, prevKey == curKey, at)
 	if prevKey == curKey {
 		return nil
 	}
 	return &Transition{At: at, DeviceID: cur.ID, DeviceName: cur.Name, From: prevKey, To: curKey}
+}
+
+// dwell mide segundos completos en la misma clave con el reloj del ciclo.
+// Copia el origen para no compartir un puntero mutable con el estado previo.
+// Un origen cero se considera ausente; un retroceso nunca produce negativos.
+func dwell(prev *device.Device, cur *device.Device, same bool, at time.Time) {
+	since := at
+	if same && prev != nil && prev.FenceStateSince != nil && !prev.FenceStateSince.IsZero() {
+		since = *prev.FenceStateSince
+	}
+	cur.FenceStateSince = &since
+	cur.DwellSeconds = max(0, int(at.Sub(since)/time.Second))
 }
