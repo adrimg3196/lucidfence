@@ -30,8 +30,8 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/domain/poi` | Puntos de interés y su exportación GeoJSON. |
 | `internal/domain/device` | Dispositivo normalizado, inventario, veredicto de riesgo, trail. |
 | `internal/domain/transition` | Evaluación de geocerca por ciclo y detección de transiciones. |
-| `internal/domain/integrity` | Evidencia de velocidad, país y precisión de ubicación sin I/O; no conecta aún con riesgo ni enforcement. |
-| `internal/domain/risk` | Siete productores puros de señales: hora, turno, salud, postura, integridad de ubicación, zona y ruta. Defaults neutros no acreditan conformidad observada. Sin I/O, veredicto ni conexión al motor. |
+| `internal/domain/integrity` | Evidencia de velocidad, país y precisión de ubicación sin I/O; risk consume sus constantes sin recalcular detecciones. Sin conexión al motor/enforcement. |
+| `internal/domain/risk` | Siete productores puros de señales y veredicto explicable 0–100; fallo null/unknown. Defaults neutros no acreditan conformidad observada. Sin I/O ni conexión al motor/enforcement. |
 | `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700. |
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
@@ -50,7 +50,7 @@ los crea; el test `TestArchitectureDocListsEveryPackage` lo exige.
 
 | Paquete | Puede importar del proyecto |
 |---------|-----------------------------|
-| `internal/domain` | nada (solo stdlib y otros subpaquetes de `domain`) |
+| `internal/domain` | nada (solo stdlib y otros subpaquetes de `domain`; go-cmp exclusivamente en `_test.go`, protegido por depguard y guardián de imports de producción) |
 | `internal/uem` y conectores | `domain`, `uem` |
 | `internal/store` | `domain` |
 | `internal/notify`, `internal/posture`, `internal/reports` | `domain`, `store` |

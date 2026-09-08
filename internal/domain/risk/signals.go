@@ -1,6 +1,6 @@
 // Package risk produce siete señales explicables y puras del dispositivo.
 // Los defaults neutros de compatibilidad no acreditan conformidad observada.
-// No calcula veredictos ni conecta las señales al ciclo del motor.
+// Evaluate consume estas señales sin conectarlas al ciclo del motor.
 package risk
 
 import (

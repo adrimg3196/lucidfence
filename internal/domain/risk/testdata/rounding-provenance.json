@@ -1,0 +1,14 @@
+{
+  "inputs.jsonl": {
+    "sha256": "deb5138414c1852d7171e5755b8ca51345bd8cf5491bd8186fad416efd6e490e",
+    "bytes": 3941281,
+    "gzip_sha256": "e5766c57c4bd7c1a0260fa432fee0108143b07ec41041778c4d44a7e7828f94b",
+    "rows": 43347
+  },
+  "python-results.jsonl": {
+    "sha256": "870492f82d204a0b4f0cfc1d4f116e1d47fdb05872ba189e23277e16e8b057fb",
+    "bytes": 14597545,
+    "gzip_sha256": "7ce0e0634b6846a94ec0238fc55eef144a5f3fb6ac127010dca9842fb6d5f708",
+    "rows": 43347
+  }
+}

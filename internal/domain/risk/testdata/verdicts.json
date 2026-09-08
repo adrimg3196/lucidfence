@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "dentro-limpio-sin-hallazgos",
+      "device": {
+        "id": "dev-01",
+        "name": "Furgoneta 1",
+        "platform": "android",
+        "compliant": true,
+        "fence_state": "inside",
+        "inside_fence": "hq",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "Android 15", "battery_level": 90, "storage_total_gb": 64, "storage_free_gb": 50, "encryption_enabled": true, "supervised": true, "lockdown_mode": true},
+        "posture": {"rooted": false, "os_outdated": false, "osquery_config_valid": true, "hardware_health": {"battery": "ok", "storage": "healthy"}},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {"score": 0, "severity": "low", "reasons": [], "matched_policies": [], "evaluated_at": "2026-09-06T12:00:00Z", "provenance": "none", "verified": false}
+    },
+    {
+      "name": "fuera-no-conforme-y-sin-cifrar",
+      "device": {
+        "id": "dev-02",
+        "name": "Tablet almacén",
+        "platform": "android",
+        "compliant": false,
+        "fence_state": "outside",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "Android 15", "battery_level": 80, "storage_total_gb": 128, "storage_free_gb": 64, "encryption_enabled": false},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 75,
+        "severity": "high",
+        "reasons": ["fuera de geocerca permitida", "dispositivo no conforme", "almacenamiento sin cifrar"],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "ubicacion-desconocida-fuera-de-horario",
+      "device": {
+        "id": "dev-03",
+        "name": "iPad reparto",
+        "platform": "ios",
+        "compliant": true,
+        "fence_state": "unknown",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "iOS 18", "battery_level": 55, "storage_total_gb": 128, "storage_free_gb": 60, "encryption_enabled": true},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T03:20:00Z"},
+      "want": {
+        "score": 30,
+        "severity": "medium",
+        "reasons": ["ubicación desconocida (señal perdida)", "fuera de horario laboral"],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T03:20:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "acumulado-se-acota-a-100",
+      "device": {
+        "id": "dev-04",
+        "name": "Portátil taller",
+        "platform": "android",
+        "compliant": false,
+        "fence_state": "outside",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "Android 12", "battery_level": 9, "storage_total_gb": 64, "storage_free_gb": 2, "encryption_enabled": false, "supervised": false, "lockdown_mode": false},
+        "posture": {"rooted": true, "os_outdated": true, "osquery_config_valid": false, "hardware_health": {"battery": "failed", "storage": "degraded"}},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 100,
+        "severity": "critical",
+        "reasons": [
+          "fuera de geocerca permitida",
+          "dispositivo no conforme",
+          "dispositivo con root/jailbreak",
+          "SO desactualizado",
+          "disco casi lleno (<10% libre)",
+          "batería crítica (≤15%)",
+          "almacenamiento sin cifrar",
+          "Lockdown Mode desactivado",
+          "dispositivo sin supervisión (enrolamiento personal)",
+          "salud de hardware degradada (battery, storage)",
+          "configuración de osquery no válida"
+        ],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "on-route-no-baja-de-cero",
+      "device": {
+        "id": "dev-05",
+        "name": "Furgoneta 2",
+        "platform": "android",
+        "compliant": true,
+        "fence_state": "inside",
+        "inside_fence": "hq",
+        "route_id": "route-centro",
+        "route_state": "on_route",
+        "route_deviation_m": 12.4,
+        "inventory": {"os_version": "Android 15", "battery_level": 76, "storage_total_gb": 64, "storage_free_gb": 40, "encryption_enabled": true},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {"score": 0, "severity": "low", "reasons": [], "matched_policies": [], "evaluated_at": "2026-09-06T12:00:00Z", "provenance": "none", "verified": false}
+    },
+    {
+      "name": "on-route-resta-cinco-sin-dejar-razon",
+      "device": {
+        "id": "dev-06",
+        "name": "Furgoneta 3",
+        "platform": "android",
+        "compliant": true,
+        "fence_state": "outside",
+        "route_id": "route-centro",
+        "route_state": "on_route",
+        "route_deviation_m": 30.0,
+        "inventory": {"os_version": "Android 15", "battery_level": 64, "storage_total_gb": 64, "storage_free_gb": 40, "encryption_enabled": true},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 30,
+        "severity": "medium",
+        "reasons": ["fuera de geocerca permitida"],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "desviado-de-ruta",
+      "device": {
+        "id": "dev-07",
+        "name": "Furgoneta 4",
+        "platform": "android",
+        "compliant": true,
+        "fence_state": "inside",
+        "inside_fence": "hq",
+        "route_id": "route-centro",
+        "route_state": "off_route",
+        "route_deviation_m": 1234.5,
+        "inventory": {"os_version": "Android 15", "battery_level": 70, "storage_total_gb": 64, "storage_free_gb": 40, "encryption_enabled": true},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 37,
+        "severity": "medium",
+        "reasons": ["desviado de su ruta asignada (1234 m)"],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "desviacion-enorme-se-acota-en-25",
+      "device": {
+        "id": "dev-08",
+        "name": "Furgoneta 5",
+        "platform": "android",
+        "compliant": true,
+        "fence_state": "outside",
+        "route_id": "route-centro",
+        "route_state": "off_route",
+        "route_deviation_m": 9000.0,
+        "inventory": {"os_version": "Android 15", "battery_level": 70, "storage_total_gb": 64, "storage_free_gb": 40, "encryption_enabled": true},
+        "location_integrity": {"suspicious": false, "checks": []}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 85,
+        "severity": "critical",
+        "reasons": ["fuera de geocerca permitida", "desviado de su ruta asignada (9000 m)"],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "spoofing-velocidad-y-flip-de-pais",
+      "device": {
+        "id": "dev-09",
+        "name": "Teléfono comercial",
+        "platform": "ios",
+        "compliant": true,
+        "fence_state": "inside",
+        "inside_fence": "hq",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "iOS 18", "battery_level": 66, "storage_total_gb": 256, "storage_free_gb": 100, "encryption_enabled": true},
+        "location_integrity": {"suspicious": true, "checks": ["impossible_speed", "country_flip_without_movement"], "speed_kmh": 4200.7, "distance_km": 812.3}
+      },
+      "context": {"now": "2026-09-06T12:00:00Z"},
+      "want": {
+        "score": 45,
+        "severity": "medium",
+        "reasons": [
+          "velocidad imposible entre reportes (4200 km/h): posible spoofing de ubicación",
+          "país declarado cambió sin movimiento acorde: metadatos de ubicación incoherentes"
+        ],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    },
+    {
+      "name": "precision-falseada-turno-y-zona",
+      "device": {
+        "id": "dev-10",
+        "name": "Tablet turno noche",
+        "platform": "ios",
+        "compliant": true,
+        "fence_state": "inside",
+        "inside_fence": "almacen",
+        "route_state": "unassigned",
+        "inventory": {"os_version": "iOS 18", "battery_level": 70, "storage_total_gb": 256, "storage_free_gb": 120, "encryption_enabled": true},
+        "posture": {"osquery_config_valid": false},
+        "location_integrity": {"suspicious": true, "checks": ["accuracy_invalid", "accuracy_too_perfect"]}
+      },
+      "context": {
+        "now": "2026-09-06T12:00:00Z",
+        "shift_zones": {"dev-10": "hq"},
+        "zone_risk": {"almacen": 0.5}
+      },
+      "want": {
+        "score": 54,
+        "severity": "medium",
+        "reasons": [
+          "configuración de osquery no válida",
+          "precisión GPS inválida (accuracy ≤ 0): report no fiable",
+          "precisión imposible para geolocalización por IP: campo falseado",
+          "dispositivo fuera de su turno asignado",
+          "zona de riesgo elevado (0.5)"
+        ],
+        "matched_policies": [],
+        "evaluated_at": "2026-09-06T12:00:00Z",
+        "provenance": "tool",
+        "verified": true
+      }
+    }
+  ]
+}
