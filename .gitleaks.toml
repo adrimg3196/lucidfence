@@ -2,4 +2,7 @@
 useDefault = true
 
 [allowlist]
-paths = ['''web/package-lock.json''']
+paths = [
+    '''web/package-lock.json''',
+    '''docs/roadmap/PRODUCT_ROADMAP.md''',
+]
