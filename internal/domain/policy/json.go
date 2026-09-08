@@ -14,6 +14,15 @@ func (a *Action) UnmarshalJSON(data []byte) error {
 	return decoder.Decode((*plain)(a))
 }
 
+// UnmarshalJSON conserva los literales de evidencia antes de comprobar su rango.
+// UseNumber en el consumidor no puede recuperar Signals ya redondeadas.
+func (s *Subject) UnmarshalJSON(data []byte) error {
+	type plain Subject
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode((*plain)(s))
+}
+
 // UnmarshalJSON conserva Value antes de validar su rango, sin redondearlo.
 // También se aplica a las condiciones anidadas en Policy.
 func (c *Condition) UnmarshalJSON(data []byte) error {
