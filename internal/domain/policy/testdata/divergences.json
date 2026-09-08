@@ -1,0 +1,9 @@
+[
+ {"name":"bool_no_numero_eq","actual":true,"op":"eq","value":1,"legacy":true,"match":false},
+ {"name":"familias_incompatibles_ne","actual":true,"op":"ne","value":2,"legacy":true,"match":false},
+ {"name":"texto_no_umbral","actual":"501","op":"gt","value":500,"legacy":true,"match":false},
+ {"name":"bool_no_umbral","actual":true,"op":"gte","value":1,"legacy":true,"match":false},
+ {"name":"in_no_subcadena","actual":"ES","op":"in","value":"ESTE","legacy":true,"match":false},
+
+ {"name":"entero_fuera_intervalo","actual":9007199254740992,"op":"eq","value":9007199254740992,"legacy":true,"match":false}
+]
