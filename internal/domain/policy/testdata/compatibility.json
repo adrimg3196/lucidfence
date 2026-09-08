@@ -1,0 +1,19 @@
+[
+ {"name":"eq_numero","actual":2,"op":"eq","value":2,"match":true},
+ {"name":"eq_diferente","actual":2,"op":"eq","value":3,"match":false},
+ {"name":"ne_texto","actual":"a","op":"ne","value":"b","match":true},
+ {"name":"ne_igual","actual":false,"op":"ne","value":false,"match":false},
+ {"name":"gt","actual":501,"op":"gt","value":500,"match":true},
+ {"name":"gt_borde","actual":500,"op":"gt","value":500,"match":false},
+ {"name":"gte","actual":500,"op":"gte","value":500,"match":true},
+ {"name":"gte_inferior","actual":499,"op":"gte","value":500,"match":false},
+ {"name":"lt","actual":-1,"op":"lt","value":0,"match":true},
+ {"name":"lt_borde","actual":0,"op":"lt","value":0,"match":false},
+ {"name":"lte","actual":0,"op":"lte","value":0,"match":true},
+ {"name":"lte_superior","actual":1,"op":"lte","value":0,"match":false},
+ {"name":"in","actual":"ES","op":"in","value":["FR","ES"],"match":true},
+ {"name":"in_ausente","actual":"PT","op":"in","value":["FR","ES"],"match":false},
+ {"name":"contains","actual":"ventas norte","op":"contains","value":"norte","match":true},
+ {"name":"contains_ausente","actual":"ventas norte","op":"contains","value":"sur","match":false},
+ {"name":"false_observado","actual":false,"op":"eq","value":false,"match":true}
+]
