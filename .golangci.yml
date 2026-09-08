@@ -26,8 +26,12 @@ linters:
       rules:
         domain:
           list-mode: strict
-          files: ["**/internal/domain/**"]
+          files: ["**/internal/domain/**", "!$test"]
           allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain"]
+        domain-tests:
+          list-mode: strict
+          files: ["**/internal/domain/**/*_test.go"]
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/google/go-cmp/cmp"]
         uem:
           list-mode: strict
           files: ["**/internal/uem/**"]
