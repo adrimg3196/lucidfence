@@ -39,7 +39,7 @@ func validateValue(value any, op Op) error {
 			return errors.New("'value' de in debe ser una lista")
 		}
 	case OpContains:
-		if _, ok := value.(string); !ok {
+		if _, ok := scalarFamily(value).(string); !ok {
 			return errors.New("'value' de contains debe ser texto")
 		}
 	case OpGt, OpGte, OpLt, OpLte:

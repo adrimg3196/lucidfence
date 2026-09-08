@@ -40,8 +40,8 @@ func compare(a any, op Op, b any) bool {
 			}
 		}
 	case OpContains:
-		text, ok := a.(string)
-		needle, valid := b.(string)
+		text, ok := scalarFamily(a).(string)
+		needle, valid := scalarFamily(b).(string)
 		return ok && valid && strings.Contains(text, needle)
 	}
 	return false
