@@ -137,6 +137,11 @@ func sigShiftMatch(d device.Device, ctx Context) Signal {
 	if expected == "" {
 		return Signal{"shift_known": false}
 	}
+	// Turno conocido no implica ubicación conocida. Solo outside observado
+	// permite afirmar incumplimiento sin una geocerca identificada.
+	if d.FenceState == device.Unknown || (d.InsideFence == "" && d.FenceState != device.Outside) {
+		return Signal{"shift_known": true}
+	}
 	return Signal{"shift_known": true, "shift_match": d.InsideFence == expected}
 }
 
