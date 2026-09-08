@@ -84,6 +84,16 @@ type Posture struct {
 	Site               string            `json:"site,omitempty"`
 }
 
+// Integrity conserva evidencia de ubicación; no descarta reports ni ejecuta acciones.
+// Métricas nil indican falta de evidencia. Checks nil significa sin evaluar;
+// una evaluación sin anomalías devuelve una lista vacía.
+type Integrity struct {
+	Suspicious bool     `json:"suspicious"`
+	Checks     []string `json:"checks"`
+	SpeedKMH   *float64 `json:"speed_kmh,omitempty"`
+	DistanceKM *float64 `json:"distance_km,omitempty"`
+}
+
 // Verdict es el veredicto de riesgo explicable. Score nil = sin evaluar o
 // evaluación fallida (nunca 0 por defecto).
 type Verdict struct {
@@ -98,26 +108,27 @@ type Verdict struct {
 
 // Device es el dispositivo normalizado.
 type Device struct {
-	ID              string            `json:"id"`
-	Name            string            `json:"name"`
-	Platform        string            `json:"platform"`
-	Status          string            `json:"status,omitempty"`
-	Compliant       *bool             `json:"compliant"`
-	Provider        string            `json:"provider"`
-	ProviderRefs    map[string]string `json:"provider_refs,omitempty"`
-	Location        Location          `json:"location"`
-	Network         Network           `json:"network"`
-	Inventory       Inventory         `json:"inventory"`
-	Posture         Posture           `json:"posture"`
-	FenceState      FenceState        `json:"fence_state"`
-	InsideFence     string            `json:"inside_fence"`
-	LastInsideFence string            `json:"last_inside_fence"`
-	RouteID         string            `json:"route_id,omitempty"`
-	RouteState      RouteState        `json:"route_state"`
-	RouteDeviationM *float64          `json:"route_deviation_m,omitempty"`
-	Risk            Verdict           `json:"risk"`
-	EvaluationError string            `json:"evaluation_error,omitempty"`
-	LastReportAt    time.Time         `json:"last_report_at"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Platform          string            `json:"platform"`
+	Status            string            `json:"status,omitempty"`
+	Compliant         *bool             `json:"compliant"`
+	Provider          string            `json:"provider"`
+	ProviderRefs      map[string]string `json:"provider_refs,omitempty"`
+	Location          Location          `json:"location"`
+	Network           Network           `json:"network"`
+	Inventory         Inventory         `json:"inventory"`
+	Posture           Posture           `json:"posture"`
+	FenceState        FenceState        `json:"fence_state"`
+	InsideFence       string            `json:"inside_fence"`
+	LastInsideFence   string            `json:"last_inside_fence"`
+	RouteID           string            `json:"route_id,omitempty"`
+	RouteState        RouteState        `json:"route_state"`
+	RouteDeviationM   *float64          `json:"route_deviation_m,omitempty"`
+	Risk              Verdict           `json:"risk"`
+	LocationIntegrity Integrity         `json:"location_integrity"`
+	EvaluationError   string            `json:"evaluation_error,omitempty"`
+	LastReportAt      time.Time         `json:"last_report_at"`
 }
 
 // TrailPoint es una posición histórica.

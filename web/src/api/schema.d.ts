@@ -1131,6 +1131,13 @@ export interface components {
             country?: string;
             site?: string;
         };
+        /** @description Evidencia de ubicación, sin enforcement. Métricas omitidas si faltan datos; checks null significa sin evaluar, [] evaluación sin anomalías. */
+        Integrity: {
+            suspicious: boolean;
+            checks: string[] | null;
+            speed_kmh?: number;
+            distance_km?: number;
+        };
         Verdict: {
             score: number | null;
             severity: string;
@@ -1175,6 +1182,8 @@ export interface components {
             route_state: "on_route" | "off_route" | "unassigned";
             route_deviation_m?: number;
             risk: components["schemas"]["Verdict"];
+            /** @description Siempre emitido por D01b; opcional para admitir respuestas M1. */
+            location_integrity?: components["schemas"]["Integrity"];
             evaluation_error?: string;
             /** Format: date-time */
             last_report_at: string;
