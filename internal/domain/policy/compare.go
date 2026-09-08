@@ -2,7 +2,11 @@
 // No ejecuta acciones, consulta el reloj ni hace I/O.
 package policy
 
-import "strings"
+import (
+	"encoding/json"
+	"reflect"
+	"strings"
+)
 
 // Op identifica un comparador explícito.
 type Op string
@@ -43,7 +47,23 @@ func compare(a any, op Op, b any) bool {
 	return false
 }
 
+// scalarFamily elimina nombres Go de bool/texto sin convertir números en texto.
+func scalarFamily(v any) any {
+	if _, ok := v.(json.Number); ok {
+		return v
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.String:
+		return rv.String()
+	case reflect.Bool:
+		return rv.Bool()
+	}
+	return v
+}
+
 func equality(a, b any) (bool, bool) {
+	a, b = scalarFamily(a), scalarFamily(b)
 	switch v := a.(type) {
 	case bool:
 		w, ok := b.(bool)
