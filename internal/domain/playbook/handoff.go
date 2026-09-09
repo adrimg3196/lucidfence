@@ -3,6 +3,8 @@
 package playbook
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -50,10 +52,20 @@ func RequiresHandoff(a action.Action) bool {
 
 // HandoffID es determinista por dispositivo, playbook y acción, y no depende
 // del orden de la lista: mientras el handoff siga pendiente, el mismo ciclo no
-// crea un segundo. El id viaja en /api/v1/handoffs/{id}/approve, así que cada
-// parte se normaliza a slug.
+// crea un segundo. El id viaja en /api/v1/handoffs/{id}/approve y es la clave
+// con la que Upsert guarda la petición, así que tiene que distinguir el triple
+// sin ambigüedad. La parte legible se normaliza a slug para la URL; la
+// identidad la lleva el sello: doce hex de un SHA-256 del triple crudo con las
+// longitudes por delante, de modo que ni el guion que separa los tramos (el id
+// del playbook es un slug con guiones) ni lo que slug() colapsa (mayúsculas y
+// puntuación del id del dispositivo, que no tiene formato obligado) pueden
+// hacer que dos triples distintos compartan id. Mismo sello determinista que
+// el CommandID de internal/uem/simulation.
 func HandoffID(deviceID, playbookID string, a action.Action) string {
-	return "ho-" + slug(deviceID) + "-" + slug(playbookID) + "-" + slug(string(a))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%d:%s|%d:%s|%d:%s",
+		len(deviceID), deviceID, len(playbookID), playbookID, len(a), string(a)))
+	legible := slug(deviceID) + "-" + slug(playbookID) + "-" + slug(string(a))
+	return "ho-" + legible + "-" + hex.EncodeToString(sum[:6])
 }
 
 // slug deja minúsculas, dígitos y guiones; cualquier otra runa se convierte en
@@ -146,7 +158,11 @@ func statusesHint() string {
 }
 
 // Upsert reemplaza por id sin duplicar, conserva el orden y devuelve una lista
-// nueva: la recibida no se muta.
+// nueva: la recibida no se muta. La clave es el id, y basta, porque HandoffID
+// es inyectivo sobre (dispositivo, playbook, acción), exactamente la tupla con
+// la que FindPending decide si el gate sigue abierto: dos peticiones distintas
+// nunca comparten id y por tanto nunca se pisan. Lo fija
+// TestUpsertNoPisaElHandoffDeOtroDispositivo.
 func Upsert(hs []Handoff, h Handoff) []Handoff {
 	out := make([]Handoff, 0, len(hs)+1)
 	sustituido := false

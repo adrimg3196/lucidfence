@@ -89,23 +89,70 @@ func TestRequiresHandoffEsElEspejoDeDestructive(t *testing.T) {
 
 func TestHandoffIDEsDeterministaYSeguroEnURL(t *testing.T) {
 	id := HandoffID("dev-1", "soar-noncompliant-outside", action.Lock)
-	if id != "ho-dev-1-soar-noncompliant-outside-lock" {
-		t.Fatalf("HandoffID = %q, quiero el formato ho-<device>-<playbook>-<action>", id)
+	const prefijo = "ho-dev-1-soar-noncompliant-outside-lock-"
+	if !strings.HasPrefix(id, prefijo) {
+		t.Fatalf("HandoffID = %q, quiero el prefijo legible %q", id, prefijo)
+	}
+	if len(id) != len(prefijo)+12 {
+		t.Fatalf("HandoffID = %q, quiero el prefijo legible más los doce hex del sello", id)
 	}
 	if HandoffID("dev-1", "soar-noncompliant-outside", action.Lock) != id {
 		t.Fatal("HandoffID debe ser determinista")
 	}
-	distintos := map[string]bool{
-		id: true,
-		HandoffID("dev-2", "soar-noncompliant-outside", action.Lock): true,
-		HandoffID("dev-1", "soar-locate-unknown", action.Lock):       true,
-		HandoffID("dev-1", "soar-noncompliant-outside", action.Wipe): true,
+	for _, r := range id {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			t.Fatalf("el id viaja en la URL: %q lleva la runa %q", id, r)
+		}
 	}
-	if len(distintos) != 4 {
-		t.Fatalf("el id debe distinguir dispositivo, playbook y acción: %#v", distintos)
+	if got := HandoffID("Tablet Almacén/07", "soar-locate-unknown", action.Wipe); !strings.HasPrefix(got, "ho-tablet-almac-n-07-soar-locate-unknown-wipe-") {
+		t.Fatalf("la parte legible se normaliza a slug: %q", got)
 	}
-	if got := HandoffID("Tablet Almacén/07", "soar-locate-unknown", action.Wipe); got != "ho-tablet-almac-n-07-soar-locate-unknown-wipe" {
-		t.Fatalf("el id viaja en la URL: %q debe normalizarse a slug", got)
+}
+
+// TestHandoffIDDistingueTriplesQueElSlugConfunde fija la corrección de M2-R18.
+// El id es la clave con la que Upsert guarda la petición y con la que
+// /api/v1/handoffs/{id}/approve resuelve sobre qué dispositivo se ejecuta un
+// wipe, así que dos triples distintos no pueden compartirlo. Los cuatro pares
+// son los que la unión con guiones colapsaba: el guion que separa los tramos
+// también aparece dentro de ellos (el id del playbook es un slug con guiones
+// por fence.IDPattern) y slug() borra mayúsculas y puntuación del id del
+// dispositivo, que no tiene formato obligado.
+func TestHandoffIDDistingueTriplesQueElSlugConfunde(t *testing.T) {
+	pares := [][2][3]string{
+		{{"a", "b-c", "wipe"}, {"a-b", "c", "wipe"}},
+		{{"dev-1", "soar-noncompliant-outside", "lock"}, {"dev", "1-soar-noncompliant-outside", "lock"}},
+		{{"intune:9f2", "soar-locate-unknown", "wipe"}, {"intune-9f2", "soar-locate-unknown", "wipe"}},
+		{{"dev_1", "soar-locate-unknown", "lock"}, {"DEV-1", "soar-locate-unknown", "lock"}},
+	}
+	for _, par := range pares {
+		izq := HandoffID(par[0][0], par[0][1], action.Action(par[0][2]))
+		der := HandoffID(par[1][0], par[1][1], action.Action(par[1][2]))
+		if izq == der {
+			t.Errorf("%v y %v comparten id %q", par[0], par[1], izq)
+		}
+	}
+}
+
+// TestUpsertNoPisaElHandoffDeOtroDispositivo es la consecuencia sobre la
+// bandeja: con el id anterior, la petición de "a-b" sustituía a la de "a" y el
+// SOC dejaba de ver un wipe pendiente que nadie había contestado.
+func TestUpsertNoPisaElHandoffDeOtroDispositivo(t *testing.T) {
+	uno := handoffPendiente()
+	uno.DeviceID, uno.PlaybookID, uno.Action = "a", "b-c", action.Wipe
+	uno.ID = HandoffID(uno.DeviceID, uno.PlaybookID, uno.Action)
+	otro := handoffPendiente()
+	otro.DeviceID, otro.PlaybookID, otro.Action = "a-b", "c", action.Wipe
+	otro.ID = HandoffID(otro.DeviceID, otro.PlaybookID, otro.Action)
+
+	out := Upsert(Upsert(nil, uno), otro)
+	if len(out) != 2 {
+		t.Fatalf("dos peticiones de dispositivos distintos son dos entradas: %#v", out)
+	}
+	if _, ok := FindPending(out, "a", "b-c", action.Wipe); !ok {
+		t.Error("la petición del dispositivo a sigue pendiente en la bandeja")
+	}
+	if _, ok := FindPending(out, "a-b", "c", action.Wipe); !ok {
+		t.Error("la petición del dispositivo a-b sigue pendiente en la bandeja")
 	}
 }
 
