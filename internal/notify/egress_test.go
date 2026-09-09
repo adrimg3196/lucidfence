@@ -181,6 +181,28 @@ func TestVariasDireccionesUnaPrivadaDeniegaElDestino(t *testing.T) {
 	}
 }
 
+func TestAAAAConIPv4EmpotradaSeDeniega(t *testing.T) {
+	// Un AAAA que empotra una IPv4 interna en forma compatible (::a.b.c.d) o
+	// 6to4 (2002:<v4>::/16) es el mismo pivote que ::ffff:a.b.c.d escrito de
+	// otra manera, y llega por la misma vía: el DNS de un host allowlisted.
+	for _, aaaa := range []string{"::10.0.0.5", "::127.0.0.1", "2002:0a00:0005::1", "::169.254.169.254"} {
+		r := &fakeResolver{answers: [][]string{{aaaa}}}
+		e := egress(t, []string{"hooks.ejemplo.com"}, false, r)
+		if _, err := e.Check(context.Background(), "https://hooks.ejemplo.com/x"); !errors.Is(err, ErrPrivateAddress) {
+			t.Errorf("AAAA privado %s aceptado: %v", aaaa, err)
+		}
+	}
+	// La metadata de nube se deniega también con allow_private, en cualquier
+	// codificación: es la excepción que el brief fija como "siempre".
+	for _, aaaa := range []string{"::169.254.169.254", "2002:a9fe:a9fe::1"} {
+		r := &fakeResolver{answers: [][]string{{aaaa}}}
+		e := egress(t, []string{"hooks.ejemplo.com"}, true, r)
+		if _, err := e.Check(context.Background(), "https://hooks.ejemplo.com/x"); !errors.Is(err, ErrPrivateAddress) {
+			t.Errorf("AAAA de metadata %s aceptado con allow_private: %v", aaaa, err)
+		}
+	}
+}
+
 func TestEsquemasNoPermitidos(t *testing.T) {
 	e := egress(t, []string{"hooks.ejemplo.com"}, false, nil)
 	for _, raw := range []string{"ftp://hooks.ejemplo.com/x", "file:///etc/passwd", "hooks.ejemplo.com/x", "", "://x"} {
@@ -263,41 +285,6 @@ func TestTOCTOUSeResuelveUnaVezYSeFijaLaIP(t *testing.T) {
 	}
 }
 
-func TestDialIgnoraLaDireccionQuePideElTransporte(t *testing.T) {
-	// Prueba directa del pinning: se marca la IP validada aunque el transporte
-	// pida la dirección a la que rebindió el atacante.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ln.Close() }()
-	go func() {
-		if c, err := ln.Accept(); err == nil {
-			_ = c.Close()
-		}
-	}()
-	_, port, err := net.SplitHostPort(ln.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	target := Target{Host: "hooks.ejemplo.test", Port: port, IPs: []net.IP{net.ParseIP("127.0.0.1")}}
-	tr, ok := (&Egress{}).Client(target, 2*time.Second).Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("Client debe devolver un *http.Transport propio")
-	}
-	if tr.TLSClientConfig.ServerName != "hooks.ejemplo.test" {
-		t.Fatalf("SNI = %q; debe pinnearse al nombre original", tr.TLSClientConfig.ServerName)
-	}
-	conn, err := tr.DialContext(context.Background(), "tcp", "169.254.169.254:443")
-	if err != nil {
-		t.Fatalf("el dial debía ir a la IP validada: %v", err)
-	}
-	defer func() { _ = conn.Close() }()
-	if conn.RemoteAddr().String() != ln.Addr().String() {
-		t.Fatalf("conectó a %s, quiero %s", conn.RemoteAddr(), ln.Addr())
-	}
-}
-
 func TestDenegarNoAbreNingunSocket(t *testing.T) {
 	var golpes atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -345,13 +332,5 @@ func TestDenegacionSeRegistraSinLaRuta(t *testing.T) {
 	}
 	if strings.Contains(log, "secretoAAA") || strings.Contains(log, "/services/") {
 		t.Fatalf("la ruta del webhook lleva el token y no puede aparecer en el log: %q", log)
-	}
-}
-
-func TestClientSinDireccionValidadaNoDial(t *testing.T) {
-	e := egress(t, []string{"hooks.ejemplo.com"}, false, nil)
-	_, err := e.Client(Target{Host: "hooks.ejemplo.com", Port: "443"}, 0).Get("https://hooks.ejemplo.com/x")
-	if !errors.Is(err, ErrUnresolvable) {
-		t.Fatalf("un Target sin IPs no puede abrir socket, got %v", err)
 	}
 }

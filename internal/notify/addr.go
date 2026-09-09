@@ -71,34 +71,81 @@ func usable(ip net.IP) (net.IP, bool) {
 	return ip, true
 }
 
+// embeddedV4 devuelve la IPv4 que una dirección IPv6 lleva dentro en las dos
+// codificaciones que net.IP.To4 NO reconoce: la compatible ::a.b.c.d (RFC 4291)
+// y 6to4 2002:<v4>::/16 (RFC 3056). Sin esto, ::169.254.169.254 y
+// 2002:a9fe:a9fe::1 son la misma metadata de instancia escrita de otra manera y
+// se clasifican como públicas: el mismo bypass por codificación que parseIPAny
+// cierra en IPv4, mudado a IPv6. Se juzga lo empotrado en vez de denegar ::/96 y
+// 2002::/16 enteros porque el bloque dejaría ::1 fuera del alcance de
+// allow_private (el SIEM on-prem) y denegaría un 6to4 legítimo de una IPv4
+// pública. Devuelve nil cuando no hay IPv4 empotrada; :: y ::1 son direcciones
+// por derecho propio, no un envoltorio.
+func embeddedV4(ip net.IP) net.IP {
+	if len(ip) != net.IPv6len || ip.To4() != nil || ip.IsUnspecified() || ip.IsLoopback() {
+		return nil
+	}
+	if ip[0] == 0x20 && ip[1] == 0x02 { // 6to4: la IPv4 va en los 32 bits siguientes
+		return net.IPv4(ip[2], ip[3], ip[4], ip[5]).To4()
+	}
+	for _, b := range ip[:12] { // compatible: 96 bits a cero y la IPv4 al final
+		if b != 0 {
+			return nil
+		}
+	}
+	return net.IPv4(ip[12], ip[13], ip[14], ip[15]).To4()
+}
+
 // alwaysBlocked marca los destinos que no salen nunca, ni siquiera con
 // allow_private: no hay ahí un servicio del operador, solo el pivote hacia las
-// credenciales de instancia.
+// credenciales de instancia. Juzga también la IPv4 empotrada, para que
+// ::169.254.169.254 y 2002:a9fe:a9fe::1 pesen lo mismo que 169.254.169.254.
 func alwaysBlocked(ip net.IP) bool {
 	norm, ok := usable(ip)
 	if !ok {
 		return true
 	}
-	return inAny(blockedNets, norm)
+	if inAny(blockedNets, norm) {
+		return true
+	}
+	if v4 := embeddedV4(norm); v4 != nil {
+		return inAny(blockedNets, v4)
+	}
+	return false
 }
 
 // IsPrivate dice si la dirección pertenece a la red interna, al bucle local o a
 // un rango reservado: destinos que una entrega saliente no debe alcanzar salvo
 // que el operador active allow_private. Cubre RFC1918, loopback, link-local (y
 // con ella la metadata de nube 169.254.169.254), ULA fc00::/7, la dirección sin
-// especificar, multicast y las IPv4 mapeadas en IPv6. Una dirección ausente o
-// de longitud imposible cuenta como privada: el defecto seguro es no salir.
+// especificar, multicast y las IPv4 empotradas en IPv6 en sus tres formas:
+// mapeada (::ffff:a.b.c.d), compatible (::a.b.c.d) y 6to4 (2002:<v4>::/16). Una
+// dirección ausente o de longitud imposible cuenta como privada: el defecto
+// seguro es no salir.
 func IsPrivate(ip net.IP) bool {
 	norm, ok := usable(ip)
 	if !ok {
 		return true
 	}
-	if norm.IsUnspecified() || norm.IsLoopback() || norm.IsPrivate() ||
-		norm.IsLinkLocalUnicast() || norm.IsLinkLocalMulticast() ||
-		norm.IsInterfaceLocalMulticast() || norm.IsMulticast() {
+	if privateAddr(norm) {
 		return true
 	}
-	return inAny(reservedNets, norm) || inAny(blockedNets, norm)
+	if v4 := embeddedV4(norm); v4 != nil {
+		return privateAddr(v4)
+	}
+	return false
+}
+
+// privateAddr juzga una dirección ya normalizada sin mirar lo que pueda llevar
+// empotrado. Está separado de IsPrivate para poder aplicarlo dos veces: a la
+// dirección y a la IPv4 que envuelve.
+func privateAddr(ip net.IP) bool {
+	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsPrivate() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
+		return true
+	}
+	return inAny(reservedNets, ip) || inAny(blockedNets, ip)
 }
 
 // errBadHost es el motivo interno; Check lo envuelve en ErrHostNotAllowed.

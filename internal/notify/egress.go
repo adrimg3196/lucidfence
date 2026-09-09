@@ -188,28 +188,43 @@ func (e *Egress) checkAddresses(host string, ips []net.IP, scheme string) error 
 }
 
 // Client devuelve el http.Client con el que se entrega a este destino y solo a
-// este: DialContext ignora la dirección que pida el transporte y marca la IP ya
-// validada, mientras Host y SNI siguen siendo el nombre original, así que el
-// certificado se valida contra el nombre y la conexión no puede desviarse
-// aunque el DNS cambie entre Check y la entrega. Sin proxy (HTTP_PROXY saltaría
-// el pinning) y sin seguir redirecciones (un 30x apuntaría fuera del destino
-// validado).
+// este: DialContext ignora la dirección que pida el transporte y recorre, en
+// orden, las direcciones que Check ya validó, mientras Host y SNI siguen siendo
+// el nombre original, así que el certificado se valida contra el nombre y la
+// conexión no puede desviarse aunque el DNS cambie entre Check y la entrega. La
+// lista se congela aquí: Client no vuelve a mirar el DNS. Recorrerla en vez de
+// fijar la primera no amplía en una dirección el conjunto alcanzable (todas
+// salieron de checkAddresses) y evita que un destino dual-stack se quede sin
+// salida cuando la primera no encamina: aquí no hay Happy Eyeballs ni
+// re-resolución, y T11 reutiliza este mismo cliente en los tres intentos. Sin
+// proxy (HTTP_PROXY saltaría el pinning) y sin seguir redirecciones (un 30x
+// apuntaría fuera del destino validado).
 func (e *Egress) Client(t Target, timeout time.Duration) *http.Client {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	pinned := ""
-	if len(t.IPs) > 0 {
-		pinned = net.JoinHostPort(t.IPs[0].String(), t.Port)
+	pinned := make([]string, 0, len(t.IPs))
+	for _, ip := range t.IPs {
+		pinned = append(pinned, net.JoinHostPort(ip.String(), t.Port))
 	}
 	tr := &http.Transport{
 		Proxy: nil,
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			if pinned == "" {
+			if len(pinned) == 0 {
 				return nil, fmt.Errorf("%w: destino sin dirección validada", ErrUnresolvable)
 			}
 			d := net.Dialer{Timeout: timeout}
-			return d.DialContext(ctx, network, pinned)
+			var err error
+			for _, addr := range pinned {
+				var conn net.Conn
+				if conn, err = d.DialContext(ctx, network, addr); err == nil {
+					return conn, nil
+				}
+				if ctx.Err() != nil {
+					break // el contexto cancelado corta el recorrido, no lo agota
+				}
+			}
+			return nil, err
 		},
 		TLSClientConfig:     &tls.Config{ServerName: t.Host, MinVersion: tls.VersionTLS12},
 		TLSHandshakeTimeout: timeout,
