@@ -24,3 +24,5 @@ internal/web/dist/*
 # sistema
 .DS_Store
 /.superpowers/
+# worktrees de agentes (Hermes)
+/.worktrees/
