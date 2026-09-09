@@ -9,10 +9,14 @@
 /web/package-lock.json        @adrimg3196
 /internal/arch/               @adrimg3196
 /internal/battery/            @adrimg3196
-# Guardarraíles del motor (spec §5.4 y §9.2): guardrails.go decide y
-# guardrails_cooldown.go guarda la memoria del cooldown. El patrón cubre
-# ambos y sus tests; ningún otro fichero puede fijar dry_run ni abrir la
-# doble llave de wipe.
+# Guardarraíles del motor (spec §5.4 y §9.2). Tres ficheros y sus tests:
+# guardrails.go decide (observe/enforce, live_actions y la doble llave de
+# wipe), guardrails_cooldown.go guarda la memoria del cooldown y
+# guardrails_apply.go aplica el orden completo de §5.4 (dedupe por ciclo,
+# enrutado de bloqueo y supresión, y el sello del dry_run del resultado
+# auditado: lo que devuelva el conector se sobrescribe ahí). Ningún fichero
+# fuera de este patrón decide si una orden sale en vivo; internal/arch lo
+# comprueba en TestSoloLosGuardarrailesFijanDryRun.
 /internal/engine/guardrails*  @adrimg3196
 /scripts/                     @adrimg3196
 /scripts/coverage.sh          @adrimg3196
