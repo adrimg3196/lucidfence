@@ -43,7 +43,11 @@ linters:
         leaf-services:
           list-mode: strict
           files: ["**/internal/notify/**", "**/internal/posture/**", "**/internal/reports/**"]
-          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store"]
+          # go-cmp entra para los ficheros dorados de los tests (OCSF en
+          # internal/notify). No hace falta una regla aparte tipo domain-tests:
+          # TestProductionDoesNotImportGoCmp (internal/arch) ya prohíbe el
+          # import fuera de _test.go en todo cmd/ e internal/.
+          allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store", "github.com/google/go-cmp"]
           deny:
             - pkg: "github.com/adrimg3196/lucidfence/internal/engine"
               desc: "notify, posture y reports son hojas: las llama el motor, nunca al revés (spec §5.2)"

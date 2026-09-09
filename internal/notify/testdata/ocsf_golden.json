@@ -1,0 +1,136 @@
+{
+  "incidente_abierto": {
+    "activity_id": 1,
+    "activity_name": "Create",
+    "category_uid": 2,
+    "category_name": "Findings",
+    "class_uid": 2004,
+    "class_name": "Detection Finding",
+    "type_uid": 200401,
+    "type_name": "Detection Finding: Create",
+    "severity_id": 4,
+    "severity": "High",
+    "status_id": 1,
+    "status": "New",
+    "time": 1787995800000,
+    "count": 3,
+    "message": "[HIGH] nuevo incidente: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+    "metadata": {"version": "1.3.0", "product": {"vendor_name": "LucidFence", "name": "LucidFence"}, "uid": "dlv-0001", "event_code": "incident.opened"},
+    "finding_info": {
+      "uid": "inc-geofence_exit-dev-7",
+      "title": "[HIGH] nuevo incidente: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+      "desc": "Valida la última ubicación conocida y ejecuta una acción UEM si procede.",
+      "types": ["geofence_exit"],
+      "first_seen_time": 1787994000000,
+      "last_seen_time": 1787995800000
+    },
+    "resources": [{"uid": "dev-7", "name": "Tablet almacén", "type": "device"}],
+    "unmapped": {
+      "assignee": "ana.soto",
+      "event": "incident.opened",
+      "fence_id": "hq",
+      "incident_status": "open",
+      "risk_score": 82.5,
+      "type": "geofence_exit"
+    }
+  },
+  "handoff_pendiente": {
+    "activity_id": 2,
+    "activity_name": "Update",
+    "category_uid": 2,
+    "category_name": "Findings",
+    "class_uid": 2004,
+    "class_name": "Detection Finding",
+    "type_uid": 200402,
+    "type_name": "Detection Finding: Update",
+    "severity_id": 5,
+    "severity": "Critical",
+    "status_id": 2,
+    "status": "In Progress",
+    "time": 1787995860000,
+    "message": "[CRITICAL] aprobación pendiente: Cuarentena de dispositivo en riesgo requiere lock (Tablet almacén)",
+    "metadata": {"version": "1.3.0", "product": {"vendor_name": "LucidFence", "name": "LucidFence"}, "uid": "dlv-0002", "event_code": "handoff.pending"},
+    "finding_info": {
+      "uid": "ho-dev-7-pb-cuarentena-lock",
+      "title": "[CRITICAL] aprobación pendiente: Cuarentena de dispositivo en riesgo requiere lock (Tablet almacén)",
+      "types": ["handoff.pending"]
+    },
+    "resources": [{"uid": "dev-7", "name": "Tablet almacén", "type": "device"}],
+    "unmapped": {
+      "action": "lock",
+      "event": "handoff.pending",
+      "handoff_status": "pending",
+      "playbook_id": "pb-cuarentena",
+      "reason": "risk_score gte 80; fence_state eq outside"
+    }
+  },
+  "incidente_cerrado": {
+    "activity_id": 3,
+    "activity_name": "Close",
+    "category_uid": 2,
+    "category_name": "Findings",
+    "class_uid": 2004,
+    "class_name": "Detection Finding",
+    "type_uid": 200403,
+    "type_name": "Detection Finding: Close",
+    "severity_id": 4,
+    "severity": "High",
+    "status_id": 4,
+    "status": "Resolved",
+    "time": 1787998500000,
+    "count": 4,
+    "message": "[HIGH] incidente resuelto: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+    "metadata": {"version": "1.3.0", "product": {"vendor_name": "LucidFence", "name": "LucidFence"}, "uid": "dlv-0003", "event_code": "incident.closed"},
+    "finding_info": {
+      "uid": "inc-geofence_exit-dev-7",
+      "title": "[HIGH] incidente resuelto: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+      "desc": "Valida la última ubicación conocida y ejecuta una acción UEM si procede.",
+      "types": ["geofence_exit"],
+      "first_seen_time": 1787994000000,
+      "last_seen_time": 1787998500000
+    },
+    "resources": [{"uid": "dev-7", "name": "Tablet almacén", "type": "device"}],
+    "unmapped": {
+      "assignee": "ana.soto",
+      "event": "incident.closed",
+      "fence_id": "hq",
+      "incident_status": "closed",
+      "risk_score": 82.5,
+      "type": "geofence_exit"
+    }
+  },
+  "transicion_desconocida": {
+    "activity_id": 99,
+    "activity_name": "incident.reopened",
+    "category_uid": 2,
+    "category_name": "Findings",
+    "class_uid": 2004,
+    "class_name": "Detection Finding",
+    "type_uid": 200499,
+    "type_name": "Detection Finding: incident.reopened",
+    "severity_id": 4,
+    "severity": "High",
+    "status_id": 0,
+    "status": "Unknown",
+    "time": 1787998800000,
+    "count": 3,
+    "message": "[HIGH] incident.reopened: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+    "metadata": {"version": "1.3.0", "product": {"vendor_name": "LucidFence", "name": "LucidFence"}, "uid": "dlv-0004", "event_code": "incident.reopened"},
+    "finding_info": {
+      "uid": "inc-geofence_exit-dev-7",
+      "title": "[HIGH] incident.reopened: Tablet almacén está fuera de la geocerca Almacén central (Tablet almacén)",
+      "desc": "Valida la última ubicación conocida y ejecuta una acción UEM si procede.",
+      "types": ["geofence_exit"],
+      "first_seen_time": 1787994000000,
+      "last_seen_time": 1787995800000
+    },
+    "resources": [{"uid": "dev-7", "name": "Tablet almacén", "type": "device"}],
+    "unmapped": {
+      "assignee": "ana.soto",
+      "event": "incident.reopened",
+      "fence_id": "hq",
+      "risk_score": 82.5,
+      "type": "geofence_exit"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "vectors": [
+    {
+      "nombre": "sobre nativo de un incidente",
+      "secret": "s3cr3t",
+      "body": "{\"event\":\"incident.opened\",\"incident\":{\"id\":\"inc-42\"}}",
+      "signature": "sha256=867b41281d70bdd782b4ba03661168c7d3eb3847ac4c08e5808f9a57e5a430ee"
+    },
+    {
+      "nombre": "cuerpo vacio",
+      "secret": "s3cr3t",
+      "body": "",
+      "signature": "sha256=3c81cc9496e1c25250f6ccb85f697c1bb623e3480d6538ad8cb6a6648142777d"
+    },
+    {
+      "nombre": "cuerpo con acentos UTF-8",
+      "secret": "s3cr3t",
+      "body": "{\"device_name\":\"Tablet almacén\",\"event\":\"incident.opened\"}",
+      "signature": "sha256=719b05a553624983984f9570b33cfecf0288b21ae7c15003c43e62f994c59ae7"
+    },
+    {
+      "nombre": "secreto vacio",
+      "secret": "",
+      "body": "{\"event\":\"incident.opened\"}",
+      "signature": "sha256=50bee564b4683ba5f133e32c9d683eae3b72fb5b88b73e18b5428190fb6a20db"
+    },
+    {
+      "nombre": "secreto con acentos UTF-8",
+      "secret": "contraseña-ñ",
+      "body": "{\"event\":\"alert.fired\"}",
+      "signature": "sha256=2b21123c61e3d880e7e146064327a46a16f90de3ceb964fc2102c66dbba0d5c7"
+    },
+    {
+      "nombre": "cuerpo OCSF desnudo",
+      "secret": "s3cr3t",
+      "body": "{\"class_uid\":2004,\"type_uid\":200401}",
+      "signature": "sha256=6a96e5c20bf81c9f31e074d1cfad447ebba43c18095d1754ef3c496a11205e94"
+    }
+  ]
+}
