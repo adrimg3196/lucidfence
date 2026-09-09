@@ -969,6 +969,29 @@ components:
           type: string
           format: date-time
       required: [ok, devices, latency_ms]
+    EnforcementSettings:
+      type: object
+      description: >-
+        Guardarraíles vigentes del motor (spec §5.4). live_actions nula
+        significa "todas las acciones salen en vivo"; una lista vacía deja
+        todo en dry-run.
+      properties:
+        mode:
+          type: string
+          enum: [observe, enforce]
+        live_actions:
+          type: [array, "null"]
+          items:
+            type: string
+        allow_wipe:
+          type: boolean
+        wipe_allowlist:
+          type: [array, "null"]
+          items:
+            type: string
+        action_cooldown_seconds:
+          type: integer
+      required: [mode, live_actions, allow_wipe, wipe_allowlist, action_cooldown_seconds]
     CycleStats:
       type: object
       properties:
@@ -993,6 +1016,10 @@ components:
           type: integer
         actions_executed:
           type: integer
+        actions_suppressed:
+          type: integer
+        actions_blocked:
+          type: integer
         evaluation_errors:
           type: integer
         persistence_errors:
@@ -1001,14 +1028,14 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderHealth"
-      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, evaluation_errors, persistence_errors, providers]
+      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, evaluation_errors, persistence_errors, providers]
     EngineStatus:
       type: object
       properties:
         mode:
           type: string
         enforcement:
-          type: string
+          $ref: "#/components/schemas/EnforcementSettings"
         interval_seconds:
           type: integer
         running:

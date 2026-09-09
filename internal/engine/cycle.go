@@ -149,10 +149,15 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 	planned := append(PlanTransition(*cur, tr, in.fences), e.planStanding(*cur, in.fences)...)
 	for _, p := range planned {
 		if e.alreadyFired(p) {
+			st.ActionsSuppressed++
+			e.opts.Logger.Debug("acción duplicada en el ciclo", "device", p.Device.ID,
+				"action", p.Action, "code", SuppressedDuplicate)
 			continue
 		}
 		st.ActionsPlanned++
-		results = append(results, e.execute(ctx, p))
+		if res, logged := e.apply(ctx, p, st); logged {
+			results = append(results, res)
+		}
 	}
 	return results
 }
@@ -161,6 +166,7 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 	start := time.Now()
 	now := e.opts.Now().UTC()
 	st := CycleStats{At: now, Mode: e.opts.Mode, Providers: map[string]ProviderHealth{}}
+	e.refreshGuardrails()
 	in, err := e.loadInput()
 	if err != nil {
 		return st, err
@@ -182,7 +188,6 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 	if saveErr != nil {
 		e.logPersistenceError(&st, "devices", "", saveErr)
 	}
-	st.ActionsExecuted = len(results)
 	for _, r := range results {
 		if err := e.org.AppendAction(r); err != nil {
 			e.logPersistenceError(&st, "action", r.DeviceID, err)

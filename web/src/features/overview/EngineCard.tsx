@@ -37,7 +37,7 @@ export function EngineCard() {
             <dd>{status.data.mode}</dd>
             <dt className="text-muted">{t("overview.engine.enforcement")}</dt>
             <dd>
-              <Badge variant="info">{status.data.enforcement}</Badge>
+              <Badge variant="info">{status.data.enforcement.mode}</Badge>
             </dd>
             <dt className="text-muted">{t("overview.engine.interval")}</dt>
             <dd>{Math.round(status.data.interval_seconds / 60)} min</dd>

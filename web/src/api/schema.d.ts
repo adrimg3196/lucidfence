@@ -1281,6 +1281,15 @@ export interface components {
             /** Format: date-time */
             last_ok?: string;
         };
+        /** @description Guardarraíles vigentes del motor (spec §5.4). live_actions nula significa "todas las acciones salen en vivo"; una lista vacía deja todo en dry-run. */
+        EnforcementSettings: {
+            /** @enum {string} */
+            mode: "observe" | "enforce";
+            live_actions: string[] | null;
+            allow_wipe: boolean;
+            wipe_allowlist: string[] | null;
+            action_cooldown_seconds: number;
+        };
         CycleStats: {
             /** Format: date-time */
             at: string;
@@ -1293,6 +1302,8 @@ export interface components {
             transitions: number;
             actions_planned: number;
             actions_executed: number;
+            actions_suppressed: number;
+            actions_blocked: number;
             evaluation_errors: number;
             persistence_errors: number;
             providers: {
@@ -1301,7 +1312,7 @@ export interface components {
         };
         EngineStatus: {
             mode: string;
-            enforcement: string;
+            enforcement: components["schemas"]["EnforcementSettings"];
             interval_seconds: number;
             running: boolean;
             cycles: number;

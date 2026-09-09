@@ -28,7 +28,7 @@ func (s *server) health(w http.ResponseWriter, _ *http.Request, _ *auth.Principa
 		engineView["last_error"] = st.LastError
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok", "version": version.Version, "mode": st.Mode, "enforcement": st.Enforcement, "web_built": s.d.WebBuilt,
+		"status": "ok", "version": version.Version, "mode": st.Mode, "enforcement": st.Enforcement.Mode, "web_built": s.d.WebBuilt,
 		"setup_required": !s.d.Auth.HasUsers(),
 		"engine":         engineView,
 		"persistence":    persistenceView(st),

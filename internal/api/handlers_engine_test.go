@@ -67,8 +67,12 @@ func TestEngineStatusEventosYAcciones(t *testing.T) {
 	e := newTestEnv(t)
 	e.setup("demo")
 	res, out := e.do("GET", "/api/v1/engine/status", nil, true)
-	if res.StatusCode != 200 || out["enforcement"] != "observe" || out["cycles"].(float64) != 0 {
+	enf, _ := out["enforcement"].(map[string]any)
+	if res.StatusCode != 200 || enf["mode"] != "observe" || out["cycles"].(float64) != 0 {
 		t.Fatalf("status: %d %v", res.StatusCode, out)
+	}
+	if enf["allow_wipe"] != false || enf["action_cooldown_seconds"].(float64) != 3600 {
+		t.Fatalf("el estado publica los guardarraíles completos, no solo el modo: %v", enf)
 	}
 	if res, _ := e.do("POST", "/api/v1/engine/run-once", nil, true); res.StatusCode != 200 {
 		t.Fatal("run-once")

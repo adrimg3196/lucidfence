@@ -13,7 +13,7 @@ import (
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
-	"github.com/adrimg3196/lucidfence/internal/domain/fence"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 	"github.com/adrimg3196/lucidfence/internal/uem/simulation"
@@ -123,7 +123,7 @@ func assertDemoSegundoCiclo(t *testing.T, e *Engine) {
 
 func assertDemoStatus(t *testing.T, e *Engine) {
 	t.Helper()
-	if e.Status().Cycles != 2 || e.Status().Enforcement != "observe" || e.Status().LastCycle == nil {
+	if e.Status().Cycles != 2 || e.Status().Enforcement.Mode != settings.ModeObserve || e.Status().LastCycle == nil {
 		t.Fatalf("status: %+v", e.Status())
 	}
 }
@@ -354,10 +354,10 @@ func TestPanicoPorDispositivoNoTumbaElCiclo(t *testing.T) {
 // proveedor no tiene conector registrado: la ejecución no puede llegar al
 // UEM real, así que el resultado es siempre dry-run con error.
 func TestExecuteSinConectorDevuelveResultadoDryRun(t *testing.T) {
-	e := &Engine{adapters: map[string]uem.Adapter{}, guard: Guardrails{Enforcement: EnforcementObserve}, opts: Options{Now: time.Now}}
-	p := Planned{Device: device.Device{ID: "d", Provider: "nope"}, Action: fence.Action{Action: action.Message}, FenceID: "f", Trigger: "on_enter"}
-	res := e.execute(context.Background(), p)
-	if res.OK || !res.DryRun || res.Error == "" {
-		t.Fatalf("sin conector debe ser OK=false, DryRun=true y con error: %+v", res)
+	e := &Engine{adapters: map[string]uem.Adapter{}, guard: guardWith(settings.Default().Enforcement, nil), opts: Options{Now: time.Now}}
+	p := Planned{Device: device.Device{ID: "d", Provider: "nope"}, Action: action.Message, FenceID: "f", Trigger: "on_enter"}
+	res := e.execute(context.Background(), p, false)
+	if res.OK || !res.DryRun || res.Error == "" || res.ErrorType != "no_adapter" {
+		t.Fatalf("sin conector debe ser OK=false, DryRun=true y con error tipado: %+v", res)
 	}
 }

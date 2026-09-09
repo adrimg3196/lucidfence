@@ -9,6 +9,10 @@
 /web/package-lock.json        @adrimg3196
 /internal/arch/               @adrimg3196
 /internal/battery/            @adrimg3196
+# Guardarraíles del motor (spec §5.4 y §9.2): guardrails.go decide y
+# guardrails_cooldown.go guarda la memoria del cooldown. El patrón cubre
+# ambos y sus tests; ningún otro fichero puede fijar dry_run ni abrir la
+# doble llave de wipe.
 /internal/engine/guardrails*  @adrimg3196
 /scripts/                     @adrimg3196
 /scripts/coverage.sh          @adrimg3196

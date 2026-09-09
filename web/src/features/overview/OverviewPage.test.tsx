@@ -13,7 +13,7 @@ const device = (id: string, fence_state: string, compliant: boolean | null) => (
 
 function mock(over: Partial<Record<"devices" | "engine" | "events", unknown>> = {}) {
   vi.mocked(hooks.useDevices).mockReturnValue({ data: { items: [device("a", "inside", true), device("b", "outside", false), device("c", "unknown", null)], total: 3 }, isPending: false, error: null, refetch: vi.fn(), ...(over.devices as object) } as never);
-  vi.mocked(hooks.useEngineStatus).mockReturnValue({ data: { mode: "simulation", enforcement: "observe", interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" } }, isPending: false, error: null, ...(over.engine as object) } as never);
+  vi.mocked(hooks.useEngineStatus).mockReturnValue({ data: { mode: "simulation", enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 }, interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" } }, isPending: false, error: null, ...(over.engine as object) } as never);
   vi.mocked(hooks.useEvents).mockReturnValue({ data: { items: [{ at: "2026-09-05T12:00:00Z", device_id: "a", device_name: "a", from: "none:unknown", to: "demo-hq:inside" }] }, isPending: false, error: null, ...(over.events as object) } as never);
   vi.mocked(hooks.useRunOnce).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:run"] } } as never);
@@ -56,7 +56,7 @@ test("un 409 de run-once se muestra como texto", () => {
 });
 
 test("last_error del motor se muestra como texto", () => {
-  mock({ engine: { data: { mode: "simulation", enforcement: "observe", interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" }, last_error: "proveedor simulation: tiempo agotado" } } });
+  mock({ engine: { data: { mode: "simulation", enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 }, interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" }, last_error: "proveedor simulation: tiempo agotado" } } });
   renderWithProviders(<OverviewPage />);
   expect(screen.getByText("proveedor simulation: tiempo agotado")).toBeInTheDocument();
 });

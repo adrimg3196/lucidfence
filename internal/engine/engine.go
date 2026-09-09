@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 )
@@ -47,6 +48,8 @@ type CycleStats struct {
 	Transitions       int                       `json:"transitions"`
 	ActionsPlanned    int                       `json:"actions_planned"`
 	ActionsExecuted   int                       `json:"actions_executed"`
+	ActionsSuppressed int                       `json:"actions_suppressed"`
+	ActionsBlocked    int                       `json:"actions_blocked"`
 	EvaluationErrors  int                       `json:"evaluation_errors"`
 	PersistenceErrors int                       `json:"persistence_errors"`
 	Providers         map[string]ProviderHealth `json:"providers"`
@@ -55,7 +58,7 @@ type CycleStats struct {
 // Status es lo que expone /api/v1/engine/status.
 type Status struct {
 	Mode            string                    `json:"mode"`
-	Enforcement     string                    `json:"enforcement"`
+	Enforcement     settings.Enforcement      `json:"enforcement"`
 	IntervalSeconds int                       `json:"interval_seconds"`
 	Running         bool                      `json:"running"`
 	Cycles          int                       `json:"cycles"`
@@ -93,7 +96,9 @@ type Engine struct {
 	evalHook func(*device.Device)
 }
 
-// New crea el motor. El enforcement nace en observe y M1 no ofrece forma de cambiarlo.
+// New crea el motor. El enforcement nace en los ajustes de fábrica (observe)
+// y cada ciclo lo recarga del store con refreshGuardrails; la memoria de
+// cooldown es el propio OrgStore.
 func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -104,8 +109,12 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	if opts.Interval <= 0 {
 		opts.Interval = 15 * time.Minute
 	}
-	e := &Engine{org: org, adapters: map[string]uem.Adapter{}, opts: opts, guard: Guardrails{Enforcement: EnforcementObserve},
+	e := &Engine{org: org, adapters: map[string]uem.Adapter{}, opts: opts,
+		guard:     Guardrails{Enforcement: settings.Default().Enforcement, Now: opts.Now},
 		providers: map[string]ProviderHealth{}, violations: map[string]int{}, fired: map[string]bool{}}
+	if org != nil {
+		e.guard.Cooldowns = org
+	}
 	for _, a := range adapters {
 		name := a.Name()
 		if _, dup := e.adapters[name]; dup {
@@ -118,8 +127,34 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	return e
 }
 
-// Guardrails expone la configuración de enforcement vigente.
-func (e *Engine) Guardrails() Guardrails { return e.guard }
+// Guardrails devuelve una copia de los guardarraíles vigentes. Toma el lock
+// porque el ciclo los sustituye mientras Status() los publica.
+func (e *Engine) Guardrails() Guardrails {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
+	return e.guard
+}
+
+// refreshGuardrails recarga el enforcement de settings.json al principio de
+// cada ciclo, para que un cambio hecho por la API surta efecto sin reiniciar.
+// Si los ajustes no se pueden leer, el motor cae a observe: la única postura
+// segura ante un fichero ilegible es no mandar nada en vivo.
+func (e *Engine) refreshGuardrails() {
+	if e.org == nil {
+		return
+	}
+	g := e.Guardrails()
+	set, err := e.org.Settings()
+	if err != nil {
+		e.opts.Logger.Warn("ajustes ilegibles: el motor sigue en observe", "error", err)
+		g.Enforcement = settings.Default().Enforcement
+	} else {
+		g.Enforcement = set.Enforcement
+	}
+	e.stateMu.Lock()
+	e.guard = g
+	e.stateMu.Unlock()
+}
 
 // RunOnce ejecuta un ciclo si no hay otro en curso. Si runCycle falla (p. ej.
 // el store no puede leer o guardar), el ciclo no cuenta como completado: no
