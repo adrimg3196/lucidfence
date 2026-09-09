@@ -141,7 +141,12 @@ func (p Playbook) matchFields(s policy.Subject) ([]string, bool) {
 func MatchAll(ps []Playbook, s policy.Subject) []Match {
 	var out []Match
 	for _, p := range ps {
-		if !p.Enabled {
+		// Un playbook que no valida no produce candidatos, igual que en
+		// policy.MatchAll: si su acción cae fuera de action.All, Destructive()
+		// la da por no destructiva y llegaría al adapter sin pasar por el gate
+		// humano de §6.5. Quien escribe (T20) y quien siembra (T7) validan, pero
+		// el fichero del disco se puede editar a mano.
+		if !p.Enabled || p.Validate() != nil {
 			continue
 		}
 		fields, ok := p.matchFields(s)

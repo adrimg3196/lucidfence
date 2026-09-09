@@ -211,6 +211,31 @@ func TestCondicionInvalidaSeDetectaEnValidateNoEnElCiclo(t *testing.T) {
 	}
 }
 
+// TestUnPlaybookConAccionDesconocidaNoCasa cierra el hueco que la autorrevisión
+// de la Task 6 dejó abierto. RequiresHandoff delega en Destructive(), que solo
+// conoce el enum, así que una acción fuera de action.All no se clasifica como
+// destructiva y llegaría al adapter sin pasar por el gate humano de §6.5.
+// MatchAll la descarta antes, igual que policy.MatchAll descarta una política
+// que no valida.
+func TestUnPlaybookConAccionDesconocidaNoCasa(t *testing.T) {
+	p := playbookValido()
+	p.Actions = []policy.Action{{Action: action.Action("Wipe")}}
+	if err := p.Validate(); err == nil {
+		t.Fatal("Validate debe rechazar una acción fuera del enum")
+	}
+	if !RequiresHandoff(action.Wipe) || RequiresHandoff(action.Action("Wipe")) {
+		t.Fatal("Destructive solo conoce el enum: por eso el filtro tiene que ir en MatchAll")
+	}
+	if got := MatchAll([]Playbook{p}, sujetoBrecha()); got != nil {
+		t.Fatalf("un playbook que no valida no produce candidatos: %#v", got)
+	}
+	q := playbookValido()
+	q.Severity = "grave"
+	if got := MatchAll([]Playbook{q}, sujetoBrecha()); got != nil {
+		t.Fatalf("una severidad fuera de risk.Severities tampoco produce candidatos: %#v", got)
+	}
+}
+
 // idsDefaults fija el catálogo de fábrica portado de DEFAULT_PLAYBOOKS
 // (legacy/lucidfence/core/soar.py) a la gramática 2.0.
 var idsDefaults = []string{
