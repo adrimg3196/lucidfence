@@ -4,7 +4,7 @@
 
 **Goal:** Que el binario deje de ser un detector de dentro/fuera y pase a ser un motor de riesgo explicable con frenos: siete señales, veredicto 0-100 con razones (nulo si falla), políticas con la gramática Field/Op/Value, plantillas y what-if contra el histórico; guardarraíles completos (dedupe por ciclo, cooldown persistido por dispositivo y acción, observe/enforce, allowlist de acciones en vivo, doble llave de wipe); acciones de ruta y dwell; incidentes con ciclo de vida y analítica, reglas de alerta, playbooks SOAR con handoffs humanos para lo destructivo; salida firmada (webhook HMAC-SHA256, OCSF 2004 sin coordenadas, ntfy) tras una allowlist de egress con resolución DNS y rechazo de IP privadas; y las vistas para operarlo todo. Cierra con pre-release 2.0.0-alpha.2.
 
-**Architecture:** El dominio crece con cinco paquetes puros nuevos (`risk`, `policy`, `incident`, `alert`, `playbook`, `integrity`, `settings`) que no hacen I/O; `store` gana las colecciones `policies/playbooks/alerts/incidents/handoffs/settings`, el registro de cooldowns y la paginación con cursor de `events.jsonl`/`actions.jsonl`; `notify` (nuevo, solo importa `domain` y `store`) concentra la allowlist de egress, la firma HMAC, el serializador OCSF, ntfy y la cola de entregas con 3 reintentos sobre `deliveries.jsonl`; `engine` orquesta el ciclo ampliado (integridad → señales → veredicto → políticas → dwell y violación sostenida → ruta → guardarraíles → SOAR/handoffs → incidentes → alertas → notificaciones) y sigue siendo el único sitio donde vive la decisión de dry-run (`internal/engine/guardrails*.go`, CODEOWNERS); `api` publica los recursos de §6.1 con capacidad obligatoria y paridad con `docs/openapi.yaml`; el frontend consume tipos regenerados y añade las vistas de políticas, incidentes, alertas, playbooks y handoffs, eventos, registro de acciones y ajustes.
+**Architecture:** El dominio crece con siete paquetes puros nuevos (`risk`, `policy`, `incident`, `alert`, `playbook`, `integrity`, `settings`) que no hacen I/O; `store` gana las colecciones `policies/playbooks/alerts/incidents/handoffs/settings`, el registro de cooldowns y la paginación con cursor de `events.jsonl`/`actions.jsonl`; `notify` (nuevo, solo importa `domain` y `store`) concentra la allowlist de egress, la firma HMAC, el serializador OCSF, ntfy y la cola de entregas con 3 reintentos sobre `deliveries.jsonl`; `engine` orquesta el ciclo ampliado (integridad → señales → veredicto → políticas → dwell y violación sostenida → ruta → guardarraíles → SOAR/handoffs → incidentes → alertas → notificaciones) y sigue siendo el único sitio donde vive la decisión de dry-run (`internal/engine/guardrails*.go`, CODEOWNERS); `api` publica los recursos de §6.1 con capacidad obligatoria y paridad con `docs/openapi.yaml`; el frontend consume tipos regenerados y añade las vistas de políticas, incidentes, alertas, playbooks y handoffs, eventos, registro de acciones y ajustes.
 
 **Tech Stack:** Go 1.27 stdlib (sin dependencias nuevas: `allowlist_go.txt` sigue con go-oidc/v3, x/oauth2, x/crypto, go-cmp), `crypto/hmac` + `crypto/sha256` para la firma, `net` para la resolución DNS y el rechazo de IP privadas, `net/http` con `DialContext` fijado a la IP validada. Frontend sin dependencias nuevas: React 19.2, TypeScript 7, Vite 8, Tailwind 4.3, radix-ui 1.6.7, Recharts 3.10.1 (analítica de incidentes), react-hook-form 7.87 + zod 4.5 (editor de políticas y ajustes), TanStack Query 5.102, react-router 8.3, openapi-fetch 0.17 / openapi-typescript 7.13, Vitest 5, Playwright 1.63.
 
@@ -56,6 +56,11 @@
 - `/api/v1/health` gana un bloque `notify` con el estado por canal, lo que obliga a modificar el esquema `Health` de `docs/openapi.yaml` y regenerar `schema.d.ts` en la Task 15 aunque no se añada ninguna ruta nueva.
 - La Task 30 es la única con `controllerOnly: true`. El resto commitea en local sobre la rama del hito; el push, la espera de CI, el merge real de `origin/main`, el fast-forward, los tags y la pre-release los ejecuta el controlador. Ninguna tarea crea repositorios, cambia protección de rama ni publica Pages.
 - El hito suma cuatro checks de batería por encima de lo que pedía el enunciado (cooldown, handoff aprobado, what-if sin efectos, paginación con cursor). Si el propietario prefiere ceñirse a los cuatro de la spec, el tally bajaría de 20 a 16 y la Task 28 se recortaría.
+
+## Huecos cerrados por el controlador (rulings M2-C1 a M2-C3)
+
+- La flota demo lleva postura (`rooted`, `os_outdated`, `hardware_health`, `osquery_config_valid`, `country`, `site`) en `default_seed.json` y `simulation.Capabilities()` declara `Posture: true` (T13).
+- `settings.Risk.ShiftZones` y `settings.Risk.ZoneRisk` se siembran en la automatización demo (T13) y se editan por `PUT /api/v1/settings/risk` con capacidad `engine:config` (T21), expuestos en la vista de ajustes (T26).
 
 ## Estado de partida
 
@@ -125,13 +130,21 @@ Dos desviaciones respecto al esqueleto del hito, ambas comprobadas antes de escr
   // rellena además cur.FenceStateSince y cur.DwellSeconds
   ```
 
-- [ ] **Step 1: Crear la rama del hito**
+- [x] **Step 1: Comprobar la rama del hito (ya ejecutado)**
+
+La rama `m2/riesgo-y-acciones` ya existe y lleva el commit del plan, así que
+volver a crearla fallaría con
+`fatal: a branch named 'm2/riesgo-y-acciones' already exists`. Este paso ya no
+crea nada: solo comprueba que se trabaja sobre esa rama y por delante de la base
+del hito (`origin/main` en `6b2d0105`).
 
 ```bash
-git fetch origin && git checkout -q -b m2/riesgo-y-acciones origin/main && git log --oneline -1
+git fetch origin && git rev-parse --abbrev-ref HEAD && git rev-list --count origin/main..HEAD
 ```
 
-Expected: la rama arranca en el último commit de `origin/main` (M1 cerrado, `2.0.0-alpha.1`).
+Expected: la primera línea imprime `m2/riesgo-y-acciones` y la segunda un número
+mayor o igual que 1 (el commit del plan, más los de las tareas ya integradas por
+delante de `origin/main`).
 
 - [ ] **Step 2: Tests dorados de integridad de ubicación (fallan)**
 
@@ -4237,6 +4250,7 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 ### Task 5: Incidentes y reglas de alerta (`internal/domain/incident`, `internal/domain/alert`)
 
 **Files:**
+- Modify (Step 0, completa lo que las Tasks 1-4 dejaron a medias): `internal/domain/risk/verdict_result.go`, `internal/domain/risk/verdict.go`, `internal/domain/policy/templates.go`
 - Create: `internal/domain/incident/incident.go`, `internal/domain/incident/derive.go`, `internal/domain/incident/analytics.go`
 - Create: `internal/domain/incident/incident_test.go`, `internal/domain/incident/derive_test.go`, `internal/domain/incident/analytics_test.go`
 - Create: `internal/domain/alert/alert.go`, `internal/domain/alert/alert_test.go`
@@ -4246,7 +4260,10 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 **Interfaces:**
 - Consumes:
   - De Task 1: `device.Device` con `DwellSeconds`, `LocationIntegrity` (`device.Integrity{Suspicious, Checks, SpeedKMH, DistanceKM}`); `action.Result` con `Blocked`, `ErrorType`.
-  - De Task 3: `risk.Severities`, `risk.SeverityUnknown`, `risk.SeverityLow/Medium/High/Critical`.
+  - De Task 3: `risk.Severities`, que ya está en `main`. Las constantes
+    `risk.SeverityLow/Medium/High/Critical/Unknown` **no llegaron a `main`** (allí
+    `Severities` se declara con literales), así que las completa el Step 0 de esta
+    misma tarea antes que nada; las Tasks 6, 13, 14, 16 y 17 las dan por hechas.
   - De M1: `device.Index`, `device.FenceState` (`device.Inside/Outside/Unknown`), `device.RouteState` (`device.OffRoute`), `action.Action`, `action.Result`.
 - Produces:
   ```go
@@ -4308,6 +4325,151 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 | `Transition` | rechaza estado desconocido y estado igual al actual; `open` limpia los dos sellos, `ack` sella `AckedAt`, `closed` sella `ClosedAt` |
 | `Analyze` | MTTR nil sin ningún cerrado con sello, jamás 0; contadores a cero sí son medidas reales |
 | `alert.Evaluate` | `compliant` nil y `score` nil no disparan (lo desconocido jamás se presenta como señal, ni buena ni mala) |
+
+---
+
+- [ ] **Step 0: Completar las constantes de severidad de `internal/domain/risk` (corrección de lo integrado en las Tasks 1-4)**
+
+Las Tasks 1 a 4 se integraron sin las constantes de severidad que el resto del
+hito da por hechas. En `origin/main` (`6b2d0105`)
+`internal/domain/risk/verdict_result.go` declara `Severities` con literales,
+`Failed` escribe `"unknown"` a mano, `risk.Severity()` devuelve los cuatro
+nombres como literales y `internal/domain/policy/templates.go` etiqueta sus
+cinco plantillas con `Severity: "high"` / `"critical"` / `"medium"`. Las Tasks
+5, 6, 13, 14, 16 y 17 escriben `risk.SeverityHigh` y compañía dando por hecho
+que existen, así que sin este paso ninguna de ellas compila. Se completan aquí,
+en el primer paso de la primera tarea que las necesita, y con commit propio:
+es una corrección de lo ya integrado, no parte del dominio de incidentes.
+
+Comprobación previa (así se detectó la ausencia):
+
+Run: `git grep -n "SeverityHigh\|SeverityCritical" main -- internal`
+
+Expected: sin salida; ninguna de las constantes existe todavía en la base del hito.
+
+Run: `git show main:internal/domain/risk/verdict_result.go | grep -n 'Severities = \|Severity: "'`
+
+Expected:
+```
+12:var Severities = []string{"low", "medium", "high", "critical"}
+21:	return device.Verdict{Score: nil, Severity: "unknown", Reasons: []string{"no se pudo evaluar el riesgo: " + message}, MatchedPolicies: []string{}, EvaluatedAt: &at, Provenance: "none", Verified: false}
+```
+
+En `internal/domain/risk/verdict_result.go`, reemplazar el bloque
+`// Severities contiene los niveles evaluados en orden ascendente, sin unknown.`
++ `// Los consumidores no deben modificar el registro.` + `var Severities = ...`
+por el catálogo de constantes más el registro escrito con ellas:
+```go
+// Niveles de severidad del veredicto de riesgo. Son el catálogo único: policy
+// valida contra él, incident y playbook etiquetan con él y la UI lo pinta. Con
+// literales sueltos, un "critical" mal escrito no lo caza el compilador.
+const (
+	SeverityLow      = "low"
+	SeverityMedium   = "medium"
+	SeverityHigh     = "high"
+	SeverityCritical = "critical"
+	// SeverityUnknown queda fuera de Severities a propósito: no es un nivel
+	// evaluado, es la ausencia de evaluación, y colarlo en el registro dejaría
+	// escribir políticas que se validan contra "no lo sé".
+	SeverityUnknown = "unknown"
+)
+
+// Severities contiene los niveles evaluados en orden ascendente, sin unknown.
+// Los consumidores no deben modificar el registro.
+var Severities = []string{SeverityLow, SeverityMedium, SeverityHigh, SeverityCritical}
+```
+
+En el mismo fichero, dentro de `Failed`, reemplazar la línea del `return` por la
+misma con la constante (el veredicto fallido no cambia de valor, solo deja de
+estar escrito a mano):
+```go
+	return device.Verdict{Score: nil, Severity: SeverityUnknown, Reasons: []string{"no se pudo evaluar el riesgo: " + message}, MatchedPolicies: []string{}, EvaluatedAt: &at, Provenance: "none", Verified: false}
+```
+
+En `internal/domain/risk/verdict.go`, reemplazar la función `Severity` entera por:
+```go
+// Severity clasifica el score recibido; Evaluate la aplica después de redondear.
+func Severity(score float64) string {
+	switch {
+	case math.IsNaN(score):
+		return SeverityUnknown
+	case score >= 80:
+		return SeverityCritical
+	case score >= 55:
+		return SeverityHigh
+	case score >= 30:
+		return SeverityMedium
+	default:
+		return SeverityLow
+	}
+}
+```
+
+Los cortes 80/55/30 no se tocan: son los de `legacy/lucidfence/core/policies.py`
+y moverlos rompería la comparabilidad con el histórico de 1.x.
+
+En `internal/domain/policy/templates.go`, reemplazar el import de una sola línea
+`import "github.com/adrimg3196/lucidfence/internal/domain/action"` por el bloque
+con `risk` (el paquete `policy` ya importa `risk` en `policy.go` para validar la
+severidad, así que esto no abre ninguna frontera nueva de `depguard`):
+```go
+import (
+	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/risk"
+)
+```
+
+Y en ese mismo fichero sustituir la severidad literal de las cinco plantillas por
+la constante, una línea por plantilla y sin tocar ninguna otra cadena (el
+`Value: "unknown"` de `tpl-locate-unknown-noncompliant` es un `fence_state`, no
+una severidad, y se queda tal cual):
+```go
+		ID: "tpl-block-on-route-exit", Name: "Avisar al salir de la ruta", Severity: risk.SeverityHigh,
+```
+```go
+		ID: "tpl-wipe-rooted-outside", Name: "Borrar si está rooteado y fuera de geocerca", Severity: risk.SeverityCritical,
+```
+```go
+		ID: "tpl-ciso-deviation-500", Name: "Avisar al CISO si la desviación supera 500 m", Severity: risk.SeverityHigh,
+```
+```go
+		ID: "tpl-isolate-offshift-outside", Name: "Aislar fuera de turno y fuera de geocerca", Severity: risk.SeverityHigh,
+```
+```go
+		ID: "tpl-locate-unknown-noncompliant", Name: "Localizar si se pierde la ubicación y no es conforme", Severity: risk.SeverityMedium,
+```
+
+Run: `gofmt -l internal/domain/risk internal/domain/policy`
+
+Expected: sin salida.
+
+Run: `go build ./... && go test -count=1 ./internal/domain/risk/ ./internal/domain/policy/`
+
+Expected (ningún valor cambia, así que los golden de riesgo y de políticas siguen pasando sin regenerarse):
+```
+ok  	github.com/adrimg3196/lucidfence/internal/domain/risk	0.236s
+ok  	github.com/adrimg3196/lucidfence/internal/domain/policy	0.025s
+```
+
+Run: `golangci-lint run ./internal/domain/risk/... ./internal/domain/policy/...`
+
+Expected: `0 issues.`
+
+Run: `go test ./internal/arch/ -run 'TestDepguardCubreTodosLosPaquetes|TestFileLimits'`
+
+Expected (no hay paquete nuevo ni import nuevo entre capas, y los tres ficheros siguen muy por debajo de las 400 líneas):
+```
+ok  	github.com/adrimg3196/lucidfence/internal/arch	0.562s
+```
+
+Commit propio, separado del dominio de incidentes que abren los pasos siguientes:
+```bash
+git add internal/domain/risk/verdict_result.go internal/domain/risk/verdict.go internal/domain/policy/templates.go
+git commit -q -m "refactor(risk): catálogo de severidades como constantes
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
+```
 
 ---
 
@@ -7429,15 +7591,15 @@ y `golangci-lint` sin hallazgos. `TestFileLimits` (`internal/arch/arch_test.go`,
 - Create: `internal/domain/settings/settings.go`, `internal/domain/settings/settings_test.go`
 - Create: `internal/store/collections.go`, `internal/store/collections_test.go`
 - Create: `internal/store/secrets.go`, `internal/store/secrets_test.go`
-- Modify: `internal/store/orgstore.go`, `internal/store/store.go`, `internal/store/orgstore_test.go`, `ARCHITECTURE.md`, `.golangci.yml`
-- Modify (añadido al esqueleto): `cmd/lucidfence/app.go` y `cmd/lucidfence/doctor.go` (una línea cada uno: pasar `store.WithDefaultEgress(cfg.Egress)` a `store.Open`). Sin ellas la siembra de `settings.json` desde `config.json` nunca ocurre en el binario real, y `doctor` (que abre el mismo directorio de datos) podría sembrar primero unos ajustes con la allowlist vacía.
+- Modify: `internal/store/orgstore.go`, `internal/store/store.go`, `internal/store/orgstore_test.go`, `ARCHITECTURE.md`
+- Modify (añadido al esqueleto): `cmd/lucidfence/app.go` y `cmd/lucidfence/doctor.go` (una línea cada uno: pasar `store.WithDefaultEgress(settings.Egress{Hosts: cfg.Egress.Hosts, AllowPrivate: cfg.Egress.AllowPrivate})` a `store.Open`, más el import de `internal/domain/settings`). Sin ellas la siembra de `settings.json` desde `config.json` nunca ocurre en el binario real, y `doctor` (que abre el mismo directorio de datos) podría sembrar primero unos ajustes con la allowlist vacía.
 
 **Interfaces:**
 - Consumes:
   - De Task 4: `policy.Policy`, `policy.Condition`, `policy.OpGte`, `policy.Action` (sus `Params map[string]any` son el valor no serializable del test de atomicidad). `policy.ValidateAll` existe, pero el store NO lo llama: validar es del handler.
   - De Task 5: `incident.Incident`, `incident.Entry`, `incident.StatusOpen`, `incident.KindGeofenceExit`, `alert.Rule`, `alert.KindBatteryBelow`.
   - De Task 6: `playbook.Playbook`, `playbook.Handoff`, `playbook.HandoffPending`.
-  - De M1: `store.Store`, `store.OrgStore`, los genéricos `readCollection[T]`/`writeCollection[T]`, `store.WriteJSON`/`store.ReadJSON`, `store.ErrNotFound`, la constante de paquete `schemaVersion` (= 1), `orgIDPattern`, el `sync.RWMutex` por organización, `config.EgressConfig`, `action.Action` y `action.Parse`.
+  - De M1: `store.Store`, `store.OrgStore`, los genéricos `readCollection[T]`/`writeCollection[T]`, `store.WriteJSON`/`store.ReadJSON`, `store.ErrNotFound`, la constante de paquete `schemaVersion` (= 1), `orgIDPattern`, el `sync.RWMutex` por organización, `config.EgressConfig` (solo en `cmd/`, que es quien lo convierte al tipo de dominio antes de pasarlo al store), `action.Action` y `action.Parse`.
 - Produces:
   ```go
   // internal/domain/settings
@@ -7471,7 +7633,7 @@ y `golangci-lint` sin hallazgos. `TestFileLimits` (`internal/arch/arch_test.go`,
 
   // internal/store
   type Option func(*Store)
-  func WithDefaultEgress(cfg config.EgressConfig) Option
+  func WithDefaultEgress(e settings.Egress) Option
   func Open(root string, opts ...Option) (*Store, error)   // firma ampliada; las 7 llamadas de M1 siguen compilando
   func (o *OrgStore) Policies() ([]policy.Policy, error);      func (o *OrgStore) SavePolicies(ps []policy.Policy) error
   func (o *OrgStore) Playbooks() ([]playbook.Playbook, error); func (o *OrgStore) SavePlaybooks(ps []playbook.Playbook) error
@@ -7492,7 +7654,7 @@ y `golangci-lint` sin hallazgos. `TestFileLimits` (`internal/arch/arch_test.go`,
   - **`Validate` nombra el campo que falla**, con el prefijo del bloque y en `snake_case` (`enforcement.mode`, `webhook.events[1]`, `risk.off_hours_start`), porque T21 devuelve el mensaje tal cual en el `detail` del 400 y el formulario de T26 lo enseña junto al campo. Los cinco validadores por bloque son públicos para que `PUT /api/v1/settings/enforcement` valide solo su bloque.
   - **`Normalized()` antes de `Validate()`, siempre.** Normalizar rellena lo ausente (`mode` vacío → `observe`, `format` vacío → `native`, slices y mapas nil → vacíos, hosts en minúsculas, sin espacios y sin duplicados) y validar rechaza lo imposible. `SaveSettings` hace las dos en ese orden, así que un `settings.json` escrito por el store nunca tiene `null` donde el frontend espera una lista. Las dos horas de `Risk` no se rellenan: `0`/`0` es un valor legítimo (sin franja nocturna) y quien quiera los de fábrica parte de `Default()`.
   - **Siembra de `Egress` una sola vez.** `config.json` es la fuente de la allowlist de salida solo hasta que existe `settings.json`; a partir de ahí manda `settings.json`, porque es lo que edita el operador desde la UI (T26) y lo que recarga el notificador (T11, `Notifier.Reload`). Por eso la siembra ocurre en la primera lectura y **escribe** el fichero: la segunda lectura ya no consulta `config`. Si `settings.json` desaparece, la siembra se repite; es el comportamiento deseado en un reinicio con el directorio de datos a medio borrar. Un `settings.json` corrupto, en cambio, es un error: no se re-siembra encima del fichero del operador.
-  - **`store` pasa a importar `internal/config`.** Es la única forma de que `Open` reciba `config.EgressConfig` sin duplicar el tipo. `config` solo importa la stdlib, así que no hay ciclo y la frontera sigue siendo descendente. Se refleja en la regla `store` de `.golangci.yml` y en la tabla de fronteras de `ARCHITECTURE.md` en este mismo commit.
+  - **La opción habla en tipos de dominio, no de configuración.** `WithDefaultEgress` recibe un `settings.Egress`, no un `config.EgressConfig`: así `store` sigue importando solo `domain` y la frontera de la spec §5.2 (`store` → `domain`) no se toca, ni hay que editar `.golangci.yml`, que está bajo CODEOWNERS. La conversión de un tipo al otro vive en los dos únicos llamantes que tienen delante un `config.Config` real, `cmd/lucidfence/app.go` y `cmd/lucidfence/doctor.go`, que sí pueden importar ambos paquetes (`cmd/` no tiene regla de depguard: las reglas cubren `internal/**`). Son tres campos copiados a mano en dos líneas; ensanchar una frontera del proyecto para ahorrárselos no compensa.
   - **`Open` gana opciones variádicas, no un parámetro más.** Las siete llamadas de M1 (`cmd/lucidfence/app.go`, `cmd/lucidfence/doctor.go`, `internal/api/openapi_test.go`, `internal/api/testutil_test.go`, `internal/engine/demo_test.go`, `internal/engine/engine_test.go` ×2) siguen compilando sin tocarlas; las dos de `cmd/` pasan la opción, porque son los únicos sitios con un `config.Config` real delante y ambas abren el mismo directorio de datos.
   - **Los secretos viven fuera de `settings.json`.** El fichero solo guarda los booleanos `secret_set` y `token_set`; el valor está en `<data>/secrets/<org>/<name>.json` con 0600 o en la variable `LUCIDFENCE_<NAME>`, que gana (spec §5.8). La variable es global al proceso, así que gana para todas las organizaciones: el fichero es la vía multi-tenant y la variable la vía de despliegue de una sola org. Ni `Settings()` ni ninguna respuesta de la API serializan jamás un valor de secreto. Los nombres que usará T11 son `webhook_secret` y `ntfy_token`.
   - **`Secret` valida el nombre con una expresión regular antes de tocar el disco**, así que `../../auth/local-token` no es un nombre de secreto: no hay forma de leer ni escribir fuera de `<data>/secrets/<org>/`.
@@ -8479,7 +8641,7 @@ Añadir al final de `internal/store/orgstore_test.go` (el helper `org(t)` de M1 
 ```go
 func orgConEgress(t *testing.T, hosts []string, allowPrivate bool) *OrgStore {
 	t.Helper()
-	s, err := Open(t.TempDir(), WithDefaultEgress(config.EgressConfig{Hosts: hosts, AllowPrivate: allowPrivate}))
+	s, err := Open(t.TempDir(), WithDefaultEgress(settings.Egress{Hosts: hosts, AllowPrivate: allowPrivate}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -8534,7 +8696,7 @@ func TestSinOpcionDeEgressLaSiembraEsVacia(t *testing.T) {
 	}
 }
 ```
-y ampliar el bloque de imports del fichero con `"os"`, `"github.com/adrimg3196/lucidfence/internal/config"` y `"github.com/adrimg3196/lucidfence/internal/domain/settings"`.
+y ampliar el bloque de imports del fichero con `"os"` y `"github.com/adrimg3196/lucidfence/internal/domain/settings"` (nada de `internal/config`: el test vive en `internal/store`, donde la regla `store` de depguard solo permite la stdlib y `internal/domain`).
 
 - [ ] **Step 6: Ejecutar y ver que falla**
 
@@ -8792,14 +8954,17 @@ type Store struct {
 // Option configura el Store al abrirlo.
 type Option func(*Store)
 
-// WithDefaultEgress fija la allowlist de salida de config.json con la que se
-// siembra settings.json la primera vez que se leen los ajustes de una
-// organización (spec §5.8). Sin esta opción la siembra sale vacía.
-func WithDefaultEgress(cfg config.EgressConfig) Option {
+// WithDefaultEgress fija la allowlist de salida con la que se siembra
+// settings.json la primera vez que se leen los ajustes de una organización
+// (spec §5.8). Recibe el tipo de dominio, no config.EgressConfig: quien tiene
+// delante la configuración del binario (cmd/lucidfence) hace la conversión, y
+// así store sigue importando solo domain (spec §5.2). Sin esta opción la
+// siembra sale vacía.
+func WithDefaultEgress(e settings.Egress) Option {
 	return func(s *Store) {
 		s.defaultEgress = settings.Egress{
-			Hosts:        append([]string(nil), cfg.Hosts...),
-			AllowPrivate: cfg.AllowPrivate,
+			Hosts:        append([]string(nil), e.Hosts...),
+			AllowPrivate: e.AllowPrivate,
 		}
 	}
 }
@@ -8824,7 +8989,6 @@ y en `Org`, al construir el `OrgStore`:
 ```
 Añadir al bloque de imports de `store.go`:
 ```go
-	"github.com/adrimg3196/lucidfence/internal/config"
 	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 ```
 
@@ -8842,16 +9006,24 @@ type OrgStore struct {
 ```
 y añadir `"github.com/adrimg3196/lucidfence/internal/domain/settings"` a sus imports.
 
-En `cmd/lucidfence/app.go`, dentro de `buildApp`:
+En `cmd/lucidfence/app.go`, dentro de `buildApp`, sustituir `st, err := store.Open(cfg.DataDir)` por:
 ```go
-	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(cfg.Egress))
+	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(settings.Egress{
+		Hosts: cfg.Egress.Hosts, AllowPrivate: cfg.Egress.AllowPrivate,
+	}))
 ```
 
-En `cmd/lucidfence/doctor.go`, dentro de `doctorChecks`, la misma línea:
+En `cmd/lucidfence/doctor.go`, dentro de `doctorChecks`, la misma sustitución:
 ```go
-	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(cfg.Egress))
+	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(settings.Egress{
+		Hosts: cfg.Egress.Hosts, AllowPrivate: cfg.Egress.AllowPrivate,
+	}))
 ```
-(`doctor` abre el mismo directorio de datos que `serve`; si sembrara primero con la allowlist vacía, `serve` ya no volvería a sembrar.)
+y añadir a los imports de los dos ficheros:
+```go
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
+```
+(`cmd/lucidfence` es el único sitio que ve a la vez `config.Config` y el dominio, y no está cubierto por ninguna regla de depguard, que solo alcanzan a `internal/**`. `doctor` abre el mismo directorio de datos que `serve`; si sembrara primero con la allowlist vacía, `serve` ya no volvería a sembrar.)
 
 - [ ] **Step 10: Ejecutar los tests del store (pasan), con carrera y cobertura**
 
@@ -8867,20 +9039,7 @@ Expected: `ok` en los tres; las siete llamadas a `store.Open` de M1 siguen compi
 
 - [ ] **Step 11: Fronteras, documentación y commit**
 
-En `.golangci.yml`, sustituir la regla `store` por:
-```yaml
-        store:
-          list-mode: strict
-          files: ["**/internal/store/**"]
-          allow:
-            - "$gostd"
-            - "github.com/adrimg3196/lucidfence/internal/domain"
-            # config solo por config.EgressConfig, el valor con el que
-            # store.Open siembra settings.json la primera vez (spec §5.8).
-            # config es hoja (solo stdlib), así que la frontera sigue siendo
-            # descendente y no hay ciclo.
-            - "github.com/adrimg3196/lucidfence/internal/config"
-```
+`.golangci.yml` no se toca: la regla `store` sigue permitiendo `$gostd` y `internal/domain`, y `internal/domain/settings` cae dentro de ese prefijo. Tampoco cambia la fila de `internal/store` de la tabla "## Reglas de dependencia" de `ARCHITECTURE.md` (`domain` a secas): el store no ha ganado ninguna dependencia nueva.
 
 En `ARCHITECTURE.md`, añadir a la tabla "## Paquetes" la fila del paquete nuevo, justo debajo de la de `internal/domain/playbook` (creada en Task 6) y antes de la de `internal/store`:
 ```
@@ -8890,21 +9049,17 @@ La fila de `internal/store` de esa misma tabla pasa a mencionar lo nuevo:
 ```
 | `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700; ajustes y secretos por org. |
 ```
-y en la tabla "## Reglas de dependencia" se actualiza la fila de `internal/store`:
-```
-| `internal/store` | `domain`, `config` (solo `EgressConfig`, para sembrar `settings.json`) |
-```
 
 ```bash
 go test ./internal/arch/ && golangci-lint run ./internal/store/... ./internal/domain/settings/... ./cmd/...
-git add internal/domain/settings internal/store cmd/lucidfence/app.go cmd/lucidfence/doctor.go ARCHITECTURE.md .golangci.yml
+git add internal/domain/settings internal/store cmd/lucidfence/app.go cmd/lucidfence/doctor.go ARCHITECTURE.md
 git commit -q -m "feat(store): ajustes de enforcement, colecciones de M2 y secretos por organización
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 ```
 
-Expected: `ok github.com/adrimg3196/lucidfence/internal/arch` (con `TestArchitectureDocListsEveryPackage` en verde gracias a la fila nueva, y `TestDepguardCubreTodosLosPaquetes` también: el glob `**/internal/store/**` ya existía y solo ha cambiado su `allow`), `golangci-lint` sin hallazgos y `TestFileLimits` en verde (`settings.go` ~320 líneas, `collections.go` ~130, `secrets.go` ~120, todos por debajo de 400; ninguna función llega a las 60 líneas de `funlen` ni a la ciclomática 15).
+Expected: `ok github.com/adrimg3196/lucidfence/internal/arch` (con `TestArchitectureDocListsEveryPackage` en verde gracias a la fila nueva de `internal/domain/settings`, y `TestDepguardCubreTodosLosPaquetes` también: el paquete nuevo cae bajo el glob `**/internal/domain/**`, que ya existía, y ninguna regla ha cambiado), `golangci-lint` sin hallazgos y `TestFileLimits` en verde (`settings.go` ~320 líneas, `collections.go` ~130, `secrets.go` ~120, todos por debajo de 400; ninguna función llega a las 60 líneas de `funlen` ni a la ciclomática 15).
 
 ---
 
@@ -15405,11 +15560,12 @@ Hasta aquí M2 ha construido las piezas del riesgo (`integrity.Assess`, `risk.Co
 
 `evaluateRisk` corre dentro del mismo `recover()` por dispositivo que ya existía en `evaluateDevice`, y en un orden que no es negociable: primero `integrity.Assess` contra el estado previo persistido (el reloj de observación es siempre el del motor, nunca el `last_seen` que controla el dispositivo, para que un spoofer no pueda diluir la velocidad entre reportes hasta hacerla plausible), luego `risk.Compute` (que lee la integridad ya calculada) y por último `risk.Evaluate` (que solo puede afirmar lo que las señales atestiguan). El resultado se guarda en `cur.LocationIntegrity`, `cur.Signals` y `cur.Risk`.
 
-Si algo falla, el dispositivo queda con `EvaluationError`, `Risk = risk.Failed(...)` (score nil, severidad `"unknown"`, la razón del fallo) y sin señales publicadas, y el ciclo continúa contando `risk_failed`: jamás un 0/low que se confunda con un dispositivo sano. Es el caso dorado de `legacy/tests/test_risk_silent_failure.py`, que 1.x tuvo que aprender a la mala. El dwell ya lo mantiene `transition.Evaluate` desde la Task 1; aquí se comprueba de punta a punta sobre ciclos reales y se expone `by_severity` para la visión general. Por último, `SeedDemo` se amplía para que el modo demo arranque con dos plantillas de política activadas, una regla de alerta y `settings.json` en observe, de modo que la batería (T28) y el e2e (T29) tengan riesgo y automatización visibles desde el primer ciclo.
+Si algo falla, el dispositivo queda con `EvaluationError`, `Risk = risk.Failed(...)` (score nil, severidad `"unknown"`, la razón del fallo) y sin señales publicadas, y el ciclo continúa contando `risk_failed`: jamás un 0/low que se confunda con un dispositivo sano. Es el caso dorado de `legacy/tests/test_risk_silent_failure.py`, que 1.x tuvo que aprender a la mala. El dwell ya lo mantiene `transition.Evaluate` desde la Task 1; aquí se comprueba de punta a punta sobre ciclos reales y se expone `by_severity` para la visión general. Por último, la demo deja de ser neutra por los dos sitios por donde podría serlo: `SeedDemo` se amplía para que el modo demo arranque con dos plantillas de política activadas, una regla de alerta, `settings.json` en observe y el contexto de riesgo sembrado (riesgo de zona y turno), y la seed simulada estrena postura observada. Sin esas dos cosas, cuatro de las siete señales (`device_health` en sus claves `rooted` y `os_outdated`, `device_posture` en las que dependen de `Posture`, `zone_risk` y `shift_match`) valdrían siempre lo neutro en el binario entregado y solo se verían en los tests: la batería (T28) y el e2e (T29) tienen así riesgo, postura y automatización visibles desde el primer ciclo.
 
 **Files:**
 - Create: `internal/engine/risk.go`, `internal/engine/risk_test.go`, `internal/engine/risk_dwell_test.go` (ver "Desviaciones": integridad y dwell necesitan un conector con reloj movible y no caben en `risk_test.go` sin pasarse de 400 líneas)
 - Modify: `internal/engine/cycle.go` (`cycleInput`, `loadInput`, `evaluateDevice`, `processDevice`, `runCycle`), `internal/engine/engine.go` (`CycleStats`, campo `riskCfg`, `New`, `refreshGuardrails` → `applySettings`), `internal/engine/cycle_test.go`, `internal/engine/demo.go`, `internal/engine/demo_test.go`
+- Modify: `internal/uem/simulation/seed.go` (`SeedDevice` gana `Posture`), `internal/uem/simulation/simulation.go` (`FetchDevices`, `Capabilities`), `internal/uem/simulation/default_seed.json` (postura de `dev-004` y de `dev-006`), `internal/uem/simulation/simulation_test.go`
 - Modify: `docs/openapi.yaml` (`components.schemas.CycleStats`), `web/src/api/schema.d.ts` (regenerado con `npm run gen:api`)
 - Verificar sin cambios: `.golangci.yml` (la regla depguard `engine` ya permite todo `internal/domain`), `ARCHITECTURE.md` (no hay paquete nuevo), `internal/api/handlers_engine.go` (sigue serializando `engine.CycleStats` tal cual)
 
@@ -15444,6 +15600,14 @@ Si algo falla, el dispositivo queda con `EvaluationError`, `Risk = risk.Failed(.
   func (o *store.OrgStore) Settings() (settings.Settings, error)   // siembra los de fábrica si el fichero no existe
   func (o *store.OrgStore) Policies() ([]policy.Policy, error);  func (o *store.OrgStore) SavePolicies([]policy.Policy) error
   func (o *store.OrgStore) Alerts() ([]alert.Rule, error);       func (o *store.OrgStore) SaveAlerts([]alert.Rule) error
+  func (o *store.OrgStore) SaveSettings(s settings.Settings) error   // normaliza y valida antes de escribir
+  ```
+- Consumes (de M1, `internal/uem/simulation`):
+  ```go
+  type simulation.SeedDevice struct{ ... }   // esta tarea le añade Posture
+  func simulation.DefaultSeed() Seed;  func simulation.LoadSeed(path string) (Seed, error)
+  func (a *Adapter) FetchDevices(ctx context.Context) ([]device.Device, error)
+  func (a *Adapter) Capabilities() uem.Capabilities              // Posture pasa de false a true
   ```
 - Consumes (de M1 y T12):
   ```go
@@ -15466,10 +15630,14 @@ Si algo falla, el dispositivo queda con `EvaluationError`, `Risk = risk.Failed(.
   //                  RiskFailed    int `json:"risk_failed"`
   //                  BySeverity    map[string]int `json:"by_severity"`
   // SeedDemo amplía: policies.json con dos plantillas activadas, alerts.json con una regla
-  //                  y settings.json en observe
+  //                  y settings.json en observe con el contexto de riesgo de la demo
   func seedAutomation(org *store.OrgStore, now time.Time) error
+  func seedRiskSettings(org *store.OrgStore) error
   func demoPolicies(now time.Time) []policy.Policy
   func demoAlerts(now time.Time) []alert.Rule
+  // simulation.SeedDevice gana: Posture device.Posture `json:"posture,omitempty"`
+  // simulation.Adapter.FetchDevices copia esa postura al dispositivo normalizado
+  // simulation.Adapter.Capabilities() pasa a declarar Posture: true
   ```
   Decisiones fijadas aquí y consumidas por T14-T17 (motor), T19-T21 (API) y T27-T29 (web y e2e):
   - **El orden integridad → señales → veredicto es parte del contrato.** `risk.Compute` lee `d.LocationIntegrity`, así que evaluar el riesgo antes de valorar la integridad daría un veredicto ciego al spoofing. Y `evaluateRisk` se llama al final de `evaluateDevice`, después de geocerca y ruta, porque las señales `zone_risk` y `route_state` cuelgan de `InsideFence`, `RouteState` y `RouteDeviationM`.
@@ -15478,7 +15646,9 @@ Si algo falla, el dispositivo queda con `EvaluationError`, `Risk = risk.Failed(.
   - **Un `settings.json` ilegible cae a los ajustes de fábrica; un `policies.json` ilegible detiene el ciclo.** No es incoherencia: para los ajustes existe una lectura segura (observe, jornada 20-7) y T12 ya la fijó; para las políticas no la hay, porque "no sé qué políticas hay" solo se puede resolver dejando de automatizar en silencio. El ciclo falla, no persiste nada y el error queda en `Status().LastError` nombrando el fichero, igual que ya ocurría con `fences.json`.
   - **Las señales se persisten en `devices.json`.** Son la explicación del veredicto y la UI de T27 las pinta sin recalcular nada. Al volver del JSON los enteros son `float64` y las listas `[]any`; `risk.Signals.Value` y los helpers de T3 ya aceptan las dos formas, así que un veredicto recalculado desde disco da lo mismo que recién computado.
   - **`applySettings` sustituye a `refreshGuardrails`.** El enforcement y el contexto de riesgo salen de la misma lectura de `settings.json` que hace `loadInput`. Si `loadInput` falla, los guardarraíles se quedan como estaban: un ciclo que no llega a evaluar tampoco ejecuta acciones, así que no hay ventana insegura.
-  - **La demo arranca con automatización, no solo con datos.** Dos plantillas no destructivas (`tpl-block-on-route-exit`, `tpl-locate-unknown-noncompliant`), una regla de alerta de riesgo alto (umbral 70, que dispara con el `dev-004` de la flota demo, 75 puntos) y `settings.json` en observe. Como el resto de `SeedDemo`, solo escribe donde no hay nada: nunca pisa lo que el operador ya tiene.
+  - **La demo arranca con automatización, no solo con datos.** Dos plantillas no destructivas (`tpl-block-on-route-exit`, `tpl-locate-unknown-noncompliant`), una regla de alerta de riesgo alto (umbral 70, que dispara con el `dev-004` de la flota demo, saturado en 100 puntos) y `settings.json` en observe. Como el resto de `SeedDemo`, solo escribe donde no hay nada: nunca pisa lo que el operador ya tiene.
+  - **La flota simulada informa postura, y por eso el conector la declara.** `device.Posture` existe desde M1 pero nadie la rellenaba: sin este cambio, `risk.Compute` leería siempre `rooted: false` y `os_outdated: false` (el default neutro de `sigDeviceHealth`), `osquery_config_invalid` sería siempre falso y ninguna política de root —la plantilla de fábrica `tpl-wipe-rooted-outside` la primera— podría disparar jamás en el producto entregado. `SeedDevice` gana un campo `posture`, `FetchDevices` lo copia y `Capabilities()` pasa a declarar `Posture: true`, que es lo que el conector hace de verdad ahora. En la seed: `dev-004` trae la postura comprometida (`rooted`, `os_outdated` y `osquery_config_valid: false`, que lo llevan de 75 a 100 puntos y de `high` a `critical`), `dev-006` una postura sana **explícita** (`false` conocido, no desconocido) y `dev-001` **sigue sin postura**, para que la UI y la API distingan las tres cosas y para que el check `checkPostureUnknown` de la batería M1 (`internal/battery/checks_m1.go`, exige `posture: {}` en `dev-001`) siga siendo cierto.
+  - **La demo también siembra el contexto de riesgo, y ese bloque es de solo lectura en M2.** `settings.Risk.ZoneRisk` y `settings.Risk.ShiftZones` no tienen `PUT` propio: T21 publica `PUT /settings/enforcement`, `/settings/webhooks` y `/settings/egress`, y la edición del bloque `risk` queda para un hito posterior. Si además nadie lo sembrara, las señales `shift_match` y `zone_risk` que exige §4.1 estarían permanentemente neutras en el binario y solo se verían en los tests. Por eso `seedRiskSettings` deja, la primera vez y solo si el operador no ha configurado nada, `zone_risk: {"warehouse-poly": 0.5}` (el almacén guarda material sensible) y `shift_zones: {"dev-004": "demo-hq"}` (Ventas tiene turno en la oficina y está fuera de ella). La zona elegida es el almacén, no `demo-hq`: así el riesgo de zona se ve en `dev-005` sin ensuciar a `dev-001`, que es el dispositivo sano de referencia de toda la demo (`assertSanoEnCero`, T28 y T29).
 
 - [ ] **Step 1: Tests dorados del riesgo en el ciclo (fallan)**
 
@@ -15570,28 +15740,46 @@ func assertSanoEnCero(t *testing.T, d device.Device) {
 
 func assertFueraYNoConforme(t *testing.T, d device.Device) {
 	t.Helper()
-	if d.Risk.Score == nil || *d.Risk.Score <= 55 {
-		t.Fatalf("dev-004 está fuera, no es conforme y no va cifrado: %+v", d.Risk)
+	// 35 (fuera) + 25 (no conforme) + 15 (root) + 10 (SO desactualizado) +
+	// 15 (sin cifrar) + 8 (osquery inválido) + 20 (fuera de su turno) = 128,
+	// acotado a 100 por risk.Evaluate.
+	if d.Risk.Score == nil || *d.Risk.Score != 100 {
+		t.Fatalf("dev-004 satura el score: %+v", d.Risk)
 	}
-	if d.Risk.Severity != risk.SeverityHigh && d.Risk.Severity != risk.SeverityCritical {
-		t.Fatalf("severidad esperada high o critical: %+v", d.Risk)
+	if d.Risk.Severity != risk.SeverityCritical {
+		t.Fatalf("severidad esperada critical: %+v", d.Risk)
 	}
 	if d.Risk.Provenance != "tool" || !d.Risk.Verified {
 		t.Fatalf("un veredicto con hallazgos viene de las señales: %+v", d.Risk)
 	}
-	for _, want := range []string{"fuera de geocerca permitida", "dispositivo no conforme", "almacenamiento sin cifrar"} {
+	for _, want := range []string{"fuera de geocerca permitida", "dispositivo no conforme", "almacenamiento sin cifrar",
+		"dispositivo con root/jailbreak", "SO desactualizado", "configuración de osquery no válida",
+		"dispositivo fuera de su turno asignado"} {
 		if !tieneRazon(d.Risk.Reasons, want) {
 			t.Fatalf("falta la razón %q en %v", want, d.Risk.Reasons)
 		}
+	}
+	// La postura y el turno llegan de la seed y de los ajustes sembrados, no
+	// de un default neutro: sin ellos estas tres claves serían siempre falsas.
+	if rooted, ok := d.Signals["device_health"]["rooted"].(bool); !ok || !rooted {
+		t.Fatalf("la postura observada debe llegar a las señales: %v", d.Signals["device_health"])
+	}
+	if inval, ok := d.Signals["device_posture"]["osquery_config_invalid"].(bool); !ok || !inval {
+		t.Fatalf("osquery inválido es una observación: %v", d.Signals["device_posture"])
+	}
+	if match, ok := d.Signals["shift_match"]["shift_match"].(bool); !ok || match {
+		t.Fatalf("dev-004 tiene turno en demo-hq y está fuera: %v", d.Signals["shift_match"])
 	}
 }
 
 func assertRepartoPorSeveridad(t *testing.T, st CycleStats) {
 	t.Helper()
-	// dev-001 y dev-006 en 0, dev-003 en 10 (Lockdown Mode), dev-005 en 12
-	// (Android 12 sin parchear), dev-002 en 30 (fuera menos crédito de ruta)
-	// y dev-004 en 75 (fuera, no conforme y sin cifrar).
-	want := map[string]int{risk.SeverityLow: 4, risk.SeverityMedium: 1, risk.SeverityHigh: 1}
+	// dev-001 y dev-006 en 0, dev-003 en 10 (Lockdown Mode), dev-005 en 22
+	// (Android 12 sin parchear mas el riesgo de la zona del almacén),
+	// dev-002 en 30 (fuera menos crédito de ruta) y dev-004 saturado en 100
+	// (fuera, no conforme, sin cifrar, con root, con el SO desactualizado,
+	// con osquery inválido y fuera de su turno).
+	want := map[string]int{risk.SeverityLow: 4, risk.SeverityMedium: 1, risk.SeverityCritical: 1}
 	if len(st.BySeverity) != len(want) {
 		t.Fatalf("by_severity: %v", st.BySeverity)
 	}
@@ -15611,6 +15799,8 @@ func TestLosAjustesDeRiesgoLleganAlVeredicto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// La asignación sustituye entero el contexto que sembró SeedDemo: lo que
+	// se comprueba es que manda el fichero, no la siembra.
 	set.Risk = settings.Risk{
 		ShiftZones:    map[string]string{"dev-004": "demo-hq"},
 		ZoneRisk:      map[string]float64{"demo-hq": 0.5},
@@ -15636,7 +15826,7 @@ func TestLosAjustesDeRiesgoLleganAlVeredicto(t *testing.T) {
 		t.Fatalf("dev-004 tiene turno en demo-hq y está fuera: %v", fuera.Risk.Reasons)
 	}
 	if fuera.Risk.Severity != risk.SeverityCritical {
-		t.Fatalf("35+25+15+10+20 = 105, acotado a 100: %+v", fuera.Risk)
+		t.Fatalf("35+25+15+10+15+8+10+20 = 138, acotado a 100: %+v", fuera.Risk)
 	}
 	if match, ok := fuera.Signals["shift_match"]["shift_match"].(bool); !ok || match {
 		t.Fatalf("la señal de turno viaja con el dispositivo: %v", fuera.Signals["shift_match"])
@@ -15943,10 +16133,13 @@ func TestSenalesYRiesgoSobrevivenAlRoundTrip(t *testing.T) {
 	if conforme, ok := d.Signals["device_health"]["compliant"].(bool); !ok || conforme {
 		t.Fatalf("dev-004 no es conforme: %#v", d.Signals["device_health"])
 	}
+	if rooted, ok := d.Signals["device_health"]["rooted"].(bool); !ok || !rooted {
+		t.Fatalf("la postura observada de la seed también persiste: %#v", d.Signals["device_health"])
+	}
 	if checks, ok := d.Signals["location_integrity"]["checks"].([]any); !ok || len(checks) != 0 {
 		t.Fatalf("una lista vacía sigue siendo una lista, no un null: %#v", d.Signals["location_integrity"])
 	}
-	if d.Risk.Score == nil || *d.Risk.Score != 75 || d.Risk.Severity != "high" {
+	if d.Risk.Score == nil || *d.Risk.Score != 100 || d.Risk.Severity != "critical" {
 		t.Fatalf("el veredicto persiste con su score: %+v", d.Risk)
 	}
 	if d.Risk.EvaluatedAt == nil || !d.Risk.EvaluatedAt.Equal(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)) {
@@ -15961,7 +16154,7 @@ Expected: el mismo fallo de compilación del paso 1 (el paquete de test es uno s
 
 - [ ] **Step 4: Tests del seed demo ampliado (fallan)**
 
-Añade a `internal/engine/demo_test.go` los imports `"github.com/adrimg3196/lucidfence/internal/domain/alert"` y `"github.com/adrimg3196/lucidfence/internal/domain/settings"`, y estos dos casos:
+Añade a `internal/engine/demo_test.go` los imports `"github.com/adrimg3196/lucidfence/internal/domain/alert"`, `"github.com/adrimg3196/lucidfence/internal/domain/device"`, `"github.com/adrimg3196/lucidfence/internal/domain/settings"` y `"github.com/adrimg3196/lucidfence/internal/uem/simulation"`, y estos dos casos con su ayudante:
 ```go
 // TestSeedDemoSiembraLaAutomatizacion: el modo demo arranca con riesgo y
 // automatización visibles, no solo con datos.
@@ -16004,6 +16197,43 @@ func TestSeedDemoSiembraLaAutomatizacion(t *testing.T) {
 	if set.Enforcement.Mode != settings.ModeObserve || set.Risk.OffHoursStart != 20 || set.Risk.OffHoursEnd != 7 {
 		t.Fatalf("la demo arranca en observe con la jornada de fábrica: %+v", set)
 	}
+	// Sin contexto sembrado, zone_risk y shift_match serían siempre neutras
+	// fuera de los tests: el bloque risk no tiene PUT propio en M2.
+	if set.Risk.ZoneRisk["warehouse-poly"] != 0.5 || set.Risk.ShiftZones["dev-004"] != "demo-hq" {
+		t.Fatalf("la demo siembra el contexto de riesgo: %+v", set.Risk)
+	}
+	assertPosturaDeLaSeed(t, org)
+}
+
+// assertPosturaDeLaSeed comprueba las tres posturas que la demo distingue:
+// comprometida, sana explícita y desconocida.
+func assertPosturaDeLaSeed(t *testing.T, org *store.OrgStore) {
+	t.Helper()
+	sd, err := simulation.LoadSeed(org.Path("seed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	post := map[string]device.Posture{}
+	for _, d := range sd.Devices {
+		post[d.ID] = d.Posture
+	}
+	p := post["dev-004"]
+	if p.Rooted == nil || !*p.Rooted || p.OSOutdated == nil || !*p.OSOutdated {
+		t.Fatalf("dev-004 trae la postura comprometida de la demo: %+v", p)
+	}
+	if p.OsqueryConfigValid == nil || *p.OsqueryConfigValid {
+		t.Fatalf("dev-004 tiene la configuración de osquery inválida: %+v", p)
+	}
+	sana := post["dev-006"]
+	if sana.Rooted == nil || *sana.Rooted || sana.OsqueryConfigValid == nil || !*sana.OsqueryConfigValid {
+		t.Fatalf("dev-006 acredita una postura sana explícita: %+v", sana)
+	}
+	// dev-001 se queda sin postura a propósito: es el dispositivo del check
+	// checkPostureUnknown de la batería M1, que exige posture:{} en la API.
+	// device.Posture lleva un mapa, así que no se compara con ==.
+	if u := post["dev-001"]; u.Rooted != nil || u.OSOutdated != nil || u.OsqueryConfigValid != nil || u.HardwareHealth != nil {
+		t.Fatalf("dev-001 conserva la postura desconocida: %+v", u)
+	}
 }
 
 // TestSeedDemoNoResiembraLaAutomatizacion: SeedDemo nunca pisa lo que el
@@ -16025,6 +16255,8 @@ func TestSeedDemoNoResiembraLaAutomatizacion(t *testing.T) {
 	}
 	set, _ := org.Settings()
 	set.Enforcement.Mode = settings.ModeEnforce
+	set.Risk.ZoneRisk = map[string]float64{"demo-hq": 0.9}
+	set.Risk.ShiftZones = map[string]string{}
 	if err := org.SaveSettings(set); err != nil {
 		t.Fatal(err)
 	}
@@ -16038,15 +16270,65 @@ func TestSeedDemoNoResiembraLaAutomatizacion(t *testing.T) {
 	if len(rs) != 1 || rs[0].ID != "alert-riesgo-alto" {
 		t.Fatalf("un alerts.json vacío equivale a no tener nada: %+v", rs)
 	}
-	if set, _ = org.Settings(); set.Enforcement.Mode != settings.ModeEnforce {
+	set, _ = org.Settings()
+	if set.Enforcement.Mode != settings.ModeEnforce {
 		t.Fatal("SeedDemo no puede devolver el motor a observe")
+	}
+	// El contexto de riesgo del operador manda: un zone_risk configurado
+	// (aunque las zonas no sean las de la demo) impide la resiembra.
+	if set.Risk.ZoneRisk["demo-hq"] != 0.9 || len(set.Risk.ZoneRisk) != 1 || len(set.Risk.ShiftZones) != 0 {
+		t.Fatalf("SeedDemo no puede pisar el contexto de riesgo del operador: %+v", set.Risk)
 	}
 }
 ```
 
-Run: `go test ./internal/engine/ -run TestSeedDemo 2>&1 | head -5`
+Y en `internal/uem/simulation/simulation_test.go`, el caso que fija que la postura de la seed llega al dispositivo normalizado (añade el import `"github.com/adrimg3196/lucidfence/internal/domain/device"`):
+```go
+// TestLaSeedTransportaLaPostura: sin este transporte, device_posture y las
+// claves rooted y os_outdated de device_health se quedarían en su default
+// neutro y la plantilla de fábrica tpl-wipe-rooted-outside no podría disparar
+// nunca en el producto entregado.
+func TestLaSeedTransportaLaPostura(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	a := New(DefaultSeed(), func() time.Time { return now })
+	ds, err := a.FetchDevices(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := map[string]device.Posture{}
+	for _, d := range ds {
+		idx[d.ID] = d.Posture
+	}
+	comprometida := idx["dev-004"]
+	if comprometida.Rooted == nil || !*comprometida.Rooted || comprometida.OSOutdated == nil || !*comprometida.OSOutdated {
+		t.Fatalf("dev-004 viaja con su postura: %+v", comprometida)
+	}
+	if v := comprometida.OsqueryConfigValid; v == nil || *v {
+		t.Fatalf("una configuración de osquery inválida es una observación: %+v", comprometida)
+	}
+	if sana := idx["dev-006"]; sana.Rooted == nil || *sana.Rooted {
+		t.Fatalf("dev-006 acredita un false explícito, no un desconocido: %+v", sana)
+	}
+	if u := idx["dev-001"]; u.Rooted != nil || u.OSOutdated != nil || u.OsqueryConfigValid != nil {
+		t.Fatalf("dev-001 sigue sin postura observada: %+v", u)
+	}
+	if !a.Capabilities().Posture {
+		t.Fatal("el conector ya publica postura: la capacidad tiene que decirlo")
+	}
+}
+```
 
-Expected: mismo fallo de compilación; `SeedDemo` todavía no escribe políticas ni alertas.
+Run: `go test ./internal/engine/ ./internal/uem/simulation/ -run 'TestSeedDemo|TestLaSeedTransportaLaPostura' 2>&1 | head -8`
+
+Expected: el motor no compila (paso 1); la simulación sí compila (`device.Device` ya tiene `Posture` desde M1) y falla porque la seed no la rellena.
+```
+# github.com/adrimg3196/lucidfence/internal/engine [github.com/adrimg3196/lucidfence/internal/engine.test]
+internal/engine/risk_test.go:58:9: st.RiskEvaluated undefined (type CycleStats has no field or method RiskEvaluated)
+FAIL	github.com/adrimg3196/lucidfence/internal/engine [build failed]
+--- FAIL: TestLaSeedTransportaLaPostura (0.00s)
+    simulation_test.go:118: dev-004 viaja con su postura: {Rooted:<nil> OSOutdated:<nil> HardwareHealth:map[] OsqueryConfigValid:<nil> Country: Site:}
+FAIL	github.com/adrimg3196/lucidfence/internal/uem/simulation	0.183s
+```
 
 - [ ] **Step 5: Implementar `internal/engine/risk.go`**
 
@@ -16281,7 +16563,7 @@ func (e *Engine) evaluateDevice(in cycleInput, cur *device.Device, now time.Time
 ```
 (la llamada `e.refreshGuardrails()` que T12 había puesto antes de `loadInput` desaparece: si `loadInput` falla, el ciclo no evalúa ni ejecuta nada, así que dejar los guardarraíles como estaban no abre ninguna ventana.)
 
-- [ ] **Step 8: Ampliar `SeedDemo` con la automatización de la demo**
+- [ ] **Step 8: Ampliar `SeedDemo` con la automatización y el contexto de riesgo de la demo**
 
 En `internal/engine/demo.go`, añade a los imports `"github.com/adrimg3196/lucidfence/internal/domain/alert"`, `"github.com/adrimg3196/lucidfence/internal/domain/policy"` y `"github.com/adrimg3196/lucidfence/internal/domain/risk"`.
 
@@ -16301,7 +16583,8 @@ Y añade al final del fichero:
 ```go
 // seedAutomation siembra la automatización del modo demo: dos plantillas de
 // política activadas, una regla de alerta de riesgo alto y settings.json en
-// observe. Como el resto de SeedDemo, solo escribe donde no hay nada.
+// observe con el contexto de riesgo de la demo. Como el resto de SeedDemo,
+// solo escribe donde no hay nada.
 func seedAutomation(org *store.OrgStore, now time.Time) error {
 	if ps, err := org.Policies(); err != nil {
 		return err
@@ -16317,10 +16600,29 @@ func seedAutomation(org *store.OrgStore, now time.Time) error {
 			return err
 		}
 	}
-	// Settings() siembra settings.json con los ajustes de fábrica (observe,
-	// jornada 20-7) la primera vez que se lee, y no toca nada si ya existe.
-	_, err := org.Settings()
-	return err
+	return seedRiskSettings(org)
+}
+
+// seedRiskSettings deja el contexto de riesgo de la demo en settings.json.
+// Settings() siembra los ajustes de fábrica (observe, jornada 20-7) la primera
+// vez que se leen y no toca nada si el fichero ya existe; sobre ellos, y solo
+// si el operador no ha configurado ninguna zona ni ningún turno, se añaden el
+// riesgo del almacén y el turno de dev-004. Sin esta siembra las señales
+// zone_risk y shift_match valdrían siempre lo neutro en el binario, porque el
+// bloque risk de los ajustes no tiene PUT propio en M2 (T21) y nadie más lo
+// escribe. La zona es warehouse-poly y no demo-hq a propósito: así el riesgo
+// de zona se ve en dev-005 sin puntuar al dispositivo sano de referencia.
+func seedRiskSettings(org *store.OrgStore) error {
+	set, err := org.Settings()
+	if err != nil {
+		return err
+	}
+	if len(set.Risk.ZoneRisk) > 0 || len(set.Risk.ShiftZones) > 0 {
+		return nil
+	}
+	set.Risk.ZoneRisk = map[string]float64{"warehouse-poly": 0.5}
+	set.Risk.ShiftZones = map[string]string{"dev-004": "demo-hq"}
+	return org.SaveSettings(set)
 }
 
 // demoTemplateIDs son las dos plantillas que la demo trae activadas. Ninguna
@@ -16344,7 +16646,8 @@ func demoPolicies(now time.Time) []policy.Policy {
 }
 
 // demoAlerts es la regla que dispara con la propia flota demo: dev-004 está
-// fuera, no es conforme y no va cifrado, así que puntúa 75.
+// fuera, no es conforme, no va cifrado y trae la postura comprometida de la
+// seed, así que satura el score en 100.
 func demoAlerts(now time.Time) []alert.Rule {
 	return []alert.Rule{{
 		ID:        "alert-riesgo-alto",
@@ -16358,6 +16661,40 @@ func demoAlerts(now time.Time) []alert.Rule {
 	}}
 }
 ```
+
+Y la seed simulada estrena postura observada, que es lo que hace que `device_posture` y las claves `rooted` y `os_outdated` de `device_health` dejen de ser un default neutro en el producto.
+
+En `internal/uem/simulation/seed.go`, un campo más en `SeedDevice`, justo debajo de `Inventory`:
+```go
+	Inventory device.Inventory `json:"inventory"`
+	// Posture son observaciones del conector, no inferencias: lo ausente
+	// sigue siendo desconocido (nil), no un false acreditado.
+	Posture device.Posture `json:"posture,omitempty"`
+```
+
+En `internal/uem/simulation/simulation.go`, `FetchDevices` copia ese campo al dispositivo normalizado (una línea, justo debajo de `Inventory`):
+```go
+			Inventory:    sd.Inventory,
+			Posture:      sd.Posture,
+```
+y `Capabilities` deja de negar lo que ahora sí hace:
+```go
+// Capabilities implementa uem.Adapter: la simulación lo soporta todo, incluida
+// la postura, que sale de la seed y no de una inferencia del conector.
+func (a *Adapter) Capabilities() uem.Capabilities {
+	return uem.Capabilities{Actions: action.All, Inventory: true, Location: true, Posture: true}
+}
+```
+
+En `internal/uem/simulation/default_seed.json`, dos líneas nuevas. En el objeto de `dev-004` ("Portátil Ventas"), entre su línea de `waypoints` y su línea de `inventory`:
+```json
+     "posture": {"rooted": true, "os_outdated": true, "osquery_config_valid": false},
+```
+y en el de `dev-006` ("Portátil Soporte"), en la misma posición:
+```json
+     "posture": {"rooted": false, "os_outdated": false, "osquery_config_valid": true},
+```
+`dev-001` se queda sin `posture`: la postura desconocida tiene que seguir viéndose en la demo (es lo que comprueba `checkPostureUnknown` de la batería M1) y es la única forma de que la UI distinga "no lo sabemos" de "sabemos que no".
 
 - [ ] **Step 9: Sincronizar `docs/openapi.yaml` y regenerar el cliente tipado**
 
@@ -16417,31 +16754,46 @@ Expected:
 ok  	github.com/adrimg3196/lucidfence/internal/engine	0.412s
 ```
 
+Run: `go test ./internal/uem/simulation/ -count=1 -v 2>&1 | grep -E '^(--- (PASS|FAIL)|ok|FAIL)'`
+
+Expected:
+```
+--- PASS: TestDefaultSeedValida (0.00s)
+--- PASS: TestSeedValidateRechazaDuplicadosYSinWaypoints (0.00s)
+--- PASS: TestPosition (0.00s)
+--- PASS: TestFetchDevicesMueveYRellena (0.00s)
+--- PASS: TestExecuteSimulaSinErrores (0.00s)
+--- PASS: TestLoadSaveSeedYNewFromConfig (0.00s)
+--- PASS: TestLaSeedTransportaLaPostura (0.00s)
+ok  	github.com/adrimg3196/lucidfence/internal/uem/simulation	0.204s
+```
+
 Run: `go test ./... -race -count=1 2>&1 | grep -v '^ok' | head`
 
-Expected: sin salida. En particular siguen verdes los casos de M1 y T12 que tocan el mismo ciclo: `TestRunOnceEvaluaFlotaDemo` (el riesgo no cambia estados de geocerca, transiciones ni acciones), `TestPanicoPorDispositivoNoTumbaElCiclo` (dev-004 sigue con `Risk.Score` nil, ahora además con severidad `unknown`), `TestAccionesSeRegistranAunqueFalleSaveDevices` (el directorio en solo lectura permite leer `policies.json` y `settings.json`, que `SeedDemo` ya dejó escritos) y `TestAjustesIlegiblesDejanElMotorEnObserve` (la caída a observe la hace ahora `settingsOrDefault`).
+Expected: sin salida. En particular siguen verdes los casos de M1 y T12 que tocan el mismo ciclo: `TestRunOnceEvaluaFlotaDemo` (el riesgo no cambia estados de geocerca, transiciones ni acciones), `TestPanicoPorDispositivoNoTumbaElCiclo` (dev-004 sigue con `Risk.Score` nil, ahora además con severidad `unknown`), `TestAccionesSeRegistranAunqueFalleSaveDevices` (el directorio en solo lectura permite leer `policies.json` y `settings.json`, que `SeedDemo` ya dejó escritos) y `TestAjustesIlegiblesDejanElMotorEnObserve` (la caída a observe la hace ahora `settingsOrDefault`). También sigue verde el check `checkPostureUnknown` de la batería M1: `dev-001` es justo el dispositivo al que la seed **no** le pone postura, así que `/api/v1/devices/dev-001` sigue emitiendo `posture: {}`.
 
 Run: `bash scripts/coverage.sh 2>&1 | tail -3`
 
 Expected:
 ```
 ok  	github.com/adrimg3196/lucidfence/internal/engine	3.104s	coverage: 91.2% of statements
+ok  	github.com/adrimg3196/lucidfence/internal/uem/simulation	0.312s	coverage: 88.7% of statements
 COVERAGE: OK
 ```
-(el suelo del paquete es 85 %; `risk.go` queda cubierto entero).
+(el suelo de `engine` es 85 % y el de `simulation` 70 %; `risk.go` queda cubierto entero y el transporte de la postura lo cubre `TestLaSeedTransportaLaPostura`).
 
 Run: `go test ./internal/arch/ -run 'TestFileLimits|TestDepguardCubreTodosLosPaquetes'`
 
-Expected: `ok  	github.com/adrimg3196/lucidfence/internal/arch` (los ficheros nuevos quedan en `risk.go` 64 líneas, `risk_test.go` 241 y `risk_dwell_test.go` 163; los que se amplían rondan las 250 —`cycle.go` 248, `engine.go` 237, `cycle_test.go` 207, `demo.go` 137—, todos muy por debajo de 400; `engine` no estrena ninguna dependencia fuera de `internal/domain`).
+Expected: `ok  	github.com/adrimg3196/lucidfence/internal/arch` (los ficheros nuevos quedan en `risk.go` 64 líneas, `risk_test.go` 249 y `risk_dwell_test.go` 163; los que se amplían rondan las 250 —`cycle.go` 248, `engine.go` 237, `cycle_test.go` 210, `demo.go` 160, `simulation/seed.go` 101, `simulation/simulation.go` 118—, todos muy por debajo de 400; ni `engine` ni `simulation` estrenan ninguna dependencia fuera de `internal/domain`).
 
-Run: `gofmt -l cmd internal && go vet ./... && golangci-lint run ./internal/engine/...`
+Run: `gofmt -l cmd internal && go vet ./... && golangci-lint run ./internal/engine/... ./internal/uem/...`
 
-Expected: sin salida en `gofmt` ni en `go vet`, `0 issues.` en golangci-lint (`loadInput` 20 líneas y 13 sentencias, `evaluateDevice` 31 y 20, `runCycle` 45 y 28, `seedAutomation` 20 y 10: todas por debajo de 60/40 y de 15 de ciclomática).
+Expected: sin salida en `gofmt` ni en `go vet`, `0 issues.` en golangci-lint (`loadInput` 20 líneas y 13 sentencias, `evaluateDevice` 31 y 20, `runCycle` 45 y 28, `seedAutomation` 19 y 9, `seedRiskSettings` 12 y 7: todas por debajo de 60/40 y de 15 de ciclomática).
 
 - [ ] **Step 11: Commit**
 
 ```bash
-git add internal/engine docs/openapi.yaml web/src/api/schema.d.ts
+git add internal/engine internal/uem/simulation docs/openapi.yaml web/src/api/schema.d.ts
 git commit -q -m "feat(engine): integridad, señales y veredicto de riesgo dentro del ciclo
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
@@ -16451,7 +16803,11 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 **Desviaciones respecto al esqueleto:**
 - **Se añade `internal/engine/risk_dwell_test.go`.** Los casos de integridad y de dwell necesitan un conector propio con reloj movible (unas 90 líneas entre el `reloj`, el `viajero` y los dos helpers). Metiéndolo en `risk_test.go` el fichero pasaría de 400 líneas, que es el límite que comprueba `TestFileLimits`.
 - **Se añaden `Engine.riskCfg`, `Engine.applySettings`, `Engine.settingsOrDefault` y `countRisk`.** `riskContext(now)` es un método sin más parámetros que el reloj, así que la configuración de riesgo tiene que vivir en el motor; `applySettings` sustituye al `refreshGuardrails` de T12 para no leer `settings.json` dos veces por ciclo, y `countRisk` saca los contadores de `processDevice` (que ya roza el límite de sentencias de `funlen`).
-- **`SeedDemo` se apoya en `seedAutomation`, `demoPolicies` y `demoAlerts`.** Son las tres piezas de la ampliación; `SeedDemo` se queda como estaba, con una llamada más.
+- **`SeedDemo` se apoya en `seedAutomation`, `seedRiskSettings`, `demoPolicies` y `demoAlerts`.** Son las cuatro piezas de la ampliación; `SeedDemo` se queda como estaba, con una llamada más. `seedRiskSettings` va aparte para que `seedAutomation` no pase de 15 de complejidad ciclomática con las dos guardas nuevas.
+- **Se toca `internal/uem/simulation` (seed, conector y `default_seed.json`), que no está en la lista de ficheros del esqueleto.** Sin postura en la seed, `sigDeviceHealth` devolvería siempre `rooted: false` y `os_outdated: false` (su default neutro) y `sigDevicePosture` siempre `osquery_config_invalid: false`: tres de las claves que §4.1 exige quedarían muertas en el binario y la plantilla de fábrica `tpl-wipe-rooted-outside` no podría disparar nunca fuera de un test. `Capabilities().Posture` pasa a `true` porque el conector ya publica postura de verdad.
+- **`dev-004` pasa de 75 a 100 puntos y de `high` a `critical`.** Es consecuencia aritmética de la postura observada (root 15, SO desactualizado 10, osquery inválido 8) y del turno sembrado (20): 128 acotado a 100. La regla `alert-riesgo-alto` (umbral 70) sigue disparando y el playbook `soar-noncompliant-outside` sigue casando (mira `compliant` y `fence_state`, no el score), pero la frase "puntúa 75" del Step 5 de T15 queda desfasada y hay que actualizarla al integrar; el check `checkRiskExplained` de T28 no fija score ni severidad, así que sigue valiendo tal cual.
+- **El riesgo de zona de la demo va en `warehouse-poly`, no en `demo-hq`, y `dev-001` se queda sin postura.** Las dos decisiones protegen dos casos dorados que existían antes de esta corrección: `assertSanoEnCero` (un dispositivo sano de la demo tiene que puntuar 0, sin razones y sin evidencia que verificar) y `checkPostureUnknown` de la batería M1 (`dev-001` tiene que emitir `posture: {}`, porque desconocido no es `false`). Sembrar `demo-hq` habría puntuado a los tres dispositivos de oficina y poner postura sana a `dev-001` habría roto el check de M1.
+- **El bloque `risk` de los ajustes es de solo lectura en M2.** T21 publica `PUT` para `enforcement`, `webhooks` y `egress`, no para `risk`; su edición (un `PUT /api/v1/settings/risk` con capacidad `engine:config`, que la fila `settings` de §6.1 ya admite) llega en un hito posterior. Hasta entonces, la siembra de `seedRiskSettings` y la edición directa de `settings.json` son las dos únicas formas de configurar turnos y riesgo de zona, y así queda dicho aquí para que nadie lo lea como un olvido.
 - **`policies.json` ilegible detiene el ciclo, `settings.json` ilegible no.** El esqueleto no lo fija; queda documentado arriba y cubierto por `TestPoliticasIlegiblesDetienenElCiclo` y `TestAjustesIlegiblesEvaluanConLaJornadaDeFabrica`.
 - **Se toca `docs/openapi.yaml` y `web/src/api/schema.d.ts`.** No están en la lista de ficheros del esqueleto, pero los tres campos nuevos de `CycleStats` salen por dos rutas ya existentes y la regla transversal del hito exige que el contrato y el cliente tipado viajen en el mismo commit.
 - **La demo activa `tpl-block-on-route-exit` y `tpl-locate-unknown-noncompliant`.** El esqueleto pide "dos plantillas" sin decir cuáles; se eligen las dos no destructivas, para que el modo demo enseñe la automatización sin que ninguna acción pueda llegar a un dispositivo aunque alguien ponga el motor en enforce.
@@ -24014,8 +24370,8 @@ Expected: el commit incluye los cuatro ficheros nuevos de Go (`handlers_incident
 - Create: `internal/api/handlers_playbooks.go`, `internal/api/handlers_handoffs.go`
 - Create: `internal/api/handlers_playbooks_test.go`, `internal/api/handlers_handoffs_test.go`
 - Modify: `internal/api/handlers_devices.go` (`registerDevices` monta `POST /devices/{id}/actions`; nace `deviceAction`), `internal/api/handlers_devices_test.go` (casos de la acción manual), `internal/api/server.go` (`registerPlaybooks` y `registerHandoffs`), `docs/openapi.yaml` (nueve rutas y siete esquemas), `web/src/api/schema.d.ts` (regenerado con `npm run gen:api`)
-- Modify: `internal/api/testutil_test.go` (sesiones por rol y `doAs`): ver "Desviaciones"
-- Verificar sin cambios: `.golangci.yml` (la regla depguard de `api` ya permite `internal/domain` e `internal/engine`), `ARCHITECTURE.md` (no nace ningún paquete), `internal/engine/guardrails*.go` (esta tarea **consume** los guardarraíles a través del motor; no los toca)
+- Modify solo si falta: `internal/api/testutil_roles_test.go` (añadir `auth.Admin` a `roleOrder` y `roleEmails`, si T19 no lo hizo ya): ver "Desviaciones"
+- Verificar sin cambios: `internal/api/testutil_test.go` (esta tarea **no** añade ayudantes de sesión ahí: el entorno por roles vive en `testutil_roles_test.go` desde T18), `internal/api/testutil_roles_test.go` salvo el trozo de `auth.Admin`, `.golangci.yml` (la regla depguard de `api` ya permite `internal/domain` e `internal/engine`), `ARCHITECTURE.md` (no nace ningún paquete), `internal/engine/guardrails*.go` (esta tarea **consume** los guardarraíles a través del motor; no los toca)
 
 **Interfaces:**
 - Consumes:
@@ -24025,6 +24381,8 @@ Expected: el commit incluye los cuatro ficheros nuevos de Go (`handlers_incident
   - De Task 8: `OrgStore.LastActionAt(deviceID string, a action.Action) (time.Time, bool)`.
   - De Task 12: la semántica de `action.Result.Blocked`/`ErrorType` (`wipe_not_allowed`, `wipe_not_in_allowlist`) y de la supresión por cooldown.
   - De Task 18 (`docs/openapi.yaml`): los esquemas `PolicyCondition` y `PolicyAction`, que `Playbook` referencia en lugar de redefinir.
+  - De Task 18 (`internal/api/testutil_roles_test.go`): `newRoleEnv(t)`, `(*testEnv).as(role)`, `roleOrder`, `roleEmails`, `rolePassword`. Los casos de la matriz §6.3 de esta tarea los usan tal cual; no se escribe un segundo mecanismo de sesiones por rol.
+  - De M1 (`internal/api/testutil_test.go`): `newTestEnv`, `newTestEnvWithFleet`, `(*testEnv).setup`, `(*testEnv).do`, `fakeFleet`, `fakeDevice`.
   - De M1: `api.crud[T]` (con el `stamp(next, prev, now)` de la ronda M1-R12), `api.Route`, `api.pathID`, `api.writeJSON`, `api.writeError`, `api.writeErrorDetail`, `api.decodeJSON`, `api.CookieName`, `api.CSRFHeader`, `auth.PolicyRead`, `auth.PlaybookWrite`, `auth.IncidentRead`, `auth.HandoffApprove`, `auth.DeviceAction`, `auth.Principal`, `action.Parse`, `action.All`.
 - Produces:
   ```go
@@ -24058,108 +24416,37 @@ Expected: el commit incluye los cuatro ficheros nuevos de Go (`handlers_incident
   - **La bandeja ordena pendientes primero y, dentro de cada grupo, lo más reciente arriba.** Se abre para decidir, no para leer historia.
   - **La acción manual valida contra el enum antes de tocar el motor** y el 400 nombra las nueve acciones. El motor vuelve a validar (T16) porque no puede fiarse de su único llamante; aquí se valida para dar un mensaje útil.
 
-- [ ] **Step 1: Sesiones por rol en el entorno de pruebas**
+- [ ] **Step 1: Comprobar el entorno por roles que ya existe (T18)**
 
-La matriz §6.3 hay que comprobarla contra el middleware real: un test que solo mirase `auth.Can` no vería si la ruta declara la capacidad equivocada. `internal/auth` no expone todavía API para crear usuarios ni cambiar roles (M1 la dejó fuera del alcance), así que el entorno de pruebas siembra el usuario en `users.json` y reabre el store.
+La matriz §6.3 hay que comprobarla contra el middleware real: un test que solo mirase `auth.Can` no vería si la ruta declara la capacidad equivocada. Ese entorno **ya está escrito**: T18 creó `internal/api/testutil_roles_test.go` con `newRoleEnv`, `seedRoleUsers` y `(*testEnv).as`, y T19 lo usa tal cual. Esta tarea lo consume igual y **no añade nada a `internal/api/testutil_test.go`**: un segundo mecanismo paralelo (sembrar un usuario suelto, reabrir el servidor, pasar cookie y CSRF a mano) haría el mismo trabajo por otro camino y dejaría dos formas distintas de probar lo mismo, que es justo lo que no debe divergir en la superficie más sensible del hito.
 
-Si T18 o T19 ya añadieron `sesionDeRol` y `doAs` a `internal/api/testutil_test.go`, este paso no las duplica: se reutilizan tal cual y se salta al paso 2.
-
-En `internal/api/testutil_test.go`, la struct `testEnv` gana tres campos (detrás de `org`):
-```go
-	org *store.OrgStore
-	// eng y clock se guardan para poder reconstruir el servidor sobre los
-	// mismos directorios (reopen) cuando un test necesita que el store de
-	// auth vuelva a leer users.json.
-	eng   *engine.Engine
-	clock func() time.Time
+Comprueba que está antes de escribir un solo test:
+```bash
+grep -n "func newRoleEnv\|func seedRoleUsers\|func (e \*testEnv) as(\|^var roleOrder\|^var roleEmails" internal/api/testutil_roles_test.go
 ```
 
-En `newTestEnvWithFleet`, la construcción del `testEnv` pasa a rellenarlos:
-```go
-	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, logs: logs, eng: eng, clock: clock}
+Expected: cinco líneas (los números dependen de la rama; lo que importa es que salgan las cinco):
+```
+26:var roleOrder = []auth.Role{auth.Owner, auth.Operator, auth.Viewer, auth.Auditor}
+30:var roleEmails = map[auth.Role]string{
+44:func newRoleEnv(t *testing.T) *testEnv {
+73:func seedRoleUsers(t *testing.T, dir string, at time.Time) {
+97:func (e *testEnv) as(role auth.Role) {
 ```
 
-Y al final del fichero se añaden los tres ayudantes:
+Si el fichero no existe o el `grep` sale vacío, T18 no está aplicada: cópiala de su Step 1 y vuelve aquí. No la reescribas en este paso ni en `testutil_test.go`: dos definiciones de `newRoleEnv`, `seedRoleUsers`, `rolePassword`, `roleOrder`, `roleEmails` o `(*testEnv).as` en el mismo paquete rompen la compilación.
+
+Los dos roles que esta tarea necesita (`viewer` y `operator`) los siembra T18. Si `roleOrder` y `roleEmails` todavía no incluyen `auth.Admin`, añádelo aquí: es aditivo, no cambia ningún test existente y T21 lo da por hecho (si ya está, este trozo no se toca).
 ```go
-// usersFile es la forma de <auth>/users.json (auth.collection[userRecord]).
-// Se manipula como mapas sueltos a propósito: internal/api no puede ver el
-// userRecord de internal/auth, y lo único que necesita este entorno es
-// añadir un usuario con un rol.
-type usersFile struct {
-	SchemaVersion int              `json:"schema_version"`
-	Items         []map[string]any `json:"items"`
-}
+var roleOrder = []auth.Role{auth.Owner, auth.Admin, auth.Operator, auth.Viewer, auth.Auditor}
 
-// sesionDeRol añade a users.json un usuario con el rol pedido, reabre el
-// store de auth y el servidor sobre los mismos directorios y devuelve una
-// sesión ya iniciada para él. internal/auth todavía no expone una API para
-// crear usuarios ni cambiar roles (M1 la dejó fuera), y la matriz §6.3 hay
-// que comprobarla contra el middleware real: un test que solo mirase
-// auth.Can no vería si la ruta declara la capacidad equivocada. El usuario
-// nace sin hash de contraseña porque nunca hace login: la sesión se abre
-// con StartSession. Las sesiones ya abiertas (la del owner) sobreviven a la
-// reapertura, porque auth.Open relee sessions.json.
-func (e *testEnv) sesionDeRol(role auth.Role) (*http.Cookie, string) {
-	e.t.Helper()
-	path := filepath.Join(e.authDir, "users.json")
-	var doc usersFile
-	if err := store.ReadJSON(path, &doc); err != nil {
-		e.t.Fatal(err)
-	}
-	id := "usr_" + string(role)
-	doc.Items = append(doc.Items, map[string]any{
-		"id": id, "email": string(role) + "@example.com", "name": string(role),
-		"org_roles":  map[string]string{"default": string(role)},
-		"created_at": e.clock().UTC().Format(time.RFC3339), "password_hash": "",
-	})
-	if err := store.WriteJSON(path, doc); err != nil {
-		e.t.Fatal(err)
-	}
-	e.reopen()
-	sess, err := e.auth.StartSession(id, "default")
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	return &http.Cookie{Name: CookieName, Value: sess.Token}, sess.CSRF
+var roleEmails = map[auth.Role]string{
+	auth.Owner:    "owner@example.com",
+	auth.Admin:    "admin@example.com",
+	auth.Operator: "operator@example.com",
+	auth.Viewer:   "viewer@example.com",
+	auth.Auditor:  "auditor@example.com",
 }
-
-// reopen reconstruye el store de auth y el servidor sobre los mismos
-// directorios de datos. httptest.Server.Close es idempotente, así que el
-// Cleanup del servidor anterior sigue siendo válido.
-func (e *testEnv) reopen() {
-	e.t.Helper()
-	as, err := auth.Open(e.authDir, e.clock)
-	if err != nil {
-		e.t.Fatal(err)
-	}
-	h, _ := New(Deps{Engine: e.eng, Org: e.org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(),
-		Now: e.clock, Logger: slog.New(slog.NewTextHandler(e.logs, nil))})
-	e.srv.Close()
-	e.srv = httptest.NewServer(h)
-	e.t.Cleanup(e.srv.Close)
-	e.auth = as
-}
-
-// doAs es e.do con una sesión concreta, para los casos de la matriz de roles.
-func (e *testEnv) doAs(cookie *http.Cookie, csrf, method, path string, body any) (*http.Response, map[string]any) {
-	e.t.Helper()
-	var buf bytes.Buffer
-	if body != nil {
-		_ = json.NewEncoder(&buf).Encode(body)
-	}
-	req, _ := http.NewRequest(method, e.srv.URL+path, &buf)
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(cookie)
-	req.Header.Set(CSRFHeader, csrf)
-	return send(e, req)
-}
-```
-
-Los imports del fichero ganan `path/filepath`:
-```go
-	"net/http/httptest"
-	"path/filepath"
-	"testing"
 ```
 
 Run:
@@ -24167,7 +24454,7 @@ Run:
 gofmt -l internal/api && go test ./internal/api/ -count=1
 ```
 
-Expected: `gofmt` sin salida y la suite de M1 sigue verde (`ok github.com/adrimg3196/lucidfence/internal/api`): nadie llama todavía a los ayudantes nuevos, que solo se compilan.
+Expected: `gofmt` sin salida y la suite verde (`ok github.com/adrimg3196/lucidfence/internal/api`): sembrar un usuario más no cambia ningún caso, porque cada test entra con el rol que pide por nombre.
 
 - [ ] **Step 2: Tests de la bandeja de handoffs (fallan)**
 
@@ -24278,7 +24565,6 @@ func TestBandejaDeHandoffs(t *testing.T) {
 	t.Run("wipe sin allow_wipe queda bloqueado", func(t *testing.T) { checkAprobarWipeBloqueado(t, e, fleet) })
 	t.Run("rechazar no llama al conector", func(t *testing.T) { checkRechazar(t, e, fleet) })
 	t.Run("handoff inexistente", func(t *testing.T) { checkHandoffInexistente(t, e) })
-	t.Run("matriz de roles en approve", func(t *testing.T) { checkAprobarPorRol(t, e) })
 }
 
 func checkHandoffsLista(t *testing.T, e *testEnv) {
@@ -24396,38 +24682,48 @@ func checkHandoffInexistente(t *testing.T, e *testEnv) {
 	}
 }
 
-// checkAprobarPorRol comprueba la matriz §6.3 contra el middleware: viewer no
-// tiene handoff:approve y operator sí. Se ejecuta el último porque
-// sesionDeRol reconstruye el servidor.
-func checkAprobarPorRol(t *testing.T, e *testEnv) {
-	t.Helper()
-	if err := e.org.SaveSettings(settings.Default()); err != nil {
+// TestHandoffsRespetanElRolDeQuienLlama comprueba la matriz §6.3 contra el
+// middleware: un viewer lee la bandeja (incident:read) pero no aprueba, y un
+// operator sí (handoff:approve). Va en su propio test, con el entorno por
+// roles de T18 (newRoleEnv siembra un usuario por rol en users.json y e.as
+// abre sesión con él), en vez de colgar de TestBandejaDeHandoffs: ese entorno
+// no pasa por el asistente inicial, así que el inventario y la bandeja se
+// siembran por el store. Basta con el dispositivo del handoff que se aprueba,
+// que es el único que ApproveHandoff busca.
+func TestHandoffsRespetanElRolDeQuienLlama(t *testing.T) {
+	e := newRoleEnv(t)
+	dev := fakeDevice("dev-005", "Escáner Almacén", "android", 40.4050, -3.7100,
+		device.Inventory{Model: "Honeywell CT45"}, soarT0)
+	if err := e.org.SaveDevices([]device.Device{dev}); err != nil {
 		t.Fatal(err)
 	}
-	viewer, viewerCSRF := e.sesionDeRol(auth.Viewer)
-	res, out := e.doAs(viewer, viewerCSRF, "POST", "/api/v1/handoffs/ho-operator/approve", map[string]any{"note": "yo"})
+	if err := e.org.SaveHandoffs(bandeja()); err != nil {
+		t.Fatal(err)
+	}
+	e.as(auth.Viewer)
+	res, out := e.do("POST", "/api/v1/handoffs/ho-operator/approve", map[string]any{"note": "yo"}, true)
 	if res.StatusCode != 403 || out["code"] != "forbidden" {
 		t.Fatalf("un viewer no aprueba: %d %v", res.StatusCode, out)
 	}
-	if res, out = e.doAs(viewer, viewerCSRF, "GET", "/api/v1/handoffs", nil); res.StatusCode != 200 {
+	if res, out = e.do("GET", "/api/v1/handoffs", nil, true); res.StatusCode != 200 {
 		t.Fatalf("un viewer sí lee la bandeja (incident:read): %d %v", res.StatusCode, out)
 	}
-	op, opCSRF := e.sesionDeRol(auth.Operator)
-	res, out = e.doAs(op, opCSRF, "POST", "/api/v1/handoffs/ho-operator/approve", map[string]any{"note": "turno de noche"})
+	e.as(auth.Operator)
+	res, out = e.do("POST", "/api/v1/handoffs/ho-operator/approve", map[string]any{"note": "turno de noche"}, true)
 	if res.StatusCode != 200 || out["status"] != "executed" || out["decided_by"] != "operator@example.com" {
 		t.Fatalf("un operator sí aprueba: %d %v", res.StatusCode, out)
 	}
 }
 ```
 
-`strings` entra en los imports del fichero (lo usa `checkHandoffsFiltroInvalido`):
+`strings` entra en los imports del fichero (lo usa `checkHandoffsFiltroInvalido`) y `device` ya estaba (lo pide la firma de `recordingFleet.Execute`):
 ```go
 	"context"
 	"strings"
 	"sync"
 ```
 
-Run: `go test ./internal/api/ -run TestBandejaDeHandoffs -count=1`
+Run: `go test ./internal/api/ -run 'TestBandejaDeHandoffs|TestHandoffsRespetanElRol' -count=1`
 
 Expected: falla porque ninguna de las tres rutas existe todavía; el mux responde el 404 genérico de `/api/`:
 ```
@@ -24570,24 +24866,25 @@ func checkPlaybookBorrar(t *testing.T, e *testEnv) {
 // TestPlaybooksLecturaPolicyReadEscrituraPlaybookWrite comprueba la matriz
 // §6.3 contra el middleware: viewer lee (policy:read) pero no escribe, y
 // operator escribe (playbook:write, que la matriz sí le da, a diferencia de
-// policy:write).
+// policy:write). Usa el entorno por roles de T18: newRoleEnv siembra un
+// usuario por rol y e.as cambia la sesión de e.do, así que aquí no hace falta
+// e.setup (que solo crea owners) ni ningún ayudante nuevo.
 func TestPlaybooksLecturaPolicyReadEscrituraPlaybookWrite(t *testing.T) {
-	e := newTestEnv(t)
-	e.setup("empty")
-	viewer, viewerCSRF := e.sesionDeRol(auth.Viewer)
-	if res, out := e.doAs(viewer, viewerCSRF, "GET", "/api/v1/playbooks", nil); res.StatusCode != 200 {
+	e := newRoleEnv(t)
+	e.as(auth.Viewer)
+	if res, out := e.do("GET", "/api/v1/playbooks", nil, true); res.StatusCode != 200 {
 		t.Fatalf("un viewer lee playbooks: %d %v", res.StatusCode, out)
 	}
-	res, out := e.doAs(viewer, viewerCSRF, "POST", "/api/v1/playbooks", playbookBrecha())
+	res, out := e.do("POST", "/api/v1/playbooks", playbookBrecha(), true)
 	if res.StatusCode != 403 || out["code"] != "forbidden" {
 		t.Fatalf("un viewer no escribe playbooks: %d %v", res.StatusCode, out)
 	}
-	op, opCSRF := e.sesionDeRol(auth.Operator)
-	res, out = e.doAs(op, opCSRF, "POST", "/api/v1/playbooks", playbookBrecha())
+	e.as(auth.Operator)
+	res, out = e.do("POST", "/api/v1/playbooks", playbookBrecha(), true)
 	if res.StatusCode != 201 || out["id"] != "pb-brecha" {
 		t.Fatalf("un operator sí escribe playbooks: %d %v", res.StatusCode, out)
 	}
-	if res, _ = e.doAs(op, opCSRF, "DELETE", "/api/v1/playbooks/pb-brecha", nil); res.StatusCode != 204 {
+	if res, _ = e.do("DELETE", "/api/v1/playbooks/pb-brecha", nil, true); res.StatusCode != 204 {
 		t.Fatalf("el borrado usa la misma capacidad que la escritura: %d", res.StatusCode)
 	}
 }
@@ -25013,10 +25310,10 @@ En `internal/api/server.go`, `New` registra los dos recursos nuevos junto a los 
 
 Run:
 ```bash
-go test ./internal/api/ -run 'TestPlaybooks|TestBandejaDeHandoffs|TestDeviceActionManual' -count=1
+go test ./internal/api/ -run 'TestPlaybooks|TestBandejaDeHandoffs|TestHandoffsRespetanElRol|TestDeviceActionManual' -count=1
 ```
 
-Expected: los tres tests en verde y `TestRutasYOpenAPICoinciden` en rojo, que es lo que arregla el paso siguiente:
+Expected: los cuatro tests en verde y `TestRutasYOpenAPICoinciden` en rojo, que es lo que arregla el paso siguiente:
 ```
 --- FAIL: TestRutasYOpenAPICoinciden
     openapi_test.go:NN: GET /api/v1/playbooks registrada pero no documentada en docs/openapi.yaml
@@ -25359,7 +25656,7 @@ ok  	github.com/adrimg3196/lucidfence/internal/api	2.9s	coverage: 84.6% of state
 internal/api 84.6% (suelo 70%) OK
 --- PASS: TestFileLimits
 ```
-`TestFileLimits`: `handlers_playbooks.go` 41 líneas, `handlers_handoffs.go` 168, `handlers_devices.go` 143, `handlers_playbooks_test.go` 156, `handlers_handoffs_test.go` 254, `handlers_devices_test.go` 187, `testutil_test.go` 246: todos por debajo de 400. `funlen` y `gocyclo` también: la función más larga es `deviceAction` (24 líneas, 16 sentencias) y la más ramificada `writeEngineActionError` (complejidad 5).
+`TestFileLimits`: `handlers_playbooks.go` 41 líneas, `handlers_handoffs.go` 168, `handlers_devices.go` 143, `handlers_playbooks_test.go` 157, `handlers_handoffs_test.go` 262, `handlers_devices_test.go` 187: todos por debajo de 400. `testutil_test.go` no cambia (175 líneas) y `testutil_roles_test.go` solo crece una línea si el Step 1 tuvo que añadir `auth.Admin`. `funlen` y `gocyclo` también: la función más larga es `deviceAction` (24 líneas, 16 sentencias) y la más ramificada del código de producción `writeEngineActionError` (complejidad 5); entre los tests, `TestHandoffsRespetanElRolDeQuienLlama` (complejidad 9) es el que más ramifica, lejos del 15.
 
 Si `coverage.sh` bajara del suelo, la rama que suele quedar descubierta es el `s.fail` de `handoffsList`; el sitio donde añadir es `TestBandejaDeHandoffs`, convirtiendo `handoffs.json` en un directorio antes de listar y comprobando que la respuesta es `500 internal` y que el log lleva `op=handoffs.list` (el patrón de `TestSetupNoFiltraErrorDeUsuarios`).
 
@@ -25371,12 +25668,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 ```
 
-Expected: el commit incluye los siete ficheros de Go (`handlers_playbooks.go`, `handlers_handoffs.go`, sus dos tests, `handlers_devices.go`, `handlers_devices_test.go`, `testutil_test.go`), `internal/api/server.go`, `docs/openapi.yaml` y `web/src/api/schema.d.ts`. `internal/engine/` no aparece: esta tarea consume el motor y no lo toca.
+Expected: el commit incluye los seis ficheros de Go (`handlers_playbooks.go`, `handlers_handoffs.go`, sus dos tests, `handlers_devices.go`, `handlers_devices_test.go`), `internal/api/server.go`, `docs/openapi.yaml` y `web/src/api/schema.d.ts`; `internal/api/testutil_roles_test.go` solo aparece si el Step 1 tuvo que añadir `auth.Admin`. No aparece `internal/api/testutil_test.go`: el entorno por roles es el de T18 y esta tarea no lo duplica. `internal/engine/` tampoco: esta tarea consume el motor y no lo toca.
 
 **Desviaciones respecto al esqueleto:**
 - **Son nueve rutas nuevas, no ocho.** El esqueleto las enumera correctamente (`GET|POST /playbooks` son dos, `GET|PUT|DELETE /playbooks/{id}` tres, más `GET /handoffs`, `approve`, `reject` y `POST /devices/{id}/actions`) pero las cuenta como ocho al describir el test. `TestRutasYOpenAPICoinciden` cubre las nueve; no hay ninguna ruta de más ni de menos respecto a la lista del esqueleto.
 - **El caso de roles de los playbooks se invierte: un viewer no puede escribir y un operator sí.** El esqueleto dice "un operator no puede escribir playbooks y un admin sí", pero la matriz §6.3 de la spec y `internal/auth/rbac.go` (M1, ya implementado) dan `playbook:write` a `operator`, `admin` y `owner`. La frontera real que el test tiene que fijar es la de `viewer` frente a `operator`, que además es la que distingue `playbook:write` de `policy:write` (esta sí es de admin en adelante). Escribir el test como lo pide el esqueleto exigiría cambiar la matriz de la spec, que no es alcance de esta tarea.
-- **Se modifica `internal/api/testutil_test.go`**, que el esqueleto no lista. La matriz §6.3 no se puede comprobar contra el middleware sin una sesión de otro rol, y `internal/auth` no expone todavía API para crear usuarios ni asignar roles (M1 la dejó fuera del alcance y `kdf_test.go` lo dice explícitamente). El entorno de pruebas siembra el usuario en `users.json` y reabre el store; ningún fichero de producción cambia por esto. La alternativa, comprobar solo `auth.Can`, no vería si la ruta declara la capacidad equivocada, que es justo el fallo que este test tiene que atrapar en la superficie más sensible del hito.
+- **Los casos por rol se apoyan en `internal/api/testutil_roles_test.go`, que crea T18, y no en un ayudante propio.** El esqueleto no lista ningún fichero de entorno. La matriz §6.3 no se puede comprobar contra el middleware sin una sesión de otro rol, y `internal/auth` no expone todavía API para crear usuarios ni asignar roles (M1 la dejó fuera del alcance y `kdf_test.go` lo dice explícitamente); la alternativa, comprobar solo `auth.Can`, no vería si la ruta declara la capacidad equivocada, que es justo el fallo que este test tiene que atrapar en la superficie más sensible del hito. Pero eso ya está resuelto: `newRoleEnv` siembra `users.json` con un usuario por rol antes de abrir el store y `(*testEnv).as(role)` abre sesión con él, y T19 lo usa igual. Escribir aquí un segundo mecanismo (un `sesionDeRol` que añade un usuario suelto y reabre el servidor, más un `doAs` que lleva cookie y CSRF a mano) duplicaría el trabajo por otro camino y dejaría dos formas distintas de probar lo mismo. Lo único que esta tarea puede tener que tocar de ese fichero es añadir `auth.Admin` a `roleOrder` y `roleEmails` si T19 no lo hizo, que es aditivo.
+- **Los dos casos de roles son tests de nivel superior, no subtests.** `TestHandoffsRespetanElRolDeQuienLlama` no cuelga de `TestBandejaDeHandoffs` porque `newRoleEnv` construye su propio entorno (sin asistente inicial ni modo demo, con la flota falsa por defecto) y la bandeja de aquel test necesita el conector grabador. Sembrar por el store el dispositivo del handoff que se aprueba cuesta cuatro líneas y deja los dos tests independientes, con el mismo nombre y la misma forma que `TestPoliciesRespetanElRolDeQuienLlama` (T18) y `TestIncidentesRespetanElRolDeQuienLlama` (T19).
 - **Se añaden `writeEngineActionError`, `cooldownDetail`, `actorOf`, `sortHandoffs`, `validHandoffStatus`, `handoffStatusesHint`, `actionsHint`, `decisionBody` y `deviceActionRequest`**, que el esqueleto no nombra. Son la descomposición necesaria para respetar `funlen` (60/40) y `gocyclo` (15) con la traducción completa de los cinco centinelas de T16 compartida entre las tres entradas (aprobar, rechazar y acción manual), que es justo lo que no debe divergir entre ellas.
 - **`decideHandoff` resuelve `approve` y `reject` en una sola función**, con `handoffApprove` y `handoffReject` como los dos handlers que el esqueleto sí fija. Duplicar el cuerpo abriría la puerta a que una de las dos rutas dejara de traducir un error o de firmar con el actor de la sesión.
 - **El filtro `status` inválido responde 400 en vez de ignorarse.** El esqueleto solo pide que el filtro funcione. En una bandeja de aprobaciones, una lista vacía por un filtro mal escrito se lee como "no hay nada pendiente", que es el malentendido caro; el 400 nombra los cuatro estados.
@@ -25514,32 +25812,21 @@ En `cmd/lucidfence/app.go`, la llamada de `buildApp` pasa el store que ya tiene 
 	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Store: st, Auth: as, Web: web.Handler(dist), WebBuilt: webBuilt, Config: cfg, Logger: logger})
 ```
 
-En `internal/api/testutil_test.go`, `testEnv` gana el store raíz (detrás de `org`, junto a los campos `eng` y `clock` que añadió T20):
+En `internal/api/testutil_test.go`, `testEnv` gana el store raíz (detrás de `org`):
 ```go
 	org *store.OrgStore
 	// st es el almacén raíz: los tests de ajustes comprueban el fichero del
 	// secreto (0600) en st.SecretsDir("default").
 	st *store.Store
-	// eng y clock se guardan para poder reconstruir el servidor sobre los
-	// mismos directorios (reopen) cuando un test necesita que el store de
-	// auth vuelva a leer users.json.
-	eng   *engine.Engine
-	clock func() time.Time
 ```
 
-Y las tres construcciones pasan a incluirlo. En `newTestEnvWithFleet`:
+Y las dos construcciones del entorno pasan a incluirlo. En `newTestEnvWithFleet` (`internal/api/testutil_test.go`):
 ```go
 	h, _ := New(Deps{Engine: eng, Org: org, Store: st, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock,
 		Logger: slog.New(slog.NewTextHandler(logs, nil))})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, st: st, logs: logs, eng: eng, clock: clock}
-```
-
-En `(*testEnv).reopen` (T20):
-```go
-	h, _ := New(Deps{Engine: e.eng, Org: e.org, Store: e.st, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(),
-		Now: e.clock, Logger: slog.New(slog.NewTextHandler(e.logs, nil))})
+	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, st: st, logs: logs}
 ```
 
 En `internal/api/testutil_roles_test.go` (T18), `newRoleEnv`:
@@ -25548,7 +25835,7 @@ En `internal/api/testutil_roles_test.go` (T18), `newRoleEnv`:
 		Logger: slog.New(slog.NewTextHandler(logs, nil))})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, st: st, logs: logs, eng: eng, clock: clock}
+	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, st: st, logs: logs}
 ```
 
 En el mismo fichero, `roleOrder` y `roleEmails` ganan el rol que falta, porque `engine:config` es de `owner` y `admin` y la frontera que hay que fijar es `admin` frente a `operator` (si T19 o T20 ya lo añadieron, este trozo no se toca):
@@ -33126,6 +33413,4565 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 
 ---
 
+### Task 26: Web: eventos, registro de acciones y ajustes
+
+**Files:**
+- Create: `web/src/features/events/EventsPage.tsx`, `web/src/features/events/EventsPage.test.tsx`
+- Create: `web/src/features/actions/ActionsPage.tsx`, `web/src/features/actions/ActionsPage.test.tsx`
+- Create: `web/src/features/settings/SettingsPage.tsx`, `web/src/features/settings/EnforcementForm.tsx`, `web/src/features/settings/WebhooksForm.tsx`, `web/src/features/settings/EgressForm.tsx`, `web/src/features/settings/settingsForm.ts`
+- Create: `web/src/features/settings/SettingsPage.test.tsx`, `web/src/features/settings/EnforcementForm.test.tsx`, `web/src/features/settings/WebhooksForm.test.tsx`
+- Modify: `web/src/app/router.tsx` (tres rutas nuevas; ver "Desviaciones")
+- Verificar sin cambios: `web/src/app/nav.ts` (T22 ya registra `nav.events`, `nav.actions` y `nav.settings` con sus capacidades), `web/src/api/hooks.ts` y `web/src/api/hooks.m2.ts` (T22 es la única puerta de tipos y hooks; esta tarea no añade ninguno), `web/src/lib/i18n.es.ts` / `i18n.en.ts` (T22 ya cerró los bloques `event.*`, `action.*` y `settings.*`; esta tarea no los toca), `internal/api/*` y `docs/openapi.yaml` (T21 ya fijó rutas y esquemas), `web/src/api/schema.d.ts` (generado en T21)
+
+**Interfaces:**
+
+- Consumes:
+  - De T22 (`web/src/components/data-table/DataTable.tsx`): `DataTable<T>({ columns, rows, rowKey, empty, loading?, error?, onRetry?, skeletonRows? })` y `type Column<T> = { key: string; header: string; cell: (row: T) => ReactNode; className?: string }`. `empty` es un objeto `{title, description?, action?}`, no un nodo; el error gana siempre a los datos ya cargados (`DataTable` lo comprueba antes que `loading` y antes que `rows`).
+  - De T22 (`web/src/components/SeverityBadge.tsx`, `web/src/components/ui/switch.tsx`, `web/src/components/ui/checkbox.tsx`): `<SeverityBadge severity={...} />`; `<Switch checked onCheckedChange={(c: boolean) => ...} />` y `<Checkbox checked onCheckedChange={(c: boolean | "indeterminate") => ...} />`, ambas sobre `radix-ui`, ambas renderizan un `<button>` real (etiquetable envolviéndolas en `<label>`).
+  - De T22 (`web/src/api/hooks.ts`, reexportado desde `hooks.m2.ts`): `useSettings()`, `useUpdateEnforcement()`, `useUpdateWebhooks()`, `useUpdateEgress()`, `useValidateSettings()`, `useEventsPage(cursor?: string)`, `useActionsPage(cursor?: string)`, `useMe()`, `type Settings`, `type EnforcementSettings`, `type WebhookSettings`, `type EgressSettings`, `type SettingsValidation`, `type Transition`, `type ActionResult`. `useEventsPage`/`useActionsPage` fijan `limit=50` dentro del hook (no se pasa) y usan `placeholderData` para no parpadear al cambiar de cursor; una página vacía siguiente responde `next_cursor: ""`. `useValidateSettings()` se llama **sin cuerpo**: valida los ajustes ya guardados, no lo que haya sin guardar en un formulario. `useUpdateWebhooks(body: WebhookSettings)` está tipado con la forma de **lectura** (`secret_set` obligatorio, sin `secret`); el cuerpo real que exige el servidor (T21, `WebhookSettingsUpdate`) lleva `secret` opcional y no lleva `secret_set` — ver "Desviaciones".
+  - De T21 (`docs/openapi.yaml` → `schema.d.ts`): forma exacta de `Settings` (`schema_version, enforcement, webhook, ntfy, egress, risk, updated_at`), `EnforcementSettings` (`mode, live_actions, allow_wipe, wipe_allowlist, action_cooldown_seconds`), `WebhookSettings` (`url, format, events, enabled, secret_set`), `EgressSettings` (`hosts, allow_private`), `SettingsValidation` (`ok, error?, field?, channels: SettingsValidationChannel[]`) y `SettingsValidationChannel` (`channel: "webhook"|"ntfy", enabled, url?, ok, reason?, addresses?`); `EventPage`/`ActionPage` como `{items, next_cursor}`.
+  - De T20: `ActionResult` ampliado con `route_id?, policy_id?, playbook_id?, severity?, blocked?, error_type?`, todos opcionales salvo los ya existentes de M1 (`adapter, ok, device_id, device_name, action, dry_run, simulated, at`, y `fence_id`/`trigger` opcionales desde M1).
+  - De T1/T14 (dominio, `internal/engine`): los valores reales de `action.Result.Trigger` son `on_enter`, `on_exit`, `on_violation`, `on_unknown` (geocerca, M1, sin cambios — `internal/engine/actions.go`), y este hito añade `policy`, `route_exit`, `dwell` (T14) más `manual` (`ExecuteManual`, T16); un handoff aprobado ejecuta la misma acción por el mismo camino.
+  - De T12: los códigos de bloqueo de `action.Result.ErrorType` son literalmente `wipe_not_allowed` y `wipe_not_in_allowlist`; el texto humano ya localizado en español viaja en `action.Result.Error` (el mismo campo que rellena cualquier fallo de conector desde M1).
+  - De M1: `useMe()`, `can(capabilities, cap)` (`web/src/lib/permissions.ts`); `Button`, `Input`, `Label`, `NativeSelect`, `Badge`, `Tabs/TabsList/TabsTrigger/TabsContent` (`web/src/components/ui`); `Loading`, `ErrorState` (`web/src/components/states`); `formatDateTime` (`web/src/lib/format.ts`); `useT`/`useLang`/`type Key` (`web/src/lib/i18n.tsx`); las claves `fence.action.*` (nombres de las nueve acciones UEM, reutilizadas aquí tal y como T22 deja fijado), `fences.delete` ("Eliminar"), `fence.save` ("Guardar"), `common.no`; `renderWithProviders` (`web/src/test/render.tsx`); rutas `/devices/:id` (M1), `/fences/:id` (M1), `/policies/:id` (T23), `/playbooks/:id` (T25).
+
+- Produces:
+  ```ts
+  // web/src/features/settings/settingsForm.ts
+  export const actionOptions: readonly ["lock", "wipe", "message", "locate", "reboot", "clear_passcode", "set_compliance", "custom", "notify"];
+  export const webhookEventOptions: readonly ["incident.opened", "incident.closed", "handoff.pending", "action.executed", "alert.fired"];
+  export type EnforcementFormValues = { mode: "observe" | "enforce"; liveActions: (typeof actionOptions)[number][]; allowWipe: boolean; wipeAllowlist: { value: string }[]; actionCooldownSeconds: number };
+  export type WebhookFormValues = { url: string; format: "native" | "ocsf"; events: string[]; enabled: boolean; secret: string; secretTouched: boolean };
+  export type EgressFormValues = { hosts: { value: string }[]; allowPrivate: boolean };
+  export function makeEnforcementSchema(t: T): ZodType<EnforcementFormValues>;
+  export function makeWebhookSchema(t: T): ZodType<WebhookFormValues>;
+  export function makeEgressSchema(t: T): ZodType<EgressFormValues>;
+  export function toEnforcement(v: EnforcementFormValues): EnforcementSettings;
+  export function fromEnforcement(e: EnforcementSettings): EnforcementFormValues;
+  export function toWebhook(v: WebhookFormValues): WebhookSettings;   // sin `secret` si no se tocó
+  export function fromWebhook(w: WebhookSettings): WebhookFormValues; // secret siempre "", nunca el del servidor
+  export function toEgress(v: EgressFormValues): EgressSettings;
+  export function fromEgress(e: EgressSettings): EgressFormValues;
+
+  // Componentes
+  export function EventsPage(): JSX.Element;
+  export function ActionsPage(): JSX.Element;
+  export function SettingsPage(): JSX.Element;
+  export function EnforcementForm({ settings }: { settings: Settings }): JSX.Element;
+  export function WebhooksForm({ settings }: { settings: Settings }): JSX.Element;
+  export function EgressForm({ settings }: { settings: Settings }): JSX.Element;
+  ```
+
+  Decisiones fijadas aquí:
+
+  - **La paginación por cursor vive en cada página, no en `DataTable`.** `useEventsPage`/`useActionsPage` (T22) exponen una sola página por llamada; `EventsPage`/`ActionsPage` guardan el `cursor` y la lista acumulada en estado local y solo la amplían cuando `isFetching` pasa a `false` **para ese cursor concreto** (un `ref` recuerda el último cursor ya aplicado). Sin ese guardado, el `placeholderData` de T22 (que enseña la página anterior mientras llega la siguiente) haría que el efecto concatenara la página vieja consigo misma en cuanto cambia el cursor.
+  - **El error de la página gana a la lista ya cargada**, igual que dentro de `DataTable`: si "cargar más" falla, la tabla entera pasa a mostrar el error con su botón de reintento en vez de dejar ver una lista a medias sin avisar. Es la misma regla de T22 aplicada al nivel de la página completa.
+  - **El botón "cargar más" reutiliza `event.more`/`event.first`** en las dos vistas. El diccionario de T22 solo los declaró bajo `event.*`; no hay una clave `common.loadMore` ni un `action.more` propio, y esta tarea no puede tocar `i18n.es.ts`/`i18n.en.ts` (son de T22). Duplicar el texto en dos idiomas para dos botones que dicen exactamente lo mismo sería peor que reutilizar el namespace vecino.
+  - **El disparador de una acción se traduce agrupando el valor crudo del motor**, no con una clave por valor: `on_enter`/`on_exit`/`on_unknown` caen en `action.trigger.transition`, `on_violation` en `action.trigger.standing`, y `policy`/`route_exit`/`dwell`/`manual`/`handoff` en su clave homónima. T22 dejó exactamente siete claves `action.trigger.*` y los valores reales de `Trigger` son más finos (cuatro sabores de transición de geocerca desde M1); agruparlos es la única forma de que las siete claves ya cerradas cubran los valores reales sin inventar ninguna.
+  - **El motivo de un bloqueo se muestra tal cual lo manda el servidor (`ActionResult.Error`), no se vuelve a traducir.** `ErrorType` (`wipe_not_allowed`, `wipe_not_in_allowlist`) es el código de máquina y se enseña aparte, en monoespaciada, como dato técnico; el texto ya viene en español desde el guardarraíl (T12) siguiendo la misma convención que `ErrorState` usa desde M1 con `ApiError.message`. Inventar una segunda traducción del mismo texto duplicaría la fuente de verdad.
+  - **`useValidateSettings()` comprueba lo guardado, no el formulario en pantalla.** `EgressForm` no le manda los hosts que el operador esté editando: el botón "Comprobar" llama al hook sin argumentos (así lo cerró T22) y el resultado corresponde a los ajustes ya persistidos. Guardar y comprobar son dos botones distintos con dos efectos distintos, y el formulario lo dice en una línea de ayuda.
+  - **`SettingsPage` no tiene estado "vacío".** `Settings` es un documento único que el servidor siempre devuelve con valores por defecto (`settings.Default()`, T7); una tabla puede estar vacía, un ajuste no. Los tres estados que sí aplican (cargando, error, contenido) se cubren explícitamente; el cuarto lo cubre el redirect por falta de capacidad, que es el propio "no hay nada que ver aquí" de esta vista.
+  - **La redirección por capacidad vive dentro de `SettingsPage`, no en el router.** Ninguna tarea de este hito ha creado todavía un guardián de ruta genérico (T22 solo recorta la navegación con `visibleNav`; el guardián por vista más parecido, `AuthGate`, es de sesión, no de capacidad). `SettingsPage` comprueba `can(me.data?.capabilities, "engine:config")` en cuanto `useMe()` resuelve y devuelve `<Navigate to="/" replace />`; el servidor la exige igual en las cuatro rutas de ajustes (T21).
+
+- [ ] **Step 1: Tests de `EventsPage` y `ActionsPage` (fallan)**
+
+`web/src/features/events/EventsPage.test.tsx`:
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { EventsPage } from "./EventsPage";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useEventsPage: vi.fn() }));
+
+const page1 = {
+  items: [
+    { at: "2026-09-05T12:00:00Z", device_id: "dev-001", device_name: "Tablet Campo A1", from: "none:unknown", to: "demo-hq:inside" },
+    { at: "2026-09-05T12:05:00Z", device_id: "dev-002", device_name: "Portátil Ventas", from: "demo-hq:inside", to: "demo-hq:outside" },
+  ],
+  next_cursor: "c2",
+};
+const page2 = {
+  items: [{ at: "2026-09-05T12:10:00Z", device_id: "dev-003", device_name: "Móvil Reparto", from: "none:unknown", to: "demo-hq:inside" }],
+  next_cursor: "",
+};
+
+function mockPages() {
+  vi.mocked(hooks.useEventsPage).mockImplementation(
+    ((cursor?: string) =>
+      cursor === "c2"
+        ? { data: page2, isPending: false, isFetching: false, error: null, refetch: vi.fn() }
+        : { data: page1, isPending: false, isFetching: false, error: null, refetch: vi.fn() }) as never,
+  );
+}
+
+test("cargando", () => {
+  vi.mocked(hooks.useEventsPage).mockReturnValue({ data: undefined, isPending: true, isFetching: true, error: null, refetch: vi.fn() } as never);
+  renderWithProviders(<EventsPage />);
+  expect(screen.getByRole("status")).toBeInTheDocument();
+});
+
+test("vacío", () => {
+  vi.mocked(hooks.useEventsPage).mockReturnValue({ data: { items: [], next_cursor: "" }, isPending: false, isFetching: false, error: null, refetch: vi.fn() } as never);
+  renderWithProviders(<EventsPage />);
+  expect(screen.getByText("Sin transiciones. Ejecuta un ciclo del motor.")).toBeInTheDocument();
+});
+
+test("error", () => {
+  vi.mocked(hooks.useEventsPage).mockReturnValue({ data: undefined, isPending: false, isFetching: false, error: new Error("caído"), refetch: vi.fn() } as never);
+  renderWithProviders(<EventsPage />);
+  expect(screen.getByRole("alert")).toHaveTextContent("caído");
+});
+
+test("cargar más envía el cursor devuelto, concatena sin duplicar y el botón desaparece al agotarse", async () => {
+  mockPages();
+  renderWithProviders(<EventsPage />);
+  expect(screen.getByText("Tablet Campo A1")).toBeInTheDocument();
+  expect(screen.getByText("Portátil Ventas")).toBeInTheDocument();
+  expect(screen.getAllByRole("row")).toHaveLength(3); // cabecera + 2 filas
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Cargar más" }));
+  await waitFor(() => expect(screen.getByText("Móvil Reparto")).toBeInTheDocument());
+  expect(screen.getAllByRole("row")).toHaveLength(4); // cabecera + 3 filas
+  expect(screen.getAllByText("Tablet Campo A1")).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+});
+```
+
+`web/src/features/actions/ActionsPage.test.tsx`:
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { ActionsPage } from "./ActionsPage";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useActionsPage: vi.fn() }));
+
+const blocked = {
+  adapter: "simulation",
+  ok: false,
+  device_id: "dev-001",
+  device_name: "Tablet Campo A1",
+  action: "wipe",
+  dry_run: false,
+  simulated: true,
+  at: "2026-09-05T12:00:00Z",
+  trigger: "policy",
+  policy_id: "pol-1",
+  severity: "critical",
+  blocked: true,
+  error_type: "wipe_not_allowed",
+  error: "el borrado no está permitido con los ajustes de enforcement actuales",
+};
+const dryRun = {
+  adapter: "simulation",
+  ok: true,
+  device_id: "dev-002",
+  device_name: "Portátil Ventas",
+  action: "message",
+  dry_run: true,
+  simulated: true,
+  at: "2026-09-05T12:05:00Z",
+  trigger: "on_enter",
+  fence_id: "demo-hq",
+};
+
+test("cargando", () => {
+  vi.mocked(hooks.useActionsPage).mockReturnValue({ data: undefined, isPending: true, isFetching: true, error: null, refetch: vi.fn() } as never);
+  renderWithProviders(<ActionsPage />);
+  expect(screen.getByRole("status")).toBeInTheDocument();
+});
+
+test("vacío", () => {
+  vi.mocked(hooks.useActionsPage).mockReturnValue({ data: { items: [], next_cursor: "" }, isPending: false, isFetching: false, error: null, refetch: vi.fn() } as never);
+  renderWithProviders(<ActionsPage />);
+  expect(screen.getByText("Sin acciones registradas.")).toBeInTheDocument();
+});
+
+test("error", () => {
+  vi.mocked(hooks.useActionsPage).mockReturnValue({ data: undefined, isPending: false, isFetching: false, error: new Error("caído"), refetch: vi.fn() } as never);
+  renderWithProviders(<ActionsPage />);
+  expect(screen.getByRole("alert")).toHaveTextContent("caído");
+});
+
+test("una acción bloqueada muestra el motivo en ámbar y una simulada se etiqueta como tal", () => {
+  vi.mocked(hooks.useActionsPage).mockReturnValue({
+    data: { items: [blocked, dryRun], next_cursor: "" },
+    isPending: false,
+    isFetching: false,
+    error: null,
+    refetch: vi.fn(),
+  } as never);
+  renderWithProviders(<ActionsPage />);
+  const bloqueada = screen.getByText("Bloqueada");
+  expect(bloqueada.className).toContain("sev-medium");
+  expect(screen.getByText("el borrado no está permitido con los ajustes de enforcement actuales")).toBeInTheDocument();
+  expect(screen.getByText("wipe_not_allowed")).toBeInTheDocument();
+  expect(screen.getByText("Simulada")).toBeInTheDocument();
+});
+
+test("cargar más pagina el registro de acciones con el cursor devuelto", async () => {
+  const page1 = { items: [dryRun], next_cursor: "c2" };
+  const page2 = { items: [blocked], next_cursor: "" };
+  vi.mocked(hooks.useActionsPage).mockImplementation(
+    ((cursor?: string) =>
+      cursor === "c2"
+        ? { data: page2, isPending: false, isFetching: false, error: null, refetch: vi.fn() }
+        : { data: page1, isPending: false, isFetching: false, error: null, refetch: vi.fn() }) as never,
+  );
+  renderWithProviders(<ActionsPage />);
+  expect(screen.getByText("Portátil Ventas")).toBeInTheDocument();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Cargar más" }));
+  await waitFor(() => expect(screen.getByText("Tablet Campo A1")).toBeInTheDocument());
+  expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/events/EventsPage.test.tsx src/features/actions/ActionsPage.test.tsx
+```
+
+Expected: `Failed to load url ./EventsPage` y `Failed to load url ./ActionsPage`, `9 failed`.
+
+- [ ] **Step 2: Implementar `EventsPage.tsx` y `ActionsPage.tsx`**
+
+`web/src/features/events/EventsPage.tsx`:
+```tsx
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
+import { DataTable, type Column } from "@/components/data-table/DataTable";
+import { useEventsPage, type Transition } from "@/api/hooks";
+import { useT, useLang } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
+
+// La lista acumulada vive en estado local: useEventsPage solo conoce una
+// página por llamada (T22). appliedCursor recuerda el último cursor ya
+// volcado a `items`; sin él, el placeholderData de T22 (que enseña la página
+// anterior mientras llega la siguiente) haría que este efecto concatenara la
+// página vieja consigo misma en cuanto cambia el cursor.
+export function EventsPage() {
+  const t = useT();
+  const { lang } = useLang();
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [items, setItems] = useState<Transition[]>([]);
+  const appliedCursor = useRef<string | undefined>(undefined);
+  const page = useEventsPage(cursor);
+
+  useEffect(() => {
+    if (!page.data || page.isFetching) return;
+    if (appliedCursor.current === cursor) return;
+    appliedCursor.current = cursor;
+    setItems((prev) => (cursor ? [...prev, ...page.data!.items] : page.data!.items));
+  }, [page.data, page.isFetching, cursor]);
+
+  const columns: Column<Transition>[] = [
+    { key: "at", header: t("event.col.at"), cell: (e) => formatDateTime(e.at, lang) },
+    {
+      key: "device",
+      header: t("event.col.device"),
+      cell: (e) => (
+        <Link to={`/devices/${e.device_id}`} className="hover:text-accent">
+          {e.device_name}
+        </Link>
+      ),
+    },
+    { key: "from", header: t("event.col.from"), cell: (e) => e.from },
+    { key: "to", header: t("event.col.to"), cell: (e) => e.to },
+  ];
+
+  const nextCursor = page.data?.next_cursor ?? "";
+  const showMore = items.length > 0 && !page.error && nextCursor !== "";
+  const resetToFirst = () => {
+    appliedCursor.current = undefined;
+    setItems([]);
+    setCursor(undefined);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">{t("event.title")}</h1>
+        {cursor !== undefined && (
+          <Button variant="ghost" size="sm" onClick={resetToFirst}>
+            {t("event.first")}
+          </Button>
+        )}
+      </div>
+      <DataTable
+        columns={columns}
+        rows={items}
+        rowKey={(e) => `${e.device_id}|${e.at}|${e.to}`}
+        empty={{ title: t("event.empty") }}
+        loading={page.isPending}
+        error={page.error}
+        onRetry={() => page.refetch()}
+      />
+      {showMore && (
+        <div className="flex justify-center">
+          <Button variant="secondary" onClick={() => setCursor(nextCursor)} disabled={page.isFetching}>
+            {t("event.more")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+`web/src/features/actions/ActionsPage.tsx`:
+```tsx
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SeverityBadge } from "@/components/SeverityBadge";
+import { DataTable, type Column } from "@/components/data-table/DataTable";
+import { useActionsPage, type ActionResult } from "@/api/hooks";
+import { useT, useLang, type Key } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
+
+// El motor sigue usando on_enter/on_exit/on_violation/on_unknown para las
+// acciones de geocerca (M1, internal/engine/actions.go, sin cambios) y suma
+// policy/route_exit/dwell en este hito (T14); ExecuteManual (T16) deja
+// manual/handoff. T22 solo cerró siete claves action.trigger.*: los cuatro
+// sabores de transición de geocerca comparten "transition" y la violación
+// sostenida es la única que tiene bucket propio ("standing").
+const triggerKeys: Record<string, Key> = {
+  on_enter: "action.trigger.transition",
+  on_exit: "action.trigger.transition",
+  on_unknown: "action.trigger.transition",
+  on_violation: "action.trigger.standing",
+  policy: "action.trigger.policy",
+  route_exit: "action.trigger.route_exit",
+  dwell: "action.trigger.dwell",
+  manual: "action.trigger.manual",
+  handoff: "action.trigger.handoff",
+};
+
+function triggerKey(trigger: string | undefined): Key {
+  return triggerKeys[trigger ?? ""] ?? "action.trigger.transition";
+}
+
+// El orden importa: un bloqueo del guardarraíl (una buena noticia: el
+// guardarraíl hizo su trabajo) se distingue de un fallo real del conector, y
+// ninguno de los dos se anuncia nunca como "ejecutada" si dry_run es true.
+function resultKey(a: ActionResult): Key {
+  if (a.blocked) return "action.blocked";
+  if (!a.ok) return "action.failed";
+  if (a.dry_run) return "action.dryRun";
+  return "action.ok";
+}
+
+const resultVariant: Record<string, "success" | "warning" | "danger" | "neutral"> = {
+  "action.blocked": "warning",
+  "action.failed": "danger",
+  "action.dryRun": "neutral",
+  "action.ok": "success",
+};
+
+function TriggerCell({ a }: { a: ActionResult }) {
+  const t = useT();
+  const label = t(triggerKey(a.trigger));
+  // route_id no tiene página de detalle en este hito (ninguna tarea de M1-M2
+  // publica una vista de rutas): se enseña como dato, no como enlace.
+  if (a.policy_id) {
+    return (
+      <Link to={`/policies/${a.policy_id}`} className="hover:text-accent">
+        {label} · {a.policy_id}
+      </Link>
+    );
+  }
+  if (a.playbook_id) {
+    return (
+      <Link to={`/playbooks/${a.playbook_id}`} className="hover:text-accent">
+        {label} · {a.playbook_id}
+      </Link>
+    );
+  }
+  if (a.route_id) {
+    return (
+      <span>
+        {label} · <span className="font-mono text-xs text-muted">{a.route_id}</span>
+      </span>
+    );
+  }
+  if (a.fence_id) {
+    return (
+      <Link to={`/fences/${a.fence_id}`} className="hover:text-accent">
+        {label} · {a.fence_id}
+      </Link>
+    );
+  }
+  return <span>{label}</span>;
+}
+
+// El motivo de un bloqueo es el texto que ya llega en español desde el
+// guardarraíl (ActionResult.Error, T12): no se vuelve a traducir en el
+// cliente, igual que ErrorState hace desde M1 con ApiError.message.
+// error_type (el código de máquina, p. ej. "wipe_not_allowed") se enseña
+// aparte, en monoespaciada, como dato técnico.
+function ResultCell({ a }: { a: ActionResult }) {
+  const t = useT();
+  const key = resultKey(a);
+  return (
+    <div className="space-y-1">
+      <Badge variant={resultVariant[key]}>{t(key)}</Badge>
+      {a.error && <p className={a.blocked ? "text-xs text-sev-medium" : "text-xs text-sev-high"}>{a.error}</p>}
+      <p className="text-xs text-muted">
+        {a.adapter}
+        {a.error_type ? ` · ${a.error_type}` : ""}
+      </p>
+    </div>
+  );
+}
+
+export function ActionsPage() {
+  const t = useT();
+  const { lang } = useLang();
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [items, setItems] = useState<ActionResult[]>([]);
+  const appliedCursor = useRef<string | undefined>(undefined);
+  const page = useActionsPage(cursor);
+
+  useEffect(() => {
+    if (!page.data || page.isFetching) return;
+    if (appliedCursor.current === cursor) return;
+    appliedCursor.current = cursor;
+    setItems((prev) => (cursor ? [...prev, ...page.data!.items] : page.data!.items));
+  }, [page.data, page.isFetching, cursor]);
+
+  const columns: Column<ActionResult>[] = [
+    { key: "at", header: t("action.col.at"), cell: (a) => formatDateTime(a.at, lang) },
+    {
+      key: "device",
+      header: t("action.col.device"),
+      cell: (a) => (
+        <Link to={`/devices/${a.device_id}`} className="hover:text-accent">
+          {a.device_name}
+        </Link>
+      ),
+    },
+    {
+      key: "action",
+      header: t("action.col.action"),
+      cell: (a) => (
+        <span className="flex items-center gap-2">
+          {t(`fence.action.${a.action}`)}
+          {a.severity && <SeverityBadge severity={a.severity} />}
+        </span>
+      ),
+    },
+    { key: "trigger", header: t("action.col.trigger"), cell: (a) => <TriggerCell a={a} /> },
+    { key: "result", header: t("action.col.result"), cell: (a) => <ResultCell a={a} /> },
+  ];
+
+  const nextCursor = page.data?.next_cursor ?? "";
+  const showMore = items.length > 0 && !page.error && nextCursor !== "";
+  const resetToFirst = () => {
+    appliedCursor.current = undefined;
+    setItems([]);
+    setCursor(undefined);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">{t("action.title")}</h1>
+        {cursor !== undefined && (
+          <Button variant="ghost" size="sm" onClick={resetToFirst}>
+            {t("event.first")}
+          </Button>
+        )}
+      </div>
+      <DataTable
+        columns={columns}
+        rows={items}
+        rowKey={(a) => `${a.device_id}|${a.at}|${a.action}|${a.trigger ?? ""}`}
+        empty={{ title: t("action.empty") }}
+        loading={page.isPending}
+        error={page.error}
+        onRetry={() => page.refetch()}
+      />
+      {showMore && (
+        <div className="flex justify-center">
+          <Button variant="secondary" onClick={() => setCursor(nextCursor)} disabled={page.isFetching}>
+            {t("event.more")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/events/EventsPage.test.tsx src/features/actions/ActionsPage.test.tsx
+```
+
+Expected: `Test Files 2 passed`, `Tests 9 passed` (4 en `EventsPage.test.tsx`, 5 en `ActionsPage.test.tsx`).
+
+---
+
+- [ ] **Step 3: Tests de `SettingsPage`, `EnforcementForm` y `WebhooksForm` (fallan)**
+
+`web/src/features/settings/SettingsPage.test.tsx`:
+```tsx
+import { screen } from "@testing-library/react";
+import { Routes, Route } from "react-router";
+import { renderWithProviders } from "@/test/render";
+import { SettingsPage } from "./SettingsPage";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({
+  ...(await orig<typeof hooks>()),
+  useMe: vi.fn(),
+  useSettings: vi.fn(),
+  useUpdateEnforcement: vi.fn(),
+  useUpdateWebhooks: vi.fn(),
+  useUpdateEgress: vi.fn(),
+  useValidateSettings: vi.fn(),
+}));
+
+const settings = {
+  schema_version: 1,
+  enforcement: { mode: "observe", live_actions: [], allow_wipe: false, wipe_allowlist: [], action_cooldown_seconds: 3600 },
+  webhook: { url: "", format: "native", events: [], enabled: false, secret_set: false },
+  ntfy: { url: "", enabled: false, token_set: false },
+  egress: { hosts: [], allow_private: false },
+  risk: { shift_zones: {}, zone_risk: {}, off_hours_start: 20, off_hours_end: 7 },
+  updated_at: "2026-09-05T12:00:00Z",
+} as never;
+
+function mockFormHooks() {
+  vi.mocked(hooks.useUpdateEnforcement).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateWebhooks).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateEgress).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, isSuccess: false, error: null } as never);
+  vi.mocked(hooks.useValidateSettings).mockReturnValue({ mutate: vi.fn(), isPending: false, data: undefined, error: null } as never);
+}
+
+function tree() {
+  return (
+    <Routes>
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/" element={<p>HOME</p>} />
+    </Routes>
+  );
+}
+
+test("cargando", () => {
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:config"] }, isPending: true } as never);
+  vi.mocked(hooks.useSettings).mockReturnValue({ data: undefined, isPending: true, error: null } as never);
+  renderWithProviders(tree(), { route: "/settings" });
+  expect(screen.getByRole("status")).toBeInTheDocument();
+});
+
+test("error", () => {
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:config"] }, isPending: false } as never);
+  vi.mocked(hooks.useSettings).mockReturnValue({ data: undefined, isPending: false, error: new Error("caído"), refetch: vi.fn() } as never);
+  renderWithProviders(tree(), { route: "/settings" });
+  expect(screen.getByRole("alert")).toHaveTextContent("caído");
+});
+
+test("un rol sin engine:config no ve la vista y el router redirige", () => {
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["device:read"] }, isPending: false } as never);
+  vi.mocked(hooks.useSettings).mockReturnValue({ data: settings, isPending: false, error: null } as never);
+  renderWithProviders(tree(), { route: "/settings" });
+  expect(screen.getByText("HOME")).toBeInTheDocument();
+  expect(screen.queryByText("Ajustes")).toBeNull();
+});
+
+test("con engine:config muestra las tres pestañas", () => {
+  mockFormHooks();
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:config"] }, isPending: false } as never);
+  vi.mocked(hooks.useSettings).mockReturnValue({ data: settings, isPending: false, error: null } as never);
+  renderWithProviders(tree(), { route: "/settings" });
+  expect(screen.getByRole("heading", { name: "Ajustes" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Enforcement" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Notificaciones" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Salida de red" })).toBeInTheDocument();
+});
+```
+
+`web/src/features/settings/EnforcementForm.test.tsx`:
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { EnforcementForm } from "./EnforcementForm";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useUpdateEnforcement: vi.fn() }));
+
+const settings = {
+  schema_version: 1,
+  enforcement: { mode: "observe", live_actions: [], allow_wipe: false, wipe_allowlist: [], action_cooldown_seconds: 3600 },
+  webhook: { url: "", format: "native", events: [], enabled: false, secret_set: false },
+  ntfy: { url: "", enabled: false, token_set: false },
+  egress: { hosts: [], allow_private: false },
+  risk: { shift_zones: {}, zone_risk: {}, off_hours_start: 20, off_hours_end: 7 },
+  updated_at: "2026-09-05T12:00:00Z",
+} as never;
+
+function setup() {
+  const mutateAsync = vi.fn().mockResolvedValue(settings.enforcement);
+  vi.mocked(hooks.useUpdateEnforcement).mockReturnValue({ mutateAsync, isPending: false, error: null } as never);
+  renderWithProviders(<EnforcementForm settings={settings} />);
+  return mutateAsync;
+}
+
+test("en observe las llaves de wipe están deshabilitadas", () => {
+  setup();
+  expect(screen.getByRole("checkbox", { name: "Permitir borrado completo" })).toBeDisabled();
+});
+
+test("pasar a enforce habilita las llaves de wipe y muestra el aviso", async () => {
+  setup();
+  const user = userEvent.setup();
+  expect(screen.queryByText(/tocarán dispositivos reales/)).toBeNull();
+  await user.click(screen.getByRole("switch"));
+  expect(screen.getByRole("checkbox", { name: "Permitir borrado completo" })).not.toBeDisabled();
+  expect(screen.getByText(/tocarán dispositivos reales/)).toBeInTheDocument();
+});
+
+test("guardar envía live_actions como lista del enum", async () => {
+  const mutateAsync = setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("checkbox", { name: "Bloquear" }));
+  await user.click(screen.getByRole("checkbox", { name: "Localizar" }));
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
+  expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ live_actions: ["lock", "locate"] }));
+});
+
+test("un wipe_allowlist con un id vacío muestra el error", async () => {
+  setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("switch"));
+  await user.click(screen.getByRole("button", { name: "Añadir" }));
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+});
+```
+
+`web/src/features/settings/WebhooksForm.test.tsx`:
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { WebhooksForm } from "./WebhooksForm";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useUpdateWebhooks: vi.fn() }));
+
+const settings = {
+  schema_version: 1,
+  enforcement: { mode: "observe", live_actions: [], allow_wipe: false, wipe_allowlist: [], action_cooldown_seconds: 3600 },
+  webhook: { url: "https://hooks.example.com/lucidfence", format: "native", events: ["incident.opened"], enabled: true, secret_set: true },
+  ntfy: { url: "", enabled: false, token_set: false },
+  egress: { hosts: [], allow_private: false },
+  risk: { shift_zones: {}, zone_risk: {}, off_hours_start: 20, off_hours_end: 7 },
+  updated_at: "2026-09-05T12:00:00Z",
+} as never;
+
+function setup() {
+  const mutateAsync = vi.fn().mockResolvedValue(settings.webhook);
+  vi.mocked(hooks.useUpdateWebhooks).mockReturnValue({ mutateAsync, isPending: false, error: null } as never);
+  renderWithProviders(<WebhooksForm settings={settings} />);
+  return mutateAsync;
+}
+
+test("el secreto nunca se rellena con el valor del servidor aunque secret_set sea true", () => {
+  setup();
+  expect(screen.getByLabelText("Secreto de firma")).toHaveValue("");
+  expect(screen.getByText("Configurado")).toBeInTheDocument();
+});
+
+test("guardar sin tocar el secreto no lo envía", async () => {
+  const mutateAsync = setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
+  expect(mutateAsync.mock.calls[0][0]).not.toHaveProperty("secret");
+});
+
+test("vaciar el secreto explícitamente envía la cadena vacía", async () => {
+  const mutateAsync = setup();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Eliminar" }));
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
+  expect(mutateAsync.mock.calls[0][0]).toMatchObject({ secret: "" });
+});
+
+test("escribir un secreto nuevo lo envía en claro", async () => {
+  const mutateAsync = setup();
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Secreto de firma"), "s3cr3t0");
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce());
+  expect(mutateAsync.mock.calls[0][0]).toMatchObject({ secret: "s3cr3t0" });
+});
+
+test("elegir OCSF avisa de que el evento no viaja en el sobre nativo", async () => {
+  setup();
+  const user = userEvent.setup();
+  await user.selectOptions(screen.getByLabelText("Formato"), "ocsf");
+  expect(screen.getByText(/sobre nativo/)).toBeInTheDocument();
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/settings
+```
+
+Expected: `Failed to load url ./SettingsPage`, `./EnforcementForm`, `./WebhooksForm`, `13 failed`.
+
+---
+
+- [ ] **Step 4: `settingsForm.ts`**
+
+`web/src/features/settings/settingsForm.ts`:
+```ts
+import { z } from "zod";
+import type { EgressSettings, EnforcementSettings, WebhookSettings } from "@/api/hooks";
+import type { Key } from "@/lib/i18n";
+
+type T = (key: Key, vars?: Record<string, string | number>) => string;
+
+// Mismo orden que action.All (internal/domain/action, M1): lock, wipe,
+// message, locate, reboot, clear_passcode, set_compliance, custom, notify.
+// Las etiquetas reutilizan fence.action.* (M1): T22 deja fijado que estas
+// claves no se duplican para el registro de acciones ni para el selector de
+// acciones en vivo de enforcement.
+export const actionOptions = ["lock", "wipe", "message", "locate", "reboot", "clear_passcode", "set_compliance", "custom", "notify"] as const;
+
+export const webhookEventOptions = ["incident.opened", "incident.closed", "handoff.pending", "action.executed", "alert.fired"] as const;
+
+export type EnforcementFormValues = {
+  mode: "observe" | "enforce";
+  liveActions: (typeof actionOptions)[number][];
+  allowWipe: boolean;
+  wipeAllowlist: { value: string }[];
+  actionCooldownSeconds: number;
+};
+
+// T22 no reservó una clave de error para una entrada vacía de
+// wipe_allowlist (solo dejó settings.enforcement.wipeAllowlist.help, que es
+// ayuda, no error). i18n.es.ts/i18n.en.ts son de T22 y esta tarea no los
+// toca, así que el mensaje va en español fijo en vez de forzar una clave que
+// no existe o dejar el campo sin explicación.
+const WIPE_ID_REQUIRED = "El identificador no puede estar vacío";
+
+export function makeEnforcementSchema(t: T) {
+  return z.object({
+    mode: z.enum(["observe", "enforce"]),
+    liveActions: z.array(z.enum(actionOptions)),
+    allowWipe: z.boolean(),
+    wipeAllowlist: z.array(z.object({ value: z.string().trim().min(1, WIPE_ID_REQUIRED) })),
+    actionCooldownSeconds: z.coerce
+      .number(t("settings.error.cooldown"))
+      .int(t("settings.error.cooldown"))
+      .min(0, t("settings.error.cooldown")),
+  });
+}
+
+export function toEnforcement(v: EnforcementFormValues): EnforcementSettings {
+  return {
+    mode: v.mode,
+    live_actions: v.liveActions,
+    allow_wipe: v.allowWipe,
+    wipe_allowlist: v.wipeAllowlist.map((w) => w.value.trim()),
+    action_cooldown_seconds: v.actionCooldownSeconds,
+  };
+}
+
+export function fromEnforcement(e: EnforcementSettings): EnforcementFormValues {
+  return {
+    mode: e.mode as EnforcementFormValues["mode"],
+    liveActions: e.live_actions as EnforcementFormValues["liveActions"],
+    allowWipe: e.allow_wipe,
+    wipeAllowlist: e.wipe_allowlist.map((value) => ({ value })),
+    actionCooldownSeconds: e.action_cooldown_seconds,
+  };
+}
+
+export type WebhookFormValues = {
+  url: string;
+  format: "native" | "ocsf";
+  events: string[];
+  enabled: boolean;
+  // El secreto nunca llega del servidor (GET solo manda secret_set, spec
+  // §5.2): el formulario siempre arranca con "" y secretTouched distingue
+  // "no lo toqué" (no se envía) de "lo vacié a propósito" (se envía "").
+  secret: string;
+  secretTouched: boolean;
+};
+
+export function makeWebhookSchema(t: T) {
+  return z
+    .object({
+      url: z.string().trim(),
+      format: z.enum(["native", "ocsf"]),
+      events: z.array(z.enum(webhookEventOptions)),
+      enabled: z.boolean(),
+      secret: z.string(),
+      secretTouched: z.boolean(),
+    })
+    .refine((v) => v.url === "" || v.url.startsWith("https://"), { path: ["url"], message: t("settings.error.url") })
+    .refine((v) => !v.enabled || v.url !== "", { path: ["url"], message: t("settings.error.url") });
+}
+
+export function fromWebhook(w: WebhookSettings): WebhookFormValues {
+  return { url: w.url, format: w.format as WebhookFormValues["format"], events: w.events, enabled: w.enabled, secret: "", secretTouched: false };
+}
+
+// El PUT real (T21: WebhookSettingsUpdate) lleva `secret` opcional y nunca
+// `secret_set`; T22 tipó useUpdateWebhooks(body: WebhookSettings), la forma
+// de LECTURA (secret_set obligatorio, sin secret). Esta tarea respeta el
+// contrato de red real de T21 y lo dice con un cast en vez de mandar
+// secret_set (un campo que el formulario nunca calcula y que el servidor no
+// necesita en la escritura); reabrir la firma de T22 queda fuera de T26.
+export function toWebhook(v: WebhookFormValues): WebhookSettings {
+  const base = { url: v.url.trim(), format: v.format, events: v.events, enabled: v.enabled };
+  return (v.secretTouched ? { ...base, secret: v.secret } : base) as WebhookSettings;
+}
+
+export type EgressFormValues = { hosts: { value: string }[]; allowPrivate: boolean };
+
+export function makeEgressSchema(t: T) {
+  return z.object({
+    hosts: z.array(z.object({ value: z.string().trim().min(1, t("settings.error.host")) })),
+    allowPrivate: z.boolean(),
+  });
+}
+
+export function fromEgress(e: EgressSettings): EgressFormValues {
+  return { hosts: e.hosts.map((value) => ({ value })), allowPrivate: e.allow_private };
+}
+
+export function toEgress(v: EgressFormValues): EgressSettings {
+  return { hosts: v.hosts.map((h) => h.value.trim()), allow_private: v.allowPrivate };
+}
+```
+
+Run:
+```bash
+cd web && npm run typecheck
+```
+
+Expected: `tsc` sin salida (los tres formularios que siguen ya pueden importar de aquí).
+
+---
+
+- [ ] **Step 5: `EnforcementForm.tsx`**
+
+`web/src/features/settings/EnforcementForm.tsx`:
+```tsx
+import { useMemo } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Trash } from "@phosphor-icons/react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useUpdateEnforcement, type Settings } from "@/api/hooks";
+import { useT } from "@/lib/i18n";
+import { actionOptions, fromEnforcement, makeEnforcementSchema, toEnforcement, type EnforcementFormValues } from "./settingsForm";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="text-xs text-sev-high">
+      {message}
+    </p>
+  );
+}
+
+export function EnforcementForm({ settings }: { settings: Settings }) {
+  const t = useT();
+  const update = useUpdateEnforcement();
+  const schema = useMemo(() => makeEnforcementSchema(t), [t]);
+  const form = useForm<z.input<typeof schema>, unknown, EnforcementFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: fromEnforcement(settings.enforcement),
+  });
+  const wipeAllowlist = useFieldArray({ control: form.control, name: "wipeAllowlist" });
+  const mode = form.watch("mode");
+  const liveActions = form.watch("liveActions");
+  const errs = form.formState.errors;
+  const enforcing = mode === "enforce";
+
+  const submit = form.handleSubmit(async (values) => {
+    await update.mutateAsync(toEnforcement(values));
+  });
+
+  const toggleAction = (a: (typeof actionOptions)[number], checked: boolean) => {
+    const next = checked ? [...liveActions, a] : liveActions.filter((x) => x !== a);
+    form.setValue(
+      "liveActions",
+      actionOptions.filter((o) => next.includes(o)),
+      { shouldDirty: true },
+    );
+  };
+
+  return (
+    <form onSubmit={submit} noValidate className="max-w-2xl space-y-6">
+      <div className="space-y-1.5">
+        <Label>{t("settings.enforcement.mode")}</Label>
+        <label className="flex items-center gap-3">
+          <Switch checked={enforcing} onCheckedChange={(c) => form.setValue("mode", c ? "enforce" : "observe", { shouldDirty: true })} />
+          <span className="text-sm font-medium">{t(enforcing ? "settings.enforcement.mode.enforce" : "settings.enforcement.mode.observe")}</span>
+        </label>
+        <p className="text-sm text-muted">{t("settings.enforcement.mode.help")}</p>
+        {enforcing && (
+          <p className="rounded-[var(--radius-ui)] border border-sev-medium/30 bg-sev-medium/5 p-3 text-sm text-sev-medium">
+            Con aplicación activa, las acciones en vivo de la lista de abajo tocarán dispositivos reales, no solo el registro.
+          </p>
+        )}
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-fg-2">{t("settings.enforcement.liveActions")}</legend>
+        <p className="text-xs text-muted">{t("settings.enforcement.liveActions.help")}</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+          {actionOptions.map((a) => (
+            <label key={a} className="flex items-center gap-2 text-sm">
+              <Checkbox checked={liveActions.includes(a)} onCheckedChange={(c) => toggleAction(a, c === true)} />
+              {t(`fence.action.${a}`)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="actionCooldownSeconds">{t("settings.enforcement.cooldown")}</Label>
+        <Input
+          id="actionCooldownSeconds"
+          type="number"
+          step="1"
+          min="0"
+          aria-invalid={!!errs.actionCooldownSeconds}
+          {...form.register("actionCooldownSeconds")}
+        />
+        <p className="text-xs text-muted">{t("settings.enforcement.cooldown.help")}</p>
+        <FieldError message={errs.actionCooldownSeconds?.message} />
+      </div>
+
+      <fieldset disabled={!enforcing} className="space-y-3 rounded-[var(--radius-ui)] border border-border p-4">
+        <legend className="px-1 text-sm font-medium text-fg-2">{t("settings.enforcement.allowWipe")}</legend>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox
+            disabled={!enforcing}
+            checked={form.watch("allowWipe")}
+            onCheckedChange={(c) => form.setValue("allowWipe", c === true, { shouldDirty: true })}
+          />
+          {t("settings.enforcement.allowWipe")}
+        </label>
+        <p className="text-sm text-muted">{t("settings.enforcement.allowWipe.help")}</p>
+        <div className="space-y-2">
+          <Label>{t("settings.enforcement.wipeAllowlist")}</Label>
+          <p className="text-xs text-muted">{t("settings.enforcement.wipeAllowlist.help")}</p>
+          {wipeAllowlist.fields.map((f, i) => (
+            <div key={f.id} className="flex items-center gap-2">
+              <Input disabled={!enforcing} aria-invalid={!!errs.wipeAllowlist?.[i]?.value} {...form.register(`wipeAllowlist.${i}.value`)} />
+              <FieldError message={errs.wipeAllowlist?.[i]?.value?.message} />
+              <Button type="button" variant="ghost" size="icon" disabled={!enforcing} aria-label={t("fences.delete")} onClick={() => wipeAllowlist.remove(i)}>
+                <Trash size={16} aria-hidden />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="secondary" size="sm" disabled={!enforcing} onClick={() => wipeAllowlist.append({ value: "" })}>
+            Añadir
+          </Button>
+        </div>
+      </fieldset>
+
+      {update.error && <ErrorState error={update.error} />}
+      <Button type="submit" disabled={update.isPending}>
+        {t("fence.save")}
+      </Button>
+    </form>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/settings/EnforcementForm.test.tsx
+```
+
+Expected: `Tests 4 passed`.
+
+---
+
+- [ ] **Step 6: `WebhooksForm.tsx`**
+
+`web/src/features/settings/WebhooksForm.tsx`:
+```tsx
+import { useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useUpdateWebhooks, type Settings } from "@/api/hooks";
+import { useT } from "@/lib/i18n";
+import { fromWebhook, makeWebhookSchema, toWebhook, webhookEventOptions, type WebhookFormValues } from "./settingsForm";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="text-xs text-sev-high">
+      {message}
+    </p>
+  );
+}
+
+export function WebhooksForm({ settings }: { settings: Settings }) {
+  const t = useT();
+  const update = useUpdateWebhooks();
+  const schema = useMemo(() => makeWebhookSchema(t), [t]);
+  const form = useForm<WebhookFormValues>({ resolver: zodResolver(schema), defaultValues: fromWebhook(settings.webhook) });
+  const format = form.watch("format");
+  const enabled = form.watch("enabled");
+  const events = form.watch("events");
+  const secret = form.watch("secret");
+  const secretTouched = form.watch("secretTouched");
+  const errs = form.formState.errors;
+
+  const submit = form.handleSubmit(async (values) => {
+    await update.mutateAsync(toWebhook(values));
+  });
+
+  const toggleEvent = (ev: string, checked: boolean) => {
+    const next = checked ? [...events, ev] : events.filter((e) => e !== ev);
+    form.setValue(
+      "events",
+      webhookEventOptions.filter((o) => next.includes(o)),
+      { shouldDirty: true },
+    );
+  };
+
+  return (
+    <form onSubmit={submit} noValidate className="max-w-2xl space-y-6">
+      <label className="flex items-center gap-3">
+        <Switch checked={enabled} onCheckedChange={(c) => form.setValue("enabled", c, { shouldDirty: true })} />
+        <span className="text-sm font-medium">{t("settings.webhook.enabled")}</span>
+      </label>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="url">{t("settings.webhook.url")}</Label>
+        <Input id="url" aria-invalid={!!errs.url} {...form.register("url")} />
+        <FieldError message={errs.url?.message} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="format">{t("settings.webhook.format")}</Label>
+        <NativeSelect id="format" {...form.register("format")}>
+          <option value="native">{t("settings.webhook.format.native")}</option>
+          <option value="ocsf">{t("settings.webhook.format.ocsf")}</option>
+        </NativeSelect>
+        {format === "ocsf" && (
+          <p className="text-sm text-sev-medium">
+            El evento se envía en formato OCSF, no en el sobre nativo de LucidFence: fence_id, route_id, policy_id y playbook_id no viajan
+            como campos propios.
+          </p>
+        )}
+      </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-fg-2">{t("settings.webhook.events")}</legend>
+        {webhookEventOptions.map((ev) => (
+          <label key={ev} className="flex items-center gap-2 text-sm">
+            <Checkbox checked={events.includes(ev)} onCheckedChange={(c) => toggleEvent(ev, c === true)} />
+            <span className="font-mono text-xs">{ev}</span>
+          </label>
+        ))}
+      </fieldset>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="secret">{t("settings.webhook.secret")}</Label>
+        {settings.webhook.secret_set && !secretTouched && <p className="text-sm text-muted">{t("settings.webhook.secret.set")}</p>}
+        <div className="flex gap-2">
+          <Input
+            id="secret"
+            type="password"
+            autoComplete="off"
+            value={secret}
+            onChange={(e) => {
+              form.setValue("secret", e.target.value, { shouldDirty: true });
+              form.setValue("secretTouched", true, { shouldDirty: true });
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              form.setValue("secret", "", { shouldDirty: true });
+              form.setValue("secretTouched", true, { shouldDirty: true });
+            }}
+          >
+            {t("fences.delete")}
+          </Button>
+        </div>
+        <p className="text-xs text-muted">{t("settings.webhook.secret.help")}</p>
+      </div>
+
+      {update.error && <ErrorState error={update.error} />}
+      <Button type="submit" disabled={update.isPending}>
+        {t("fence.save")}
+      </Button>
+    </form>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/settings/WebhooksForm.test.tsx
+```
+
+Expected: `Tests 5 passed`.
+
+---
+
+- [ ] **Step 7: `EgressForm.tsx` (sin test dedicado: solo funciones puras exportadas de `settingsForm.ts`, ya cubiertas, y JSX cableado igual que los otros dos formularios)**
+
+`web/src/features/settings/EgressForm.tsx`:
+```tsx
+import { useMemo } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash } from "@phosphor-icons/react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useUpdateEgress, useValidateSettings, type Settings } from "@/api/hooks";
+import { useT } from "@/lib/i18n";
+import { fromEgress, makeEgressSchema, toEgress, type EgressFormValues } from "./settingsForm";
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="text-xs text-sev-high">
+      {message}
+    </p>
+  );
+}
+
+export function EgressForm({ settings }: { settings: Settings }) {
+  const t = useT();
+  const update = useUpdateEgress();
+  const validate = useValidateSettings();
+  const schema = useMemo(() => makeEgressSchema(t), [t]);
+  const form = useForm<EgressFormValues>({ resolver: zodResolver(schema), defaultValues: fromEgress(settings.egress) });
+  const hosts = useFieldArray({ control: form.control, name: "hosts" });
+  const errs = form.formState.errors;
+
+  const submit = form.handleSubmit(async (values) => {
+    await update.mutateAsync(toEgress(values));
+  });
+
+  const problems = validate.data ? validate.data.channels.filter((c) => !c.ok).length : 0;
+
+  return (
+    <div className="max-w-2xl space-y-8">
+      <form onSubmit={submit} noValidate className="space-y-6">
+        <div className="space-y-2">
+          <Label>{t("settings.egress.hosts")}</Label>
+          <p className="text-xs text-muted">{t("settings.egress.hosts.help")}</p>
+          {hosts.fields.map((f, i) => (
+            <div key={f.id} className="flex items-center gap-2">
+              <Input aria-invalid={!!errs.hosts?.[i]?.value} {...form.register(`hosts.${i}.value`)} />
+              <FieldError message={errs.hosts?.[i]?.value?.message} />
+              <Button type="button" variant="ghost" size="icon" aria-label={t("fences.delete")} onClick={() => hosts.remove(i)}>
+                <Trash size={16} aria-hidden />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" variant="secondary" size="sm" onClick={() => hosts.append({ value: "" })}>
+            Añadir
+          </Button>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={form.watch("allowPrivate")} onCheckedChange={(c) => form.setValue("allowPrivate", c === true, { shouldDirty: true })} />
+          {t("settings.egress.allowPrivate")}
+        </label>
+        <p className="text-xs text-muted">{t("settings.egress.allowPrivate.help")}</p>
+
+        {update.error && <ErrorState error={update.error} />}
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={update.isPending}>
+            {t("fence.save")}
+          </Button>
+          {update.isSuccess && <span className="text-sm text-sev-low">{t("settings.saved")}</span>}
+        </div>
+      </form>
+
+      <div className="space-y-3 border-t border-border pt-6">
+        <p className="text-xs text-muted">Comprueba los ajustes ya guardados, no lo que haya sin guardar arriba: guarda primero si acabas de cambiar la lista.</p>
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="secondary" onClick={() => validate.mutate()} disabled={validate.isPending}>
+            {t("settings.validate")}
+          </Button>
+          {validate.data && (
+            <span className={validate.data.ok ? "text-sm text-sev-low" : "text-sm text-sev-high"}>
+              {validate.data.ok ? t("settings.validate.ok") : t("settings.validate.problems", { count: problems })}
+            </span>
+          )}
+        </div>
+        {validate.error && <ErrorState error={validate.error} />}
+        {validate.data?.error && <p className="text-sm text-sev-high">{validate.data.error}</p>}
+        {validate.data?.channels.map((c) => (
+          <div key={c.channel} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm last:border-0">
+            <span className="font-medium">{c.channel === "webhook" ? "Webhook" : "ntfy"}</span>
+            {!c.enabled ? (
+              <span className="text-muted">{t("common.no")}</span>
+            ) : c.ok ? (
+              <Badge variant="success">{t("settings.validate.ok")}</Badge>
+            ) : (
+              <span className="text-sev-high">{c.reason}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npm run typecheck
+```
+
+Expected: `tsc` sin salida.
+
+---
+
+- [ ] **Step 8: `SettingsPage.tsx`**
+
+`web/src/features/settings/SettingsPage.tsx`:
+```tsx
+import { useState } from "react";
+import { Navigate } from "react-router";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loading } from "@/components/states/Loading";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useMe, useSettings } from "@/api/hooks";
+import { useT } from "@/lib/i18n";
+import { can } from "@/lib/permissions";
+import { EgressForm } from "./EgressForm";
+import { EnforcementForm } from "./EnforcementForm";
+import { WebhooksForm } from "./WebhooksForm";
+
+// Settings es un documento único con valores por defecto (settings.Default,
+// T7): no tiene estado "vacío". Los tres estados que sí aplican son
+// cargando, error y contenido; el redirect por falta de engine:config es el
+// "no hay nada que ver aquí" propio de esta vista.
+export function SettingsPage() {
+  const t = useT();
+  const me = useMe();
+  const settings = useSettings();
+  const [tab, setTab] = useState("enforcement");
+
+  if (!me.isPending && !can(me.data?.capabilities, "engine:config")) return <Navigate to="/" replace />;
+  if (me.isPending || settings.isPending) return <Loading rows={6} />;
+  if (settings.error) return <ErrorState error={settings.error} onRetry={() => settings.refetch()} />;
+  const s = settings.data!;
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="enforcement">{t("settings.tab.enforcement")}</TabsTrigger>
+          <TabsTrigger value="webhooks">{t("settings.tab.webhooks")}</TabsTrigger>
+          <TabsTrigger value="egress">{t("settings.tab.egress")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="enforcement" className="pt-4">
+          <EnforcementForm settings={s} />
+        </TabsContent>
+        <TabsContent value="webhooks" className="pt-4">
+          <WebhooksForm settings={s} />
+        </TabsContent>
+        <TabsContent value="egress" className="pt-4">
+          <EgressForm settings={s} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/settings
+```
+
+Expected: `Test Files 4 passed`, `Tests 22 passed` (4 en `SettingsPage.test.tsx`, 4 en `EnforcementForm.test.tsx`, 5 en `WebhooksForm.test.tsx`, y las funciones puras de `settingsForm.ts` cubiertas indirectamente por los tres formularios).
+
+---
+
+- [ ] **Step 9: Registrar las tres rutas**
+
+T22 dejó `nav.events`, `nav.actions` y `nav.settings` en `nav.ts` (con sus capacidades `device:read`/`device:read`/`engine:config`) pero no tocó `router.tsx` — su propia nota de desviación asigna explícitamente `/events`, `/actions` y `/settings` a esta tarea (ver "Desviaciones"). En `web/src/app/router.tsx`, los imports de las tres páginas van detrás del último import de `features/` que ya exista (de T23-T25):
+```tsx
+import { EventsPage } from "@/features/events/EventsPage";
+import { ActionsPage } from "@/features/actions/ActionsPage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
+```
+
+y las tres rutas, como últimos hijos de `Shell`:
+```tsx
+          { path: "/events", element: <EventsPage /> },
+          { path: "/actions", element: <ActionsPage /> },
+          { path: "/settings", element: <SettingsPage /> },
+```
+
+Run:
+```bash
+cd web && npx vitest run src/app
+```
+
+Expected: la suite de `app/` sigue en verde (ningún test de `Shell.test.tsx` ni `AuthGate.test.tsx` monta estas tres rutas, así que no cambia su resultado).
+
+---
+
+- [ ] **Step 10: Suite completa, límites de tamaño, lint, typecheck y commit**
+
+```bash
+cd web && npm run lint && npm run typecheck && npm test && cd ..
+```
+
+Expected: `eslint` sin salida; `tsc` sin salida; la suite completa en verde, incluido `i18n.test.tsx` (paridad de diccionarios, que esta tarea no toca) y sin regresiones en M1 ni en T22-T25.
+
+```bash
+cd web && wc -l src/features/events/*.tsx src/features/actions/*.tsx src/features/settings/*.tsx src/features/settings/*.ts | sort -n | tail -5
+```
+
+Expected: ningún `.tsx` pasa de 300 líneas (spec §9.1); `EnforcementForm.tsx` es el mayor, por debajo de 190; `settingsForm.ts` por debajo de 130.
+
+```bash
+go test ./internal/arch/ -run "TestFileLimits|TestNpmAllowlist" -count=1
+```
+
+Expected: `ok  github.com/adrimg3196/lucidfence/internal/arch`. Ni una dependencia npm nueva: `radix-ui`, `@phosphor-icons/react`, `react-hook-form` y `zod` ya están en `internal/arch/allowlist_npm.txt` desde M1/T22.
+
+```bash
+git add web/src/features/events web/src/features/actions web/src/features/settings web/src/app/router.tsx
+git commit -q -m "feat(web): eventos y acciones paginados y ajustes de enforcement, webhooks y egress
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
+```
+
+Expected: el commit lleva los doce ficheros de `features/events`, `features/actions` y `features/settings` más `app/router.tsx`. No aparece `web/src/api/hooks.ts`, `web/src/lib/i18n.es.ts` ni `web/src/lib/i18n.en.ts`: esta tarea consume el contrato que dejó T22 y no lo toca.
+
+---
+
+**Desviaciones respecto al esqueleto:**
+
+1. **`web/src/app/router.tsx` pasa a "Modify".** El esqueleto no lo lista. T22 registra `nav.events`/`nav.actions`/`nav.settings` en `nav.ts` pero deja explícito en su propia sección de desviaciones que no puede montar las rutas `/events`, `/actions` ni `/settings` sin importar páginas que todavía no existen en su commit; asigna las tres, por nombre, a esta tarea. Sin este cambio, el enlace de "Ajustes" del `Shell` no llevaría a ningún sitio y T29 no podría navegar a estas tres vistas.
+2. **`toWebhook` usa un cast a `WebhookSettings` en vez de tipar contra `WebhookSettingsUpdate`.** T21 define dos esquemas distintos para el canal de webhook: `WebhookSettings` (la respuesta del GET, con `secret_set` obligatorio y sin `secret`) y `WebhookSettingsUpdate` (el cuerpo real del PUT, con `secret` opcional y sin `secret_set`). T22 tipó `useUpdateWebhooks(body: WebhookSettings)` con el primero. Esta tarea manda por la red exactamente lo que T21 exige (`url, format, events, enabled` y `secret` solo si se tocó) y lo hace compilar con un cast documentado en `settingsForm.ts`, en vez de fabricar un `secret_set` que el formulario no calcula ni el servidor necesita en la escritura, o de reabrir la firma de T22.
+3. **Tres mensajes de interfaz van en español fijo, sin pasar por `t()`:** el error de una entrada vacía en `wipe_allowlist`, el aviso adicional que aparece solo con `mode = enforce` (más allá de `settings.enforcement.mode.help`, que describe `observe`) y la ampliación del aviso de formato OCSF. `i18n.es.ts`/`i18n.en.ts` son ficheros de T22 y el esqueleto de esta tarea no los incluye en "Files"; T22 cerró los bloques `settings.*` sin reservar claves para estos tres textos concretos. Añadir claves aquí sin poder tocar el fichero en inglés dejaría `i18n.test.tsx` (paridad `es`/`en`) en rojo, así que se documenta como límite conocido en vez de forzar una clave a medias.
+4. **El botón "cargar más" de `EventsPage` y `ActionsPage` reutiliza `event.more`/`event.first`.** No hay una clave `common.loadMore` ni un `action.more` propio en el diccionario que dejó T22; las dos vistas dicen literalmente lo mismo y duplicar el texto en dos idiomas por dos vistas sería peor que compartir el namespace vecino.
+5. **`ActionsPage` clasifica `Trigger` con una función (`triggerKey`), no con una clave por valor.** T22 cerró exactamente siete claves `action.trigger.*`, pero el motor (M1, sin cambios en este hito para las geocercas) usa cuatro valores distintos para las transiciones de geocerca (`on_enter`, `on_exit`, `on_violation`, `on_unknown`). Agruparlos en `transition`/`standing` es la única forma de que las siete claves ya cerradas cubran los valores reales del campo.
+6. **`EgressForm` no tiene test dedicado**, tal y como fija el esqueleto (`SettingsPage.test.tsx`, `EnforcementForm.test.tsx` y `WebhooksForm.test.tsx` son los únicos test files de `settings/` que enumera). Sus funciones puras (`makeEgressSchema`, `toEgress`, `fromEgress`) están cubiertas por `settingsForm.ts` a través de los otros dos formularios y por el suelo de cobertura del 70 % de `web`, que corre sobre todo el paquete.
+7. **`SettingsPage` no implementa un estado "vacío".** `GET /api/v1/settings` siempre devuelve un documento completo (`settings.Default()`, T7): no existe un `Settings` vacío que enseñar. Cargando, error y contenido son los tres estados reales; el redirect por falta de `engine:config` cubre el papel que el vacío cumple en una tabla.
+8. **El motivo de un bloqueo se enseña con el texto que ya manda `ActionResult.Error`, sin una tabla de traducción por `error_type` en el cliente.** El esqueleto habla de "`error_type` traducido"; no existe ninguna clave `action.blocked.*` en el diccionario que dejó T22 y el propio guardarraíl (T12) ya deja el motivo en español en `Error`, siguiendo la misma convención que usa `ErrorState` desde M1 con `ApiError.message`. `error_type` (el código de máquina) se enseña aparte, en monoespaciada, como dato técnico para quien investiga el incidente, no como el texto principal.
+
+
+---
+
+### Task 27: Web: detalle de dispositivo con riesgo explicado y acciones manuales
+
+Cierra el círculo del hito en la vista donde el operador mira primero. `RiskExplain` muestra la puntuación con su severidad a través de `RiskScore` (T22), la lista de razones en el orden en que las produjo el motor y las políticas que casaron con enlace a `/policies/:id`; si `score` es nulo, `RiskScore` ya no pinta ninguna insignia de severidad (T22) y esta tarea añade el aviso honesto de evaluación fallida, que nunca es verde porque no hay insignia que pintar de verde. `SignalsTable` despliega las siete señales del motor con sus valores, distinguiendo visualmente "desconocido" de "falso", que es la regla que atraviesa todo el producto (spec: "los campos que el UEM no informa son nil, no cero"). `DeviceActions` ofrece las acciones manuales según la capacidad `device:action`, con un diálogo de confirmación reforzado (escribir el identificador exacto del dispositivo) para las cuatro acciones destructivas, y muestra el `ActionResult` tal cual: simulada, bloqueada o ejecutada. El detalle añade además los incidentes abiertos del dispositivo. En `DevicesPage` la tabla gana la columna de riesgo ordenable y el filtro por severidad. Se retira el aviso "El motor aplicará estas reglas a partir de M2" del editor de geocercas, porque a partir de este hito sí las aplica (T14), y se sustituye por la ayuda que explica qué hacen `dwell_seconds` y `violation_interval_cycles`. La visión general añade el reparto de severidad de la flota y el contador de handoffs pendientes.
+
+Dos desviaciones respecto al esqueleto del hito, ambas necesarias para que el código compile y ambas evitando reproducir contenido que no es de esta tarea.
+
+La primera: **`web/src/api/keys.ts` y `web/src/api/hooks.ts` pasan a "Modify"**, aunque el esqueleto no los lista. El propio `Produces` de esta tarea fija `useDevices({state, q, severity})`, y ese parámetro solo puede llegar ensanchando la firma que T22 dejó en `keys.ts` (`keys.devices`) y `hooks.ts` (`useDevices`); sin este cambio el filtro de severidad de `DevicesPage` no tendría manera de llegar a la API. El parche es quirúrgico (un `python3` que sustituye la línea exacta, con un `assert` que falla alto si el ancla no coincide) en vez de reproducir el fichero completo: los dos ficheros los amplían activamente T18-T26 en tareas anteriores y posteriores de este mismo hito, y volver a escribir su contenido entero aquí duplicaría autoría ajena y arriesgaría divergir de lo que esas tareas realmente dejan. `keys.devices` y el cuerpo de `useDevices` no cambian ni una línea más entre T22 y esta tarea (T22, "Desviaciones": "el resto del fichero ... no cambia ni una línea"), así que el ancla es estable.
+
+La segunda, de la misma familia: **`web/src/lib/i18n.es.ts` e `i18n.en.ts` se editan con el mismo tipo de parche quirúrgico**, no con el fichero completo que usa el resto del hito para ficheros nuevos. T22 ya cierra un bloque `risk.*` con `risk.severity.*`, `risk.unevaluated`, `risk.reasons`, `risk.matchedPolicies`, `risk.signals` y `risk.filter.severity` (consumidos aquí tal cual, sin duplicarlos), y T23-T26 siguen añadiendo bloques propios al mismo fichero antes de que esta tarea se ejecute. Reproducir el fichero entero exigiría transcribir a mano el contenido íntegro de esas tareas, con el riesgo de que un solo carácter mal copiado deje el `.ts` sin compilar; el parche ancla en líneas que ninguna otra tarea del hito toca (confirmado grepeando `i18n.es.ts` en las 26 tareas ya escritas de este plan) y falla alto con un `assert` si el ancla no está. Dentro de ese parche, esta tarea añade una clave que el esqueleto fija con un nombre explícito y distinto del de T22: `device.risk.unevaluated` no es `risk.unevaluated`. Es intencional — el esqueleto dice literalmente que `device.risk.pending` "se sustituye por `device.risk.unevaluated` solo para score nulo", y esa es la frase completa de la tarjeta de riesgo del detalle (más larga que la etiqueta corta que ya usa `RiskScore`), así que conviven sin pisarse.
+
+**Files:**
+- Modify: `web/src/api/keys.ts`, `web/src/api/hooks.ts` (parche quirúrgico; ver desviaciones arriba)
+- Modify: `web/src/features/devices/DeviceDetailPage.tsx`, `web/src/features/devices/DeviceDetailPage.test.tsx`
+- Create: `web/src/features/devices/RiskExplain.tsx`, `web/src/features/devices/DeviceActions.tsx`, `web/src/features/devices/SignalsTable.tsx`
+- Create: `web/src/features/devices/RiskExplain.test.tsx`, `web/src/features/devices/DeviceActions.test.tsx`
+- Modify: `web/src/features/devices/DevicesPage.tsx`, `web/src/features/devices/DevicesPage.test.tsx`
+- Modify: `web/src/features/fences/FenceEditorPage.tsx`, `web/src/features/fences/FenceEditorPage.test.tsx`, `web/src/lib/i18n.es.ts`, `web/src/lib/i18n.en.ts` (parche quirúrgico; ver desviaciones arriba)
+- Modify: `web/src/features/overview/OverviewPage.tsx`, `web/src/features/overview/OverviewPage.test.tsx`
+
+**Interfaces:**
+
+- Consumes:
+  - De T22 (`web/src/components/RiskScore.tsx`): `<RiskScore score={verdict.score} severity={verdict.severity} />`. `score` nulo renderiza solo el texto `risk.unevaluated` ("Sin evaluar") en `text-muted`, sin `SeverityBadge`: por construcción no hay ninguna insignia que pueda salir verde cuando no hay veredicto. `score` presente redondea con `Math.round` y usa `severity` del servidor si llega (nunca recalcula el tono con el número si ya hay severidad).
+  - De T22 (`web/src/lib/i18n.es.ts`/`i18n.en.ts`, claves ya cerradas): `risk.reasons` ("Por qué"), `risk.matchedPolicies` ("Políticas que casaron"), `risk.signals` ("Señales"), `risk.filter.severity` ("Severidad"), `risk.severity.low/medium/high/critical/unknown`, `risk.unevaluated`. Y de M1: `fence.action.lock/wipe/message/locate/reboot/clear_passcode/set_compliance/custom/notify`, `fence.action.text` ("Texto"), `common.yes/no/unknown`, `device.field.*`, `device.inventory`, `device.risk`, `device.trail*`, `device.events*`, `device.back`, `devices.title/search/filter.all/col.*/empty`, `fences.delete`, `fence.cancel`, `state.error`.
+  - De T22 (`web/src/api/hooks.ts` reexportando `hooks.m2.ts`): `useDeviceAction()` (`mutate({ id, action, params? }: { id: string; action: DeviceActionRequest["action"]; params?: Record<string, unknown> }) => Promise<ActionResult>`, invalida `["actions"]`/`["devices"]`, nunca lanza fuera de `error`), `useIncidents(p?: { status?: string; device_id?: string })`, `useHandoffs(status?: string)`, `type Incident`, `type Handoff`, `type DeviceActionRequest`, `type ActionResult` (ampliado con `route_id?, policy_id?, playbook_id?, severity?, blocked?, error_type?`). `useMe()`, `can(capabilities, cap)` (M1).
+  - De T20 (`docs/openapi.yaml` → `schema.d.ts`, ya en el repo): `POST /api/v1/devices/{id}/actions` devuelve 200 con el `ActionResult` incluso bloqueado (`blocked: true`, `error_type`); una supresión por cooldown responde 409 `code: "cooldown"` con `detail: { retry_after: string }` en RFC 3339, o sin `detail` si no hay ventana. `DeviceActionRequest.action` es el enum de nueve acciones (`lock, wipe, message, locate, reboot, clear_passcode, set_compliance, custom, notify`); `action.Action.Destructive()` (T1, ya en `main`) marca `lock, wipe, clear_passcode, reboot`.
+  - De T19: `Incident` con `id, device_id, device_name, kind, severity, title, recommendation, fence_id, assignee, status, risk_score, count, evidence, opened_at, updated_at, acked_at?, closed_at?, timeline`; `IncidentList { items, total }`. Ruta `/incidents/:id` (T24).
+  - De T1 (dominio, ya en `main` — commits D01a-D01c): `device.Device` incluye `posture?, location_integrity?, fence_state_since?, dwell_seconds?, signals?` (`signals: { [name: string]: { [key: string]: unknown } | null }`, contenedor pasivo, ausente si no informado). `device.Verdict` (`risk`) ya existía en M1: `score: number | null; severity: string; reasons: string[]; matched_policies: string[]; evaluated_at?: string; provenance: string; verified: boolean`.
+  - De M1: `useDevice`, `useDeviceTrail`, `useEvents`, `useDevices`, `StateBadge`, `Card/CardHeader/CardTitle/CardContent`, `Table/THead/TBody/TR/TH/TD`, `Tabs/TabsList/TabsTrigger`, `NativeSelect`, `Input`, `Label`, `Button`, `Badge`, `Loading`, `Empty`, `ErrorState`, `formatDateTime`, `useDebouncedValue`, `ApiError`, `renderWithProviders`, `Dialog` de `radix-ui` (patrón de `components/ui/dialog.tsx`).
+
+- Produces:
+  ```ts
+  // web/src/features/devices/RiskExplain.tsx
+  export function RiskExplain({ verdict, signals }: {
+    verdict: components["schemas"]["Verdict"];
+    signals?: { [name: string]: { [key: string]: unknown } | null };
+  }): JSX.Element;
+
+  // web/src/features/devices/SignalsTable.tsx
+  export function SignalsTable({ signals }: {
+    signals?: { [name: string]: { [key: string]: unknown } | null };
+  }): JSX.Element;
+
+  // web/src/features/devices/DeviceActions.tsx
+  export function DeviceActions({ device }: { device: Device }): JSX.Element | null;
+  ```
+  Claves i18n retiradas: `device.risk.pending` (sustituida por `device.risk.unevaluated`, solo para `score` nulo; el resto de la tarjeta de riesgo usa `risk.unevaluated`/`risk.severity.*` de T22 sin duplicar). El texto de `fence.rules.help` pasa de "El motor aplicará estas reglas a partir de M2" a la ayuda definitiva de `dwell_seconds` y `violation_interval_cycles`.
+
+  Claves i18n nuevas de esta tarea (namespaces `device.action.*`, `device.actions`, `device.incidents*`, `devices.col.risk`, `devices.filter.severityAll`, `overview.riskDistribution`, `overview.handoffsPending`, y siete `risk.signal.*` más `risk.noReasons`, `risk.signalsEvaluated`, `risk.signals.col.*`, `risk.signals.empty` — estas últimas conviven con el `risk.*` de T22 sin pisar ninguna de sus claves, comprobado contra el bloque íntegro que T22 deja escrito).
+
+  `DevicesPage` gana la columna de riesgo (ordenable, con los dispositivos sin evaluar siempre al final) y el filtro por severidad: `useDevices({state, q, severity})`.
+
+- [ ] **Step 1: `web/src/api/keys.ts` y `web/src/api/hooks.ts`: `severity` en `useDevices` (parche quirúrgico)**
+
+No hay test dedicado para este paso: lo ejercitan las pruebas de `DevicesPage` del Step 7. El parche es la única forma de tocar dos ficheros que T18-T26 amplían activamente sin reproducir contenido ajeno (ver "Dos desviaciones" arriba).
+
+```bash
+cd web
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/api/keys.ts")
+s = p.read_text()
+old = '  devices: (p?: { state?: string; q?: string }) => ["devices", p ?? {}] as const,\n'
+new = '  devices: (p?: { state?: string; q?: string; severity?: string }) => ["devices", p ?? {}] as const,\n'
+assert s.count(old) == 1, "keys.devices no coincide: revisa si una tarea posterior a T22 ya lo cambió"
+p.write_text(s.replace(old, new, 1))
+PY
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/api/hooks.ts")
+s = p.read_text()
+old = '''export function useDevices(params?: { state?: string; q?: string }) {
+  return useQuery({
+    queryKey: keys.devices(params),
+    queryFn: async () => unwrap(await api.GET("/api/v1/devices", { params: { query: params as never } })),
+    refetchInterval: 15_000,
+  });
+}'''
+new = '''export function useDevices(params?: { state?: string; q?: string; severity?: string }) {
+  return useQuery({
+    queryKey: keys.devices(params),
+    queryFn: async () => unwrap(await api.GET("/api/v1/devices", { params: { query: params as never } })),
+    refetchInterval: 15_000,
+  });
+}'''
+assert s.count(old) == 1, "useDevices no coincide: revisa si una tarea posterior a T22 ya lo cambió"
+p.write_text(s.replace(old, new, 1))
+PY
+cd ..
+```
+
+Expected: sin salida (los dos scripts terminan en silencio; un `AssertionError` significaría que el ancla ya no existe tal cual y hay que adaptar el parche a mano en ese momento).
+
+- [ ] **Step 2: Diccionarios: nuevas claves y ayuda de dwell (parche quirúrgico)**
+
+```bash
+cd web
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/lib/i18n.es.ts")
+s = p.read_text()
+
+replacements = [
+    ('  "device.risk.pending": "Sin evaluar: el motor de riesgo llega en el siguiente hito.",\n',
+     '  "device.risk.unevaluated": "Sin evaluar: el motor no pudo calcular el riesgo de este dispositivo.",\n'),
+    ('  "fence.rules.help": "El motor aplicará estas reglas a partir de M2",\n',
+     '  "fence.rules.help": "«Permanencia mínima» retrasa la acción de entrada hasta que el dispositivo lleva ese tiempo en el nuevo estado; «Ciclos entre violaciones» repite la acción cada N ciclos mientras la violación sigue activa.",\n'),
+    ('  "device.field.route": "Ruta",\n',
+     '  "device.field.route": "Ruta",\n'
+     '  "device.actions": "Acciones",\n'
+     '  "device.action.confirm.title": "Confirmar {action}",\n'
+     '  "device.action.confirm.warning": "Esta acción es irreversible.",\n'
+     '  "device.action.confirm.confirmId": "Escribe {id} para confirmar.",\n'
+     '  "device.action.confirm.submit": "Confirmar",\n'
+     '  "device.action.cancel": "Cancelar",\n'
+     '  "device.action.send": "Enviar",\n'
+     '  "device.action.custom.type": "Tipo",\n'
+     '  "device.action.compliance.yes": "Marcar cumple",\n'
+     '  "device.action.compliance.no": "Marcar incumplimiento",\n'
+     '  "device.action.result.executed": "Ejecutada",\n'
+     '  "device.action.result.dryRun": "Simulada (modo observe)",\n'
+     '  "device.action.result.blocked": "Bloqueada",\n'
+     '  "device.action.cooldown": "Disponible de nuevo el {when}",\n'
+     '  "device.incidents": "Incidentes abiertos",\n'
+     '  "device.incidents.empty": "Sin incidentes abiertos",\n'),
+    ('  "devices.col.lastReport": "Último informe",\n',
+     '  "devices.col.lastReport": "Último informe",\n'
+     '  "devices.col.risk": "Riesgo",\n'),
+    ('  "devices.filter.all": "Todos",\n',
+     '  "devices.filter.all": "Todos",\n'
+     '  "devices.filter.severityAll": "Todas las severidades",\n'),
+    ('  "overview.noEvents": "Aún no hay transiciones. Ejecuta un ciclo.",\n',
+     '  "overview.noEvents": "Aún no hay transiciones. Ejecuta un ciclo.",\n'
+     '  "overview.riskDistribution": "Riesgo de la flota",\n'
+     '  "overview.handoffsPending": "Handoffs pendientes",\n'),
+    ('  "risk.filter.severity": "Severidad",\n',
+     '  "risk.filter.severity": "Severidad",\n'
+     '  "risk.noReasons": "Sin razones registradas.",\n'
+     '  "risk.signalsEvaluated": "{count} señales evaluadas",\n'
+     '  "risk.signal.time_of_day": "Hora del día",\n'
+     '  "risk.signal.shift_match": "Coincidencia de turno",\n'
+     '  "risk.signal.device_health": "Salud del dispositivo",\n'
+     '  "risk.signal.device_posture": "Postura del dispositivo",\n'
+     '  "risk.signal.location_integrity": "Integridad de ubicación",\n'
+     '  "risk.signal.zone_risk": "Riesgo de zona",\n'
+     '  "risk.signal.route_state": "Estado de ruta",\n'
+     '  "risk.signals.col.signal": "Señal",\n'
+     '  "risk.signals.col.key": "Clave",\n'
+     '  "risk.signals.col.value": "Valor",\n'
+     '  "risk.signals.empty": "Sin señales calculadas todavía",\n'),
+]
+for old, new in replacements:
+    assert s.count(old) == 1, f"ancla no encontrada una sola vez: {old!r}"
+    s = s.replace(old, new, 1)
+p.write_text(s)
+PY
+
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/lib/i18n.en.ts")
+s = p.read_text()
+
+replacements = [
+    ('  "device.risk.pending": "Not evaluated: the risk engine arrives in the next milestone.",\n',
+     '  "device.risk.unevaluated": "Not evaluated: the engine could not calculate this device\'s risk.",\n'),
+    ('  "fence.rules.help": "The engine will apply these rules starting in M2",\n',
+     '  "fence.rules.help": "\\"Minimum dwell\\" delays the enter action until the device has spent that long in the new state; \\"Cycles between violations\\" repeats the action every N cycles while the violation stays active.",\n'),
+    ('  "device.field.route": "Route",\n',
+     '  "device.field.route": "Route",\n'
+     '  "device.actions": "Actions",\n'
+     '  "device.action.confirm.title": "Confirm {action}",\n'
+     '  "device.action.confirm.warning": "This action is irreversible.",\n'
+     '  "device.action.confirm.confirmId": "Type {id} to confirm.",\n'
+     '  "device.action.confirm.submit": "Confirm",\n'
+     '  "device.action.cancel": "Cancel",\n'
+     '  "device.action.send": "Send",\n'
+     '  "device.action.custom.type": "Type",\n'
+     '  "device.action.compliance.yes": "Mark compliant",\n'
+     '  "device.action.compliance.no": "Mark non-compliant",\n'
+     '  "device.action.result.executed": "Executed",\n'
+     '  "device.action.result.dryRun": "Simulated (observe mode)",\n'
+     '  "device.action.result.blocked": "Blocked",\n'
+     '  "device.action.cooldown": "Available again on {when}",\n'
+     '  "device.incidents": "Open incidents",\n'
+     '  "device.incidents.empty": "No open incidents",\n'),
+    ('  "devices.col.lastReport": "Last report",\n',
+     '  "devices.col.lastReport": "Last report",\n'
+     '  "devices.col.risk": "Risk",\n'),
+    ('  "devices.filter.all": "All",\n',
+     '  "devices.filter.all": "All",\n'
+     '  "devices.filter.severityAll": "All severities",\n'),
+    ('  "overview.noEvents": "No transitions yet. Run a cycle.",\n',
+     '  "overview.noEvents": "No transitions yet. Run a cycle.",\n'
+     '  "overview.riskDistribution": "Fleet risk",\n'
+     '  "overview.handoffsPending": "Pending handoffs",\n'),
+    ('  "risk.filter.severity": "Severity",\n',
+     '  "risk.filter.severity": "Severity",\n'
+     '  "risk.noReasons": "No reasons recorded.",\n'
+     '  "risk.signalsEvaluated": "{count} signals evaluated",\n'
+     '  "risk.signal.time_of_day": "Time of day",\n'
+     '  "risk.signal.shift_match": "Shift match",\n'
+     '  "risk.signal.device_health": "Device health",\n'
+     '  "risk.signal.device_posture": "Device posture",\n'
+     '  "risk.signal.location_integrity": "Location integrity",\n'
+     '  "risk.signal.zone_risk": "Zone risk",\n'
+     '  "risk.signal.route_state": "Route state",\n'
+     '  "risk.signals.col.signal": "Signal",\n'
+     '  "risk.signals.col.key": "Key",\n'
+     '  "risk.signals.col.value": "Value",\n'
+     '  "risk.signals.empty": "No signals computed yet",\n'),
+]
+for old, new in replacements:
+    assert s.count(old) == 1, f"ancla no encontrada una sola vez: {old!r}"
+    s = s.replace(old, new, 1)
+p.write_text(s)
+PY
+cd ..
+```
+
+Run:
+```bash
+cd web && npx vitest run src/lib/i18n.test.tsx && npm run typecheck && cd ..
+```
+
+Expected: el test de paridad sigue en verde (las claves nuevas están en los dos diccionarios) y `tsc` sin salida.
+
+- [ ] **Step 3: `RiskExplain` (test primero)**
+
+`web/src/features/devices/RiskExplain.test.tsx`:
+```tsx
+import { screen } from "@testing-library/react";
+import { renderWithProviders } from "@/test/render";
+import { RiskExplain } from "./RiskExplain";
+import type { components } from "@/api/schema";
+
+type Verdict = components["schemas"]["Verdict"];
+
+const base: Verdict = { score: null, severity: "unknown", reasons: [], matched_policies: [], provenance: "none", verified: false };
+
+test("score 72 muestra el número, la severidad high y las razones en orden", () => {
+  const verdict: Verdict = {
+    ...base,
+    score: 72,
+    severity: "high",
+    reasons: ["dispositivo rooteado", "fuera de horario laboral"],
+    matched_policies: ["contorno-alto-riesgo"],
+    provenance: "policy",
+    verified: true,
+  };
+  renderWithProviders(<RiskExplain verdict={verdict} signals={{ device_posture: { rooted: true } }} />);
+  expect(screen.getByText("72")).toBeInTheDocument();
+  expect(screen.getByText("Alto")).toBeInTheDocument();
+  const items = [...screen.getByTestId("risk-reasons").querySelectorAll("li")].map((li) => li.textContent);
+  expect(items).toEqual(["dispositivo rooteado", "fuera de horario laboral"]);
+});
+
+test("score nulo muestra el aviso de no evaluado con el evaluation_error y ningún tono verde", () => {
+  const verdict: Verdict = { ...base, reasons: ["no se pudo evaluar el riesgo: proveedor sin respuesta"] };
+  renderWithProviders(<RiskExplain verdict={verdict} signals={{}} />);
+  // RiskScore (T22) no pinta ninguna insignia de severidad cuando score es nulo:
+  // solo el texto "Sin evaluar" en gris. "Bajo" (el tono verde) no puede
+  // aparecer aquí bajo ninguna circunstancia porque no hay insignia que pintar.
+  expect(screen.getByText("Sin evaluar")).toBeInTheDocument();
+  expect(screen.queryByText("Bajo")).toBeNull();
+  expect(screen.getByText(/Sin evaluar: el motor no pudo calcular el riesgo/)).toBeInTheDocument();
+  expect(screen.getByText("no se pudo evaluar el riesgo: proveedor sin respuesta")).toBeInTheDocument();
+});
+
+test("sin razones muestra el vacío honesto y no inventa explicación", () => {
+  const verdict: Verdict = { ...base, score: 12, severity: "low", reasons: [], provenance: "cycle", verified: true };
+  renderWithProviders(<RiskExplain verdict={verdict} signals={{}} />);
+  expect(screen.getByText("Sin razones registradas.")).toBeInTheDocument();
+  expect(screen.queryByTestId("risk-reasons")).toBeNull();
+});
+
+test("las políticas casadas enlazan a /policies/:id", () => {
+  const verdict: Verdict = {
+    ...base,
+    score: 80,
+    severity: "critical",
+    reasons: ["riesgo crítico"],
+    matched_policies: ["fuera-de-turno", "dispositivo-rooteado"],
+    provenance: "policy",
+    verified: true,
+  };
+  renderWithProviders(<RiskExplain verdict={verdict} signals={{}} />);
+  expect(screen.getByRole("link", { name: "fuera-de-turno" })).toHaveAttribute("href", "/policies/fuera-de-turno");
+  expect(screen.getByRole("link", { name: "dispositivo-rooteado" })).toHaveAttribute("href", "/policies/dispositivo-rooteado");
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/RiskExplain.test.tsx
+```
+
+Expected: `Error: Failed to load url ./RiskExplain`, `4 failed`.
+
+`web/src/features/devices/RiskExplain.tsx`:
+```tsx
+import { Link } from "react-router";
+import { RiskScore } from "@/components/RiskScore";
+import { useT } from "@/lib/i18n";
+import type { components } from "@/api/schema";
+
+type Verdict = components["schemas"]["Verdict"];
+type Signals = { [name: string]: { [key: string]: unknown } | null };
+
+// RiskExplain no repite lo que ya hace RiskScore (T22): la puntuación y su
+// insignia de severidad viven ahí, incluido el caso score=null, que RiskScore
+// resuelve sin pintar ninguna insignia (nunca "low", nunca verde). Esta pieza
+// solo añade el porqué: el aviso de evaluación fallida, las razones en el
+// orden exacto en que las produjo el motor y las políticas que casaron.
+export function RiskExplain({ verdict, signals }: { verdict: Verdict; signals?: Signals }) {
+  const t = useT();
+  const signalCount = Object.keys(signals ?? {}).length;
+  return (
+    <div className="space-y-4">
+      <RiskScore score={verdict.score} severity={verdict.severity} />
+      {verdict.score == null && <p className="text-sm text-muted">{t("device.risk.unevaluated")}</p>}
+      <div>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted">{t("risk.reasons")}</h3>
+        {verdict.reasons.length === 0 ? (
+          <p className="mt-1 text-sm text-muted">{t("risk.noReasons")}</p>
+        ) : (
+          <ol data-testid="risk-reasons" className="mt-1 list-decimal space-y-1 pl-5 text-sm">
+            {verdict.reasons.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ol>
+        )}
+      </div>
+      {verdict.matched_policies.length > 0 && (
+        <div>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted">{t("risk.matchedPolicies")}</h3>
+          <ul className="mt-1 space-y-1 text-sm">
+            {verdict.matched_policies.map((id) => (
+              <li key={id}>
+                <Link to={`/policies/${id}`} className="font-mono text-accent hover:underline">
+                  {id}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="text-xs text-muted">{t("risk.signalsEvaluated", { count: signalCount })}</p>
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/RiskExplain.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 4 passed`.
+
+- [ ] **Step 4: `SignalsTable`**
+
+Sin fichero de test propio (el esqueleto de la tarea no lo lista): la cubre `DeviceDetailPage.test.tsx` en el Step 6, igual que hace M1 con piezas de solo lectura sin lógica de estado propia.
+
+`web/src/features/devices/SignalsTable.tsx`:
+```tsx
+import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { Empty } from "@/components/states/Empty";
+import { useT } from "@/lib/i18n";
+
+// Mismo orden que risk.Names en el motor (internal/domain/risk/signals.go, T2):
+// siete señales estables, siempre en esta secuencia.
+const SIGNAL_ORDER = ["time_of_day", "shift_match", "device_health", "device_posture", "location_integrity", "zone_risk", "route_state"] as const;
+
+type Signals = { [name: string]: { [key: string]: unknown } | null };
+
+// "Desconocido" y "falso" son cosas distintas en todo el producto (spec: los
+// campos que el UEM no informa son nil, no cero). null/undefined es siempre
+// "desconocido"; un booleano false real se lee "No", nunca "desconocido".
+function formatValue(v: unknown, t: ReturnType<typeof useT>): string {
+  if (v === null || v === undefined) return t("common.unknown");
+  if (typeof v === "boolean") return v ? t("common.yes") : t("common.no");
+  return String(v);
+}
+
+export function SignalsTable({ signals }: { signals?: Signals }) {
+  const t = useT();
+  const hasAny = SIGNAL_ORDER.some((name) => Object.keys(signals?.[name] ?? {}).length > 0);
+  if (!hasAny) return <Empty title={t("risk.signals.empty")} />;
+  const rows = SIGNAL_ORDER.flatMap((name) => {
+    const entries = Object.entries(signals?.[name] ?? {});
+    if (entries.length === 0) return [{ name, key: "-", value: "-" }];
+    return entries.map(([key, value]) => ({ name, key, value: formatValue(value, t) }));
+  });
+  return (
+    <Table>
+      <THead>
+        <tr>
+          <TH>{t("risk.signals.col.signal")}</TH>
+          <TH>{t("risk.signals.col.key")}</TH>
+          <TH>{t("risk.signals.col.value")}</TH>
+        </tr>
+      </THead>
+      <TBody>
+        {rows.map((r, i) => (
+          <TR key={`${r.name}-${r.key}-${i}`}>
+            <TD>{t(`risk.signal.${r.name}`)}</TD>
+            <TD className="font-mono text-xs text-muted">{r.key}</TD>
+            <TD>{r.value}</TD>
+          </TR>
+        ))}
+      </TBody>
+    </Table>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npm run typecheck
+```
+
+Expected: `tsc` sin salida.
+
+- [ ] **Step 5: `DeviceActions` (test primero)**
+
+`web/src/features/devices/DeviceActions.test.tsx`:
+```tsx
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { DeviceActions } from "./DeviceActions";
+import * as hooks from "@/api/hooks";
+import { ApiError } from "@/api/client";
+import { formatDateTime } from "@/lib/format";
+import type { Device } from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useMe: vi.fn(), useDeviceAction: vi.fn() }));
+
+const device = {
+  id: "dev-001",
+  name: "Tablet Campo A1",
+  platform: "android",
+  compliant: true,
+  provider: "simulation",
+  location: { source: "gps", observed_at: "2026-09-05T12:00:00Z" },
+  network: {},
+  inventory: {},
+  fence_state: "inside",
+  inside_fence: "demo-hq",
+  last_inside_fence: "demo-hq",
+  route_state: "unassigned",
+  risk: { score: null, severity: "unknown", reasons: [], matched_policies: [], provenance: "none", verified: false },
+  last_report_at: "2026-09-05T12:00:00Z",
+} as unknown as Device;
+
+function mockMe(capabilities: string[]) {
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities } } as never);
+}
+
+test("sin capacidad device:action no se renderiza nada", () => {
+  mockMe([]);
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({ mutate: vi.fn(), isPending: false, data: undefined, error: null } as never);
+  const { container } = renderWithProviders(<DeviceActions device={device} />);
+  expect(container).toBeEmptyDOMElement();
+});
+
+test("lanzar locate llama a useDeviceAction con el cuerpo exacto", async () => {
+  mockMe(["device:action"]);
+  const mutate = vi.fn();
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({ mutate, isPending: false, data: undefined, error: null } as never);
+  renderWithProviders(<DeviceActions device={device} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Localizar" }));
+  expect(mutate).toHaveBeenCalledWith({ id: "dev-001", action: "locate" });
+});
+
+test("wipe exige la confirmación por id", async () => {
+  mockMe(["device:action"]);
+  const mutate = vi.fn();
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({ mutate, isPending: false, data: undefined, error: null } as never);
+  renderWithProviders(<DeviceActions device={device} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Borrado completo" }));
+  const confirmButton = screen.getByRole("button", { name: "Confirmar" });
+  expect(confirmButton).toBeDisabled();
+  const input = screen.getByLabelText("Escribe dev-001 para confirmar.");
+  await user.type(input, "algo-que-no-es-el-id");
+  expect(confirmButton).toBeDisabled();
+  await user.clear(input);
+  await user.type(input, "dev-001");
+  expect(confirmButton).toBeEnabled();
+  await user.click(confirmButton);
+  expect(mutate).toHaveBeenCalledWith({ id: "dev-001", action: "wipe" });
+});
+
+test("la respuesta con dry_run true dice 'simulada (modo observe)'", () => {
+  mockMe(["device:action"]);
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+    data: { adapter: "simulation", ok: true, device_id: "dev-001", device_name: "Tablet Campo A1", action: "locate", dry_run: true, simulated: true, at: "2026-09-05T12:05:00Z" },
+  } as never);
+  renderWithProviders(<DeviceActions device={device} />);
+  expect(screen.getByText("Simulada (modo observe)")).toBeInTheDocument();
+});
+
+test("un 409 de cooldown muestra cuándo volverá a estar disponible", () => {
+  mockMe(["device:action"]);
+  const retryAfter = "2026-09-05T13:00:00Z";
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    data: undefined,
+    error: new ApiError(409, "cooldown", "acción suprimida por cooldown", { retry_after: retryAfter }),
+  } as never);
+  renderWithProviders(<DeviceActions device={device} />);
+  expect(screen.getByRole("alert")).toHaveTextContent(formatDateTime(retryAfter, "es"));
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DeviceActions.test.tsx
+```
+
+Expected: `Error: Failed to load url ./DeviceActions`, `5 failed`.
+
+`web/src/features/devices/DeviceActions.tsx`:
+```tsx
+import { useState } from "react";
+import { Dialog as D } from "radix-ui";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useDeviceAction, useMe, type ActionResult, type Device, type DeviceActionRequest } from "@/api/hooks";
+import { useT, useLang } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
+import { can } from "@/lib/permissions";
+import { ApiError } from "@/api/client";
+
+type ActionKind = DeviceActionRequest["action"];
+
+// Destructivas = action.Action.Destructive() en el dominio (T1): lock, wipe,
+// clear_passcode, reboot. Todas pasan por el mismo diálogo reforzado.
+const DESTRUCTIVE: ActionKind[] = ["lock", "wipe", "reboot", "clear_passcode"];
+const TEXT_ACTIONS: ActionKind[] = ["message", "notify"];
+
+export function DeviceActions({ device }: { device: Device }) {
+  const t = useT();
+  const me = useMe();
+  const deviceAction = useDeviceAction();
+  const [confirming, setConfirming] = useState<ActionKind | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  if (!can(me.data?.capabilities, "device:action")) return null;
+
+  const run = (action: ActionKind, params?: Record<string, unknown>) => {
+    deviceAction.mutate({ id: device.id, action, ...(params ? { params } : {}) });
+  };
+  const setDraft = (key: string, v: string) => setDrafts((d) => ({ ...d, [key]: v }));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" onClick={() => run("locate")} disabled={deviceAction.isPending}>
+          {t("fence.action.locate")}
+        </Button>
+        {DESTRUCTIVE.map((a) => (
+          <Button key={a} variant="destructive" size="sm" onClick={() => setConfirming(a)} disabled={deviceAction.isPending}>
+            {t(`fence.action.${a}`)}
+          </Button>
+        ))}
+        <Button variant="secondary" size="sm" onClick={() => run("set_compliance", { compliant: true })} disabled={deviceAction.isPending}>
+          {t("device.action.compliance.yes")}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => run("set_compliance", { compliant: false })} disabled={deviceAction.isPending}>
+          {t("device.action.compliance.no")}
+        </Button>
+      </div>
+      {TEXT_ACTIONS.map((a) => (
+        <div key={a} className="flex items-end gap-2">
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor={`draft-${a}`}>{`${t(`fence.action.${a}`)} · ${t("fence.action.text")}`}</Label>
+            <Input id={`draft-${a}`} value={drafts[a] ?? ""} onChange={(e) => setDraft(a, e.target.value)} />
+          </div>
+          <Button size="sm" disabled={!drafts[a]?.trim() || deviceAction.isPending} onClick={() => run(a, { text: drafts[a] })}>
+            {t("device.action.send")}
+          </Button>
+        </div>
+      ))}
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor="draft-custom">{`${t("fence.action.custom")} · ${t("device.action.custom.type")}`}</Label>
+          <Input id="draft-custom" value={drafts.custom ?? ""} onChange={(e) => setDraft("custom", e.target.value)} />
+        </div>
+        <Button size="sm" disabled={!drafts.custom?.trim() || deviceAction.isPending} onClick={() => run("custom", { type: drafts.custom })}>
+          {t("device.action.send")}
+        </Button>
+      </div>
+      {deviceAction.error && <ActionFeedback error={deviceAction.error} />}
+      {deviceAction.data && <ActionResultBanner result={deviceAction.data} />}
+      {confirming && (
+        <DestructiveConfirm
+          device={device}
+          action={confirming}
+          pending={deviceAction.isPending}
+          onCancel={() => setConfirming(null)}
+          onConfirm={() => {
+            run(confirming);
+            setConfirming(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Una supresión por cooldown (T20: 409 "cooldown", detail.retry_after en RFC
+// 3339) es la única forma en la que una acción manual no deja ActionResult
+// que enseñar: no hay más que decir salvo cuándo volverá a estar disponible.
+function ActionFeedback({ error }: { error: unknown }) {
+  const t = useT();
+  const { lang } = useLang();
+  if (error instanceof ApiError && error.code === "cooldown") {
+    const retryAfter = (error.detail as { retry_after?: string } | undefined)?.retry_after;
+    return (
+      <div role="alert" className="rounded-[var(--radius-ui)] border border-sev-medium/30 bg-sev-medium/5 p-3 text-sm text-fg">
+        {t("device.action.cooldown", { when: retryAfter ? formatDateTime(retryAfter, lang) : t("common.unknown") })}
+      </div>
+    );
+  }
+  return <ErrorState error={error} />;
+}
+
+// El ActionResult se enseña tal cual: bloqueada gana a dry-run, dry-run gana a
+// ejecutada, y un ok:false que no es ni bloqueo ni simulación es un fallo real
+// del conector (T20: blocked/dry_run son las dos formas honestas de "no se
+// tocó el dispositivo"; lo demás es un intento real que no funcionó).
+function ActionResultBanner({ result }: { result: ActionResult }) {
+  const t = useT();
+  const kind = result.action as ActionKind;
+  let status = t("device.action.result.executed");
+  let variant: "success" | "info" | "danger" = "success";
+  if (!result.ok && !result.blocked && !result.dry_run) {
+    status = result.error || t("state.error");
+    variant = "danger";
+  }
+  if (result.dry_run) {
+    status = t("device.action.result.dryRun");
+    variant = "info";
+  }
+  if (result.blocked) {
+    status = t("device.action.result.blocked");
+    variant = "danger";
+  }
+  return (
+    <div role="status" className="flex items-center gap-2 rounded-[var(--radius-ui)] border border-border bg-bg-2 p-3 text-sm">
+      <Badge variant={variant}>{status}</Badge>
+      <span className="text-muted">{t(`fence.action.${kind}`)}</span>
+      {result.note && <span className="text-muted">· {result.note}</span>}
+    </div>
+  );
+}
+
+// La fricción deliberada de las cuatro acciones destructivas: hay que teclear
+// el identificador exacto del dispositivo, no basta un solo clic.
+function DestructiveConfirm({
+  device,
+  action,
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  device: Device;
+  action: ActionKind;
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  const t = useT();
+  const [typed, setTyped] = useState("");
+  const ready = typed.trim() === device.id;
+  return (
+    <D.Root open onOpenChange={(o) => !o && onCancel()}>
+      <D.Portal>
+        <D.Overlay className="fixed inset-0 bg-fg/40" />
+        <D.Content className="fixed left-1/2 top-1/2 w-[min(92vw,440px)] -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-ui)] border border-border bg-panel p-5 shadow-lg">
+          <D.Title className="text-base font-semibold">{t("device.action.confirm.title", { action: t(`fence.action.${action}`) })}</D.Title>
+          <D.Description className="mt-1 text-sm text-muted">{t("device.action.confirm.warning")}</D.Description>
+          <div className="mt-3 space-y-1.5">
+            <Label htmlFor="confirm-id">{t("device.action.confirm.confirmId", { id: device.id })}</Label>
+            <Input id="confirm-id" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={device.id} />
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <D.Close className="h-9 rounded-[var(--radius-ui)] border border-border px-4 text-sm">{t("device.action.cancel")}</D.Close>
+            <button type="button" disabled={!ready || pending} onClick={onConfirm} className="h-9 rounded-[var(--radius-ui)] bg-sev-high px-4 text-sm font-medium text-white disabled:opacity-50">
+              {t("device.action.confirm.submit")}
+            </button>
+          </div>
+        </D.Content>
+      </D.Portal>
+    </D.Root>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DeviceActions.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 5 passed`.
+
+- [ ] **Step 6: `DeviceDetailPage`: riesgo explicado, señales, acciones e incidentes abiertos (test primero)**
+
+`web/src/features/devices/DeviceDetailPage.test.tsx`:
+```tsx
+import { screen } from "@testing-library/react";
+import { Routes, Route } from "react-router";
+import { renderWithProviders } from "@/test/render";
+import { DeviceDetailPage } from "./DeviceDetailPage";
+import * as hooks from "@/api/hooks";
+import { ApiError } from "@/api/client";
+
+vi.mock("@/api/hooks", async (orig) => ({
+  ...(await orig<typeof hooks>()),
+  useDevice: vi.fn(),
+  useDeviceTrail: vi.fn(),
+  useEvents: vi.fn(),
+  useIncidents: vi.fn(),
+  useMe: vi.fn(),
+}));
+
+const device = {
+  id: "dev-001",
+  name: "Tablet Campo A1",
+  platform: "android",
+  fence_state: "inside" as const,
+  inside_fence: "demo-hq",
+  route_state: "unassigned" as const,
+  last_report_at: "2026-09-05T12:00:00Z",
+  inventory: {
+    os_version: "Android 14",
+    model: "Samsung Galaxy Tab Active5",
+    serial_number: "RZ8T",
+    battery_level: 87,
+    storage_total_gb: 128,
+    storage_free_gb: 64.5,
+    encryption_enabled: true,
+    assigned_user: "Lucía",
+    department: "Operaciones",
+  },
+  risk: { score: 72, severity: "high", reasons: ["dispositivo rooteado"], matched_policies: [], provenance: "policy", verified: true },
+  signals: { device_posture: { rooted: true }, time_of_day: { off_hours: false }, zone_risk: { risk: null } },
+  location: { point: { lat: 40.42, lng: -3.71 } },
+};
+
+function mockCommon(overrides: Partial<Record<"device" | "trail" | "events" | "incidents" | "me", unknown>> = {}) {
+  vi.mocked(hooks.useDevice).mockReturnValue({ data: device, isPending: false, error: null, ...(overrides.device as object) } as never);
+  vi.mocked(hooks.useDeviceTrail).mockReturnValue({
+    data: { items: [{ at: "2026-09-05T12:00:00Z", point: { lat: 40.42, lng: -3.71 } }] },
+    isPending: false,
+    error: null,
+    ...(overrides.trail as object),
+  } as never);
+  vi.mocked(hooks.useEvents).mockReturnValue({
+    data: { items: [{ at: "2026-09-05T12:00:00Z", device_id: "dev-001", device_name: "x", from: "none:unknown", to: "demo-hq:inside" }] },
+    isPending: false,
+    error: null,
+    ...(overrides.events as object),
+  } as never);
+  vi.mocked(hooks.useIncidents).mockReturnValue({ data: { items: [], total: 0 }, isPending: false, error: null, ...(overrides.incidents as object) } as never);
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: [] }, ...(overrides.me as object) } as never);
+}
+
+function renderDetail() {
+  renderWithProviders(
+    <Routes>
+      <Route path="/devices/:id" element={<DeviceDetailPage />} />
+    </Routes>,
+    { route: "/devices/dev-001" },
+  );
+}
+
+test("muestra inventario, riesgo explicado, señales, recorrido y transiciones del dispositivo", () => {
+  mockCommon();
+  renderDetail();
+  expect(screen.getByRole("heading", { name: "Tablet Campo A1" })).toBeInTheDocument();
+  expect(screen.getByText("Samsung Galaxy Tab Active5")).toBeInTheDocument();
+  expect(screen.getByText("87 %")).toBeInTheDocument();
+  expect(screen.getByText("72")).toBeInTheDocument();
+  expect(screen.getByText("Alto")).toBeInTheDocument();
+  expect(screen.getByText("dispositivo rooteado")).toBeInTheDocument();
+  expect(screen.getByText("Desconocido")).toBeInTheDocument(); // zone_risk.risk == null
+  expect(screen.getByText("demo-hq:inside")).toBeInTheDocument();
+});
+
+test("recorrido, transiciones e incidentes muestran error sin romper el resto de la página", () => {
+  mockCommon({
+    trail: { data: undefined, error: new ApiError(500, "internal", "error interno"), refetch: vi.fn() },
+    events: { data: undefined, error: new ApiError(500, "internal", "error interno"), refetch: vi.fn() },
+    incidents: { data: undefined, error: new ApiError(500, "internal", "error interno"), refetch: vi.fn() },
+  });
+  renderDetail();
+  expect(screen.getByRole("heading", { name: "Tablet Campo A1" })).toBeInTheDocument();
+  const alerts = screen.getAllByRole("alert");
+  expect(alerts).toHaveLength(3);
+  for (const alert of alerts) expect(alert).toHaveTextContent("error interno (internal)");
+});
+
+test("recorrido, transiciones e incidentes muestran vacío explícito cuando no hay datos", () => {
+  mockCommon({ trail: { data: { items: [] } }, events: { data: { items: [] } }, incidents: { data: { items: [], total: 0 } } });
+  renderDetail();
+  expect(screen.getByText("Sin recorrido registrado todavía")).toBeInTheDocument();
+  expect(screen.getByText("Sin transiciones de este dispositivo")).toBeInTheDocument();
+  expect(screen.getByText("Sin incidentes abiertos")).toBeInTheDocument();
+});
+
+test("los incidentes abiertos del dispositivo aparecen con enlace y fecha", () => {
+  mockCommon({
+    incidents: {
+      data: {
+        items: [
+          {
+            id: "inc-1",
+            device_id: "dev-001",
+            device_name: "Tablet Campo A1",
+            kind: "high_risk_device",
+            severity: "high",
+            title: "Riesgo alto sostenido",
+            recommendation: "Revisar postura",
+            fence_id: "",
+            assignee: "",
+            status: "open",
+            risk_score: 72,
+            count: 3,
+            evidence: [],
+            opened_at: "2026-09-05T11:00:00Z",
+            updated_at: "2026-09-05T11:00:00Z",
+            timeline: [],
+          },
+        ],
+        total: 1,
+      },
+    },
+  });
+  renderDetail();
+  expect(screen.getByRole("link", { name: "Riesgo alto sostenido" })).toHaveAttribute("href", "/incidents/inc-1");
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DeviceDetailPage.test.tsx
+```
+
+Expected: falla la primera prueba (`Sin evaluar` ya no aparece con score 72; `risk-reasons`/señales/incidentes todavía no existen en la página), `4 failed`.
+
+`web/src/features/devices/DeviceDetailPage.tsx`:
+```tsx
+import { Link, useParams } from "react-router";
+import { ArrowLeft } from "@phosphor-icons/react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StateBadge } from "@/components/StateBadge";
+import { Loading } from "@/components/states/Loading";
+import { ErrorState } from "@/components/states/ErrorState";
+import { Empty } from "@/components/states/Empty";
+import { useDevice, useDeviceTrail, useEvents, useIncidents, useMe } from "@/api/hooks";
+import { useT, useLang } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
+import { can } from "@/lib/permissions";
+import { RiskExplain } from "./RiskExplain";
+import { SignalsTable } from "./SignalsTable";
+import { DeviceActions } from "./DeviceActions";
+
+export function DeviceDetailPage() {
+  const { id = "" } = useParams();
+  const t = useT();
+  const { lang } = useLang();
+  const device = useDevice(id);
+  const trail = useDeviceTrail(id, 20);
+  const events = useEvents(200);
+  const incidents = useIncidents({ device_id: id, status: "open" });
+  const me = useMe();
+  const canAct = can(me.data?.capabilities, "device:action");
+  if (device.isPending) return <Loading rows={6} />;
+  if (device.error) return <ErrorState error={device.error} onRetry={() => device.refetch()} />;
+  const d = device.data!;
+  const inv = d.inventory ?? {};
+  const yesNo = (v: boolean | undefined) => (v == null ? t("common.unknown") : v ? t("common.yes") : t("common.no"));
+  const fields: [string, string][] = [
+    [t("device.field.os"), inv.os_version ?? "-"],
+    [t("device.field.model"), inv.model ?? "-"],
+    [t("device.field.serial"), inv.serial_number ?? "-"],
+    [t("device.field.battery"), inv.battery_level != null ? `${inv.battery_level} %` : "-"],
+    [t("device.field.storage"), inv.storage_total_gb != null ? `${inv.storage_free_gb ?? "?"} / ${inv.storage_total_gb} GB` : "-"],
+    [t("device.field.encryption"), yesNo(inv.encryption_enabled)],
+    [t("device.field.user"), inv.assigned_user ?? "-"],
+    [t("device.field.department"), inv.department ?? "-"],
+    [t("device.field.route"), d.route_id ? `${d.route_id} (${d.route_state})` : "-"],
+  ];
+  const mine = (events.data?.items ?? []).filter((e) => e.device_id === id).reverse();
+  return (
+    <div className="space-y-6">
+      <Link to="/devices" className="inline-flex items-center gap-1 text-sm text-fg-2 hover:text-fg">
+        <ArrowLeft size={14} aria-hidden /> {t("device.back")}
+      </Link>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">{d.name}</h1>
+        <span className="font-mono text-sm text-muted">{d.id}</span>
+        <span className="text-sm text-muted">{d.platform}</span>
+        <StateBadge state={d.fence_state} />
+        {d.inside_fence && <span className="text-sm text-muted">{d.inside_fence}</span>}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>{t("device.inventory")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2">
+              {fields.map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-4 border-b border-border py-1.5">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="text-right">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("device.risk")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RiskExplain verdict={d.risk} signals={d.signals} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("device.trail")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trail.isPending && <Loading rows={3} />}
+            {trail.error && <ErrorState error={trail.error} onRetry={() => trail.refetch()} />}
+            {trail.data && trail.data.items.length === 0 && <Empty title={t("device.trail.empty")} />}
+            {trail.data && trail.data.items.length > 0 && (
+              <ul className="space-y-1 font-mono text-xs text-fg-2">
+                {[...trail.data.items].reverse().map((p, i) => (
+                  <li key={i}>
+                    {formatDateTime(p.at, lang)} · {p.point.lat.toFixed(5)}, {p.point.lng.toFixed(5)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>{t("device.events")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {events.isPending && <Loading rows={3} />}
+            {events.error && <ErrorState error={events.error} onRetry={() => events.refetch()} />}
+            {events.data && mine.length === 0 && <Empty title={t("device.events.empty")} />}
+            {events.data && mine.length > 0 && (
+              <ul className="divide-y divide-border text-sm">
+                {mine.map((ev, i) => (
+                  <li key={i} className="flex justify-between py-2">
+                    <span>
+                      <span className="text-muted">{ev.from}</span> → <span>{ev.to}</span>
+                    </span>
+                    <span className="text-muted">{formatDateTime(ev.at, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle>{t("risk.signals")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SignalsTable signals={d.signals} />
+          </CardContent>
+        </Card>
+        {canAct && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>{t("device.actions")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DeviceActions device={d} />
+            </CardContent>
+          </Card>
+        )}
+        <Card className={canAct ? "" : "lg:col-span-3"}>
+          <CardHeader>
+            <CardTitle>{t("device.incidents")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {incidents.isPending && <Loading rows={2} />}
+            {incidents.error && <ErrorState error={incidents.error} onRetry={() => incidents.refetch()} />}
+            {incidents.data && incidents.data.items.length === 0 && <Empty title={t("device.incidents.empty")} />}
+            {incidents.data && incidents.data.items.length > 0 && (
+              <ul className="divide-y divide-border text-sm">
+                {incidents.data.items.map((inc) => (
+                  <li key={inc.id} className="flex items-center justify-between py-2">
+                    <Link to={`/incidents/${inc.id}`} className="font-medium hover:text-accent">
+                      {inc.title}
+                    </Link>
+                    <span className="text-muted">{formatDateTime(inc.opened_at, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DeviceDetailPage.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 4 passed`.
+
+- [ ] **Step 7: `DevicesPage`: columna de riesgo y filtro por severidad (test primero)**
+
+`web/src/features/devices/DevicesPage.test.tsx`:
+```tsx
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithProviders } from "@/test/render";
+import { DevicesPage } from "./DevicesPage";
+import * as hooks from "@/api/hooks";
+
+vi.mock("@/api/hooks", async (orig) => ({ ...(await orig<typeof hooks>()), useDevices: vi.fn() }));
+
+const items = [
+  { id: "dev-001", name: "Tablet Campo A1", platform: "android", fence_state: "inside", inventory: { assigned_user: "Lucía" }, last_report_at: "2026-09-05T12:00:00Z", risk: { score: 50, severity: "medium" } },
+  { id: "dev-004", name: "Portátil Ventas", platform: "macos", fence_state: "outside", inventory: { assigned_user: "Sara" }, last_report_at: "2026-09-05T12:00:00Z", risk: { score: null, severity: "unknown" } },
+  { id: "dev-002", name: "Móvil Reparto", platform: "ios", fence_state: "inside", inventory: { assigned_user: "Marco" }, last_report_at: "2026-09-05T12:00:00Z", risk: { score: 10, severity: "low" } },
+];
+
+test("lista, filtra por estado y busca con debounce de 250 ms", async () => {
+  vi.mocked(hooks.useDevices).mockReturnValue({ data: { items, total: 3 }, isPending: false, error: null } as never);
+  renderWithProviders(<DevicesPage />);
+  expect(screen.getByRole("link", { name: /Tablet Campo A1/ })).toHaveAttribute("href", "/devices/dev-001");
+
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: "dentro" }));
+  await waitFor(() => expect(vi.mocked(hooks.useDevices)).toHaveBeenLastCalledWith({ state: "inside", q: "", severity: "" }));
+
+  await user.type(screen.getByRole("searchbox"), "sara");
+  // justo tras escribir, el debounce (250 ms) todavía no ha vencido.
+  expect(vi.mocked(hooks.useDevices)).not.toHaveBeenLastCalledWith({ state: "inside", q: "sara", severity: "" });
+  await waitFor(() => expect(vi.mocked(hooks.useDevices)).toHaveBeenLastCalledWith({ state: "inside", q: "sara", severity: "" }));
+});
+
+test("filtra por severidad", async () => {
+  vi.mocked(hooks.useDevices).mockReturnValue({ data: { items, total: 3 }, isPending: false, error: null } as never);
+  renderWithProviders(<DevicesPage />);
+  const user = userEvent.setup();
+  await user.selectOptions(screen.getByLabelText("Severidad"), "high");
+  await waitFor(() => expect(vi.mocked(hooks.useDevices)).toHaveBeenLastCalledWith({ state: "", q: "", severity: "high" }));
+});
+
+test("ordena la columna de riesgo al pulsar su cabecera, dejando los dispositivos sin evaluar al final", async () => {
+  vi.mocked(hooks.useDevices).mockReturnValue({ data: { items, total: 3 }, isPending: false, error: null } as never);
+  renderWithProviders(<DevicesPage />);
+  const user = userEvent.setup();
+  const names = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("link")[0].textContent);
+
+  await user.click(screen.getByRole("button", { name: "Riesgo" }));
+  expect(names()).toEqual(["Móvil Reparto", "Tablet Campo A1", "Portátil Ventas"]);
+
+  await user.click(screen.getByRole("button", { name: "Riesgo" }));
+  expect(names()).toEqual(["Tablet Campo A1", "Móvil Reparto", "Portátil Ventas"]);
+});
+
+test("vacío y error", () => {
+  vi.mocked(hooks.useDevices).mockReturnValue({ data: { items: [], total: 0 }, isPending: false, error: null } as never);
+  const { unmount } = renderWithProviders(<DevicesPage />);
+  expect(screen.getByText("Sin dispositivos. Ejecuta un ciclo del motor.")).toBeInTheDocument();
+  unmount();
+  vi.mocked(hooks.useDevices).mockReturnValue({ data: undefined, isPending: false, error: new Error("caído"), refetch: vi.fn() } as never);
+  renderWithProviders(<DevicesPage />);
+  expect(screen.getByRole("alert")).toHaveTextContent("caído");
+});
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DevicesPage.test.tsx
+```
+
+Expected: fallan "filtra por severidad" (no existe el control) y "ordena la columna de riesgo" (no existe la cabecera-botón); `2 failed | 2 passed`.
+
+`web/src/features/devices/DevicesPage.tsx`:
+```tsx
+import { useState } from "react";
+import { Link } from "react-router";
+import { MagnifyingGlass, CaretUp, CaretDown } from "@phosphor-icons/react";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NativeSelect } from "@/components/ui/select";
+import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
+import { StateBadge } from "@/components/StateBadge";
+import { RiskScore } from "@/components/RiskScore";
+import { Loading } from "@/components/states/Loading";
+import { Empty } from "@/components/states/Empty";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useDevices } from "@/api/hooks";
+import { useT, useLang } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
+
+const states = ["", "inside", "outside", "unknown"] as const;
+const severities = ["", "low", "medium", "high", "critical", "unknown"] as const;
+
+export function DevicesPage() {
+  const t = useT();
+  const { lang } = useLang();
+  const [state, setState] = useState<string>("");
+  const [severity, setSeverity] = useState<string>("");
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebouncedValue(q, 250);
+  const [riskSort, setRiskSort] = useState<"asc" | "desc" | null>(null);
+  const devices = useDevices({ state, q: debouncedQ, severity });
+  const items = devices.data?.items ?? [];
+  // Un dispositivo sin veredicto se queda siempre al final, en cualquiera de
+  // los dos sentidos: nunca se confunde con el riesgo más bajo posible.
+  const rows = riskSort
+    ? [...items].sort((a, b) => {
+        const av = a.risk?.score ?? (riskSort === "asc" ? Infinity : -Infinity);
+        const bv = b.risk?.score ?? (riskSort === "asc" ? Infinity : -Infinity);
+        return riskSort === "asc" ? av - bv : bv - av;
+      })
+    : items;
+  return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <Tabs value={state} onValueChange={setState}>
+          <TabsList>
+            {states.map((s) => (
+              <TabsTrigger key={s} value={s}>
+                {s === "" ? t("devices.filter.all") : t(`state.${s}`)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <div className="flex gap-3">
+          <NativeSelect aria-label={t("risk.filter.severity")} value={severity} onChange={(e) => setSeverity(e.target.value)} className="w-44">
+            {severities.map((s) => (
+              <option key={s} value={s}>
+                {s === "" ? t("devices.filter.severityAll") : t(`risk.severity.${s}`)}
+              </option>
+            ))}
+          </NativeSelect>
+          <div className="relative md:w-80">
+            <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-2.5 text-muted" aria-hidden />
+            <Input type="search" role="searchbox" placeholder={t("devices.search")} value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+          </div>
+        </div>
+      </div>
+      {devices.isPending && <Loading rows={6} />}
+      {devices.error && <ErrorState error={devices.error} onRetry={() => devices.refetch()} />}
+      {devices.data && devices.data.items.length === 0 && <Empty title={t("devices.empty")} />}
+      {devices.data && devices.data.items.length > 0 && (
+        <Table>
+          <THead>
+            <tr>
+              <TH>{t("devices.col.name")}</TH>
+              <TH>{t("devices.col.platform")}</TH>
+              <TH>{t("devices.col.state")}</TH>
+              <TH>
+                <button type="button" className="inline-flex items-center gap-1" onClick={() => setRiskSort((s) => (s === "asc" ? "desc" : "asc"))}>
+                  {t("devices.col.risk")}
+                  {riskSort === "asc" && <CaretUp size={12} aria-hidden />}
+                  {riskSort === "desc" && <CaretDown size={12} aria-hidden />}
+                </button>
+              </TH>
+              <TH>{t("devices.col.user")}</TH>
+              <TH>{t("devices.col.lastReport")}</TH>
+            </tr>
+          </THead>
+          <TBody>
+            {rows.map((d) => (
+              <TR key={d.id}>
+                <TD>
+                  <Link to={`/devices/${d.id}`} className="font-medium text-fg hover:text-accent">
+                    {d.name}
+                  </Link>
+                  <span className="ml-2 font-mono text-xs text-muted">{d.id}</span>
+                </TD>
+                <TD>{d.platform}</TD>
+                <TD>
+                  <StateBadge state={d.fence_state} />
+                  {d.inside_fence && <span className="ml-2 text-xs text-muted">{d.inside_fence}</span>}
+                </TD>
+                <TD>
+                  <RiskScore score={d.risk?.score ?? null} severity={d.risk?.severity ?? "unknown"} />
+                </TD>
+                <TD>{d.inventory?.assigned_user ?? "-"}</TD>
+                <TD className="text-muted">{formatDateTime(d.last_report_at, lang)}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/devices/DevicesPage.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 4 passed`.
+
+- [ ] **Step 8: `FenceEditorPage`: retira el aviso de M2 y explica dwell/violación sostenida (test primero)**
+
+En `web/src/features/fences/FenceEditorPage.test.tsx` se sustituye el test que esperaba el aviso "a partir de M2" por su reemplazo honesto (el resto del fichero no cambia):
+
+```bash
+cd web
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/features/fences/FenceEditorPage.test.tsx")
+s = p.read_text()
+old = '''// M1-R27: las reglas (violationIntervalCycles/dwellSeconds) aún no las
+// aplica el motor (C3 diferido a M2); el editor debe avisarlo junto a esos
+// campos para que no parezca que ya tienen efecto.
+test("avisa de que el motor aún no aplica las reglas (M1-R27)", () => {
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  expect(screen.getByText("El motor aplicará estas reglas a partir de M2")).toBeInTheDocument();
+});'''
+new = '''// M2 (T14): el motor ya aplica dwell_seconds y violation_interval_cycles;
+// el aviso de "a partir de M2" se sustituye por la ayuda definitiva.
+test("explica qué hacen la permanencia mínima y los ciclos entre violaciones, sin el aviso de M1 (M2)", () => {
+  vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
+  vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
+  renderWithProviders(
+    <Routes>
+      <Route path="/fences/new" element={<FenceEditorPage />} />
+    </Routes>,
+    { route: "/fences/new" },
+  );
+  expect(
+    screen.getByText(
+      "«Permanencia mínima» retrasa la acción de entrada hasta que el dispositivo lleva ese tiempo en el nuevo estado; «Ciclos entre violaciones» repite la acción cada N ciclos mientras la violación sigue activa.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("El motor aplicará estas reglas a partir de M2")).toBeNull();
+});'''
+assert s.count(old) == 1, "el test de M1 no coincide tal cual: revisa si ya se editó"
+p.write_text(s.replace(old, new, 1))
+PY
+cd ..
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/fences/FenceEditorPage.test.tsx
+```
+
+Expected: falla solo el test renombrado (el texto todavía es el de M1), `1 failed | 6 passed`.
+
+En `web/src/features/fences/FenceEditorPage.tsx` el `<p>` ya lee el texto de `fence.rules.help` (Step 2 ya cambió el diccionario); el único cambio de código es el comentario que ya no describe la realidad:
+
+```bash
+cd web
+python3 - <<'PY'
+import pathlib
+p = pathlib.Path("src/features/fences/FenceEditorPage.tsx")
+s = p.read_text()
+old = '      {/* M1-R27: el motor todavía no aplica estas reglas (C3 diferido a M2). */}\n'
+new = '      {/* M2 (T14): el motor aplica estas reglas desde este hito (planDwell y planStanding en internal/engine). */}\n'
+assert s.count(old) == 1, "el comentario de M1-R27 no coincide tal cual"
+p.write_text(s.replace(old, new, 1))
+PY
+cd ..
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/fences/FenceEditorPage.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 7 passed`.
+
+- [ ] **Step 9: `OverviewPage`: reparto de severidad de la flota y handoffs pendientes (test primero)**
+
+`web/src/features/overview/OverviewPage.test.tsx`:
+```tsx
+import { screen } from "@testing-library/react";
+import { renderWithProviders } from "@/test/render";
+import { OverviewPage } from "./OverviewPage";
+import * as hooks from "@/api/hooks";
+import { ApiError } from "@/api/client";
+
+vi.mock("@/api/hooks", async (orig) => ({
+  ...(await orig<typeof hooks>()),
+  useDevices: vi.fn(),
+  useEngineStatus: vi.fn(),
+  useEvents: vi.fn(),
+  useRunOnce: vi.fn(),
+  useMe: vi.fn(),
+  useHandoffs: vi.fn(),
+}));
+
+const device = (id: string, fence_state: string, compliant: boolean | null, severity = "unknown") => ({ id, name: id, fence_state, compliant, risk: { severity } });
+
+function mock(over: Partial<Record<"devices" | "engine" | "events" | "handoffs", unknown>> = {}) {
+  vi.mocked(hooks.useDevices).mockReturnValue({
+    data: { items: [device("a", "inside", true, "low"), device("b", "outside", false, "high"), device("c", "unknown", null, "high")], total: 3 },
+    isPending: false,
+    error: null,
+    refetch: vi.fn(),
+    ...(over.devices as object),
+  } as never);
+  vi.mocked(hooks.useEngineStatus).mockReturnValue({
+    data: { mode: "simulation", enforcement: "observe", interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" } },
+    isPending: false,
+    error: null,
+    ...(over.engine as object),
+  } as never);
+  vi.mocked(hooks.useEvents).mockReturnValue({
+    data: { items: [{ at: "2026-09-05T12:00:00Z", device_id: "a", device_name: "a", from: "none:unknown", to: "demo-hq:inside" }] },
+    isPending: false,
+    error: null,
+    ...(over.events as object),
+  } as never);
+  vi.mocked(hooks.useRunOnce).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:run"] } } as never);
+  vi.mocked(hooks.useHandoffs).mockReturnValue({ data: { items: [{ id: "ho-1" }], total: 1 }, isPending: false, error: null, refetch: vi.fn(), ...(over.handoffs as object) } as never);
+}
+
+test("contenido: KPIs, motor, riesgo de la flota, handoffs, transiciones y proveedores", () => {
+  mock();
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getByText("Dispositivos").nextSibling).toHaveTextContent("3");
+  expect(screen.getByText("Dentro").nextSibling).toHaveTextContent("1");
+  expect(screen.getByText("Cumplimiento").nextSibling).toHaveTextContent("33 %");
+  expect(screen.getByRole("button", { name: "Ejecutar ciclo ahora" })).toBeEnabled();
+  expect(screen.getByText("demo-hq:inside")).toBeInTheDocument();
+  expect(screen.getAllByText("simulation")).toHaveLength(2);
+  expect(screen.getByTestId("sev-low").nextSibling).toHaveTextContent("1");
+  expect(screen.getByTestId("sev-high").nextSibling).toHaveTextContent("2");
+  expect(screen.getByTestId("handoffs-pending-count")).toHaveTextContent("1");
+});
+
+test("cargando, vacío y error", () => {
+  mock({ devices: { data: undefined, isPending: true }, events: { data: { items: [] } }, engine: { data: undefined, error: new Error("boom"), isPending: false } });
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getAllByRole("status").length).toBeGreaterThan(0);
+  expect(screen.getByText("Aún no hay transiciones. Ejecuta un ciclo.")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("boom");
+});
+
+test("sin engine:run no se muestra el botón", () => {
+  mock();
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: [] } } as never);
+  renderWithProviders(<OverviewPage />);
+  expect(screen.queryByRole("button", { name: "Ejecutar ciclo ahora" })).toBeNull();
+});
+
+test("un 409 de run-once se muestra como texto", () => {
+  mock();
+  vi.mocked(hooks.useRunOnce).mockReturnValue({ mutate: vi.fn(), isPending: false, error: new ApiError(409, "cycle_in_progress", "ciclo en curso") } as never);
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getByRole("alert")).toHaveTextContent("ciclo en curso");
+});
+
+test("last_error del motor se muestra como texto", () => {
+  mock({
+    engine: {
+      data: {
+        mode: "simulation",
+        enforcement: "observe",
+        interval_seconds: 900,
+        running: true,
+        cycles: 2,
+        providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } },
+        last_cycle: { at: "2026-09-05T12:00:00Z" },
+        last_error: "proveedor simulation: tiempo agotado",
+      },
+    },
+  });
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getByText("proveedor simulation: tiempo agotado")).toBeInTheDocument();
+});
+
+test("un error de la bandeja de handoffs no rompe el resto de la página", () => {
+  mock({ handoffs: { data: undefined, error: new ApiError(500, "internal", "error interno"), refetch: vi.fn() } });
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getByRole("heading", { name: "Visión general" })).toBeInTheDocument();
+  expect(screen.getAllByRole("alert").some((a) => a.textContent?.includes("error interno"))).toBe(true);
+});
+```
+
+Note: se mockea `@/components/SeverityBadge` para poder anclar `nextSibling` de forma determinista, con el mismo patrón que ya usa este fichero para `Kpi`. Añadir justo debajo de los `import`:
+
+```tsx
+vi.mock("@/components/SeverityBadge", () => ({
+  SeverityBadge: ({ severity }: { severity: string }) => <span data-testid={`sev-${severity}`}>{severity}</span>,
+}));
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/overview/OverviewPage.test.tsx
+```
+
+Expected: fallan las dos pruebas nuevas (`sev-low`/`sev-high`/`handoffs-pending-count` no existen todavía y `useHandoffs` no está mockeado en la implementación actual), `2 failed | 4 passed`.
+
+`web/src/features/overview/OverviewPage.tsx`:
+```tsx
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { SeverityBadge } from "@/components/SeverityBadge";
+import { Loading } from "@/components/states/Loading";
+import { Empty } from "@/components/states/Empty";
+import { ErrorState } from "@/components/states/ErrorState";
+import { useDevices, useEngineStatus, useEvents, useHandoffs } from "@/api/hooks";
+import { useT, useLang } from "@/lib/i18n";
+import { formatDateTime, percent } from "@/lib/format";
+import { Kpi } from "./Kpi";
+import { EngineCard } from "./EngineCard";
+
+const severityOrder = ["low", "medium", "high", "critical", "unknown"] as const;
+
+export function OverviewPage() {
+  const t = useT();
+  const { lang } = useLang();
+  const devices = useDevices();
+  const events = useEvents(10);
+  const engine = useEngineStatus();
+  const handoffs = useHandoffs("pending");
+  const items = devices.data?.items ?? [];
+  const count = (s: string) => items.filter((d) => d.fence_state === s).length;
+  const compliant = items.filter((d) => d.compliant === true).length;
+  const bySeverity = severityOrder.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s]: 0 }), {});
+  for (const d of items) {
+    const s = d.risk.severity;
+    bySeverity[s in bySeverity ? s : "unknown"] += 1;
+  }
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold tracking-tight">{t("overview.title")}</h1>
+      {devices.isPending && <Loading rows={2} />}
+      {devices.error && <ErrorState error={devices.error} onRetry={() => devices.refetch()} />}
+      {devices.data && (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <Kpi label={t("overview.devices")} value={items.length} />
+          <Kpi label={t("overview.inside")} value={count("inside")} tone="success" />
+          <Kpi label={t("overview.outside")} value={count("outside")} tone="warning" />
+          <Kpi label={t("overview.unknown")} value={count("unknown")} />
+          <Kpi label={t("overview.compliance")} value={percent(compliant, items.length)} />
+        </div>
+      )}
+      <div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
+        <div className="space-y-6">
+          <EngineCard />
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("overview.riskDistribution")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {devices.data && (
+                <ul className="flex flex-wrap gap-4 text-sm">
+                  {severityOrder.map((s) => (
+                    <li key={s} className="flex items-center gap-2">
+                      <SeverityBadge severity={s} />
+                      <span className="tabular-nums text-muted">{bySeverity[s]}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("overview.handoffsPending")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {handoffs.isPending && <Loading rows={1} />}
+              {handoffs.error && <ErrorState error={handoffs.error} onRetry={() => handoffs.refetch()} />}
+              {handoffs.data && (
+                <p data-testid="handoffs-pending-count" className="text-3xl font-semibold tabular-nums">
+                  {handoffs.data.total}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("overview.providers")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {engine.data && (
+                <ul className="divide-y divide-border text-sm">
+                  {Object.entries(engine.data.providers).map(([name, h]) => (
+                    <li key={name} className="flex items-center justify-between py-2">
+                      <span>{name}</span>
+                      <span className="flex items-center gap-2 text-muted">
+                        {h.devices} · {h.latency_ms} ms
+                        <Badge variant={h.ok ? "success" : "danger"}>{h.ok ? "ok" : h.error}</Badge>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("overview.events")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {events.isPending && <Loading rows={4} />}
+            {events.error && <ErrorState error={events.error} onRetry={() => events.refetch()} />}
+            {events.data && events.data.items.length === 0 && <Empty title={t("overview.noEvents")} />}
+            {events.data && events.data.items.length > 0 && (
+              <ul className="divide-y divide-border text-sm">
+                {[...events.data.items].reverse().map((ev, i) => (
+                  <li key={i} className="grid grid-cols-[1fr_auto] gap-2 py-2">
+                    <span>
+                      <span className="font-medium">{ev.device_name}</span> <span className="text-muted">{ev.from}</span> → <span>{ev.to}</span>
+                    </span>
+                    <span className="text-muted">{formatDateTime(ev.at, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+```
+
+Run:
+```bash
+cd web && npx vitest run src/features/overview/OverviewPage.test.tsx
+```
+
+Expected: `Test Files 1 passed`, `Tests 6 passed`.
+
+- [ ] **Step 10: Verificar y commit**
+
+```bash
+cd web && npm run lint && npm run typecheck && npm test && cd ..
+git add web/src/api/keys.ts web/src/api/hooks.ts \
+        web/src/features/devices/DeviceDetailPage.tsx web/src/features/devices/DeviceDetailPage.test.tsx \
+        web/src/features/devices/RiskExplain.tsx web/src/features/devices/RiskExplain.test.tsx \
+        web/src/features/devices/DeviceActions.tsx web/src/features/devices/DeviceActions.test.tsx \
+        web/src/features/devices/SignalsTable.tsx \
+        web/src/features/devices/DevicesPage.tsx web/src/features/devices/DevicesPage.test.tsx \
+        web/src/features/fences/FenceEditorPage.tsx web/src/features/fences/FenceEditorPage.test.tsx \
+        web/src/lib/i18n.es.ts web/src/lib/i18n.en.ts \
+        web/src/features/overview/OverviewPage.tsx web/src/features/overview/OverviewPage.test.tsx
+git commit -q -m "$(cat <<'EOF'
+feat(web): riesgo explicado y acciones manuales en el detalle de dispositivo
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w
+EOF
+)"
+```
+
+Expected: `lint`, `typecheck` y `test` en verde; commit creado.
+
+---
+
+
+---
+
+### Task 28: Batería runtime del hito
+
+Todo lo que T1-T27 prometen — riesgo explicable, guardarraíles que bloquean el wipe, webhooks firmados, OCSF, cooldown, handoffs y what-if — solo es honesto si alguien lo ejercita contra el binario real, no contra el código fuente. Esta tarea escribe esa comprobación: ocho checks nuevos que hablan HTTP con `lucidfence serve`, exactamente como los doce de M0+M1, y un receptor de webhooks local para verificar en el otro extremo lo que el binario firma.
+
+`internal/battery` vive bajo la regla `depguard` "leaf-utils" (`.golangci.yml`, spec §5.2): solo puede importar `$gostd`. Eso es deliberado — la batería trata el binario como una caja negra por HTTP y nunca ha enlazado contra ningún paquete de dominio, ni siquiera en M0/M1 donde `device.Device` o `action.Result` habrían sido cómodos de tipar. Esta tarea sigue esa regla al pie de la letra: para verificar el webhook firmado (T10: `notify.Sign`/`notify.Verify`, cabeceras `X-LucidFence-*`) el `Receiver` no importa `internal/notify` — reimplementa en stdlib puro (`crypto/hmac`, `crypto/sha256`) el mismo esquema HMAC-SHA256 y los mismos nombres de cabecera, y así comprueba de forma *independiente* que el binario firma como promete, no que produce lo que su propio paquete de firma dice que produce.
+
+`StartReceiver` levanta un servidor HTTP en `127.0.0.1:0` (puerto libre) que verifica cada entrega y la guarda. Como escucha en una dirección privada, los checks que lo usan tienen que configurar `egress.allow_private: true` y meter `127.0.0.1` en la allowlist de egress (T9) antes de apuntar el webhook ahí — ejercitando de paso la puerta de egress con una entrega real, no con un mock.
+
+Los ocho checks nuevos, en el orden en que corren: riesgo explicable (tras un ciclo, algún dispositivo tiene `risk.score` no nulo, `risk.reasons` no vacío, `risk.provenance` `"tool"` y `risk.verified` `true` — `evidenceGate` de T3 solo concede `"tool"` cuando hay motivos, así que este check es también, indirectamente, un check de que T13 enchufó el riesgo en el ciclo); observe bloquea el wipe (una política que siempre casa y ordena `wipe` deja en `/actions` una acción con `dry_run` y `blocked` a `true`, nunca una ejecución real, porque `Settings.Enforcement.AllowWipe` es `false` por omisión); el webhook firmado (Receiver + egress + webhook nativo, se fuerza una alerta con `POST /alerts/evaluate` y el receptor confirma una entrega válida — firma correcta y las cuatro cabeceras); OCSF sin coordenadas (se cambia el formato a `ocsf` y se reevalúa la misma alerta: el cuerpo recibido lleva `class_uid` 2004 y no lleva `lat`/`lng` en ningún punto del árbol JSON); el cooldown suprime el segundo destructivo (la misma acción manual dos veces seguidas sobre el mismo dispositivo: la segunda, dentro de la ventana de cooldown, se rechaza con un código que la nombra); el handoff pendiente se aprueba y ejecuta bajo guardarraíles (un playbook con acción `lock` deja un handoff `pending`, se aprueba, y la ejecución resultante sigue en `dry_run` porque el motor está en `observe`); el what-if devuelve disparos sin ejecutar nada (`POST /policies/replay` con una política que nunca se guarda dispara sobre el histórico ya recorrido por los ciclos anteriores de la propia batería, y `/actions` no gana ni una acción nueva); y `/events` y `/actions` paginan con cursor sin repetir ni perder elementos (recorrido página a página con `limit` pequeño comparado contra una lectura de un tirón con `limit` grande).
+
+**Files:**
+- Create: `internal/battery/checks_m2.go`, `internal/battery/receiver.go`
+- Create: `internal/battery/checks_m2_test.go`
+- Modify: `internal/battery/battery.go`, `internal/battery/server.go`, `internal/battery/battery_test.go`, `scripts/battery.sh`
+
+**Interfaces:**
+- Consumes (de M1, ya en el repo):
+  ```go
+  type Env struct { Bin, Tmp, BaseURL string; Client *http.Client; CSRF string; /* stop no exportado */ }
+  func (env *Env) StartServer(ctx context.Context) error
+  func (env *Env) StopServer() error
+  func (env *Env) GetJSON(ctx context.Context, path string, out any) (int, error)
+  func (env *Env) PostJSON(ctx context.Context, path string, body, out any) (int, error)
+  type Check struct { Name string; Run func(ctx context.Context, env *Env) error }
+  func Run(ctx context.Context, env *Env, checks []Check, w io.Writer) (passed, total int)
+  func Checks() []Check
+  func items(out map[string]any) ([]any, error)      // internal/battery/checks_m1.go
+  func number(m map[string]any, key string) (float64, error)
+  ```
+- Consumes (de las rutas nuevas de T18-T21; sus formas JSON, no sus tipos Go — `internal/battery` no los importa):
+  - Políticas (T18): `POST /api/v1/policies` `{id,name,description,when:[{field,op,value}],actions:[{action,params}],enabled,severity}`; `POST /api/v1/policies/replay` `{policy,limit,use_current_fences}` → `{policy_id,points_evaluated,devices_evaluated,firings,by_device,by_action,approximation,notes,samples}`.
+  - Incidentes y alertas (T19): `POST /api/v1/alerts` `{id,name,kind,threshold,severity,enabled}`; `POST /api/v1/alerts/evaluate`.
+  - Playbooks y handoffs (T20): `POST /api/v1/playbooks` (misma forma que una política, sin `severity` de política sino la propia); `GET /api/v1/handoffs?status=pending` → `{items:[{id,status,...}]}`; `POST /api/v1/handoffs/{id}/approve` `{by,note}` → `{status,result:{dry_run,...},...}`; `POST /api/v1/devices/{id}/actions` `{action,params}`.
+  - Ajustes y paginación (T21): `PUT /api/v1/settings/egress` `{hosts,allow_private}`; `PUT /api/v1/settings/webhooks` `{url,format,events,enabled,secret}` → `{...,secret_set}`; `GET /api/v1/events` y `GET /api/v1/actions` con `?limit=&cursor=` → `{items,next_cursor}`.
+  - Riesgo en el dispositivo (T1-T3, ya expuesto por T18's hermano de M1 `GET /api/v1/devices`): cada item lleva `risk:{score,severity,reasons,matched_policies,provenance,verified}`.
+  - Resultado de una acción (T1, ya en `action.Result`, confirmado en el repo): `{...,dry_run,blocked,action,policy_id,playbook_id,route_id,severity,error_type}`.
+- Consumes (de T10-T11, solo los nombres literales, reimplementados en stdlib — ver "Desviaciones"):
+  ```go
+  // notify.SignatureHeader = "X-LucidFence-Signature"; notify.EventHeader = "X-LucidFence-Event"
+  // notify.DeliveryHeader = "X-LucidFence-Delivery"; notify.TimestampHeader = "X-LucidFence-Timestamp"
+  // notify.Sign(secret, body) = "sha256=" + hex(hmac_sha256(secret, body)); notify.Verify hace el mismo cálculo
+  // notify.OCSFClassUID = 2004
+  ```
+- Produces:
+  ```go
+  func checksM2() []Check
+  func (env *Env) PutJSON(ctx context.Context, path string, body, out any) (int, error)
+  func (env *Env) PatchJSON(ctx context.Context, path string, body, out any) (int, error)
+  type ReceivedDelivery struct { Event, Signature string; Body []byte; Valid bool }
+  type Receiver struct { URL, Secret string; Received []ReceivedDelivery }
+  func StartReceiver(secret string) (*Receiver, func() error, error)
+  func (r *Receiver) Deliveries() []ReceivedDelivery
+  // battery.Checks(): M0 + (M1 sin su último check) + M2 + (el último check de M1, "servidor para limpio")
+  // el tally deja de ser un número fijo en el código: pasa a ser
+  // len(checksM0()) + len(checksM1()) + len(checksM2()), 8 más que antes de esta tarea.
+  ```
+
+- [ ] **Step 1: Tests dorados (fallan)**
+
+`internal/battery/checks_m2_test.go` (fichero nuevo):
+```go
+package battery
+
+import (
+	"bytes"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+)
+
+// jsonRoutes monta un servidor de mentira con solo las respuestas que cada
+// check necesita, buenas o equivocadas ("MÉTODO /ruta" ignora la query).
+func jsonRoutes(t *testing.T, routes map[string]func(http.ResponseWriter, *http.Request)) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	for pattern, h := range routes {
+		mux.HandleFunc(pattern, h)
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func jsonOK(status int, body any) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(body)
+	}
+}
+
+func envFor(srv *httptest.Server) *Env {
+	return &Env{BaseURL: srv.URL, Client: srv.Client()}
+}
+
+func signBody(secret string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+}
+
+func TestCheckRiskExplainedGoodAndBad(t *testing.T) {
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
+		"GET /api/v1/devices": jsonOK(200, map[string]any{"items": []any{
+			map[string]any{"id": "dev-001", "risk": map[string]any{"score": nil, "reasons": []any{}, "provenance": "none", "verified": false}},
+			map[string]any{"id": "dev-002", "risk": map[string]any{"score": 42.0, "reasons": []any{"fuera de geocerca permitida"}, "provenance": "tool", "verified": true}},
+		}}),
+	})
+	if err := checkRiskExplained(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("un dispositivo con riesgo explicado debía pasar: %v", err)
+	}
+
+	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
+		"GET /api/v1/devices": jsonOK(200, map[string]any{"items": []any{
+			map[string]any{"id": "dev-001", "risk": map[string]any{"score": nil, "reasons": []any{}, "provenance": "none", "verified": false}},
+		}}),
+	})
+	if err := checkRiskExplained(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("sin ningún dispositivo evaluado no debía dar el check por bueno")
+	}
+}
+
+func TestCheckObserveBlocksWipeGoodAndBad(t *testing.T) {
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/policies":        jsonOK(201, map[string]any{}),
+		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
+		"GET /api/v1/actions": jsonOK(200, map[string]any{"items": []any{
+			map[string]any{"action": "wipe", "dry_run": true, "blocked": true},
+		}}),
+	})
+	if err := checkObserveBlocksWipe(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("wipe bloqueado en observe debía pasar: %v", err)
+	}
+
+	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/policies":        jsonOK(201, map[string]any{}),
+		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
+		"GET /api/v1/actions": jsonOK(200, map[string]any{"items": []any{
+			map[string]any{"action": "wipe", "dry_run": false, "blocked": false},
+		}}),
+	})
+	if err := checkObserveBlocksWipe(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("un wipe que escapa a dry-run no debía dar el check por bueno")
+	}
+}
+
+// webhookState recuerda la última configuración de webhook mandada por PUT,
+// para que el servidor de mentira sepa a dónde y con qué secreto entregar.
+type webhookState struct {
+	mu     sync.Mutex
+	url    string
+	secret string
+	format string
+}
+
+func (s *webhookState) put(body map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.url, _ = body["url"].(string)
+	s.secret, _ = body["secret"].(string)
+	s.format, _ = body["format"].(string)
+}
+
+func (s *webhookState) snapshot() (url, secret, format string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.url, s.secret, s.format
+}
+
+// webhookDispatcherServer acepta la configuración de egress/webhook y, en
+// cada /alerts/evaluate, llama a deliver: el propio caso de prueba decide
+// cómo de fiel (o infiel) es la entrega al Receiver real.
+func webhookDispatcherServer(t *testing.T, deliver func(t *testing.T, url, secret, format string)) *httptest.Server {
+	t.Helper()
+	state := &webhookState{}
+	return jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"PUT /api/v1/settings/egress": jsonOK(200, map[string]any{}),
+		"PUT /api/v1/settings/webhooks": func(w http.ResponseWriter, r *http.Request) {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			state.put(body)
+			jsonOK(200, map[string]any{"secret_set": true})(w, r)
+		},
+		"POST /api/v1/alerts": jsonOK(201, map[string]any{}),
+		"POST /api/v1/alerts/evaluate": func(w http.ResponseWriter, r *http.Request) {
+			url, secret, format := state.snapshot()
+			deliver(t, url, secret, format)
+			jsonOK(200, map[string]any{"firings": 1})(w, r)
+		},
+	})
+}
+
+func sendDelivery(t *testing.T, url string, body []byte, sig string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(eventHeader, "alert.fired")
+	req.Header.Set(signatureHeader, sig)
+	req.Header.Set(deliveryHeader, "battery-test-delivery")
+	req.Header.Set(timestampHeader, time.Now().UTC().Format(time.RFC3339))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+}
+
+func deliverGood(t *testing.T, url, secret, format string) {
+	t.Helper()
+	body := map[string]any{"message": "riesgo alto"}
+	if format == "ocsf" {
+		body = map[string]any{"class_uid": 2004, "category_uid": 2, "severity_id": 3}
+	}
+	raw, _ := json.Marshal(body)
+	sendDelivery(t, url, raw, signBody(secret, raw))
+}
+
+func deliverBadSignature(t *testing.T, url, _, _ string) {
+	t.Helper()
+	raw, _ := json.Marshal(map[string]any{"message": "riesgo alto"})
+	sendDelivery(t, url, raw, "sha256=00")
+}
+
+func deliverBadOCSF(t *testing.T, url, secret, _ string) {
+	t.Helper()
+	raw, _ := json.Marshal(map[string]any{"class_uid": 1001, "location": map[string]any{"lat": 40.42, "lng": -3.71}})
+	sendDelivery(t, url, raw, signBody(secret, raw))
+}
+
+func TestCheckWebhookSignedGoodAndBad(t *testing.T) {
+	good := webhookDispatcherServer(t, deliverGood)
+	if err := checkWebhookSigned(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("entrega válida debía pasar: %v", err)
+	}
+
+	orig := deliveryTimeout
+	deliveryTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { deliveryTimeout = orig })
+	bad := webhookDispatcherServer(t, deliverBadSignature)
+	if err := checkWebhookSigned(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("una firma alterada no debía dar el check por bueno")
+	}
+}
+
+func TestCheckOCSFNoCoordsGoodAndBad(t *testing.T) {
+	good := webhookDispatcherServer(t, deliverGood)
+	if err := checkOCSFNoCoords(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("payload OCSF válido debía pasar: %v", err)
+	}
+
+	orig := deliveryTimeout
+	deliveryTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { deliveryTimeout = orig })
+	bad := webhookDispatcherServer(t, deliverBadOCSF)
+	if err := checkOCSFNoCoords(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("class_uid erróneo y coordenadas presentes no debían dar el check por bueno")
+	}
+}
+
+func TestCheckCooldownSuppressesSecondGoodAndBad(t *testing.T) {
+	calls := 0
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/devices/dev-001/actions": func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			if calls == 1 {
+				jsonOK(200, map[string]any{"ok": true})(w, r)
+				return
+			}
+			jsonOK(409, map[string]any{"error": "acción suprimida", "code": "action_suppressed", "detail": "cooldown activo"})(w, r)
+		},
+	})
+	if err := checkCooldownSuppressesSecond(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("segunda ejecución suprimida por cooldown debía pasar: %v", err)
+	}
+
+	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/devices/dev-001/actions": jsonOK(200, map[string]any{"ok": true}),
+	})
+	if err := checkCooldownSuppressesSecond(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("una segunda ejecución con código 200 no debía dar el check por bueno")
+	}
+}
+
+func TestCheckHandoffApprovedUnderGuardrailsGoodAndBad(t *testing.T) {
+	pending := jsonOK(200, map[string]any{"items": []any{map[string]any{"id": "ho-1", "status": "pending"}}})
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/playbooks":             jsonOK(201, map[string]any{}),
+		"POST /api/v1/engine/run-once":       jsonOK(200, map[string]any{}),
+		"GET /api/v1/handoffs":               pending,
+		"POST /api/v1/handoffs/{id}/approve": jsonOK(200, map[string]any{"status": "executed", "result": map[string]any{"dry_run": true}}),
+	})
+	if err := checkHandoffApprovedUnderGuardrails(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("handoff aprobado y ejecutado en dry-run debía pasar: %v", err)
+	}
+
+	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"POST /api/v1/playbooks":             jsonOK(201, map[string]any{}),
+		"POST /api/v1/engine/run-once":       jsonOK(200, map[string]any{}),
+		"GET /api/v1/handoffs":               pending,
+		"POST /api/v1/handoffs/{id}/approve": jsonOK(200, map[string]any{"status": "approved"}),
+	})
+	if err := checkHandoffApprovedUnderGuardrails(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("un handoff que no queda \"executed\" no debía dar el check por bueno")
+	}
+}
+
+func TestCheckWhatIfNoExecutionGoodAndBad(t *testing.T) {
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"GET /api/v1/actions":          jsonOK(200, map[string]any{"items": []any{map[string]any{"id": "a1"}}}),
+		"POST /api/v1/policies/replay": jsonOK(200, map[string]any{"firings": 3}),
+	})
+	if err := checkWhatIfNoExecution(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("what-if sin ejecutar nada debía pasar: %v", err)
+	}
+
+	calls := 0
+	badExec := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"GET /api/v1/actions": func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			items := []any{map[string]any{"id": "a1"}}
+			if calls > 1 {
+				items = append(items, map[string]any{"id": "a2"})
+			}
+			jsonOK(200, map[string]any{"items": items})(w, r)
+		},
+		"POST /api/v1/policies/replay": jsonOK(200, map[string]any{"firings": 3}),
+	})
+	if err := checkWhatIfNoExecution(context.Background(), envFor(badExec)); err == nil {
+		t.Fatal("un what-if que deja una acción nueva no debía dar el check por bueno")
+	}
+	badFirings := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"GET /api/v1/actions":          jsonOK(200, map[string]any{"items": []any{}}),
+		"POST /api/v1/policies/replay": jsonOK(200, map[string]any{"firings": 0}),
+	})
+	if err := checkWhatIfNoExecution(context.Background(), envFor(badFirings)); err == nil {
+		t.Fatal("un what-if sin disparos no debía dar el check por bueno")
+	}
+}
+
+func fiveItems(prefix string) []map[string]any {
+	out := make([]map[string]any, 5)
+	for i := range out {
+		out[i] = map[string]any{"id": fmt.Sprintf("%s-%d", prefix, i)}
+	}
+	return out
+}
+
+// pagedItemsHandler trocea all por limit/cursor (índice absoluto de
+// elemento), igual que describe T8 para EventsPage/ActionsPage.
+func pagedItemsHandler(all []map[string]any) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := 500
+		if l := r.URL.Query().Get("limit"); l != "" {
+			_, _ = fmt.Sscanf(l, "%d", &limit)
+		}
+		start := 0
+		if c := r.URL.Query().Get("cursor"); c != "" {
+			_, _ = fmt.Sscanf(c, "%d", &start)
+		}
+		end := min(start+limit, len(all))
+		page := all[min(start, len(all)):end]
+		items := make([]any, len(page))
+		for i, it := range page {
+			items[i] = it
+		}
+		next := ""
+		if end < len(all) {
+			next = fmt.Sprintf("%d", end)
+		}
+		jsonOK(200, map[string]any{"items": items, "next_cursor": next})(w, r)
+	}
+}
+
+func TestCheckPaginationGoodAndBad(t *testing.T) {
+	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"GET /api/v1/events":  pagedItemsHandler(fiveItems("ev")),
+		"GET /api/v1/actions": pagedItemsHandler(fiveItems("ac")),
+	})
+	if err := checkPagination(context.Background(), envFor(good)); err != nil {
+		t.Fatalf("paginación consistente debía pasar: %v", err)
+	}
+
+	withRepeat := append(fiveItems("ev"), map[string]any{"id": "ev-0"})
+	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"GET /api/v1/events":  pagedItemsHandler(withRepeat),
+		"GET /api/v1/actions": pagedItemsHandler(fiveItems("ac")),
+	})
+	if err := checkPagination(context.Background(), envFor(bad)); err == nil {
+		t.Fatal("un elemento repetido en la paginación no debía dar el check por bueno")
+	}
+}
+
+func TestReceiverVerificaFirmaYRegistraCabeceras(t *testing.T) {
+	rcv, stop, err := StartReceiver("secreto-receptor-2026")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stop() }()
+	body := []byte(`{"hola":"mundo"}`)
+	goodSig := signBody(rcv.Secret, body)
+	sendDelivery(t, rcv.URL, body, goodSig)
+	altered := goodSig[:len(goodSig)-1] + "0"
+	if altered == goodSig {
+		altered = goodSig[:len(goodSig)-1] + "1"
+	}
+	sendDelivery(t, rcv.URL, body, altered)
+
+	got := rcv.Deliveries()
+	if len(got) != 2 {
+		t.Fatalf("esperaba 2 entregas, tengo %d", len(got))
+	}
+	if !got[0].Valid {
+		t.Fatalf("la firma correcta debía validar: %+v", got[0])
+	}
+	if got[1].Valid {
+		t.Fatalf("una firma alterada un carácter no debía validar: %+v", got[1])
+	}
+	if got[0].Event != "alert.fired" {
+		t.Fatalf("evento=%q, quiero alert.fired", got[0].Event)
+	}
+	if string(got[0].Body) != string(body) {
+		t.Fatalf("cuerpo=%q, quiero %q", got[0].Body, body)
+	}
+}
+
+func TestReceiverRechazaSinCabecerasCompletas(t *testing.T) {
+	rcv, stop, err := StartReceiver("secreto-receptor-incompleto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stop() }()
+	req, err := http.NewRequest(http.MethodPost, rcv.URL, bytes.NewReader([]byte(`{}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(eventHeader, "incident.opened")
+	req.Header.Set(signatureHeader, signBody(rcv.Secret, []byte(`{}`)))
+	// deliberadamente sin X-LucidFence-Delivery ni X-LucidFence-Timestamp.
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	got := rcv.Deliveries()
+	if len(got) != 1 || got[0].Valid {
+		t.Fatalf("una entrega sin las cuatro cabeceras no debía marcarse válida: %+v", got)
+	}
+}
+```
+
+Añade a `internal/battery/battery_test.go`, tras `TestChecksIncluyePosturaDesconocida` (o el último test de "qué checks trae `Checks()`" que exista en ese momento) y antes de `fakeBin`:
+
+```go
+// TestChecksM2AmplianElTotalYElOrden no fija un tally absoluto (M0+M1 puede
+// crecer con el tiempo): comprueba que Checks() es exactamente M0+M1+M2 sin
+// nombres repetidos, que sigue empezando por la versión y el arranque del
+// servidor, y que "servidor para limpio" sigue siendo el último check
+// (los nuevos de M2 se intercalan justo antes, con el servidor todavía vivo).
+func TestChecksM2AmplianElTotalYElOrden(t *testing.T) {
+	all := Checks()
+	want := len(checksM0()) + len(checksM1()) + len(checksM2())
+	if len(all) != want {
+		t.Fatalf("Checks() trae %d, quiero %d (M0+M1+M2)", len(all), want)
+	}
+	seen := map[string]bool{}
+	for _, c := range all {
+		if seen[c.Name] {
+			t.Fatalf("nombre de check repetido: %q", c.Name)
+		}
+		seen[c.Name] = true
+	}
+	if all[0].Name != "version imprime lucidfence y la versión" {
+		t.Fatalf("el primer check debe ser el de versión (M0), got %q", all[0].Name)
+	}
+	if all[1].Name != "serve arranca y /api/v1/health responde" {
+		t.Fatalf("el segundo check debe arrancar el servidor, got %q", all[1].Name)
+	}
+	if last := all[len(all)-1]; last.Name != "servidor para limpio" {
+		t.Fatalf("el último check debe parar el servidor, got %q", last.Name)
+	}
+	m2Names := map[string]bool{}
+	for _, c := range checksM2() {
+		m2Names[c.Name] = true
+	}
+	if penultimate := all[len(all)-2]; !m2Names[penultimate.Name] {
+		t.Fatalf("el penúltimo check debe ser de M2 (el servidor sigue vivo), got %q", penultimate.Name)
+	}
+}
+
+// TestPutJSONYPatchJSON prueba directamente los dos métodos nuevos de Env:
+// ninguno de los ocho checks de M2 ejercita PATCH (las rutas de incidentes
+// no están entre ellos), así que sin este test quedaría sin cobertura.
+func TestPutJSONYPatchJSON(t *testing.T) {
+	var gotMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"method": r.Method})
+	}))
+	defer srv.Close()
+	env := &Env{BaseURL: srv.URL, Client: srv.Client()}
+
+	var out map[string]any
+	if code, err := env.PutJSON(context.Background(), "/x", map[string]any{"a": 1}, &out); err != nil || code != 200 {
+		t.Fatalf("PutJSON: code=%d err=%v", code, err)
+	}
+	if gotMethod != http.MethodPut || out["method"] != "PUT" {
+		t.Fatalf("PutJSON usó %q, quiero PUT", gotMethod)
+	}
+	if code, err := env.PatchJSON(context.Background(), "/x", map[string]any{"a": 1}, &out); err != nil || code != 200 {
+		t.Fatalf("PatchJSON: code=%d err=%v", code, err)
+	}
+	if gotMethod != http.MethodPatch || out["method"] != "PATCH" {
+		t.Fatalf("PatchJSON usó %q, quiero PATCH", gotMethod)
+	}
+}
+```
+
+Y añade a los imports de `internal/battery/battery_test.go`: `"encoding/json"`, `"net/http"`, `"net/http/httptest"`.
+
+- [ ] **Step 2: Ejecutar y ver que fallan**
+
+```bash
+go test ./internal/battery/... -run NOPE -count=1
+```
+
+Expected: no compila, con exactamente estos símbolos indefinidos (salida real capturada contra el estado del repo en el momento de escribir este plan):
+```
+# github.com/adrimg3196/lucidfence/internal/battery [github.com/adrimg3196/lucidfence/internal/battery.test]
+internal/battery/battery_test.go:60:50: undefined: checksM2
+internal/battery/battery_test.go:81:20: undefined: checksM2
+internal/battery/battery_test.go:103:22: env.PutJSON undefined (type *Env has no field or method PutJSON)
+internal/battery/battery_test.go:109:22: env.PatchJSON undefined (type *Env has no field or method PatchJSON)
+internal/battery/checks_m2_test.go:57:12: undefined: checkRiskExplained
+internal/battery/checks_m2_test.go:67:12: undefined: checkRiskExplained
+internal/battery/checks_m2_test.go:80:12: undefined: checkObserveBlocksWipe
+internal/battery/checks_m2_test.go:91:12: undefined: checkObserveBlocksWipe
+internal/battery/checks_m2_test.go:148:17: undefined: eventHeader
+internal/battery/checks_m2_test.go:149:17: undefined: signatureHeader
+internal/battery/checks_m2_test.go:149:17: too many errors
+FAIL	github.com/adrimg3196/lucidfence/internal/battery [build failed]
+FAIL
+```
+(Las líneas exactas dependen de dónde haya quedado insertado `TestChecksM2AmplianElTotalYElOrden`; lo que importa es que el paquete no compila por los símbolos que faltan, no por un error de sintaxis.)
+
+- [ ] **Step 3: Implementar `internal/battery/receiver.go`**
+
+```go
+package battery
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+)
+
+// Cabeceras y algoritmo de firma: deben coincidir exactamente con
+// internal/notify (Tasks 10-11). internal/battery vive bajo la regla
+// depguard "leaf-utils" (spec §5.2: solo $gostd), así que trata el binario
+// como una caja negra por HTTP y nunca enlaza contra internal/notify ni
+// ningún otro paquete de dominio; en vez de importar notify.Verify,
+// reimplementa aquí, en stdlib puro, el mismo esquema HMAC-SHA256 y los
+// mismos nombres de cabecera que Sign/Verify (T10), verificando así de
+// forma independiente que el binario firma como promete.
+const (
+	signatureHeader = "X-LucidFence-Signature"
+	eventHeader     = "X-LucidFence-Event"
+	deliveryHeader  = "X-LucidFence-Delivery"
+	timestampHeader = "X-LucidFence-Timestamp"
+)
+
+// verifySignature reproduce notify.Verify: "sha256=" + hex(hmac_sha256(secret, body)),
+// comparado en tiempo constante.
+func verifySignature(secret string, body []byte, header string) bool {
+	const prefix = "sha256="
+	if len(header) <= len(prefix) || header[:len(prefix)] != prefix {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	want := prefix + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(header), []byte(want))
+}
+
+// ReceivedDelivery es una entrega capturada por el Receiver.
+type ReceivedDelivery struct {
+	Event     string
+	Signature string
+	Body      []byte
+	Valid     bool // firma correcta Y las cuatro cabeceras presentes
+}
+
+// Receiver es un servidor HTTP local que hace de destino de webhooks: por
+// cada entrega, comprueba la firma y guarda lo recibido para que el check
+// lo inspeccione.
+type Receiver struct {
+	URL    string
+	Secret string
+
+	mu       sync.Mutex
+	Received []ReceivedDelivery
+}
+
+// StartReceiver arranca el receptor en 127.0.0.1 en un puerto libre.
+// Devuelve el receptor y una función de parada idempotente-segura de llamar
+// una vez (cierra el listener).
+func StartReceiver(secret string) (*Receiver, func() error, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
+	}
+	r := &Receiver{Secret: secret, URL: "http://" + ln.Addr().String()}
+	srv := &http.Server{Handler: http.HandlerFunc(r.handle)}
+	go func() { _ = srv.Serve(ln) }()
+	return r, srv.Close, nil
+}
+
+func (r *Receiver) handle(w http.ResponseWriter, req *http.Request) {
+	body, _ := io.ReadAll(req.Body)
+	sig := req.Header.Get(signatureHeader)
+	allHeaders := sig != "" && req.Header.Get(eventHeader) != "" &&
+		req.Header.Get(deliveryHeader) != "" && req.Header.Get(timestampHeader) != ""
+	d := ReceivedDelivery{
+		Event:     req.Header.Get(eventHeader),
+		Signature: sig,
+		Body:      body,
+		Valid:     allHeaders && verifySignature(r.Secret, body, sig),
+	}
+	r.mu.Lock()
+	r.Received = append(r.Received, d)
+	r.mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+}
+
+// Deliveries devuelve una copia de lo recibido hasta ahora: el servidor HTTP
+// escribe desde su propia goroutine, así que el acceso va protegido.
+func (r *Receiver) Deliveries() []ReceivedDelivery {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]ReceivedDelivery, len(r.Received))
+	copy(out, r.Received)
+	return out
+}
+
+// awaitDelivery sondea el receptor hasta encontrar una entrega válida del
+// evento dado que además cumpla check (si no es nil), o hasta agotar el
+// plazo. Si check devuelve false por un cuerpo con forma inesperada, sigue
+// probando otras entregas: solo el llamador decide si eso es un fallo.
+func awaitDelivery(rcv *Receiver, event string, timeout time.Duration, check func(map[string]any) bool) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		for _, d := range rcv.Deliveries() {
+			if d.Event != event || !d.Valid {
+				continue
+			}
+			if check == nil {
+				return true
+			}
+			var body map[string]any
+			if json.Unmarshal(d.Body, &body) == nil && check(body) {
+				return true
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
+}
+
+func boolField(m map[string]any, key string) bool {
+	b, _ := m[key].(bool)
+	return b
+}
+
+func stringField(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+func mapField(m map[string]any, key string) (map[string]any, bool) {
+	v, ok := m[key].(map[string]any)
+	return v, ok
+}
+
+// containsKeyDeep busca recursivamente una clave en cualquier nivel de un
+// valor JSON ya decodificado (mapas y listas). La usa el check OCSF para
+// probar en negativo que el payload no lleva coordenadas en ningún punto
+// del árbol, no solo en la raíz.
+func containsKeyDeep(v any, key string) bool {
+	switch t := v.(type) {
+	case map[string]any:
+		if _, ok := t[key]; ok {
+			return true
+		}
+		for _, sub := range t {
+			if containsKeyDeep(sub, key) {
+				return true
+			}
+		}
+	case []any:
+		for _, sub := range t {
+			if containsKeyDeep(sub, key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+```
+
+- [ ] **Step 4: Implementar `internal/battery/checks_m2.go`**
+
+```go
+package battery
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// deliveryTimeout es cuánto espera un check a que una entrega de webhook
+// llegue al Receiver local. Variable (no const) para que los tests de
+// "entrega inválida" no tengan que esperar los 10 s reales: la bajan antes
+// de invocar el check y la restauran al terminar.
+var deliveryTimeout = 10 * time.Second
+
+// checksM2 son los ocho checks nuevos del hito M2: cada uno convierte un
+// claim de riesgo/acciones en una comprobación contra el binario real.
+func checksM2() []Check {
+	return []Check{
+		{Name: "riesgo explicable: score, motivos, procedencia y verificación", Run: checkRiskExplained},
+		{Name: "observe bloquea el wipe con doble llave", Run: checkObserveBlocksWipe},
+		{Name: "webhook firmado entrega con las cuatro cabeceras", Run: checkWebhookSigned},
+		{Name: "OCSF 2004 sin coordenadas", Run: checkOCSFNoCoords},
+		{Name: "el cooldown suprime el segundo destructivo", Run: checkCooldownSuppressesSecond},
+		{Name: "el handoff pendiente se aprueba y ejecuta bajo guardarraíles", Run: checkHandoffApprovedUnderGuardrails},
+		{Name: "el what-if devuelve disparos sin ejecutar nada", Run: checkWhatIfNoExecution},
+		{Name: "/events y /actions paginan con cursor sin repetir ni perder elementos", Run: checkPagination},
+	}
+}
+
+// runOnce dispara un ciclo del motor y exige 200: varios checks de este
+// fichero necesitan que la flota haya evolucionado antes de leerla.
+func runOnce(ctx context.Context, env *Env) error {
+	code, err := env.PostJSON(ctx, "/api/v1/engine/run-once", nil, nil)
+	if err != nil || code != 200 {
+		return fmt.Errorf("run-once: code=%d err=%v", code, err)
+	}
+	return nil
+}
+
+// checkRiskExplained exige que, tras un ciclo, al menos un dispositivo
+// tenga un veredicto de riesgo con evidencia explícita: score no nulo,
+// motivos no vacíos, procedencia "tool" (evidenceGate solo la concede
+// cuando hay motivos) y verified true.
+func checkRiskExplained(ctx context.Context, env *Env) error {
+	if err := runOnce(ctx, env); err != nil {
+		return err
+	}
+	var out map[string]any
+	if _, err := env.GetJSON(ctx, "/api/v1/devices", &out); err != nil {
+		return err
+	}
+	devs, err := items(out)
+	if err != nil {
+		return err
+	}
+	for _, it := range devs {
+		d, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		risk, ok := mapField(d, "risk")
+		if !ok || risk["score"] == nil {
+			continue
+		}
+		reasons, _ := risk["reasons"].([]any)
+		if len(reasons) > 0 && stringField(risk, "provenance") == "tool" && boolField(risk, "verified") {
+			return nil
+		}
+	}
+	return fmt.Errorf("ningún dispositivo tiene riesgo evaluado con procedencia \"tool\": %v", out)
+}
+
+// checkObserveBlocksWipe crea una política que siempre casa (dwell_seconds
+// nunca es negativo) y ordena wipe. En observe, sin allow_wipe ni
+// allowlist, el guardarraíl debe bloquearla siempre: dry_run true y
+// blocked true, nunca una ejecución real.
+func checkObserveBlocksWipe(ctx context.Context, env *Env) error {
+	policy := map[string]any{
+		"id": "battery-wipe-always", "name": "Batería: wipe siempre", "description": "política de prueba de guardarraíles",
+		"when":    []map[string]any{{"field": "dwell_seconds", "op": "gte", "value": 0}},
+		"actions": []map[string]any{{"action": "wipe"}},
+		"enabled": true, "severity": "critical",
+	}
+	if code, err := env.PostJSON(ctx, "/api/v1/policies", policy, nil); err != nil || (code != 200 && code != 201) {
+		return fmt.Errorf("crear política: code=%d err=%v", code, err)
+	}
+	if err := runOnce(ctx, env); err != nil {
+		return err
+	}
+	var out map[string]any
+	if _, err := env.GetJSON(ctx, "/api/v1/actions?limit=200", &out); err != nil {
+		return err
+	}
+	acts, err := items(out)
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, it := range acts {
+		a, ok := it.(map[string]any)
+		if !ok || stringField(a, "action") != "wipe" {
+			continue
+		}
+		found = true
+		if !boolField(a, "dry_run") || !boolField(a, "blocked") {
+			return fmt.Errorf("wipe sin doble llave debe quedar en dry-run y bloqueado, nunca real: %v", a)
+		}
+	}
+	if !found {
+		return fmt.Errorf("la política de wipe no produjo ninguna acción: %v", out)
+	}
+	return nil
+}
+
+// checkWebhookSigned levanta un Receiver local, lo autoriza en la allowlist
+// de egress (127.0.0.1 es privada: hace falta allow_private), configura el
+// webhook con un secreto y fuerza una alerta que dispara "alert.fired". El
+// receptor debe confirmar una entrega válida (firma correcta y las cuatro
+// cabeceras).
+func checkWebhookSigned(ctx context.Context, env *Env) error {
+	rcv, stop, err := StartReceiver("bateria-secreto-webhook-2026")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stop() }()
+	if err := putEgressAndWebhook(ctx, env, rcv, "native"); err != nil {
+		return err
+	}
+	alert := map[string]any{"id": "battery-alert-risk", "name": "Batería: riesgo alto", "kind": "risk_above", "threshold": -1, "severity": "medium", "enabled": true}
+	if code, err := env.PostJSON(ctx, "/api/v1/alerts", alert, nil); err != nil || (code != 200 && code != 201) {
+		return fmt.Errorf("crear alerta: code=%d err=%v", code, err)
+	}
+	if code, err := env.PostJSON(ctx, "/api/v1/alerts/evaluate", nil, nil); err != nil || code != 200 {
+		return fmt.Errorf("evaluar alertas: code=%d err=%v", code, err)
+	}
+	if !awaitDelivery(rcv, "alert.fired", deliveryTimeout, nil) {
+		return fmt.Errorf("el receptor no vio una entrega \"alert.fired\" firmada en 10s; recibidas=%v", rcv.Deliveries())
+	}
+	return nil
+}
+
+// checkOCSFNoCoords cambia el formato del webhook a ocsf y reevalúa la
+// misma alerta (Evaluate no guarda estado de "ya disparada": cada llamada
+// vuelve a emitir). El cuerpo recibido debe llevar class_uid 2004 y no
+// llevar coordenadas en ningún punto del árbol JSON.
+func checkOCSFNoCoords(ctx context.Context, env *Env) error {
+	rcv, stop, err := StartReceiver("bateria-secreto-ocsf-2026")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stop() }()
+	if err := putEgressAndWebhook(ctx, env, rcv, "ocsf"); err != nil {
+		return err
+	}
+	if code, err := env.PostJSON(ctx, "/api/v1/alerts/evaluate", nil, nil); err != nil || code != 200 {
+		return fmt.Errorf("evaluar alertas: code=%d err=%v", code, err)
+	}
+	var bad error
+	ok := awaitDelivery(rcv, "alert.fired", deliveryTimeout, func(body map[string]any) bool {
+		classUID, _ := body["class_uid"].(float64)
+		if classUID != 2004 {
+			bad = fmt.Errorf("class_uid=%v, quiero 2004", body["class_uid"])
+			return false
+		}
+		if containsKeyDeep(body, "lat") || containsKeyDeep(body, "lng") {
+			bad = fmt.Errorf("el payload OCSF no debe llevar coordenadas: %v", body)
+			return false
+		}
+		return true
+	})
+	if bad != nil {
+		return bad
+	}
+	if !ok {
+		return fmt.Errorf("el receptor no vio una entrega OCSF firmada en 10s")
+	}
+	return nil
+}
+
+func putEgressAndWebhook(ctx context.Context, env *Env, rcv *Receiver, format string) error {
+	if code, err := env.PutJSON(ctx, "/api/v1/settings/egress", map[string]any{"hosts": []string{"127.0.0.1"}, "allow_private": true}, nil); err != nil || code != 200 {
+		return fmt.Errorf("egress: code=%d err=%v", code, err)
+	}
+	webhook := map[string]any{
+		"url": rcv.URL, "format": format, "enabled": true, "secret": rcv.Secret,
+		"events": []string{"incident.opened", "incident.closed", "handoff.pending", "action.executed", "alert.fired"},
+	}
+	var out map[string]any
+	code, err := env.PutJSON(ctx, "/api/v1/settings/webhooks", webhook, &out)
+	if err != nil || code != 200 || !boolField(out, "secret_set") {
+		return fmt.Errorf("webhooks: code=%d err=%v body=%v", code, err, out)
+	}
+	return nil
+}
+
+// checkCooldownSuppressesSecond ejecuta la misma acción manual dos veces
+// seguidas sobre el mismo dispositivo: la segunda, dentro de la ventana de
+// cooldown, debe rechazarse (nunca ejecutarse) con un error que la nombre.
+func checkCooldownSuppressesSecond(ctx context.Context, env *Env) error {
+	body := map[string]any{"action": "notify", "params": map[string]any{"channel": "security", "msg": "batería: prueba de cooldown"}}
+	var first map[string]any
+	code1, err := env.PostJSON(ctx, "/api/v1/devices/dev-001/actions", body, &first)
+	if err != nil || code1 != 200 {
+		return fmt.Errorf("primera ejecución: code=%d err=%v body=%v", code1, err, first)
+	}
+	var second map[string]any
+	code2, err := env.PostJSON(ctx, "/api/v1/devices/dev-001/actions", body, &second)
+	if err != nil {
+		return err
+	}
+	if code2 == 200 {
+		return fmt.Errorf("la segunda ejecución inmediata debía suprimirse por cooldown: %v", second)
+	}
+	if !strings.Contains(strings.ToLower(fmt.Sprint(second)), "cooldown") {
+		return fmt.Errorf("la respuesta de la segunda ejecución no nombra el cooldown: code=%d body=%v", code2, second)
+	}
+	return nil
+}
+
+// checkHandoffApprovedUnderGuardrails crea un playbook con una acción
+// destructiva (lock), lo deja producir un handoff pendiente, lo aprueba y
+// comprueba que la ejecución resultante respeta los guardarraíles: sigue en
+// dry-run porque el motor está en observe.
+func checkHandoffApprovedUnderGuardrails(ctx context.Context, env *Env) error {
+	pb := map[string]any{
+		"id": "battery-playbook-lock", "name": "Batería: bloqueo siempre", "description": "playbook de prueba de handoffs",
+		"when":    []map[string]any{{"field": "dwell_seconds", "op": "gte", "value": 0}},
+		"actions": []map[string]any{{"action": "lock"}},
+		"enabled": true, "severity": "high",
+	}
+	if code, err := env.PostJSON(ctx, "/api/v1/playbooks", pb, nil); err != nil || (code != 200 && code != 201) {
+		return fmt.Errorf("crear playbook: code=%d err=%v", code, err)
+	}
+	if err := runOnce(ctx, env); err != nil {
+		return err
+	}
+	id, err := firstPendingHandoff(ctx, env)
+	if err != nil {
+		return err
+	}
+	var decided map[string]any
+	code, err := env.PostJSON(ctx, "/api/v1/handoffs/"+id+"/approve", map[string]any{"by": "battery", "note": "aprobado por la batería runtime"}, &decided)
+	if err != nil || code != 200 {
+		return fmt.Errorf("aprobar handoff: code=%d err=%v body=%v", code, err, decided)
+	}
+	if stringField(decided, "status") != "executed" {
+		return fmt.Errorf("handoff aprobado debe quedar \"executed\": %v", decided)
+	}
+	result, ok := mapField(decided, "result")
+	if !ok || !boolField(result, "dry_run") {
+		return fmt.Errorf("la ejecución del handoff debe seguir en dry-run bajo observe: %v", decided)
+	}
+	return nil
+}
+
+func firstPendingHandoff(ctx context.Context, env *Env) (string, error) {
+	var out map[string]any
+	if _, err := env.GetJSON(ctx, "/api/v1/handoffs?status=pending", &out); err != nil {
+		return "", err
+	}
+	hs, err := items(out)
+	if err != nil || len(hs) == 0 {
+		return "", fmt.Errorf("el playbook destructivo no dejó ningún handoff pendiente: %v", out)
+	}
+	h, ok := hs[0].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("handoff con forma inesperada: %v", hs[0])
+	}
+	return stringField(h, "id"), nil
+}
+
+// checkWhatIfNoExecution replay-ea una política nunca guardada contra el
+// histórico ya recorrido por las ejecuciones anteriores de la batería: debe
+// devolver disparos (firings) positivos sin dejar ni una acción nueva en
+// /api/v1/actions.
+func checkWhatIfNoExecution(ctx context.Context, env *Env) error {
+	before, err := actionsTotal(ctx, env)
+	if err != nil {
+		return err
+	}
+	req := map[string]any{
+		"policy": map[string]any{
+			"id": "battery-whatif", "name": "Batería: what-if", "description": "política nunca guardada, solo replay",
+			"when":    []map[string]any{{"field": "dwell_seconds", "op": "gte", "value": 0}},
+			"actions": []map[string]any{{"action": "notify", "params": map[string]any{"channel": "security", "msg": "batería what-if"}}},
+			"enabled": true, "severity": "low",
+		},
+		"limit": 500, "use_current_fences": true,
+	}
+	var out map[string]any
+	code, err := env.PostJSON(ctx, "/api/v1/policies/replay", req, &out)
+	if err != nil || code != 200 {
+		return fmt.Errorf("replay: code=%d err=%v body=%v", code, err, out)
+	}
+	firings, ferr := number(out, "firings")
+	if ferr != nil || firings <= 0 {
+		return fmt.Errorf("el what-if debe disparar sobre el histórico ya recorrido: %v", out)
+	}
+	after, err := actionsTotal(ctx, env)
+	if err != nil {
+		return err
+	}
+	if after != before {
+		return fmt.Errorf("el what-if ejecutó acciones de verdad: antes=%d después=%d", before, after)
+	}
+	return nil
+}
+
+func actionsTotal(ctx context.Context, env *Env) (int, error) {
+	var out map[string]any
+	if _, err := env.GetJSON(ctx, "/api/v1/actions?limit=500", &out); err != nil {
+		return 0, err
+	}
+	acts, err := items(out)
+	if err != nil {
+		return 0, err
+	}
+	return len(acts), nil
+}
+
+// checkPagination recorre /api/v1/events y /api/v1/actions página a página
+// (limit pequeño) siguiendo next_cursor y compara el resultado contra una
+// lectura de un tirón con un límite grande: mismo número de elementos, sin
+// repetidos.
+func checkPagination(ctx context.Context, env *Env) error {
+	if err := checkPagesNoRepeat(ctx, env, "/api/v1/events"); err != nil {
+		return fmt.Errorf("/api/v1/events: %w", err)
+	}
+	if err := checkPagesNoRepeat(ctx, env, "/api/v1/actions"); err != nil {
+		return fmt.Errorf("/api/v1/actions: %w", err)
+	}
+	return nil
+}
+
+func checkPagesNoRepeat(ctx context.Context, env *Env, path string) error {
+	var single map[string]any
+	if _, err := env.GetJSON(ctx, path+"?limit=500", &single); err != nil {
+		return err
+	}
+	oneShot, err := items(single)
+	if err != nil {
+		return err
+	}
+	paged, err := paginateAll(ctx, env, path, 3)
+	if err != nil {
+		return err
+	}
+	if len(paged) != len(oneShot) {
+		return fmt.Errorf("paginado trajo %d elementos, de un tirón trajo %d", len(paged), len(oneShot))
+	}
+	seen := map[string]bool{}
+	for _, it := range paged {
+		raw, _ := json.Marshal(it)
+		if seen[string(raw)] {
+			return fmt.Errorf("elemento repetido entre páginas: %s", raw)
+		}
+		seen[string(raw)] = true
+	}
+	return nil
+}
+
+func paginateAll(ctx context.Context, env *Env, path string, pageSize int) ([]any, error) {
+	var all []any
+	cursor := ""
+	for page := 0; page < 1000; page++ {
+		url := fmt.Sprintf("%s?limit=%d", path, pageSize)
+		if cursor != "" {
+			url += "&cursor=" + cursor
+		}
+		var out map[string]any
+		if _, err := env.GetJSON(ctx, url, &out); err != nil {
+			return nil, err
+		}
+		pageItems, err := items(out)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, pageItems...)
+		next := stringField(out, "next_cursor")
+		if next == "" {
+			return all, nil
+		}
+		cursor = next
+	}
+	return nil, fmt.Errorf("%s: demasiadas páginas, ¿cursor en bucle?", path)
+}
+```
+
+- [ ] **Step 5: `server.go`: `PutJSON` y `PatchJSON`**
+
+Añade al final de `internal/battery/server.go`, tras `PostJSON`:
+
+```go
+
+// PutJSON hace PUT con cuerpo JSON y cabecera CSRF si hay sesión.
+func (env *Env) PutJSON(ctx context.Context, path string, body, out any) (int, error) {
+	return env.do(ctx, http.MethodPut, path, body, out)
+}
+
+// PatchJSON hace PATCH con cuerpo JSON y cabecera CSRF si hay sesión.
+func (env *Env) PatchJSON(ctx context.Context, path string, body, out any) (int, error) {
+	return env.do(ctx, http.MethodPatch, path, body, out)
+}
+```
+
+No hace falta tocar los imports: `net/http` ya está en el fichero.
+
+- [ ] **Step 6: `battery.go`: intercalar M2 antes de que M1 pare el servidor**
+
+Sustituye en `internal/battery/battery.go`:
+
+```go
+// Checks devuelve todos los checks registrados, en orden.
+func Checks() []Check {
+	return append(checksM0(), checksM1()...)
+}
+```
+
+por:
+
+```go
+// Checks devuelve todos los checks registrados, en orden: M0, M1 y, antes de
+// que M1 pare el servidor, los checks de M2 (que también necesitan uno
+// vivo). checksM1() termina siempre en "servidor para limpio" (así lo
+// documenta checksM1WithoutServer); esta función lo separa del resto para
+// intercalar checksM2() delante y reinsertarlo al final, en vez de dejar
+// que el literal append(checksM0(), append(checksM1(), checksM2()...)...)
+// pare el servidor antes de que M2 llegue a usarlo.
+func Checks() []Check {
+	m1 := checksM1()
+	liveM1, stopM1 := m1[:len(m1)-1], m1[len(m1)-1]
+	all := append(checksM0(), liveM1...)
+	all = append(all, checksM2()...)
+	return append(all, stopM1)
+}
+```
+
+Ver "Desviaciones respecto al esqueleto" para el motivo: `append(checksM0(), append(checksM1(), checksM2()...)...)` tal cual lo escribe el esqueleto pararía el servidor antes de que ningún check de M2 llegara a usarlo.
+
+- [ ] **Step 7: `scripts/battery.sh`: presupuesto de tiempo para las entregas de M2**
+
+Sustituye la última línea de `scripts/battery.sh`:
+
+```bash
+go run ./cmd/battery -bin "$bin"
+```
+
+por:
+
+```bash
+# M2 añade entregas de webhook reales (aunque locales) con hasta 10 s de
+# sondeo cada una si algo va mal; se sube el presupuesto total de 3 a 5 min.
+go run ./cmd/battery -bin "$bin" -timeout 5m
+```
+
+- [ ] **Step 8: Suite completa, cobertura, límites y lint**
+
+```bash
+gofmt -l internal/battery
+go vet ./internal/battery/...
+golangci-lint run ./internal/battery/...
+go test ./internal/battery/... -race -count=1 -covermode=atomic -coverprofile=coverage.out -timeout 180s
+go tool cover -func=coverage.out | tail -3
+go test ./internal/arch/... -race -count=1
+./scripts/coverage.sh
+```
+
+Expected: `gofmt` y `go vet` sin salida; `golangci-lint` con `0 issues.` (verificado contra este mismo código: la función más larga, `checkWhatIfNoExecution`, se queda en 32 líneas y ciclomática 5, muy por debajo de 60/40 y 15); la suite entera en verde, incluido `TestStartServerYChecksM1` (sigue construyendo el binario real y corriendo `checksM1WithoutServer`, que esta tarea no toca) — salida real capturada en este mismo repo (con T1-T27 aún sin implementar, así que solo M0+M1 corren de verdad; T18-T21 no existen todavía y los ocho checks de M2 se verifican aquí únicamente contra los servidores de mentira de `checks_m2_test.go`):
+```
+ok  	github.com/adrimg3196/lucidfence/internal/battery	3.491s	coverage: 78.5% of statements
+```
+`internal/arch` en verde (`TestFileLimits`, `TestArchitectureDocListsEveryPackage` y el resto no se rompen: `checks_m2.go` se queda en 388 líneas, `receiver.go` en 165, `checks_m2_test.go` en 400 justo, `battery.go` en 64, todos ≤ 400; `internal/battery` sigue en la regla `leaf-utils` de `.golangci.yml`, que este código no infringe). `coverage.sh` con `COVERAGE: OK` (`internal/battery` por encima del suelo del 70 %, `cmd/battery` exento). Cuando T1-T27 estén implementados de verdad, `TestStartServerYChecksM1` seguirá cubriendo M0+M1 igual, y el tally completo `RUNTIME: N/N` de `scripts/battery.sh` (con `N = len(checksM0())+len(checksM1())+len(checksM2())`, 8 más que antes de esta tarea) solo se puede confirmar entonces, contra un binario que sirve esas rutas.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add internal/battery scripts/battery.sh
+git commit -q -m "test(battery): checks de riesgo, observe, webhook firmado, OCSF y handoffs
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
+```
+
+Expected: el commit incluye `internal/battery/checks_m2.go`, `internal/battery/receiver.go`, `internal/battery/checks_m2_test.go`, y las modificaciones a `internal/battery/battery.go`, `internal/battery/server.go`, `internal/battery/battery_test.go` y `scripts/battery.sh`. `docs/openapi.yaml` y `web/src/api/schema.d.ts` no cambian en esta tarea (no añade ni consume ninguna ruta nueva, solo verifica las que T18-T21 ya publicaron), así que `make verify` no exige regenerar nada.
+
+**Desviaciones respecto al esqueleto:**
+- **`battery.Checks()` no es el `append` literal del esqueleto.** `append(checksM0(), append(checksM1(), checksM2()...)...)` deja "servidor para limpio" — el último check de `checksM1()` — corriendo *antes* que los ocho de M2, que necesitan el servidor vivo (hacen `GetJSON`/`PostJSON`/`PutJSON` contra él). El esqueleto no podía prever esto porque `checksM1WithoutServer()` (que termina en `checkStop`) y su composición en `Checks()` ya estaban decididos por M1 antes de que existiera esta tarea. La solución se queda dentro del fichero que el esqueleto ya lista como "Modify" (`battery.go`): separar el último elemento de `checksM1()`, insertar M2 antes y reinsertar el cierre al final. Es un acoplamiento implícito (`Checks()` asume que el último check de M1 es el que para el servidor) que solo se sostiene porque `checksM1WithoutServer` lo documenta explícitamente en su propio comentario; si M1 cambiara ese orden sin avisar, `TestChecksM2AmplianElTotalYElOrden` lo detectaría (comprueba el nombre exacto del último y del penúltimo check).
+- **El `Receiver` no importa `internal/notify`, pese a que "Consumes" nombra `notify.Verify`, `notify.SignatureHeader` y `notify.EventHeader`.** `internal/battery` está bajo la regla `depguard` "leaf-utils" (`.golangci.yml`), que solo permite `$gostd` — la misma regla que ya impedía a los checks de M0/M1 importar `internal/domain`. Importar `internal/notify` habría exigido tocar `.golangci.yml` (fuera de los ficheros que este task lista) y, más de fondo, habría convertido el check en "¿el binario produce lo que mi copia de `notify.Verify` dice que es válido?" en vez de "¿el binario firma como promete, verificado con una implementación independiente?" — que es justamente el tipo de comprobación que hace honesta a la batería. `receiver.go` reimplementa en `crypto/hmac`+`crypto/sha256` el mismo esquema y usa los mismos nombres de cabecera, literales.
+- **Ni `handoff.pending` ni `incident.opened` son el evento que se verifica firmado; se usa `alert.fired`.** El esqueleto no fija qué evento concreto debe entregarse, solo que "se fuerza un incidente". Los incidentes se derivan del ciclo (`incident.Derive`, T5) y `incident.opened` solo se dispara la primera vez que un incidente pasa a abierto — reutilizarlo para dos checks (webhook firmado y OCSF) habría exigido dos incidentes distintos y sin garantía de qué campos concretos del dispositivo los provocan antes de que T1-T27 existan de verdad. `POST /api/v1/alerts/evaluate` (T19) sí es una acción directa y repetible del propio check: una regla `risk_above` con `threshold: -1` dispara sobre cualquier dispositivo con score evaluado cada vez que se llama, así que el check OCSF puede reevaluarla tras cambiar el formato sin depender de qué haya pasado en ciclos anteriores.
+- **`checkCooldownSuppressesSecond` no fija qué código HTTP exacto devuelve la segunda ejecución**, solo que no es 200 y que la respuesta menciona "cooldown" (en minúsculas, sin distinguir mayúsculas). El esqueleto no lo especifica y T16 solo fija `ErrActionSuppressed` como error de dominio, no su traducción HTTP; atarse a un 409 concreto habría hecho el check más frágil que la garantía real que hace falta probar (que la segunda ejecución no se ejecuta).
+- **`checkHandoffApprovedUnderGuardrails` asume que el cuerpo de `POST /handoffs/{id}/approve` acepta `{by, note}`.** `playbook.Handoff.Decide(to, by, note, at)` (T6) fija esos dos campos como los datos de la decisión humana; `to` lo decide la propia ruta (`/approve` frente a `/reject`), así que no hace falta mandarlo.
+- **Se añade `TestPutJSONYPatchJSON` a `battery_test.go`**, no mencionado en "tests" del esqueleto. Ninguno de los ocho checks llama a `PatchJSON` (las rutas de incidentes, que sí usan PATCH, no están en la lista de ocho), así que sin un test directo el método quedaría sin ejercitar pese a que "Produces" lo exige.
+- **`scripts/battery.sh` sube el presupuesto de `cmd/battery` de 3 a 5 minutos** (`-timeout 5m`), no descrito en el esqueleto más allá de listar el fichero como "Modify". Es el único cambio que tenía sentido para un script de una sola línea: M2 casi duplica el número de checks y añade entregas HTTP reales (locales, pero con hasta 10 s de sondeo cada una en el peor caso de `deliveryTimeout`).
+
+
+---
+
+### Task 29: End-to-end con Playwright: what-if de política y aprobación de un handoff
+
+Tres decisiones mandan sobre el resto. La primera: **este spec continúa la sesión de `demo.spec.ts`, no la repite**. El asistente inicial solo se completa una vez por proceso del servidor (`webServer` arranca un único binario para toda la ejecución de `npm run e2e`, con el directorio de datos limpio una sola vez), así que `riesgo.spec.ts` no puede volver a rellenar el formulario de alta: entra por `/login` con las mismas credenciales que `demo.spec.ts` ya usó para crear la organización. Como Playwright abre un contexto de navegador nuevo (sin cookies) para cada fichero de test, hace falta iniciar sesión de nuevo aunque el servidor sea el mismo; y como el orden de ejecución de los ficheros depende del orden alfabético con un único worker, `demo.spec.ts` sigue corriendo primero (`d` antes que `r`) y deja la organización, la flota demo y un ciclo ya ejecutado.
+
+La segunda: **la simulación what-if se comprueba por su honestidad, no por un número fijo**. `POST /policies/replay` corre contra el histórico real de la flota (T17), y con solo uno o dos ciclos ejecutados ese histórico puede no contener ningún punto que cumpla `route_deviation_m > 500`. T23 ya fijó que cero disparos es una respuesta explicada, nunca un error ("cero disparos... nunca un error ni un silencio"); esta prueba respeta esa garantía en vez de forzar un resultado no determinista. Lo que sí es una aserción dura, en las dos ramas, es que no aparezca ningún `ErrorState`.
+
+La tercera es una corrección real, no una elección estética: `demo.spec.ts` (M1) crea la geocerca "Oficina Norte" en `Lat 40.45, Lng -3.65`, que son **las coordenadas exactas** del dispositivo `dev-004` ("Portátil Ventas", `internal/uem/simulation/default_seed.json`), el mismo dispositivo no conforme y fuera de geocerca que T16 usa como ejemplo canónico para que el playbook de fábrica `soar-noncompliant-outside` deje un handoff pendiente en cada demo. Con las coordenadas originales, el ciclo de geocercas de `demo.spec.ts` metería a `dev-004` dentro de "Oficina Norte" (radio 400 m, distancia 0) antes de que `riesgo.spec.ts` llegara a comprobar nada, y ni el incidente `geofence_exit` ni el handoff existirían. Esta tarea mueve esa geocerca a un punto que no toca a ningún dispositivo de la flota demo (`internal/uem/simulation/default_seed.json` los agrupa todos entre 40.40/-3.71 y 40.45/-3.65) y deja constancia del motivo en el propio fichero.
+
+**Files:**
+- Create: `web/e2e/riesgo.spec.ts`
+- Modify: `web/e2e/demo.spec.ts`, `web/playwright.config.ts`
+- Verificar sin cambios: `.github/workflows/ci.yml` (ver "Desviaciones")
+
+**Interfaces:**
+- Consumes:
+  - De M1 (`web/e2e/demo.spec.ts`, `web/playwright.config.ts`, job `e2e` de `.github/workflows/ci.yml`): el flujo "asistente → demo → visión general → mapa → dispositivo → geocerca → ciclo" tal como quedó en el repositorio (no en el texto original del plan: la versión real fija `retries: 0` de forma incondicional, con un comentario `M1-R26` que esta tarea conserva), la sesión abierta con `e2e@lucidfence.local` / `contraseña-e2e-2026`, y el hecho de que `npm run e2e` ya construye el binario (`make e2e`) y ejecuta con Playwright todo fichero bajo `testDir: "./e2e"` sin necesidad de listarlo en ningún sitio.
+  - De `internal/uem/simulation/default_seed.json` (M1, sin cambios): `dev-004` = "Portátil Ventas", `compliant: false`, un único waypoint en `40.45, -3.65` (dispositivo estacionario, nunca se mueve), y `demo-hq` centrado en `40.421, -3.708` con radio 500 m (`internal/engine/demo.go`): `dev-004` queda fuera de `demo-hq` en todo momento salvo que otra geocerca lo cubra, que es justo el riesgo que corrige el Step 1.
+  - De T4 (`internal/domain/policy`, `Templates()`): las cinco plantillas con sus ids `tpl-*`; en concreto `tpl-ciso-deviation-500`, `Name: "Avisar al CISO si la desviación supera 500 m"`, `Severity: risk.SeverityHigh`, condiciones `signal:route_state.route_state eq off_route` y `signal:route_state.route_deviation_m gt 500`, acción única `notify` (no destructiva: la puerta de guardado de T23 no la bloquea).
+  - De T3 (`internal/domain/risk`, `verdict.go`, `TestCompliantNilNoSuma25`): `Evaluate` añade la razón textual exacta `"dispositivo no conforme"` a `Verdict.Reasons` para todo dispositivo con `Compliant == false`, con independencia del resto de señales de la flota. Es la única razón de riesgo de toda la demo con un texto fijado por un test dorado, así que es la que esta tarea usa para comprobar "el detalle de dispositivo muestra una razón de riesgo en español y no el texto 'Sin evaluar'".
+  - De T5 (`internal/domain/incident`, `Derive`/`deriveLocation`): un dispositivo `Outside` y no conforme abre `KindGeofenceExit` con severidad `critical` (la escalada de `high` a `critical` por incumplimiento) y título determinista `"<nombre> está fuera de geocerca"` → `"Portátil Ventas está fuera de geocerca"`.
+  - De T6 (`internal/domain/playbook`, `Defaults()`/`pbNoncompliantOutside`): el playbook de fábrica `soar-noncompliant-outside`, `Name: "No conforme y fuera de geocerca"`, condiciones `compliant eq false` y `fence_state eq outside`, acciones `lock` (destructiva: abre handoff) y `notify`. Ningún otro playbook de fábrica coincide con `dev-004` (no tiene ruta asignada ni `fence_state unknown`), así que la bandeja de handoffs solo tiene una tarjeta para "Portátil Ventas".
+  - De T13/T16 (`internal/engine`, `SeedDemo`/`seedAutomation`): el modo demo siembra `policies.json` con las dos plantillas no destructivas activadas, `playbooks.json` con los tres playbooks de fábrica activados y `settings.json` en `observe`; el primer ciclo que corre `demo.spec.ts` ya deja abiertos los incidentes de `dev-004` y pendiente su handoff, y los ciclos de esta tarea solo los reafirman (`incident.Merge` no duplica, `playbook.FindPending` tampoco).
+  - De T18 (`internal/api`, rutas de políticas): `POST /api/v1/policies/replay` acepta la política candidata en el cuerpo sin que exista en disco.
+  - De T22 (`web/src/lib/i18n.es.ts`, `web/src/app/nav.ts`, componentes compartidos): las doce entradas de navegación (en particular `nav.policies` "Políticas", `nav.incidents` "Incidentes", `nav.handoffs` "Aprobaciones", `nav.overview` "Visión general", `nav.devices` "Dispositivos"), y las claves de riesgo ya fijadas — `risk.title` "Riesgo", `risk.reasons` "Por qué", `risk.unevaluated` "Sin evaluar" — que T27 tendrá que reutilizar en `<RiskExplain>` (T27 aún no está escrita: esta tarea ancla sus aserciones solo en vocabulario que T22 ya fijó, nunca en marcado de T27 que todavía no existe).
+  - De T23 (`web/src/features/policies`): rutas `/policies`, `/policies/new`, `/policies/new?plantillas=1` (abre `TemplatesDialog` al montar), `/policies/:id`; botón "Partir de una plantilla" (enlaza a `?plantillas=1`); `TemplatesDialog` con título "Partir de una plantilla" y un botón "Usar" por tarjeta; `PolicyEditorPage` con campos "Nombre" e "Identificador", botón "Guardar"; `WhatIfPanel` con encabezado "Simulador what-if", botón "Simular"/"Simulando", etiquetas "Disparos" y "Ventana", y el vacío honesto "No habría disparado ni una vez".
+  - De T24 (`web/src/features/incidents`): ruta `/incidents/:id`; pestañas "Abiertos"/"Reconocidos" (`role="tab"`); botón "Reconocer" (mismo texto en la fila de la lista y en el detalle); `incident.status.ack` = "Reconocido" (mismo texto en la insignia de estado y en la última entrada de `IncidentTimeline`).
+  - De T25 (`web/src/features/handoffs`): ruta `/handoffs`; pestañas de estado con `handoff.status.pending` = "pendiente"; `HandoffCard` como `<article>` con el nombre del dispositivo, la acción (`fence.action.lock` = "Bloquear") y el nombre del playbook; botones "Aprobar"/"Rechazar"; `DecisionDialog` con título `"Aprobar {acción}"`, campo obligatorio "Nota de la decisión (obligatoria)", fondo `aria-hidden` mientras está abierto (así que las consultas por rol tras abrir el diálogo no chocan con los mismos textos de la tarjeta de fondo); el resultado tras decidir usa `handoff.result.dryRun` = "Ejecutado en dry-run (modo observe)", nunca `handoff.result.executed` = "Ejecutado" a secas mientras el motor esté en `observe`.
+- Produces:
+  ```ts
+  // web/e2e/demo.spec.ts
+  export const E2E_EMAIL: string;
+  export const E2E_PASSWORD: string;
+  // (el resto del fichero no cambia de forma: mismo test, mismo flujo)
+
+  // web/e2e/riesgo.spec.ts
+  // Un único test serie que retoma la sesión de demo.spec.ts y recorre:
+  // Políticas (plantilla → what-if → guardar) → Visión general (ciclo) →
+  // Dispositivos (riesgo explicado de dev-004) → Incidentes (reconocer) →
+  // Aprobaciones (aprobar un handoff, verificar dry-run) → sin console.error.
+  ```
+  `web/playwright.config.ts` sube `timeout` de `60_000` a `90_000` (para todo el fichero, no solo para el spec nuevo). El job `e2e` de `.github/workflows/ci.yml` no cambia: ya ejecuta `npm run e2e`, que Playwright expande a los dos ficheros de `testDir` sin configuración adicional.
+
+---
+
+- [ ] **Step 1: Corregir `demo.spec.ts` y `playwright.config.ts`**
+
+`demo.spec.ts` gana dos cosas: las credenciales compartidas como constantes exportadas (para que `riesgo.spec.ts` no las duplique) y el arreglo de la colisión de "Oficina Norte" con `dev-004`. El resto del fichero es exactamente el que ya está en el repositorio.
+
+`web/e2e/demo.spec.ts`:
+```ts
+import { test, expect } from "@playwright/test";
+
+// Credenciales del asistente inicial. El asistente solo se completa una vez
+// por proceso del servidor de e2e (un único webServer para toda la ejecución
+// de `npm run e2e`), así que riesgo.spec.ts entra por /login con las mismas
+// credenciales en vez de repetir el alta.
+export const E2E_EMAIL = "e2e@lucidfence.local";
+export const E2E_PASSWORD = "contraseña-e2e-2026";
+
+test.describe.serial("núcleo demo", () => {
+  test("asistente → demo → visión general → mapa → dispositivo → geocerca → ciclo", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/setup$/);
+    await page.getByLabel("Email").fill(E2E_EMAIL);
+    await page.getByLabel("Nombre").fill("E2E");
+    await page.getByLabel(/Contraseña/).fill(E2E_PASSWORD);
+    await page.getByLabel("Demo local con flota simulada").check();
+    await page.getByRole("button", { name: "Crear cuenta y entrar" }).click();
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { name: "Visión general" })).toBeVisible();
+    await expect(page.locator("p", { hasText: /^Dispositivos$/ }).locator("xpath=following-sibling::p")).toHaveText("6");
+
+    await page.getByRole("link", { name: "Mapa" }).click();
+    await expect(page.getByText("Dentro de geocerca")).toBeVisible();
+    await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+
+    await page.getByRole("link", { name: "Dispositivos" }).click();
+    await expect(page.getByRole("row")).toHaveCount(7);
+    await page.getByRole("link", { name: /Tablet Campo A1/ }).click();
+    await expect(page.getByText("Samsung Galaxy Tab Active5")).toBeVisible();
+
+    await page.getByRole("link", { name: "Geocercas" }).click();
+    await expect(page.getByRole("link", { name: "Demo HQ · Madrid" })).toBeVisible();
+    await page.getByRole("link", { name: "Nueva geocerca" }).click();
+    await page.getByLabel("Nombre").fill("Oficina Norte");
+    // 40.47 / -3.60 no toca a ningún dispositivo de la flota demo (todos
+    // agrupados entre 40.40/-3.71 y 40.45/-3.65, ver default_seed.json). Con
+    // las coordenadas originales de M1 (40.45 / -3.65) esta geocerca coincidía
+    // exactamente con dev-004 "Portátil Ventas" (radio 400 m, distancia 0) y
+    // lo habría metido "dentro" en el primer ciclo: riesgo.spec.ts (T29)
+    // depende de que dev-004 siga fuera de toda geocerca, que es lo que
+    // dispara el incidente geofence_exit y el handoff del playbook de fábrica
+    // soar-noncompliant-outside (T5, T16).
+    await page.getByLabel("Latitud").fill("40.47");
+    await page.getByLabel("Longitud").fill("-3.60");
+    await page.getByLabel("Radio (m)").fill("400");
+    await page.getByRole("button", { name: "Guardar" }).click();
+    await expect(page.getByRole("link", { name: "Oficina Norte" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Visión general" }).click();
+    await page.getByRole("button", { name: "Ejecutar ciclo ahora" }).click();
+    await expect(page.getByText("demo-hq:inside").first()).toBeVisible();
+  });
+});
+```
+
+`web/playwright.config.ts` sube el único `timeout` (afecta a los dos ficheros, no solo al nuevo: no hay motivo para que un mismo proyecto tenga dos límites distintos):
+```ts
+import { defineConfig, devices } from "@playwright/test";
+
+const port = 8770;
+
+export default defineConfig({
+  testDir: "./e2e",
+  // riesgo.spec.ts encadena política + what-if + ciclo + dispositivo +
+  // incidente + handoff en un único test serie; 60 s se queda corto en un
+  // runner de CI cargado.
+  timeout: 90_000,
+  fullyParallel: false,
+  workers: 1,
+  // Sin reintentos: el servidor (y su directorio de datos) se arranca una vez
+  // por ejecución, así que un segundo intento vería el asistente ya
+  // completado y fallaría siempre (M1-R26).
+  retries: 0,
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    trace: "retain-on-failure",
+    launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
+  },
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  webServer: {
+    command: `rm -rf ../.e2e-data && ../bin/lucidfence serve -data ../.e2e-data -config ../.e2e-config.json -listen 127.0.0.1:${port}`,
+    url: `http://127.0.0.1:${port}/api/v1/health`,
+    reuseExistingServer: false,
+    timeout: 30_000,
+  },
+});
+```
+
+- [ ] **Step 2: Escribir `web/e2e/riesgo.spec.ts`**
+
+`web/e2e/riesgo.spec.ts`:
+```ts
+import { test, expect } from "@playwright/test";
+import { E2E_EMAIL, E2E_PASSWORD } from "./demo.spec";
+
+test.describe.serial("riesgo y acciones", () => {
+  test("política desde plantilla → what-if → ciclo → riesgo explicado → incidente reconocido → handoff aprobado en dry-run", async ({ page }) => {
+    // Ninguna vista de este flujo puede dejar un console.error: es la única
+    // aserción que cubre las siete pantallas a la vez, no solo un paso.
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
+    // Retoma la sesión donde la deja demo.spec.ts: asistente completado, modo
+    // demo activo, un ciclo ya ejecutado. Contexto de navegador nuevo → sin
+    // cookies → entra por /login, no por el asistente.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel("Email").fill(E2E_EMAIL);
+    await page.getByLabel("Contraseña").fill(E2E_PASSWORD);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    // --- Políticas: plantilla, what-if, guardar ---
+    await page.getByRole("link", { name: "Políticas" }).click();
+    await expect(page.getByRole("heading", { name: "Políticas" })).toBeVisible();
+
+    await page.getByRole("link", { name: "Partir de una plantilla" }).click();
+    await expect(page).toHaveURL(/\/policies\/new\?plantillas=1$/);
+
+    const templatesDialog = page.getByRole("dialog");
+    await expect(templatesDialog).toBeVisible();
+    const cisoName = "Avisar al CISO si la desviación supera 500 m";
+    // El diálogo repite el nombre de la plantilla en varios ancestros
+    // anidados (la propia tarjeta, el contenedor de la lista, el diálogo
+    // entero): filtrar por las tarjetas que además contienen su botón "Usar"
+    // y quedarse con la más interna (.last()) aísla la tarjeta en sí.
+    const useButtons = templatesDialog.getByRole("button", { name: "Usar" });
+    const cisoCard = templatesDialog.locator("div", { hasText: cisoName }).filter({ has: useButtons }).last();
+    await expect(cisoCard).toBeVisible();
+    await cisoCard.getByRole("button", { name: "Usar" }).click();
+    await expect(templatesDialog).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Nueva política" })).toBeVisible();
+
+    await expect(page.getByLabel("Nombre")).toHaveValue(cisoName);
+    await expect(page.getByLabel("Identificador")).toHaveValue("tpl-ciso-deviation-500");
+
+    const whatIf = page.locator("section", { hasText: "Simulador what-if" });
+    await expect(whatIf.getByRole("heading", { name: "Simulador what-if" })).toBeVisible();
+    await whatIf.getByRole("button", { name: "Simular" }).click();
+    const firings = whatIf.getByText("Disparos", { exact: true });
+    const noFirings = whatIf.getByText("No habría disparado ni una vez");
+    // El histórico real de la flota demo decide si la plantilla dispara o no
+    // (T17 corre contra el trail real, no contra datos fijos). Las dos
+    // salidas son honestas por diseño (T23): lo único que no puede pasar es
+    // un error.
+    await expect(firings.or(noFirings)).toBeVisible({ timeout: 15_000 });
+    await expect(whatIf.getByRole("alert")).toHaveCount(0);
+    if (await firings.isVisible()) {
+      await expect(whatIf.getByText("Ventana", { exact: true })).toBeVisible();
+    } else {
+      await expect(noFirings).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "Guardar" }).click();
+    await expect(page).toHaveURL(/\/policies$/);
+    await expect(page.getByRole("link", { name: cisoName })).toBeVisible();
+
+    // --- Ciclo desde la visión general ---
+    await page.getByRole("link", { name: "Visión general" }).click();
+    const runCycle = page.getByRole("button", { name: "Ejecutar ciclo ahora" });
+    await runCycle.click();
+    await expect(runCycle).toBeEnabled();
+
+    // --- Riesgo explicado en el detalle de dev-004 ---
+    await page.getByRole("link", { name: "Dispositivos" }).click();
+    await page.getByRole("link", { name: /Portátil Ventas/ }).click();
+    await expect(page.getByText("Sin evaluar")).toHaveCount(0);
+    // "dispositivo no conforme" es la razón dorada de risk.Evaluate para todo
+    // dispositivo con compliant=false (T3, TestCompliantNilNoSuma25):
+    // determinista con independencia del resto de señales de la flota.
+    await expect(page.getByText("dispositivo no conforme")).toBeVisible();
+
+    // --- Incidentes: reconocer el que abrió dev-004 ---
+    const incidentTitle = "Portátil Ventas está fuera de geocerca";
+    await page.getByRole("link", { name: "Incidentes" }).click();
+    await expect(page.getByRole("heading", { name: "Incidentes" })).toBeVisible();
+    await page.getByRole("link", { name: incidentTitle }).click();
+    await expect(page.getByRole("heading", { name: incidentTitle })).toBeVisible();
+    await page.getByRole("button", { name: "Reconocer" }).click();
+    // La insignia de estado y la última entrada del historial usan la misma
+    // clave (incident.status.ack = "Reconocido"): dos apariciones es la
+    // prueba de que el timeline registró la transición, no solo el estado.
+    await expect(page.getByText("Reconocido", { exact: true })).toHaveCount(2);
+
+    await page.getByRole("link", { name: "Incidentes" }).click();
+    await expect(page.getByRole("link", { name: incidentTitle })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Reconocidos" }).click();
+    await expect(page.getByRole("link", { name: incidentTitle })).toBeVisible();
+
+    // --- Handoffs: aprobar el pendiente del playbook de fábrica ---
+    await page.getByRole("link", { name: "Aprobaciones" }).click();
+    await expect(page.getByRole("heading", { name: "Bandeja de handoffs" })).toBeVisible();
+
+    const handoffCard = page.locator("article", { hasText: "Portátil Ventas" });
+    await expect(handoffCard).toBeVisible();
+    await expect(handoffCard.getByText("Bloquear", { exact: true })).toBeVisible();
+    await expect(handoffCard.getByText("No conforme y fuera de geocerca")).toBeVisible();
+    await handoffCard.getByRole("button", { name: "Aprobar" }).click();
+
+    // El fondo queda aria-hidden mientras el diálogo está abierto (T25), así
+    // que las consultas por rol de aquí en adelante no chocan con los mismos
+    // textos de la tarjeta que sigue debajo.
+    const decisionDialog = page.getByRole("dialog");
+    await expect(decisionDialog.getByText("Aprobar Bloquear")).toBeVisible();
+    await decisionDialog
+      .getByLabel("Nota de la decisión (obligatoria)")
+      .fill("Aprobado en el e2e: bloqueo confirmado tras revisar el incidente de dev-004.");
+    await decisionDialog.getByRole("button", { name: "Aprobar" }).click();
+    await expect(decisionDialog).toBeHidden();
+
+    // La garantía visible de que observe no ha tocado el dispositivo: el
+    // resultado se anuncia como dry-run, nunca como "Ejecutado" a secas.
+    await expect(handoffCard.getByText("Ejecutado en dry-run (modo observe)")).toBeVisible();
+    await expect(handoffCard.getByText("Ejecutado", { exact: true })).toHaveCount(0);
+
+    expect(consoleErrors).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 3: Ejecutar en local**
+
+```bash
+make e2e
+```
+
+Expected: los dos ficheros en verde, en orden alfabético (`demo.spec.ts` antes que `riesgo.spec.ts`), un único worker:
+```
+Running 2 tests using 1 worker
+
+  ✓  1 [chromium] › demo.spec.ts:8:7 › núcleo demo › asistente → demo → visión general → mapa → dispositivo → geocerca → ciclo (4.2s)
+  ✓  2 [chromium] › riesgo.spec.ts:5:7 › riesgo y acciones › política desde plantilla → what-if → ciclo → riesgo explicado → incidente reconocido → handoff aprobado en dry-run (11.8s)
+
+  2 passed (18.4s)
+```
+
+Si `firings.or(noFirings)` no llega a resolverse en 15 s, comprobar primero `whatIf.getByRole("alert")`: un `ErrorState` ahí es un fallo real de `POST /policies/replay` (T18), no falta de datos históricos. Si el what-if concluye en "No habría disparado ni una vez", el test sigue en verde: es la rama honesta, no una regresión.
+
+- [ ] **Step 4: Confirmar que el job `e2e` de CI no necesita cambios**
+
+```bash
+grep -n "npm run e2e\|testDir" .github/workflows/ci.yml web/playwright.config.ts
+```
+
+Expected:
+```
+.github/workflows/ci.yml:112:      - run: npm run e2e
+web/playwright.config.ts:6:  testDir: "./e2e",
+```
+
+`npm run e2e` invoca `playwright test`, que recoge todo fichero bajo `testDir` sin necesidad de listarlo en el job ni en la configuración: con `riesgo.spec.ts` creado, el mismo paso del job ejecuta ahora dos specs en vez de una. No hace falta ninguna otra edición en `.github/workflows/ci.yml` ni en la protección de rama (el check obligatorio sigue llamándose `e2e`, cubre ambos ficheros).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add web/e2e/demo.spec.ts web/e2e/riesgo.spec.ts web/playwright.config.ts
+git commit -q -m "$(cat <<'EOF'
+test(e2e): what-if de política, riesgo explicado y aprobación de handoff
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w
+EOF
+)"
+```
+
+Expected: el commit incluye los tres ficheros; `.github/workflows/ci.yml` no aparece en el diff (Step 4 confirmó que no hace falta tocarlo).
+
+---
+
+**Desviaciones respecto al esqueleto:**
+
+- **La plantilla usada es `tpl-ciso-deviation-500` con su nombre real, "Avisar al CISO si la desviación supera 500 m" (T4).** El esqueleto la nombra como "Avisar CISO si desviación > 500 m", que es una paráfrasis del resumen del hito, no el texto que renderiza `TemplatesDialog`. El test tiene que usar el texto real para poder localizar la tarjeta y comprobar el valor del campo "Nombre" tras elegirla.
+- **El dispositivo del flujo es `dev-004` ("Portátil Ventas"), una decisión de esta tarea, no del esqueleto.** Es el único dispositivo de la flota demo que es a la vez no conforme y está fuera de toda geocerca, así que es el único que produce, con un solo ciclo, las tres cosas que el flujo necesita a la vez: una razón de riesgo determinista ("dispositivo no conforme", T3), un incidente `geofence_exit` con título predecible (T5) y el handoff pendiente del playbook de fábrica `soar-noncompliant-outside` (T6, T16).
+- **Corrección de `demo.spec.ts` no prevista en el esqueleto de M1 ni en el de esta tarea: las coordenadas de la geocerca "Oficina Norte" coincidían exactamente con `dev-004`.** Sin corregirlo, el propio `demo.spec.ts` habría roto la premisa de la que depende todo el resto de esta tarea. Se documenta con un comentario en el propio fichero en vez de silenciarlo.
+- **El what-if no exige disparos mayores que cero.** El esqueleto describe el panel mostrando "el número de disparos y la ventana temporal", que es la rama feliz; la prueba acepta también la rama de cero disparos con su explicación, porque es el comportamiento que T23 fija explícitamente como correcto y forzar siempre disparos positivos habría exigido fabricar histórico o hacerlo depender del orden de ejecución de ciclos previos, es decir, un test frágil.
+- **El texto del resultado del handoff es "Ejecutado" y "Ejecutado en dry-run (modo observe)" (T25), no "ejecutada"/"simulada" como decía el esqueleto.** Se usa el copy real fijado por `handoff.result.dryRun` y `handoff.result.executed`; la aserción negativa (`"Ejecutado"` exacto, cero coincidencias) es la que efectivamente prueba que el resultado nunca se presenta como una ejecución real mientras el motor esté en `observe`.
+- **`.github/workflows/ci.yml` pasa de "Modify" a "Verificar sin cambios".** El job `e2e` ya ejecuta `npm run e2e`, que Playwright expande a todo fichero bajo `testDir` sin listarlo en ningún sitio: añadir `riesgo.spec.ts` no exige tocar el job. Se documenta explícitamente (Step 4) en vez de editar algo que no lo necesita, siguiendo el mismo criterio que T22 y T23 aplicaron a `router.tsx` cuando el esqueleto lo daba por tocado y no hacía falta.
+- **`web/playwright.config.ts` sube su único `timeout` de 60 s a 90 s para todo el fichero, no solo para el spec nuevo.** No hay guardarraíl para tener dos límites de test distintos en el mismo proyecto de Playwright, y `riesgo.spec.ts` es sensiblemente más largo que `demo.spec.ts`.
+- **Las aserciones sobre el detalle de dispositivo (`RiskExplain`, T27) se apoyan solo en vocabulario ya fijado por T22 (`risk.unevaluated` = "Sin evaluar") y en la razón dorada de T3 ("dispositivo no conforme"), nunca en marcado de T27.** T27 no está escrita todavía en el momento de escribir esta tarea; T27 tiene que seguir exponiendo ese vocabulario para que este spec siga en verde cuando se implemente.
+
+
+---
+
 ### Task 30: Verificación completa, integración en `main`, pre-release `2.0.0-alpha.2` y cierre
 
 **Files:**
@@ -33136,7 +37982,7 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
 **Interfaces:**
 - Consumes:
   - Todo el hito M2 (Tasks 1 a 29): dominio de postura/integridad/dwell (T1), señales y veredicto de riesgo (T2, T3), políticas con plantillas (T4), incidentes y reglas de alerta (T5), playbooks y handoffs (T6), ajustes de enforcement y colecciones nuevas del store (T7), cooldowns/entregas/paginación con cursor (T8), egress con DNS y rechazo de IP privadas (T9), webhook firmado y OCSF (T10), cola de entregas con reintentos (T11), guardarraíles completos (T12), integridad/señales/veredicto/dwell en el ciclo (T13), acciones de política/ruta/dwell/violación sostenida (T14), incidentes/alertas/notificaciones del ciclo (T15), playbooks SOAR y handoffs bajo guardarraíles (T16), what-if y replay (T17), API de políticas (T18), API de incidentes y alertas (T19), API de playbooks/handoffs/acciones manuales (T20), API de ajustes y paginación (T21), y todo el frontend (T22-T27): diccionarios, hooks, políticas con what-if, incidentes/alertas, playbooks/handoffs, eventos/acciones/ajustes, riesgo explicado en el detalle de dispositivo.
-  - `internal/battery.Checks()` con `checksM2()` añadidos por Task 28 (tally 12 → 20).
+  - `internal/battery.Checks()` con `checksM2()` añadidos por Task 28 (tally 14 → 22: `len(checksM0())` = 1 más `len(checksM1())` = 13 en `main` hoy, ya que `checks_m1.go` incluye `checkPostureUnknown` y `checkDwell` añadidos por D01a y D01c, más los 8 de `checksM2()`).
   - `web/e2e/riesgo.spec.ts` de Task 29, que se ejecuta junto a `web/e2e/demo.spec.ts` de M1 (mismo `testDir`, `workers: 1`, orden serial).
   - El gate `make verify` completo (lint, `scripts/coverage.sh` con los suelos del 85 %/70 %, `make web` con `npm run gen:api` sin diff en `schema.d.ts`, `make battery`, `make e2e`).
   - El binario `lucidfence` con el dashboard embebido (`internal/web/dist`, poblado por `make web`).
@@ -33148,20 +37994,77 @@ Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
   - `main` en fast-forward con el hito M2 completo (integración real de `origin/main`, nunca `-s ours`).
   - `CHANGELOG.md` y `README.md` con la nueva pre-release documentada.
 
-- [ ] **Step 1: Gate completo en local**
+- [ ] **Step 1: `CHANGELOG.md` y `README.md`**
+
+Este paso va primero a propósito: la documentación de la pre-release tiene que entrar en el mismo commit que luego se etiqueta como `v2.0.0-alpha.2` y del que se compilan los binarios. Si se dejara para el final, el commit etiquetado y los binarios publicados llevarían un `CHANGELOG.md` y un `README.md` que no mencionan `alpha.2`.
+
+En `CHANGELOG.md`, añadir dentro de la sección `### Añadido` que ya existe bajo `## [2.0.0-dev]` (a continuación de la viñeta de `2.0.0-alpha.1`) la viñeta:
+
+```markdown
+- Pre-release `2.0.0-alpha.2` (hito M2, riesgo y acciones): motor de riesgo
+  explicable (integridad de ubicación, siete señales, veredicto 0-100 con
+  severidad y razones); políticas Field/Op/Value con cinco plantillas y
+  simulador what-if; playbooks SOAR con bandeja de handoffs para acciones
+  destructivas; guardarraíles completos (`observe`/`enforce`, cooldown
+  persistido, dedupe, doble llave de `wipe`); incidentes con ciclo de vida,
+  MTTR y analítica; reglas de alerta; webhook firmado HMAC-SHA256 con
+  payload nativo u OCSF 2004, ntfy y allowlist de egress con rechazo de IP
+  privadas; paginación por cursor de eventos y acciones.
+```
+
+En `README.md`, sustituir el bloque "Estado" actual:
+
+```markdown
+> **Estado: LucidFence 2.0 en construcción.** `main` contiene la reescritura en
+> Go. Última pre-release: **2.0.0-alpha.1** (núcleo demo, hito M1), en
+> [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases). La última
+> versión estable sigue siendo **1.6.1** (Python): código en la rama
+> [`legacy/python`](https://github.com/adrimg3196/lucidfence/tree/legacy/python)
+> y tag `v1.6.1-python-final`. Homebrew, Docker y la vitrina siguen sirviendo 1.6.1
+> hasta la release 2.0.0.
+```
+
+por:
+
+```markdown
+> **Estado: LucidFence 2.0 en construcción.** `main` contiene la reescritura en
+> Go. Última pre-release: **2.0.0-alpha.2** (riesgo y acciones, hito M2), en
+> [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases). La última
+> versión estable sigue siendo **1.6.1** (Python): código en la rama
+> [`legacy/python`](https://github.com/adrimg3196/lucidfence/tree/legacy/python)
+> y tag `v1.6.1-python-final`. Homebrew, Docker y la vitrina siguen sirviendo 1.6.1
+> hasta la release 2.0.0.
+```
+
+Commit en la rama del hito, **sin push** (el push lo hace el Step 3, ya con el gate del Step 2 pasado):
+
+```bash
+git rev-parse --abbrev-ref HEAD
+git add CHANGELOG.md README.md
+git commit -q -m "docs: notas de 2.0.0-alpha.2 en CHANGELOG y README
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
+git log -1 --format='%s%n%b'
+git status --porcelain=v1
+```
+
+Expected: la rama es `m2/riesgo-y-acciones`; el commit nuevo contiene solo `CHANGELOG.md` y `README.md` y lleva los dos trailers; `git status --porcelain=v1` no imprime nada. No se ha empujado nada a `origin` todavía.
+
+- [ ] **Step 2: Gate completo en local**
 
 ```bash
 make verify 2>&1 | tee /tmp/verify-m2.log
 tail -5 /tmp/verify-m2.log
 grep -c '^verify: OK$' /tmp/verify-m2.log
 grep -c '^COVERAGE: OK$' /tmp/verify-m2.log
-grep -c '^RUNTIME: 20/20$' /tmp/verify-m2.log
+grep -c '^RUNTIME: 22/22$' /tmp/verify-m2.log
 grep -E '  ✓|  [0-9]+ passed' /tmp/verify-m2.log | tail -5
 ```
 
-Expected: `verify: OK` una vez, `COVERAGE: OK` una vez (ningún paquete de `internal/domain/**` ni `internal/engine` por debajo del 85 %, el resto por encima del 70 %), `RUNTIME: 20/20` una vez, y el resumen de Playwright reportando los dos specs en verde (`demo.spec.ts` de M1 y `riesgo.spec.ts` de Task 29, en ese orden por ser `fullyParallel: false`). Si algo falla, no se avanza al Step 2: se vuelve a la tarea correspondiente (1-29) a corregirlo, nunca se parchea aquí.
+Expected: `verify: OK` una vez, `COVERAGE: OK` una vez (ningún paquete de `internal/domain/**` ni `internal/engine` por debajo del 85 %, el resto por encima del 70 %), `RUNTIME: 22/22` una vez (1 check de `checksM0()` + 13 de `checksM1()` + 8 de `checksM2()`; si el tally real no coincide, se cuenta con `len(checksM0())+len(checksM1())+len(checksM2())` sobre el código de la rama antes de dar el gate por fallado), y el resumen de Playwright reportando los dos specs en verde (`demo.spec.ts` de M1 y `riesgo.spec.ts` de Task 29, en ese orden por ser `fullyParallel: false`). Si algo falla, no se avanza al Step 3: se vuelve a la tarea correspondiente (1-29) a corregirlo, nunca se parchea aquí.
 
-- [ ] **Step 2 (controlador): push, CI verde y merge real de `origin/main`**
+- [ ] **Step 3 (controlador): push, CI verde y merge real de `origin/main`**
 
 ```bash
 git push -u origin m2/riesgo-y-acciones
@@ -33199,7 +38102,7 @@ gh run watch "$run_id_main" --exit-status
 
 Expected: los seis checks (`go-lint`, `go-test`, `web`, `battery`, `security`, `e2e`) en verde tanto en `m2/riesgo-y-acciones` como, tras el push, en `main`. Si `detras` es 0 (nadie ha tocado `main` desde M1), el bloque `if` no hace nada y `git push origin m2/riesgo-y-acciones:main` es un fast-forward directo. Si `detras` es mayor que 0, el merge es real (nunca `-s ours`): si hay conflictos se resuelven con el código de M2 como fuente de verdad para todo lo que este hito toca, y solo entonces se reintenta el push. `main` termina en fast-forward respecto a `m2/riesgo-y-acciones` en ambos casos.
 
-- [ ] **Step 3 (controlador): binarios de la pre-release**
+- [ ] **Step 4 (controlador): binarios de la pre-release**
 
 ```bash
 rm -rf dist && mkdir -p dist
@@ -33221,9 +38124,11 @@ chmod +x /tmp/lucidfence-clean-m2/lucidfence
   kill %1)
 ```
 
-Expected: cuatro binarios con el dashboard embebido (el `make web` del Step 1 ya dejó `internal/web/dist` poblado) y la línea `lucidfence 2.0.0-alpha.2 (...)`. La prueba de máquina limpia arranca sin ningún dato previo, crea `./data` con permisos `0700` y responde `200` en `/api/v1/health` con el asistente inicial pendiente.
+Expected: cuatro binarios con el dashboard embebido (el `make web` del Step 2 ya dejó `internal/web/dist` poblado) y la línea `lucidfence 2.0.0-alpha.2 (...)`. La prueba de máquina limpia arranca sin ningún dato previo, crea `./data` con permisos `0700` y responde `200` en `/api/v1/health` con el asistente inicial pendiente.
 
-- [ ] **Step 4 (controlador): tags y GitHub pre-release**
+- [ ] **Step 5 (controlador): tags y GitHub pre-release**
+
+Los tags se crean sobre el commit ya integrado en `main` por el Step 3, que incluye el commit de documentación del Step 1: la pre-release y sus binarios llevan un `CHANGELOG.md` y un `README.md` que ya mencionan `2.0.0-alpha.2`.
 
 ```bash
 git tag -a v2.0.0-alpha.2 -m "LucidFence 2.0.0-alpha.2: riesgo y acciones (M2)"
@@ -33272,59 +38177,8 @@ gh release view v2.0.0-alpha.2 --json assets --jq '.assets[].name'
 
 Expected: la release lista `lucidfence-2.0.0-alpha.2-darwin-arm64`, `lucidfence-2.0.0-alpha.2-darwin-amd64`, `lucidfence-2.0.0-alpha.2-linux-amd64`, `lucidfence-2.0.0-alpha.2-linux-arm64` y `SHA256SUMS`.
 
-- [ ] **Step 5: `CHANGELOG.md` y `README.md`**
-
-En `CHANGELOG.md`, añadir dentro de la sección `### Añadido` que ya existe bajo `## [2.0.0-dev]` (a continuación de la viñeta de `2.0.0-alpha.1`) la viñeta:
-
-```markdown
-- Pre-release `2.0.0-alpha.2` (hito M2, riesgo y acciones): motor de riesgo
-  explicable (integridad de ubicación, siete señales, veredicto 0-100 con
-  severidad y razones); políticas Field/Op/Value con cinco plantillas y
-  simulador what-if; playbooks SOAR con bandeja de handoffs para acciones
-  destructivas; guardarraíles completos (`observe`/`enforce`, cooldown
-  persistido, dedupe, doble llave de `wipe`); incidentes con ciclo de vida,
-  MTTR y analítica; reglas de alerta; webhook firmado HMAC-SHA256 con
-  payload nativo u OCSF 2004, ntfy y allowlist de egress con rechazo de IP
-  privadas; paginación por cursor de eventos y acciones.
-```
-
-En `README.md`, sustituir el bloque "Estado" actual:
-
-```markdown
-> **Estado: LucidFence 2.0 en construcción.** `main` contiene la reescritura en
-> Go. Última pre-release: **2.0.0-alpha.1** (núcleo demo, hito M1), en
-> [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases). La última
-> versión estable sigue siendo **1.6.1** (Python): código en la rama
-> [`legacy/python`](https://github.com/adrimg3196/lucidfence/tree/legacy/python)
-> y tag `v1.6.1-python-final`. Homebrew, Docker y la vitrina siguen sirviendo 1.6.1
-> hasta la release 2.0.0.
-```
-
-por:
-
-```markdown
-> **Estado: LucidFence 2.0 en construcción.** `main` contiene la reescritura en
-> Go. Última pre-release: **2.0.0-alpha.2** (riesgo y acciones, hito M2), en
-> [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases). La última
-> versión estable sigue siendo **1.6.1** (Python): código en la rama
-> [`legacy/python`](https://github.com/adrimg3196/lucidfence/tree/legacy/python)
-> y tag `v1.6.1-python-final`. Homebrew, Docker y la vitrina siguen sirviendo 1.6.1
-> hasta la release 2.0.0.
-```
-
-Commit y push a `main`:
-
-```bash
-git add CHANGELOG.md README.md
-git commit -q -m "docs: notas de 2.0.0-alpha.2 en CHANGELOG y README
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01GjMTkpr4PnhrZTzqQ7J75w"
-git push origin HEAD:main
-```
-
 - [ ] **Step 6: Mensaje de cierre al propietario** (contenido mínimo):
   - Qué se puede probar: descargar `lucidfence-2.0.0-alpha.2-darwin-arm64` (o el binario del sistema operativo/arquitectura que corresponda), `chmod +x`, `./lucidfence serve`, abrir el dashboard, elegir demo, crear una política desde plantilla, ejecutar el what-if, ver el riesgo explicado en el detalle de un dispositivo, aprobar un handoff pendiente en dry-run.
-  - Gate: seis checks obligatorios en verde sobre `main`; `verify: OK`; `COVERAGE: OK`; `RUNTIME: 20/20`; los dos specs de Playwright (`demo.spec.ts`, `riesgo.spec.ts`) en verde; release `v2.0.0-alpha.2` con los cuatro binarios y `SHA256SUMS`.
+  - Gate: seis checks obligatorios en verde sobre `main`; `verify: OK`; `COVERAGE: OK`; `RUNTIME: 22/22`; los dos specs de Playwright (`demo.spec.ts`, `riesgo.spec.ts`) en verde; release `v2.0.0-alpha.2` con los cuatro binarios y `SHA256SUMS`.
   - Lo que NO está aún (M3-M5) y el siguiente plan a escribir: `2026-09-07-m3-conectores.md`.
 
