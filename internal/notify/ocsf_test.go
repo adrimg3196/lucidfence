@@ -161,6 +161,9 @@ func TestEventosNuncaLlevanCoordenadas(t *testing.T) {
 		{Kind: EventIncidentOpened, At: inc.UpdatedAt, DeliveryID: "d1", Incident: inc},
 		{Kind: EventHandoffPending, At: ho.RequestedAt, DeliveryID: "d2", Handoff: ho},
 		{Kind: EventActionExecuted, At: res.At, DeliveryID: "d3", Action: res},
+		// El disparo de alerta no tiene ninguna colección que envenenar: entra
+		// para que el quinto sobre pase también por el barrido de claves.
+		eventoAlerta(),
 	}
 	fugas := []string{"41.403629", "2.174356", "Mallorca", "\"lat\"", "\"lng\"", "\"location\""}
 	// El sobre nativo declara el tamaño de las colecciones envenenadas, nunca su

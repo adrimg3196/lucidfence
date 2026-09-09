@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -146,30 +145,9 @@ func TestNativePayloadEsDeterministaYConClavesOrdenadas(t *testing.T) {
 		}
 	}
 	// Las claves del sobre salen en orden alfabético porque es un map[string]any
-	// y encoding/json las ordena. Se leen con el decodificador, no buscando
-	// subcadenas, para no confundirlas con las del objeto anidado.
-	dec := json.NewDecoder(bytes.NewReader(primero))
-	if _, err := dec.Token(); err != nil {
-		t.Fatal(err)
-	}
-	var claves []string
-	for dec.More() {
-		tok, err := dec.Token()
-		if err != nil {
-			t.Fatal(err)
-		}
-		nombre, ok := tok.(string)
-		if !ok {
-			t.Fatalf("clave inesperada %v", tok)
-		}
-		claves = append(claves, nombre)
-		var descartar json.RawMessage
-		if err := dec.Decode(&descartar); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// y encoding/json las ordena.
 	quiero := []string{"delivery_id", "event", "incident", "product", "severity", "title", "ts"}
-	if !slices.Equal(claves, quiero) {
+	if claves := clavesDe(t, primero); !slices.Equal(claves, quiero) {
 		t.Fatalf("claves del sobre %v, esperadas %v", claves, quiero)
 	}
 	cuerpo := string(primero)
