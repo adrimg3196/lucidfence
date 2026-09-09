@@ -1010,6 +1010,14 @@ components:
           type: integer
         unknown:
           type: integer
+        risk_evaluated:
+          type: integer
+        risk_failed:
+          type: integer
+        by_severity:
+          type: object
+          additionalProperties:
+            type: integer
         transitions:
           type: integer
         actions_planned:
@@ -1028,7 +1036,7 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderHealth"
-      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, evaluation_errors, persistence_errors, providers]
+      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, evaluation_errors, persistence_errors, providers, risk_evaluated, risk_failed, by_severity]
     EngineStatus:
       type: object
       properties:

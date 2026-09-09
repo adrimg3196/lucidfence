@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
@@ -172,5 +173,46 @@ func assertRecuperacion(t *testing.T, st CycleStats, org *store.OrgStore) {
 	}
 	if len(acts) != 2 {
 		t.Fatalf("las acciones de entrada no deben repetirse: %d", len(acts))
+	}
+}
+
+// TestSenalesYRiesgoSobrevivenAlRoundTrip: las señales se calculan en memoria
+// como int, bool y []string y viajan a devices.json. Al volver, los enteros
+// son float64 y las listas []any; T3 ya acepta las dos formas, pero la UI de
+// T27 lee estas y el test las fija.
+func TestSenalesYRiesgoSobrevivenAlRoundTrip(t *testing.T) {
+	e, org := newEngine(t)
+	if _, err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ds, err := org.Devices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := device.Index(ds)["dev-004"]
+	assertSenalesTrasElJSON(t, d)
+	if d.Risk.Score == nil || *d.Risk.Score != 100 || d.Risk.Severity != "critical" {
+		t.Fatalf("el veredicto persiste con su score: %+v", d.Risk)
+	}
+	if d.Risk.EvaluatedAt == nil || !d.Risk.EvaluatedAt.Equal(time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("evaluated_at es el reloj del ciclo, no el del proceso: %+v", d.Risk)
+	}
+}
+
+// assertSenalesTrasElJSON fija las formas con las que las señales vuelven de
+// devices.json: entero a float64, bool a bool y lista vacía a lista, no a null.
+func assertSenalesTrasElJSON(t *testing.T, d device.Device) {
+	t.Helper()
+	if hora, ok := d.Signals["time_of_day"]["hour"].(float64); !ok || hora != 12 {
+		t.Fatalf("un entero vuelve del JSON como float64: %#v", d.Signals["time_of_day"])
+	}
+	if conforme, ok := d.Signals["device_health"]["compliant"].(bool); !ok || conforme {
+		t.Fatalf("dev-004 no es conforme: %#v", d.Signals["device_health"])
+	}
+	if rooted, ok := d.Signals["device_health"]["rooted"].(bool); !ok || !rooted {
+		t.Fatalf("la postura observada de la seed también persiste: %#v", d.Signals["device_health"])
+	}
+	if checks, ok := d.Signals["location_integrity"]["checks"].([]any); !ok || len(checks) != 0 {
+		t.Fatalf("una lista vacía sigue siendo una lista, no un null: %#v", d.Signals["location_integrity"])
 	}
 }

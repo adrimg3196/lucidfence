@@ -25,7 +25,7 @@ func checksM1WithoutServer() []Check {
 		{Name: "run-once evalúa la flota y hay dispositivos inside", Run: checkRunOnce},
 		{Name: "flota demo visible vía /devices", Run: checkDevices},
 		{Name: "postura desconocida explícita en dispositivo demo", Run: checkPostureUnknown},
-		{Name: "reloj de permanencia explícito sin señales inventadas", Run: checkDwell},
+		{Name: "reloj de permanencia explícito con las siete señales de riesgo", Run: checkDwell},
 		{Name: "transición none:unknown → demo-hq:inside registrada", Run: checkTransition},
 		{Name: "acciones on_enter ejecutadas en dry-run (observe)", Run: checkActionsDryRun},
 		{Name: "dashboard real embebido en /", Run: checkDashboard},

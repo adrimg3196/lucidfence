@@ -29,6 +29,9 @@ type SeedDevice struct {
 	IP        string           `json:"ip,omitempty"`
 	Waypoints []geo.Point      `json:"waypoints"`
 	Inventory device.Inventory `json:"inventory"`
+	// Posture son observaciones del conector, no inferencias: lo ausente
+	// sigue siendo desconocido (nil), no un false acreditado.
+	Posture device.Posture `json:"posture,omitempty"`
 }
 
 // Seed es la flota simulada.

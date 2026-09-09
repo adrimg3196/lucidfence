@@ -1299,6 +1299,11 @@ export interface components {
             inside: number;
             outside: number;
             unknown: number;
+            risk_evaluated: number;
+            risk_failed: number;
+            by_severity: {
+                [key: string]: number;
+            };
             transitions: number;
             actions_planned: number;
             actions_executed: number;

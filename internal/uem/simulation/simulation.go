@@ -59,9 +59,10 @@ func (a *Adapter) Tick() int {
 // Name implementa uem.Adapter.
 func (a *Adapter) Name() string { return Name }
 
-// Capabilities implementa uem.Adapter: la simulación lo soporta todo salvo postura.
+// Capabilities implementa uem.Adapter: la simulación lo soporta todo, incluida
+// la postura, que sale de la seed y no de una inferencia del conector.
 func (a *Adapter) Capabilities() uem.Capabilities {
-	return uem.Capabilities{Actions: action.All, Inventory: true, Location: true, Posture: false}
+	return uem.Capabilities{Actions: action.All, Inventory: true, Location: true, Posture: true}
 }
 
 // Position calcula la posición en un tick: un segmento cada 3 ticks con
@@ -102,6 +103,7 @@ func (a *Adapter) FetchDevices(_ context.Context) ([]device.Device, error) {
 			Location:     device.Location{Point: &p, AccuracyM: &acc, Source: Name, ObservedAt: now},
 			Network:      device.Network{IP: sd.IP},
 			Inventory:    sd.Inventory,
+			Posture:      sd.Posture,
 			FenceState:   device.Unknown,
 			RouteState:   device.Unassigned,
 			Risk:         device.Verdict{Reasons: []string{}, MatchedPolicies: []string{}},

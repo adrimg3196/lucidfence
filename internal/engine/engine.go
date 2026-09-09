@@ -45,6 +45,9 @@ type CycleStats struct {
 	Inside            int                       `json:"inside"`
 	Outside           int                       `json:"outside"`
 	Unknown           int                       `json:"unknown"`
+	RiskEvaluated     int                       `json:"risk_evaluated"`
+	RiskFailed        int                       `json:"risk_failed"`
+	BySeverity        map[string]int            `json:"by_severity"`
 	Transitions       int                       `json:"transitions"`
 	ActionsPlanned    int                       `json:"actions_planned"`
 	ActionsExecuted   int                       `json:"actions_executed"`
@@ -75,6 +78,7 @@ type Engine struct {
 	order    []string
 	opts     Options
 	guard    Guardrails
+	riskCfg  settings.Risk
 
 	cycleMu    sync.Mutex
 	stateMu    sync.RWMutex
@@ -96,9 +100,9 @@ type Engine struct {
 	evalHook func(*device.Device)
 }
 
-// New crea el motor. El enforcement nace en los ajustes de fábrica (observe)
-// y cada ciclo lo recarga del store con refreshGuardrails; la memoria de
-// cooldown es el propio OrgStore.
+// New crea el motor. El enforcement y el contexto de riesgo nacen en los
+// ajustes de fábrica (observe, jornada 20-7) y cada ciclo los recarga del
+// store con applySettings; la memoria de cooldown es el propio OrgStore.
 func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -111,6 +115,7 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	}
 	e := &Engine{org: org, adapters: map[string]uem.Adapter{}, opts: opts,
 		guard:     Guardrails{Enforcement: settings.Default().Enforcement, Now: opts.Now},
+		riskCfg:   settings.Default().Risk,
 		providers: map[string]ProviderHealth{}, violations: map[string]int{}, fired: map[string]bool{}}
 	if org != nil {
 		e.guard.Cooldowns = org
@@ -135,29 +140,22 @@ func (e *Engine) Guardrails() Guardrails {
 	return e.guard
 }
 
-// refreshGuardrails recarga el enforcement de settings.json al principio de
-// cada ciclo, para que un cambio hecho por la API surta efecto sin reiniciar.
-// Si los ajustes no se pueden leer, o traen un modo que no existe, el motor
-// cae a observe: la única postura segura ante un fichero que no se entiende
-// es no mandar nada en vivo, y que el estado lo diga.
-func (e *Engine) refreshGuardrails() {
-	if e.org == nil {
-		return
-	}
-	g := e.Guardrails()
-	set, err := e.org.Settings()
-	if err != nil {
-		e.opts.Logger.Warn("ajustes ilegibles: el motor sigue en observe", "error", err)
-		set = settings.Default()
-	}
+// applySettings refresca, una vez por ciclo, lo que el motor consulta fuera
+// del ciclo: el enforcement de los guardarraíles y el contexto de riesgo. Los
+// ajustes vienen de la lectura que hizo loadInput, así que settings.json se
+// lee una sola vez por ciclo y un cambio hecho por la API surte efecto en el
+// ciclo siguiente sin reiniciar el proceso. El modo se sanea antes de
+// guardarlo (M2-R32): lo que el motor publica no puede decir "Enforce"
+// mientras gatea como observe.
+func (e *Engine) applySettings(set settings.Settings) {
 	enf, saneado := normalizedEnforcement(set.Enforcement)
 	if saneado {
 		e.opts.Logger.Warn("enforcement.mode desconocido: el motor lo trata como observe",
 			"mode", set.Enforcement.Mode)
 	}
-	g.Enforcement = enf
 	e.stateMu.Lock()
-	e.guard = g
+	e.guard.Enforcement = enf
+	e.riskCfg = set.Risk
 	e.stateMu.Unlock()
 }
 

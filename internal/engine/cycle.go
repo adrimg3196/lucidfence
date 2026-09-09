@@ -8,7 +8,10 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
+	"github.com/adrimg3196/lucidfence/internal/domain/policy"
+	"github.com/adrimg3196/lucidfence/internal/domain/risk"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 )
@@ -16,6 +19,11 @@ import (
 type cycleInput struct {
 	fences []fence.Fence
 	routes []route.Route
+	// settings y policies se leen una sola vez por ciclo: los ajustes
+	// alimentan el enforcement y el contexto de riesgo, las políticas las
+	// consume el planificador de T14.
+	settings settings.Settings
+	policies []policy.Policy
 	// prevAll es devices.json tal cual se leyó (con su orden); prev lo
 	// indexa por id para buscar el estado previo de cada dispositivo.
 	prevAll []device.Device
@@ -31,11 +39,30 @@ func (e *Engine) loadInput() (cycleInput, error) {
 	if err != nil {
 		return cycleInput{}, err
 	}
+	ps, err := e.org.Policies()
+	if err != nil {
+		return cycleInput{}, err
+	}
 	ds, err := e.org.Devices()
 	if err != nil {
 		return cycleInput{}, err
 	}
-	return cycleInput{fences: fs, routes: rs, prevAll: ds, prev: device.Index(ds)}, nil
+	return cycleInput{fences: fs, routes: rs, policies: ps, settings: e.settingsOrDefault(),
+		prevAll: ds, prev: device.Index(ds)}, nil
+}
+
+// settingsOrDefault lee los ajustes del ciclo. Un settings.json ilegible no
+// puede tumbar el ciclo ni, mucho menos, dejar el motor en un enforcement que
+// nadie ha podido leer: se cae a los de fábrica (observe, jornada 20-7) y se
+// avisa. Con las políticas no cabe esa lectura: un policies.json ilegible
+// detiene el ciclo (arriba) en vez de dejar de automatizar en silencio.
+func (e *Engine) settingsOrDefault() settings.Settings {
+	set, err := e.org.Settings()
+	if err != nil {
+		e.opts.Logger.Warn("ajustes ilegibles: el motor sigue en observe", "error", err)
+		return settings.Default()
+	}
+	return set
 }
 
 func fetchSafe(ctx context.Context, ad uem.Adapter) (ds []device.Device, err error) {
@@ -89,13 +116,17 @@ func staleDevices(in cycleInput, providers map[string]ProviderHealth, fetched []
 }
 
 // evaluateDevice evalúa un dispositivo con recover: un fallo deja el
-// dispositivo en evaluation_error con riesgo nulo y el ciclo sigue.
+// dispositivo en evaluation_error con un veredicto fallido y el ciclo sigue.
 func (e *Engine) evaluateDevice(in cycleInput, cur *device.Device, now time.Time) (tr *transition.Transition, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%v", r)
 			cur.EvaluationError = err.Error()
-			cur.Risk.Score = nil
+			// Ni score 0 ni severidad low: un evaluador que revienta se
+			// presenta como "unknown" con la razón del fallo, que es lo
+			// único honesto que se puede decir de él.
+			cur.Risk = risk.Failed(err, now)
+			cur.Signals = nil
 		}
 	}()
 	if e.evalHook != nil {
@@ -115,6 +146,7 @@ func (e *Engine) evaluateDevice(in cycleInput, cur *device.Device, now time.Time
 			cur.RouteState = device.OffRoute
 		}
 	}
+	e.evaluateRisk(prev, cur, now)
 	return tr, nil
 }
 
@@ -126,6 +158,7 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 	if evalErr != nil {
 		st.EvaluationErrors++
 	}
+	countRisk(st, *cur)
 	switch cur.FenceState {
 	case device.Inside:
 		st.Inside++
@@ -165,12 +198,14 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 	start := time.Now()
 	now := e.opts.Now().UTC()
-	st := CycleStats{At: now, Mode: e.opts.Mode, Providers: map[string]ProviderHealth{}}
-	e.refreshGuardrails()
+	st := CycleStats{At: now, Mode: e.opts.Mode, Providers: map[string]ProviderHealth{}, BySeverity: map[string]int{}}
 	in, err := e.loadInput()
 	if err != nil {
 		return st, err
 	}
+	e.applySettings(in.settings)
+	e.opts.Logger.Debug("entrada del ciclo", "fences", len(in.fences), "routes", len(in.routes),
+		"policies", len(in.policies), "devices", len(in.prevAll), "enforcement", in.settings.Enforcement.Mode)
 	devices := e.fetchAll(ctx, &st)
 	var results []action.Result
 	for i := range devices {

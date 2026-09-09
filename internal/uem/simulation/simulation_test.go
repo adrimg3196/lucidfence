@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 )
 
@@ -113,5 +114,38 @@ func TestLoadSaveSeedYNewFromConfig(t *testing.T) {
 	}
 	if ad, err := NewFromConfig(nil, nil); err != nil || ad == nil {
 		t.Fatal("sin seed_path usa la seed por defecto")
+	}
+}
+
+// TestLaSeedTransportaLaPostura: sin este transporte, device_posture y las
+// claves rooted y os_outdated de device_health se quedarían en su default
+// neutro y la plantilla de fábrica tpl-wipe-rooted-outside no podría disparar
+// nunca en el producto entregado.
+func TestLaSeedTransportaLaPostura(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	a := New(DefaultSeed(), func() time.Time { return now })
+	ds, err := a.FetchDevices(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := map[string]device.Posture{}
+	for _, d := range ds {
+		idx[d.ID] = d.Posture
+	}
+	comprometida := idx["dev-004"]
+	if comprometida.Rooted == nil || !*comprometida.Rooted || comprometida.OSOutdated == nil || !*comprometida.OSOutdated {
+		t.Fatalf("dev-004 viaja con su postura: %+v", comprometida)
+	}
+	if v := comprometida.OsqueryConfigValid; v == nil || *v {
+		t.Fatalf("una configuración de osquery inválida es una observación: %+v", comprometida)
+	}
+	if sana := idx["dev-006"]; sana.Rooted == nil || *sana.Rooted {
+		t.Fatalf("dev-006 acredita un false explícito, no un desconocido: %+v", sana)
+	}
+	if u := idx["dev-001"]; u.Rooted != nil || u.OSOutdated != nil || u.OsqueryConfigValid != nil {
+		t.Fatalf("dev-001 sigue sin postura observada: %+v", u)
+	}
+	if !a.Capabilities().Posture {
+		t.Fatal("el conector ya publica postura: la capacidad tiene que decirlo")
 	}
 }

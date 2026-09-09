@@ -6,9 +6,12 @@ import (
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/alert"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 	"github.com/adrimg3196/lucidfence/internal/domain/poi"
+	"github.com/adrimg3196/lucidfence/internal/domain/policy"
+	"github.com/adrimg3196/lucidfence/internal/domain/risk"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem/simulation"
@@ -37,6 +40,9 @@ func SeedDemo(org *store.OrgStore, now time.Time) error {
 		if err := org.SavePOIs(demoPOIs()); err != nil {
 			return err
 		}
+	}
+	if err := seedAutomation(org, now); err != nil {
+		return err
 	}
 	if _, err := os.Stat(org.Path("seed.json")); errors.Is(err, os.ErrNotExist) {
 		return simulation.SaveSeed(org.Path("seed.json"), simulation.DefaultSeed())
@@ -69,4 +75,84 @@ func demoPOIs() []poi.POI {
 		{ID: "poi-school-001", Name: "Colegio Público", Category: "school", Tags: []string{"education"}, Point: geo.Point{Lat: 40.418, Lng: -3.705}},
 		{ID: "poi-hospital-001", Name: "Hospital Central", Category: "hospital", Tags: []string{"health"}, Point: geo.Point{Lat: 40.425, Lng: -3.700}},
 	}
+}
+
+// seedAutomation siembra la automatización del modo demo: dos plantillas de
+// política activadas, una regla de alerta de riesgo alto y settings.json en
+// observe con el contexto de riesgo de la demo. Como el resto de SeedDemo,
+// solo escribe donde no hay nada.
+func seedAutomation(org *store.OrgStore, now time.Time) error {
+	if ps, err := org.Policies(); err != nil {
+		return err
+	} else if len(ps) == 0 {
+		if err := org.SavePolicies(demoPolicies(now)); err != nil {
+			return err
+		}
+	}
+	if rs, err := org.Alerts(); err != nil {
+		return err
+	} else if len(rs) == 0 {
+		if err := org.SaveAlerts(demoAlerts(now)); err != nil {
+			return err
+		}
+	}
+	return seedRiskSettings(org)
+}
+
+// seedRiskSettings deja el contexto de riesgo de la demo en settings.json.
+// Settings() siembra los ajustes de fábrica (observe, jornada 20-7) la primera
+// vez que se leen y no toca nada si el fichero ya existe; sobre ellos, y solo
+// si el operador no ha configurado ninguna zona ni ningún turno, se añaden el
+// riesgo del almacén y el turno de dev-004. Sin esta siembra las señales
+// zone_risk y shift_match valdrían siempre lo neutro en el binario, porque el
+// bloque risk de los ajustes no tiene PUT propio en M2 (T21) y nadie más lo
+// escribe. La zona es warehouse-poly y no demo-hq a propósito: así el riesgo
+// de zona se ve en dev-005 sin puntuar al dispositivo sano de referencia.
+func seedRiskSettings(org *store.OrgStore) error {
+	set, err := org.Settings()
+	if err != nil {
+		return err
+	}
+	if len(set.Risk.ZoneRisk) > 0 || len(set.Risk.ShiftZones) > 0 {
+		return nil
+	}
+	set.Risk.ZoneRisk = map[string]float64{"warehouse-poly": 0.5}
+	set.Risk.ShiftZones = map[string]string{"dev-004": "demo-hq"}
+	return org.SaveSettings(set)
+}
+
+// demoTemplateIDs son las dos plantillas que la demo trae activadas. Ninguna
+// es destructiva: notifican, mandan un mensaje o piden localización, de modo
+// que el modo demo enseña la automatización sin poder tocar un dispositivo.
+var demoTemplateIDs = map[string]bool{
+	"tpl-block-on-route-exit":         true,
+	"tpl-locate-unknown-noncompliant": true,
+}
+
+func demoPolicies(now time.Time) []policy.Policy {
+	out := []policy.Policy{}
+	for _, p := range policy.Templates() {
+		if !demoTemplateIDs[p.ID] {
+			continue
+		}
+		p.CreatedAt, p.UpdatedAt = now, now
+		out = append(out, p)
+	}
+	return out
+}
+
+// demoAlerts es la regla que dispara con la propia flota demo: dev-004 está
+// fuera, no es conforme, no va cifrado y trae la postura comprometida de la
+// seed, así que satura el score en 100.
+func demoAlerts(now time.Time) []alert.Rule {
+	return []alert.Rule{{
+		ID:        "alert-riesgo-alto",
+		Name:      "Riesgo alto en la flota",
+		Kind:      alert.KindRiskAbove,
+		Threshold: 70,
+		Severity:  risk.SeverityHigh,
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}}
 }
