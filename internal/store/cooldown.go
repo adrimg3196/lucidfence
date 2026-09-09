@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
@@ -28,10 +29,20 @@ func cooldownKey(deviceID string, a action.Action) string {
 
 // loadCooldowns lee el documento; el llamante ya tiene el lock. Un fichero
 // ausente o corrupto equivale a "sin marcas": la memoria de cooldown nunca
-// debe impedir que el motor arranque.
+// debe impedir que el motor arranque. Fallar en abierto y hacerlo en silencio
+// son dos decisiones distintas y aquí solo la primera está justificada: el
+// fichero ausente es el primer arranque y no dice nada, pero un JSON corrupto
+// o un error de E/S sí se avisa, porque a partir de ahí LastActionAt devuelve
+// "nunca ejecutada" para todo y el primer RecordActionAt reescribe el fichero
+// entero, borrando las marcas que quedaran.
 func (o *OrgStore) loadCooldowns() cooldowns {
 	var c cooldowns
-	if err := ReadJSON(o.Path(cooldownsFile), &c); err != nil || c.Entries == nil {
+	err := ReadJSON(o.Path(cooldownsFile), &c)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		o.logger.Warn("memoria de cooldown ilegible: se sigue sin marcas y el próximo registro reescribirá el fichero",
+			"fichero", o.Path(cooldownsFile), "error", err)
+	}
+	if err != nil || c.Entries == nil {
 		c.Entries = map[string]string{}
 	}
 	return c

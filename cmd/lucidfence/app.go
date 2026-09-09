@@ -97,7 +97,9 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(egressFromConfig(cfg.Egress)))
+	st, err := store.Open(cfg.DataDir,
+		store.WithDefaultEgress(egressFromConfig(cfg.Egress)),
+		store.WithLogger(logger))
 	if err != nil {
 		return nil, err
 	}

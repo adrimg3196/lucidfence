@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"sync"
 	"time"
@@ -21,12 +22,14 @@ const schemaVersion = 1
 
 // OrgStore es el almacén de una organización (tenant local). defaultEgress es
 // la allowlist con la que se siembra settings.json la primera vez; después de
-// esa siembra ya no se consulta.
+// esa siembra ya no se consulta. logger es el canal por el que se avisa de lo
+// que el almacén decide tragarse (store.WithLogger); nunca es nil.
 type OrgStore struct {
 	id            string
 	dir           string
 	mu            sync.RWMutex
 	defaultEgress settings.Egress
+	logger        *slog.Logger
 }
 
 // ID devuelve el id de la organización.

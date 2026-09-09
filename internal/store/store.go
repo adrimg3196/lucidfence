@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,6 +28,7 @@ type Store struct {
 	orgs          map[string]*OrgStore
 	secretsMu     sync.Mutex
 	defaultEgress settings.Egress
+	logger        *slog.Logger
 }
 
 // Option configura el Store al abrirlo.
@@ -46,6 +48,21 @@ func WithDefaultEgress(egress settings.Egress) Option {
 	}
 }
 
+// WithLogger fija el logger con el que el almacén avisa de las anomalías que
+// decide tragarse para no parar el motor (hoy solo una: cooldowns.json
+// ilegible, ver cooldown.go). Sin esta opción los avisos se descartan en vez
+// de caer en slog.Default(): el destino y el nivel los elige cmd/ (spec §8,
+// "log/slog con nivel configurable"), que nunca llama a slog.SetDefault, así
+// que ni los tests ni los usos embebidos escriben en una salida que nadie les
+// ha dado.
+func WithLogger(l *slog.Logger) Option {
+	return func(s *Store) {
+		if l != nil {
+			s.logger = l
+		}
+	}
+}
+
 // Open crea la estructura de directorios si falta.
 func Open(root string, opts ...Option) (*Store, error) {
 	for _, d := range []string{"", "orgs", "auth", "secrets", "cache"} {
@@ -53,7 +70,7 @@ func Open(root string, opts ...Option) (*Store, error) {
 			return nil, fmt.Errorf("crear %s: %w", filepath.Join(root, d), err)
 		}
 	}
-	s := &Store{root: root, orgs: make(map[string]*OrgStore)}
+	s := &Store{root: root, orgs: make(map[string]*OrgStore), logger: slog.New(slog.DiscardHandler)}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -84,7 +101,7 @@ func (s *Store) Org(id string) (*OrgStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	o := &OrgStore{id: id, dir: dir, defaultEgress: s.defaultEgress}
+	o := &OrgStore{id: id, dir: dir, defaultEgress: s.defaultEgress, logger: s.logger}
 	s.orgs[id] = o
 	return o, nil
 }

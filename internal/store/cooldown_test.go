@@ -1,8 +1,11 @@
 package store
 
 import (
+	"bytes"
+	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -35,6 +38,22 @@ var cooldownT0 = time.Date(2026, 9, 6, 10, 0, 0, 0, time.UTC)
 func orgIn(t *testing.T, root string) *OrgStore {
 	t.Helper()
 	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := s.Org("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return o
+}
+
+// orgConLogger abre la organización "default" con un logger de captura: es lo
+// que permite comprobar que el almacén no se traga en silencio lo que decide
+// no propagar, y hacerlo sin tocar ningún global.
+func orgConLogger(t *testing.T, buf *bytes.Buffer) *OrgStore {
+	t.Helper()
+	s, err := Open(t.TempDir(), WithLogger(slog.New(slog.NewTextHandler(buf, nil))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,19 +198,47 @@ func TestFicheroDeCooldownsFormatoYPermisos(t *testing.T) {
 	}
 }
 
-func TestCooldownsCorruptoSeIgnoraYSeRepara(t *testing.T) {
-	o := orgIn(t, t.TempDir())
+func TestFicheroDeCooldownsAusenteNoAvisa(t *testing.T) {
+	var logs bytes.Buffer
+	o := orgConLogger(t, &logs)
+	if _, ok := o.LastActionAt("dev-1", action.Wipe); ok {
+		t.Fatal("sin fichero no hay marca")
+	}
+	if err := o.PruneCooldowns(cooldownT0); err != nil {
+		t.Fatal(err)
+	}
+	// El primer arranque es el caso normal, no una anomalía: no puede gastar
+	// una línea de log por cada acción destructiva de cada ciclo.
+	if logs.Len() != 0 {
+		t.Fatalf("el fichero ausente no debe avisar: %q", logs.String())
+	}
+}
+
+func TestCooldownsCorruptoSeIgnoraSeReparaYDejaRastro(t *testing.T) {
+	var logs bytes.Buffer
+	o := orgConLogger(t, &logs)
 	if err := os.WriteFile(o.Path("cooldowns.json"), []byte("{no es json"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := o.LastActionAt("dev-1", action.Wipe); ok {
 		t.Fatal("un fichero corrupto equivale a sin marcas")
 	}
+	// Falla en abierto, pero no en silencio: sin rastro, el operador no tiene
+	// forma de enterarse de que el motor ha olvidado lo que acaba de hacer.
+	if aviso := logs.String(); !strings.Contains(aviso, "level=WARN") || !strings.Contains(aviso, cooldownsFile) {
+		t.Fatalf("un fichero ilegible debe dejar rastro: %q", aviso)
+	}
 	if err := o.RecordActionAt("dev-1", action.Wipe, cooldownT0); err != nil {
 		t.Fatal(err)
 	}
+	trasReparar := logs.String()
 	if at, ok := o.LastActionAt("dev-1", action.Wipe); !ok || !at.Equal(cooldownT0) {
 		t.Fatalf("tras reparar: %v %v", at, ok)
+	}
+	// Reparado el fichero, el aviso deja de repetirse: la anomalía es ruidosa
+	// mientras dura, no para siempre.
+	if logs.String() != trasReparar {
+		t.Fatalf("tras reparar no debe seguir avisando: %q", strings.TrimPrefix(logs.String(), trasReparar))
 	}
 }
 
