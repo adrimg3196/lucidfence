@@ -179,3 +179,35 @@ func TestJSONLAppendYUltimasN(t *testing.T) {
 		t.Fatalf("todas: %d", len(all))
 	}
 }
+
+func TestDeliveriesSeCreaCon0600YRespetaElLimite(t *testing.T) {
+	o := org(t) // helper de orgstore_test.go, mismo paquete
+	if d, err := o.RecentDeliveries(10); err != nil || len(d) != 0 {
+		t.Fatalf("sin fichero → vacío: %v %v", err, d)
+	}
+	for i := 1; i <= 4; i++ {
+		if err := o.AppendDelivery(map[string]any{"id": i, "event": "incident.opened", "ok": true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := o.RecentDeliveries(2)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("límite: %v %d", err, len(got))
+	}
+	if string(got[0]) != `{"event":"incident.opened","id":3,"ok":true}` {
+		t.Fatalf("las últimas 2 en orden cronológico: %s", got[0])
+	}
+	all, err := o.RecentDeliveries(0)
+	if err != nil || len(all) != 4 {
+		t.Fatalf("limit 0 devuelve todas: %v %d", err, len(all))
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(o.Path("deliveries.jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("permisos %o", info.Mode().Perm())
+		}
+	}
+}

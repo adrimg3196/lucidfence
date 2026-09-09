@@ -52,3 +52,37 @@ func ReadJSONL(path string, limit int) ([]json.RawMessage, error) {
 	}
 	return out, nil
 }
+
+// pageJSONL devuelve una ventana de líneas de la más reciente a la más
+// antigua. Un cursor vacío empieza por el final del fichero; el cursor
+// devuelto apunta a la siguiente línea hacia atrás y es "" cuando ya no queda
+// nada. limit se normaliza y un cursor ilegible devuelve ErrBadCursor. Un
+// cursor por delante del final (fichero rotado) se ajusta a la última línea.
+func pageJSONL(path string, limit int, cursor string) ([]json.RawMessage, string, error) {
+	raws, err := ReadJSONL(path, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	end := len(raws) - 1
+	if cursor != "" {
+		index, err := DecodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		if index < end {
+			end = index
+		}
+	}
+	if end < 0 {
+		return []json.RawMessage{}, "", nil
+	}
+	start := end - normalizeLimit(limit) + 1
+	if start < 0 {
+		start = 0
+	}
+	out := make([]json.RawMessage, 0, end-start+1)
+	for i := end; i >= start; i-- {
+		out = append(out, raws[i])
+	}
+	return out, EncodeCursor(start - 1), nil
+}

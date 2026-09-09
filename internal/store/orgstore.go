@@ -184,3 +184,15 @@ func (o *OrgStore) RecentStats(limit int) ([]json.RawMessage, error) {
 	defer o.mu.RUnlock()
 	return ReadJSONL(o.Path("stats.jsonl"), limit)
 }
+
+// AppendDelivery registra el intento de entrega de una notificación. Acepta
+// any para que store no importe notify (la dirección permitida es la
+// contraria): así *OrgStore satisface notify.Sink por firma.
+func (o *OrgStore) AppendDelivery(v any) error { return appendLine(o, "deliveries.jsonl", v) }
+
+// RecentDeliveries devuelve las últimas entregas sin decodificar.
+func (o *OrgStore) RecentDeliveries(limit int) ([]json.RawMessage, error) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return ReadJSONL(o.Path("deliveries.jsonl"), limit)
+}
