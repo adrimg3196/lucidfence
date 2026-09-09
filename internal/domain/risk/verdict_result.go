@@ -7,9 +7,18 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 )
 
+// Niveles de severidad del veredicto de riesgo.
+const (
+	SeverityLow      = "low"
+	SeverityMedium   = "medium"
+	SeverityHigh     = "high"
+	SeverityCritical = "critical"
+	SeverityUnknown  = "unknown"
+)
+
 // Severities contiene los niveles evaluados en orden ascendente, sin unknown.
 // Los consumidores no deben modificar el registro.
-var Severities = []string{"low", "medium", "high", "critical"}
+var Severities = []string{SeverityLow, SeverityMedium, SeverityHigh, SeverityCritical}
 
 // Failed preserva el fallo total como desconocido, nunca como score cero sano.
 func Failed(err error, at time.Time) device.Verdict {

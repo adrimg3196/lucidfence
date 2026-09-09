@@ -33,6 +33,8 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/domain/integrity` | Evidencia de velocidad, país y precisión de ubicación sin I/O; risk consume sus constantes sin recalcular detecciones. Sin conexión al motor/enforcement. |
 | `internal/domain/risk` | Siete productores puros de señales y veredicto explicable 0–100; fallo null/unknown. Defaults neutros no acreditan conformidad observada. Sin I/O ni conexión al motor/enforcement. |
 | `internal/domain/policy` | Gramática Field/Op/Value, validación separada, matching AND estable y cinco plantillas; consume evidencia de risk sin recalcularla. Acciones candidatas con copias profundas JSON, sin I/O, reloj ni ejecución/enforcement. |
+| `internal/domain/incident` | Incidentes con id determinista, ciclo de vida auditable, analítica del panel y exportación CSV. |
+| `internal/domain/alert` | Reglas de alerta por umbral y su evaluación contra la foto de la flota. |
 | `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700. |
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
