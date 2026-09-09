@@ -74,3 +74,38 @@ func TestAjustesIlegiblesDejanElMotorEnObserve(t *testing.T) {
 		t.Fatalf("unos ajustes ilegibles caen a observe: %+v", e.Status().Enforcement)
 	}
 }
+
+// TestModoDesconocidoSePublicaComoObserve: un settings.json con un modo que
+// no existe (edición a mano, herramienta externa, fichero heredado de 1.x)
+// gatea como observe —lo hace Mode()— y debe además publicarse como observe.
+// Lo que el operador lee en /api/v1/engine/status, en /api/v1/health, en el
+// banner y en la tarjeta del motor no puede contradecir lo que el motor hace,
+// y docs/openapi.yaml declara enum [observe, enforce] para ese campo.
+func TestModoDesconocidoSePublicaComoObserve(t *testing.T) {
+	e, org := newEngine(t)
+	crudo := `{"schema_version":1,"enforcement":{"mode":"Enforce",` +
+		`"live_actions":["message","wipe"],"allow_wipe":true,` +
+		`"wipe_allowlist":[],"action_cooldown_seconds":3600}}`
+	if err := os.WriteFile(org.Path("settings.json"), []byte(crudo), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.Status().Enforcement.Mode; got != settings.ModeObserve {
+		t.Fatalf("un modo que no es enforce gatea como observe y debe publicarse así, no %q", got)
+	}
+	acts, err := org.RecentActions(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(acts) == 0 {
+		t.Fatal("la fixture demo debe haber planificado alguna acción")
+	}
+	for _, a := range acts {
+		if a.DryRun {
+			continue
+		}
+		t.Fatalf("con un modo desconocido nada puede salir en vivo: %+v", a)
+	}
+}

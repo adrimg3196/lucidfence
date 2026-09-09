@@ -137,8 +137,9 @@ func (e *Engine) Guardrails() Guardrails {
 
 // refreshGuardrails recarga el enforcement de settings.json al principio de
 // cada ciclo, para que un cambio hecho por la API surta efecto sin reiniciar.
-// Si los ajustes no se pueden leer, el motor cae a observe: la única postura
-// segura ante un fichero ilegible es no mandar nada en vivo.
+// Si los ajustes no se pueden leer, o traen un modo que no existe, el motor
+// cae a observe: la única postura segura ante un fichero que no se entiende
+// es no mandar nada en vivo, y que el estado lo diga.
 func (e *Engine) refreshGuardrails() {
 	if e.org == nil {
 		return
@@ -147,10 +148,14 @@ func (e *Engine) refreshGuardrails() {
 	set, err := e.org.Settings()
 	if err != nil {
 		e.opts.Logger.Warn("ajustes ilegibles: el motor sigue en observe", "error", err)
-		g.Enforcement = settings.Default().Enforcement
-	} else {
-		g.Enforcement = set.Enforcement
+		set = settings.Default()
 	}
+	enf, saneado := normalizedEnforcement(set.Enforcement)
+	if saneado {
+		e.opts.Logger.Warn("enforcement.mode desconocido: el motor lo trata como observe",
+			"mode", set.Enforcement.Mode)
+	}
+	g.Enforcement = enf
 	e.stateMu.Lock()
 	e.guard = g
 	e.stateMu.Unlock()

@@ -69,6 +69,27 @@ func TestEnforcementVacioEquivaleAObserve(t *testing.T) {
 	}
 }
 
+// TestNormalizedEnforcementSoloSaneaElModo fija lo que el saneo NO hace: no
+// toca las llaves ni la ventana, y sobre todo no convierte una live_actions
+// nula ("todas") en la lista vacía ("ninguna"), que es lo que haría
+// settings.Normalized() y significa lo contrario.
+func TestNormalizedEnforcementSoloSaneaElModo(t *testing.T) {
+	enf, saneado := normalizedEnforcement(settings.Enforcement{Mode: "Enforce",
+		AllowWipe: true, ActionCooldownSeconds: 3600})
+	if enf.Mode != settings.ModeObserve || !saneado {
+		t.Fatalf("un modo desconocido se sanea a observe y se avisa: %+v %v", enf, saneado)
+	}
+	if !enf.AllowWipe || enf.ActionCooldownSeconds != 3600 {
+		t.Fatalf("el saneo no toca el resto del bloque: %+v", enf)
+	}
+	if enf.LiveActions != nil {
+		t.Fatalf("una live_actions nula sigue significando todas: %+v", enf.LiveActions)
+	}
+	if enf, saneado := normalizedEnforcement(settings.Enforcement{Mode: settings.ModeEnforce}); enf.Mode != settings.ModeEnforce || saneado {
+		t.Fatalf("enforce se respeta tal cual: %+v %v", enf, saneado)
+	}
+}
+
 func TestEnforceSinLiveActionsEjecutaTodoEnVivo(t *testing.T) {
 	g := guardWith(settings.Enforcement{Mode: settings.ModeEnforce, AllowWipe: true}, newFakeCooldowns())
 	if g.Mode() != settings.ModeEnforce {

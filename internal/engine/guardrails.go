@@ -27,9 +27,11 @@ type CooldownStore interface {
 	RecordActionAt(deviceID string, a action.Action, at time.Time) error
 }
 
-// Guardrails es el ÚNICO sitio que decide si una orden sale en vivo. Este
-// fichero y guardrails_cooldown.go están protegidos por CODEOWNERS (spec
-// §9.2): ningún otro paquete puede fijar dry_run ni saltarse la doble llave.
+// Guardrails es el ÚNICO sitio que decide si una orden sale en vivo. Los tres
+// ficheros guardrails* del paquete están protegidos por CODEOWNERS (spec
+// §9.2): este decide, guardrails_cooldown.go recuerda y guardrails_apply.go
+// aplica. Ningún otro fichero fija el dry_run del resultado auditado ni abre
+// la doble llave de wipe.
 type Guardrails struct {
 	Enforcement settings.Enforcement
 	Cooldowns   CooldownStore
@@ -54,6 +56,20 @@ func (g Guardrails) Mode() string {
 		return settings.ModeEnforce
 	}
 	return settings.ModeObserve
+}
+
+// normalizedEnforcement sanea el modo del bloque de enforcement que el motor
+// guarda y publica, con el mismo criterio de Mode(): cualquier valor que no
+// sea "enforce" es "observe". Devuelve además si hubo que sanearlo, para que
+// el motor pueda avisar de un settings.json con un modo que no existe. Solo
+// toca el modo: una live_actions nula sigue significando "todas" (§5.4), que
+// es lo contrario de la lista vacía, así que aquí no se llama a
+// settings.Normalized(), que las confunde.
+func normalizedEnforcement(enf settings.Enforcement) (settings.Enforcement, bool) {
+	mode := Guardrails{Enforcement: enf}.Mode()
+	saneado := mode != enf.Mode
+	enf.Mode = mode
+	return enf, saneado
 }
 
 // now devuelve el reloj del motor en UTC (time.Now si no se inyectó otro).
