@@ -41,6 +41,7 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
 | `internal/config` | `config.json`: defaults seguros, validación con nombre de campo, guardado 0600. |
+| `internal/notify` | Única salida a la red: allowlist de egress con resolución única y pinning de IP, webhook firmado, OCSF, ntfy y cola de entregas. |
 | `internal/engine` | Ciclo de evaluación bajo TryLock, planificación de acciones, guardarraíles (observe por defecto), datos demo. |
 | `internal/auth` | Usuarios locales (argon2id), sesiones con CSRF y caducidad, token local para CLI/MCP, matriz de roles y capacidades. |
 | `internal/api` | API HTTP `/api/v1`: registro con capacidad obligatoria, auth por cookie/bearer local, CSRF, errores uniformes, dashboard en `/`. |

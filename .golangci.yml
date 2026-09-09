@@ -44,6 +44,15 @@ linters:
           list-mode: strict
           files: ["**/internal/notify/**", "**/internal/posture/**", "**/internal/reports/**"]
           allow: ["$gostd", "github.com/adrimg3196/lucidfence/internal/domain", "github.com/adrimg3196/lucidfence/internal/store"]
+          deny:
+            - pkg: "github.com/adrimg3196/lucidfence/internal/engine"
+              desc: "notify, posture y reports son hojas: las llama el motor, nunca al revés (spec §5.2)"
+            - pkg: "github.com/adrimg3196/lucidfence/internal/api"
+              desc: "un servicio hoja no conoce la capa HTTP (spec §5.2)"
+            - pkg: "github.com/adrimg3196/lucidfence/internal/uem"
+              desc: "las órdenes al UEM las ejecuta el motor, no el canal de salida (spec §5.2)"
+            - pkg: "github.com/adrimg3196/lucidfence/internal/config"
+              desc: "la configuración llega como settings.Settings, no leyendo config.json (spec §5.8)"
         engine:
           list-mode: strict
           files: ["**/internal/engine/**"]
