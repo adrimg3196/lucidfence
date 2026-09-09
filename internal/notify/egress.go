@@ -196,9 +196,11 @@ func (e *Egress) checkAddresses(host string, ips []net.IP, scheme string) error 
 // fijar la primera no amplía en una dirección el conjunto alcanzable (todas
 // salieron de checkAddresses) y evita que un destino dual-stack se quede sin
 // salida cuando la primera no encamina: aquí no hay Happy Eyeballs ni
-// re-resolución, y T11 reutiliza este mismo cliente en los tres intentos. Sin
-// proxy (HTTP_PROXY saltaría el pinning) y sin seguir redirecciones (un 30x
-// apuntaría fuera del destino validado).
+// re-resolución, y T11 reutiliza este mismo cliente en los tres intentos. El
+// recorrido reparte el presupuesto entre los candidatos, porque timeout acota la
+// petición entera y el primero se lo gastaría entero. Sin proxy (HTTP_PROXY
+// saltaría el pinning) y sin seguir redirecciones (un 30x apuntaría fuera del
+// destino validado).
 func (e *Egress) Client(t Target, timeout time.Duration) *http.Client {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -213,9 +215,23 @@ func (e *Egress) Client(t Target, timeout time.Duration) *http.Client {
 			if len(pinned) == 0 {
 				return nil, fmt.Errorf("%w: destino sin dirección validada", ErrUnresolvable)
 			}
-			d := net.Dialer{Timeout: timeout}
-			var err error
-			for _, addr := range pinned {
+			// timeout acota la petición entera (es el Timeout del http.Client de
+			// abajo), así que un candidato con TODO el presupuesto deja al
+			// siguiente sin turno: cuando el primero no falla rápido sino que se
+			// traga el tiempo —la ruta v6 agujereada que descarta en silencio, que
+			// es justo el caso para el que existe el recorrido— la petición muere
+			// antes del segundo intento. Cada candidato se lleva su parte de lo
+			// que queda, y lo que uno no gasta (ECONNREFUSED, ENETUNREACH) vuelve
+			// al reparto del siguiente. Con una sola dirección la parte es el
+			// presupuesto entero, igual que antes.
+			fin := time.Now().Add(timeout)
+			err := fmt.Errorf("%w: sin presupuesto para abrir socket", ErrUnresolvable)
+			for i, addr := range pinned {
+				parte := time.Until(fin) / time.Duration(len(pinned)-i)
+				if parte <= 0 {
+					break // sin tiempo no se abre otro socket
+				}
+				d := net.Dialer{Timeout: parte}
 				var conn net.Conn
 				if conn, err = d.DialContext(ctx, network, addr); err == nil {
 					return conn, nil

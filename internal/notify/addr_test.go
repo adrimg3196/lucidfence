@@ -51,6 +51,12 @@ var addressTable = []struct {
 	{"2001:4860:4860::8888", false, "pública IPv6"},
 	{"2606:4700::1111", false, "pública IPv6"},
 	{"2002:0808:0808::1", false, "6to4 de una IPv4 pública: se juzga lo empotrado, no el prefijo"},
+	{"64:ff9b::169.254.169.254", true, "metadata de nube tras el prefijo NAT64 64:ff9b::/96 (RFC 6052)"},
+	{"64:ff9b::10.0.0.5", true, "IPv4 privada tras el prefijo NAT64"},
+	{"64:ff9b::8.8.8.8", true, "NAT64 de una IPv4 pública: el prefijo entero es un rango reservado"},
+	{"::ffff:0:169.254.169.254", true, "metadata de nube en la forma traducida ::ffff:0:a.b.c.d (RFC 2765)"},
+	{"::ffff:0:10.0.0.5", true, "IPv4 privada en la forma traducida"},
+	{"::ffff:0:8.8.8.8", false, "traducida de una IPv4 pública: se juzga lo empotrado, no el prefijo"},
 }
 
 func TestIsPrivateTablaDeDirecciones(t *testing.T) {
@@ -79,13 +85,13 @@ func TestAlwaysBlockedSoloLinkLocalYMetadata(t *testing.T) {
 	// Estas se deniegan aunque el operador active allow_private: por ahí no hay
 	// destino legítimo, solo el pivote hacia las credenciales de instancia
 	// (legacy: test_webhook_resolve_blocks_pivot_address).
-	for _, s := range []string{"169.254.169.254", "169.254.0.1", "fe80::1", "fd00:ec2::254", "::ffff:169.254.169.254", "::169.254.169.254", "2002:a9fe:a9fe::1"} {
+	for _, s := range []string{"169.254.169.254", "169.254.0.1", "fe80::1", "fd00:ec2::254", "::ffff:169.254.169.254", "::169.254.169.254", "2002:a9fe:a9fe::1", "64:ff9b::169.254.169.254", "::ffff:0:169.254.169.254"} {
 		if !alwaysBlocked(net.ParseIP(s)) {
 			t.Errorf("alwaysBlocked(%s) = false; link-local y metadata no salen nunca", s)
 		}
 	}
 	// Estas sí las abre allow_private: son el caso on-prem real.
-	for _, s := range []string{"10.0.0.5", "127.0.0.1", "fc00::1", "192.168.1.1", "8.8.8.8", "::1", "::10.0.0.5", "2002:0808:0808::1"} {
+	for _, s := range []string{"10.0.0.5", "127.0.0.1", "fc00::1", "192.168.1.1", "8.8.8.8", "::1", "::10.0.0.5", "2002:0808:0808::1", "64:ff9b::8.8.8.8", "::ffff:0:10.0.0.5"} {
 		if alwaysBlocked(net.ParseIP(s)) {
 			t.Errorf("alwaysBlocked(%s) = true; allow_private debe poder abrir este destino", s)
 		}

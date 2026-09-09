@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -71,16 +72,30 @@ func usable(ip net.IP) (net.IP, bool) {
 	return ip, true
 }
 
-// embeddedV4 devuelve la IPv4 que una dirección IPv6 lleva dentro en las dos
-// codificaciones que net.IP.To4 NO reconoce: la compatible ::a.b.c.d (RFC 4291)
-// y 6to4 2002:<v4>::/16 (RFC 3056). Sin esto, ::169.254.169.254 y
-// 2002:a9fe:a9fe::1 son la misma metadata de instancia escrita de otra manera y
-// se clasifican como públicas: el mismo bypass por codificación que parseIPAny
-// cierra en IPv4, mudado a IPv6. Se juzga lo empotrado en vez de denegar ::/96 y
-// 2002::/16 enteros porque el bloque dejaría ::1 fuera del alcance de
-// allow_private (el SIEM on-prem) y denegaría un 6to4 legítimo de una IPv4
-// pública. Devuelve nil cuando no hay IPv4 empotrada; :: y ::1 son direcciones
-// por derecho propio, no un envoltorio.
+// wrappedV4Prefixes son los prefijos fijos de 96 bits que llevan una IPv4 en sus
+// últimos 32 bits y que net.IP.To4 NO reconoce: la forma compatible ::a.b.c.d
+// (RFC 4291), el prefijo bien conocido de NAT64 64:ff9b::/96 (RFC 6052) y la
+// forma traducida ::ffff:0:a.b.c.d (RFC 2765). Los prefijos específicos de red
+// del RFC 6052 (cualquier /32, /40, /48, /56 o /64 que el operador configure en
+// su traductor) no se pueden reconocer sin conocer esa configuración y quedan
+// fuera por construcción, igual que en cualquier otro filtro de egress.
+var wrappedV4Prefixes = [][]byte{
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},             // ::a.b.c.d
+	{0x00, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0}, // 64:ff9b::/96
+	{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0},       // ::ffff:0:a.b.c.d
+}
+
+// embeddedV4 devuelve la IPv4 que una dirección IPv6 lleva dentro en las
+// codificaciones que net.IP.To4 NO reconoce: 6to4 2002:<v4>::/16 (RFC 3056), que
+// la lleva en los 32 bits siguientes al prefijo, y los tres prefijos de
+// wrappedV4Prefixes, que la llevan al final. Sin esto, ::169.254.169.254,
+// 2002:a9fe:a9fe::1 y 64:ff9b::169.254.169.254 son la misma metadata de
+// instancia escrita de otra manera y no la deniega alwaysBlocked: el mismo
+// bypass por codificación que parseIPAny cierra en IPv4, mudado a IPv6. Se juzga
+// lo empotrado en vez de denegar los prefijos enteros porque el bloque dejaría
+// ::1 fuera del alcance de allow_private (el SIEM on-prem) y denegaría un 6to4
+// legítimo de una IPv4 pública. Devuelve nil cuando no hay IPv4 empotrada; :: y
+// ::1 son direcciones por derecho propio, no un envoltorio.
 func embeddedV4(ip net.IP) net.IP {
 	if len(ip) != net.IPv6len || ip.To4() != nil || ip.IsUnspecified() || ip.IsLoopback() {
 		return nil
@@ -88,12 +103,12 @@ func embeddedV4(ip net.IP) net.IP {
 	if ip[0] == 0x20 && ip[1] == 0x02 { // 6to4: la IPv4 va en los 32 bits siguientes
 		return net.IPv4(ip[2], ip[3], ip[4], ip[5]).To4()
 	}
-	for _, b := range ip[:12] { // compatible: 96 bits a cero y la IPv4 al final
-		if b != 0 {
-			return nil
+	for _, prefijo := range wrappedV4Prefixes {
+		if bytes.Equal(ip[:12], prefijo) {
+			return net.IPv4(ip[12], ip[13], ip[14], ip[15]).To4()
 		}
 	}
-	return net.IPv4(ip[12], ip[13], ip[14], ip[15]).To4()
+	return nil
 }
 
 // alwaysBlocked marca los destinos que no salen nunca, ni siquiera con

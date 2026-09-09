@@ -185,7 +185,7 @@ func TestAAAAConIPv4EmpotradaSeDeniega(t *testing.T) {
 	// Un AAAA que empotra una IPv4 interna en forma compatible (::a.b.c.d) o
 	// 6to4 (2002:<v4>::/16) es el mismo pivote que ::ffff:a.b.c.d escrito de
 	// otra manera, y llega por la misma vía: el DNS de un host allowlisted.
-	for _, aaaa := range []string{"::10.0.0.5", "::127.0.0.1", "2002:0a00:0005::1", "::169.254.169.254"} {
+	for _, aaaa := range []string{"::10.0.0.5", "::127.0.0.1", "2002:0a00:0005::1", "::169.254.169.254", "::ffff:0:10.0.0.5"} {
 		r := &fakeResolver{answers: [][]string{{aaaa}}}
 		e := egress(t, []string{"hooks.ejemplo.com"}, false, r)
 		if _, err := e.Check(context.Background(), "https://hooks.ejemplo.com/x"); !errors.Is(err, ErrPrivateAddress) {
@@ -194,7 +194,7 @@ func TestAAAAConIPv4EmpotradaSeDeniega(t *testing.T) {
 	}
 	// La metadata de nube se deniega también con allow_private, en cualquier
 	// codificación: es la excepción que el brief fija como "siempre".
-	for _, aaaa := range []string{"::169.254.169.254", "2002:a9fe:a9fe::1"} {
+	for _, aaaa := range []string{"::169.254.169.254", "2002:a9fe:a9fe::1", "64:ff9b::169.254.169.254", "::ffff:0:169.254.169.254"} {
 		r := &fakeResolver{answers: [][]string{{aaaa}}}
 		e := egress(t, []string{"hooks.ejemplo.com"}, true, r)
 		if _, err := e.Check(context.Background(), "https://hooks.ejemplo.com/x"); !errors.Is(err, ErrPrivateAddress) {
