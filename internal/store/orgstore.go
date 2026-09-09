@@ -13,16 +13,20 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 	"github.com/adrimg3196/lucidfence/internal/domain/poi"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
 )
 
 const schemaVersion = 1
 
-// OrgStore es el almacén de una organización (tenant local).
+// OrgStore es el almacén de una organización (tenant local). defaultEgress es
+// la allowlist con la que se siembra settings.json la primera vez; después de
+// esa siembra ya no se consulta.
 type OrgStore struct {
-	id  string
-	dir string
-	mu  sync.RWMutex
+	id            string
+	dir           string
+	mu            sync.RWMutex
+	defaultEgress settings.Egress
 }
 
 // ID devuelve el id de la organización.

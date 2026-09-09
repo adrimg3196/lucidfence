@@ -13,6 +13,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/api"
 	"github.com/adrimg3196/lucidfence/internal/auth"
 	"github.com/adrimg3196/lucidfence/internal/config"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/engine"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
@@ -67,6 +68,13 @@ func loadConfig(f commonFlags) (config.Config, error) {
 	return cfg, cfg.Validate()
 }
 
+// egressFromConfig traduce config.EgressConfig a settings.Egress para
+// store.WithDefaultEgress: internal/store no importa internal/config (spec
+// §5.2), así que la conversión vive aquí, en cmd/, que ya importa los dos.
+func egressFromConfig(cfg config.EgressConfig) settings.Egress {
+	return settings.Egress{Hosts: cfg.Hosts, AllowPrivate: cfg.AllowPrivate}
+}
+
 func buildAdapters(cfg config.Config, org *store.OrgStore) ([]uem.Adapter, error) {
 	reg := uem.NewRegistry()
 	reg.Register(simulation.Name, simulation.NewFromConfig)
@@ -89,7 +97,7 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	st, err := store.Open(cfg.DataDir)
+	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(egressFromConfig(cfg.Egress)))
 	if err != nil {
 		return nil, err
 	}

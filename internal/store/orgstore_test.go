@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
 	"github.com/adrimg3196/lucidfence/internal/domain/poi"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
 )
 
@@ -135,5 +137,62 @@ func TestAppendStatsYRecentStats(t *testing.T) {
 	st, _ := o.RecentStats(5)
 	if len(st) != 1 {
 		t.Fatal("stats")
+	}
+}
+
+func orgConEgress(t *testing.T, hosts []string, allowPrivate bool) *OrgStore {
+	t.Helper()
+	s, err := Open(t.TempDir(), WithDefaultEgress(settings.Egress{Hosts: hosts, AllowPrivate: allowPrivate}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := s.Org("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return o
+}
+
+func TestSettingsSiembraEgressDesdeConfigSoloLaPrimeraVez(t *testing.T) {
+	o := orgConEgress(t, []string{"SIEM.example.com", "ntfy.sh"}, true)
+	first, err := o.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Egress.Hosts) != 2 || first.Egress.Hosts[0] != "siem.example.com" || !first.Egress.AllowPrivate {
+		t.Fatalf("la primera lectura siembra egress desde config: %+v", first.Egress)
+	}
+	if _, err := os.Stat(o.Path("settings.json")); err != nil {
+		t.Fatalf("la siembra debe dejar el fichero escrito: %v", err)
+	}
+	// A partir de aquí manda settings.json, no config.json.
+	first.Egress = settings.Egress{Hosts: []string{"solo.example.com"}, AllowPrivate: false}
+	if err := o.SaveSettings(first); err != nil {
+		t.Fatal(err)
+	}
+	second, err := o.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Egress.Hosts) != 1 || second.Egress.Hosts[0] != "solo.example.com" || second.Egress.AllowPrivate {
+		t.Fatalf("la segunda lectura no vuelve a sembrar: %+v", second.Egress)
+	}
+}
+
+func TestSinOpcionDeEgressLaSiembraEsVacia(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := s.Org("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := o.Settings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.Egress.Hosts == nil || len(set.Egress.Hosts) != 0 || set.Egress.AllowPrivate {
+		t.Fatalf("sin opción: allowlist vacía y no nil, sin redes privadas: %+v", set.Egress)
 	}
 }

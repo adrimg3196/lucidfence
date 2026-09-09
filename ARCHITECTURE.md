@@ -36,7 +36,8 @@ spec completa está en `docs/superpowers/specs/2026-09-05-lucidfence-2-go-rewrit
 | `internal/domain/incident` | Incidentes con id determinista, ciclo de vida auditable, analítica del panel y exportación CSV. |
 | `internal/domain/alert` | Reglas de alerta por umbral y su evaluación contra la foto de la flota. |
 | `internal/domain/playbook` | Playbooks SOAR sobre la gramática de políticas y handoffs con gate humano para las acciones destructivas. |
-| `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700. |
+| `internal/domain/settings` | Ajustes de la organización: enforcement, webhook, ntfy, egress y contexto de riesgo, con validación por bloque. |
+| `internal/store` | Persistencia JSON/JSONL atómica por organización; ficheros 0600, directorios 0700; ajustes y secretos por org. |
 | `internal/uem` | Contrato `Adapter`, capacidades, resultado de conexión y registro de conectores. |
 | `internal/uem/simulation` | Flota simulada con seed embebida; mueve dispositivos por waypoints y simula acciones. |
 | `internal/config` | `config.json`: defaults seguros, validación con nombre de campo, guardado 0600. |

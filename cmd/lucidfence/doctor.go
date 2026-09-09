@@ -79,7 +79,7 @@ func doctorChecks(f commonFlags) []check {
 		return append(out, check{Name: "config.json", Severity: "error", Detail: err.Error()})
 	}
 	out = append(out, check{Name: "config.json", OK: true, Detail: fmt.Sprintf("%s (modo %s, intervalo %ds, listen %s)", f.ConfigPath, cfg.Mode, cfg.IntervalSeconds, cfg.Listen)})
-	st, err := store.Open(cfg.DataDir)
+	st, err := store.Open(cfg.DataDir, store.WithDefaultEgress(egressFromConfig(cfg.Egress)))
 	if err != nil {
 		return append(out, check{Name: "directorio de datos", Severity: "error", Detail: err.Error()})
 	}

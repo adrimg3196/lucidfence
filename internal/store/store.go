@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 )
 
 // ErrNotFound indica que el fichero o documento no existe.
@@ -20,19 +22,42 @@ var orgIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 // Store es la raíz del directorio de datos.
 type Store struct {
-	root string
-	mu   sync.Mutex
-	orgs map[string]*OrgStore
+	root          string
+	mu            sync.Mutex
+	orgs          map[string]*OrgStore
+	secretsMu     sync.Mutex
+	defaultEgress settings.Egress
+}
+
+// Option configura el Store al abrirlo.
+type Option func(*Store)
+
+// WithDefaultEgress fija la allowlist de salida con la que se siembra
+// settings.json la primera vez que se leen los ajustes de una organización
+// (spec §5.8). Sin esta opción la siembra sale vacía. store no importa
+// internal/config (spec §5.2, store → domain): el llamante (cmd/, que ya
+// importa config) convierte config.EgressConfig a settings.Egress.
+func WithDefaultEgress(egress settings.Egress) Option {
+	return func(s *Store) {
+		s.defaultEgress = settings.Egress{
+			Hosts:        append([]string(nil), egress.Hosts...),
+			AllowPrivate: egress.AllowPrivate,
+		}
+	}
 }
 
 // Open crea la estructura de directorios si falta.
-func Open(root string) (*Store, error) {
+func Open(root string, opts ...Option) (*Store, error) {
 	for _, d := range []string{"", "orgs", "auth", "secrets", "cache"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o700); err != nil {
 			return nil, fmt.Errorf("crear %s: %w", filepath.Join(root, d), err)
 		}
 	}
-	return &Store{root: root, orgs: make(map[string]*OrgStore)}, nil
+	s := &Store{root: root, orgs: make(map[string]*OrgStore)}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 // Root devuelve el directorio de datos.
@@ -59,7 +84,7 @@ func (s *Store) Org(id string) (*OrgStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	o := &OrgStore{id: id, dir: dir}
+	o := &OrgStore{id: id, dir: dir, defaultEgress: s.defaultEgress}
 	s.orgs[id] = o
 	return o, nil
 }
