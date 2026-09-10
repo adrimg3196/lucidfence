@@ -3,7 +3,10 @@ package battery
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +48,70 @@ func TestChecksIncluyePosturaDesconocida(t *testing.T) {
 		}
 	}
 	t.Fatal("falta check runtime D01a de postura desconocida")
+}
+
+// TestChecksM2AmplianElTotalYElOrden no fija un tally absoluto (M0+M1 puede
+// crecer con el tiempo): comprueba que Checks() es exactamente M0+M1+M2 sin
+// nombres repetidos, que sigue empezando por la versión y el arranque del
+// servidor, y que "servidor para limpio" sigue siendo el último check
+// (los nuevos de M2 se intercalan justo antes, con el servidor todavía vivo).
+func TestChecksM2AmplianElTotalYElOrden(t *testing.T) {
+	all := Checks()
+	want := len(checksM0()) + len(checksM1()) + len(checksM2())
+	if len(all) != want {
+		t.Fatalf("Checks() trae %d, quiero %d (M0+M1+M2)", len(all), want)
+	}
+	seen := map[string]bool{}
+	for _, c := range all {
+		if seen[c.Name] {
+			t.Fatalf("nombre de check repetido: %q", c.Name)
+		}
+		seen[c.Name] = true
+	}
+	if all[0].Name != "version imprime lucidfence y la versión" {
+		t.Fatalf("el primer check debe ser el de versión (M0), got %q", all[0].Name)
+	}
+	if all[1].Name != "serve arranca y /api/v1/health responde" {
+		t.Fatalf("el segundo check debe arrancar el servidor, got %q", all[1].Name)
+	}
+	if last := all[len(all)-1]; last.Name != "servidor para limpio" {
+		t.Fatalf("el último check debe parar el servidor, got %q", last.Name)
+	}
+	m2Names := map[string]bool{}
+	for _, c := range checksM2() {
+		m2Names[c.Name] = true
+	}
+	if penultimate := all[len(all)-2]; !m2Names[penultimate.Name] {
+		t.Fatalf("el penúltimo check debe ser de M2 (el servidor sigue vivo), got %q", penultimate.Name)
+	}
+}
+
+// TestPutJSONYPatchJSON prueba directamente los dos métodos nuevos de Env:
+// ninguno de los ocho checks de M2 ejercita PATCH (las rutas de incidentes
+// no están entre ellos), así que sin este test quedaría sin cobertura.
+func TestPutJSONYPatchJSON(t *testing.T) {
+	var gotMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"method": r.Method})
+	}))
+	defer srv.Close()
+	env := &Env{BaseURL: srv.URL, Client: srv.Client()}
+
+	var out map[string]any
+	if code, err := env.PutJSON(context.Background(), "/x", map[string]any{"a": 1}, &out); err != nil || code != 200 {
+		t.Fatalf("PutJSON: code=%d err=%v", code, err)
+	}
+	if gotMethod != http.MethodPut || out["method"] != "PUT" {
+		t.Fatalf("PutJSON usó %q, quiero PUT", gotMethod)
+	}
+	if code, err := env.PatchJSON(context.Background(), "/x", map[string]any{"a": 1}, &out); err != nil || code != 200 {
+		t.Fatalf("PatchJSON: code=%d err=%v", code, err)
+	}
+	if gotMethod != http.MethodPatch || out["method"] != "PATCH" {
+		t.Fatalf("PatchJSON usó %q, quiero PATCH", gotMethod)
+	}
 }
 
 func fakeBin(t *testing.T, script string) string {

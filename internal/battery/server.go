@@ -136,3 +136,13 @@ func (env *Env) GetJSON(ctx context.Context, path string, out any) (int, error) 
 func (env *Env) PostJSON(ctx context.Context, path string, body, out any) (int, error) {
 	return env.do(ctx, http.MethodPost, path, body, out)
 }
+
+// PutJSON hace PUT con cuerpo JSON y cabecera CSRF si hay sesión.
+func (env *Env) PutJSON(ctx context.Context, path string, body, out any) (int, error) {
+	return env.do(ctx, http.MethodPut, path, body, out)
+}
+
+// PatchJSON hace PATCH con cuerpo JSON y cabecera CSRF si hay sesión.
+func (env *Env) PatchJSON(ctx context.Context, path string, body, out any) (int, error) {
+	return env.do(ctx, http.MethodPatch, path, body, out)
+}

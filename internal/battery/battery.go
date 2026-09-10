@@ -43,9 +43,19 @@ func Run(ctx context.Context, env *Env, checks []Check, w io.Writer) (passed, to
 	return passed, total
 }
 
-// Checks devuelve todos los checks registrados, en orden.
+// Checks devuelve todos los checks registrados, en orden: M0, M1 y, antes de
+// que M1 pare el servidor, los checks de M2 (que también necesitan uno
+// vivo). checksM1() termina siempre en "servidor para limpio" (así lo
+// documenta checksM1WithoutServer); esta función lo separa del resto para
+// intercalar checksM2() delante y reinsertarlo al final, en vez de dejar
+// que el literal append(checksM0(), append(checksM1(), checksM2()...)...)
+// pare el servidor antes de que M2 llegue a usarlo.
 func Checks() []Check {
-	return append(checksM0(), checksM1()...)
+	m1 := checksM1()
+	liveM1, stopM1 := m1[:len(m1)-1], m1[len(m1)-1]
+	all := append(checksM0(), liveM1...)
+	all = append(all, checksM2()...)
+	return append(all, stopM1)
 }
 
 func runBin(ctx context.Context, env *Env, args ...string) (string, error) {
