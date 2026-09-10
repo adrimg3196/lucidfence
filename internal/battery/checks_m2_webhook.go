@@ -88,8 +88,15 @@ func putEgressAndWebhook(ctx context.Context, env *Env, rcv *Receiver, format st
 	}
 	var out map[string]any
 	code, err := env.PutJSON(ctx, "/api/v1/settings/webhooks", webhook, &out)
-	if err != nil || code != 200 || !boolField(out, "secret_set") {
+	if err != nil || code != 200 {
 		return fmt.Errorf("webhooks: code=%d err=%v body=%v", code, err, out)
+	}
+	// La respuesta es el documento de ajustes entero (settingsView), no el
+	// bloque que se acaba de mandar: el indicador del secreto vive en
+	// webhook.secret_set, nunca en la raíz.
+	wh, ok := mapField(out, "webhook")
+	if !ok || !boolField(wh, "secret_set") {
+		return fmt.Errorf("webhooks: el secreto no quedó guardado: body=%v", out)
 	}
 	return nil
 }

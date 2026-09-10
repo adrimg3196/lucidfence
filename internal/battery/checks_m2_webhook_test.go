@@ -75,7 +75,7 @@ func webhookDispatcherServer(t *testing.T, deliver func(t *testing.T, url, secre
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			state.put(body)
-			jsonOK(200, map[string]any{"secret_set": true})(w, r)
+			jsonOK(200, map[string]any{"webhook": map[string]any{"secret_set": true}})(w, r)
 		},
 		"POST /api/v1/alerts":          jsonOK(201, map[string]any{}),
 		"POST /api/v1/alerts/evaluate": jsonOK(200, map[string]any{"count": 1}),
@@ -194,5 +194,38 @@ func TestReceiverRechazaSinCabecerasCompletas(t *testing.T) {
 	got := rcv.Deliveries()
 	if len(got) != 1 || got[0].Valid {
 		t.Fatalf("una entrega sin las cuatro cabeceras no debía marcarse válida: %+v", got)
+	}
+}
+
+// TestPutEgressAndWebhookLeeElSecretoAnidado fija la forma real de la
+// respuesta de PUT /settings/webhooks: persistSettings responde con el
+// documento entero de ajustes (settingsView), donde el indicador vive en
+// webhook.secret_set, nunca en la raíz.
+func TestPutEgressAndWebhookLeeElSecretoAnidado(t *testing.T) {
+	rcv, stop, err := StartReceiver("secreto-forma-anidada")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stop() }()
+
+	nested := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"PUT /api/v1/settings/egress": jsonOK(200, map[string]any{}),
+		"PUT /api/v1/settings/webhooks": jsonOK(200, map[string]any{
+			"schema_version": 1,
+			"webhook":        map[string]any{"url": rcv.URL, "format": "native", "enabled": true, "secret_set": true},
+		}),
+	})
+	if err := putEgressAndWebhook(context.Background(), envFor(nested), rcv, "native"); err != nil {
+		t.Fatalf("la respuesta real de settings debía bastar: %v", err)
+	}
+
+	sinSecreto := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+		"PUT /api/v1/settings/egress": jsonOK(200, map[string]any{}),
+		"PUT /api/v1/settings/webhooks": jsonOK(200, map[string]any{
+			"webhook": map[string]any{"url": rcv.URL, "secret_set": false},
+		}),
+	})
+	if err := putEgressAndWebhook(context.Background(), envFor(sinSecreto), rcv, "native"); err == nil {
+		t.Fatal("un webhook guardado sin secreto no debía darse por bueno")
 	}
 }
