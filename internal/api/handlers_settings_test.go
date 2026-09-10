@@ -164,6 +164,39 @@ func TestSettingsEnforcementSeAplicaEnElActo(t *testing.T) {
 	}
 }
 
+// TestSettingsEnforcementNormalizaAntesDeAplicar (revisión final del hito):
+// el contrato admite live_actions nula y el guardarraíl la trata como la
+// lista vacía. Lo que se responde, lo que queda en disco y lo que gatea el
+// motor tienen que ser el mismo valor; antes de esta revisión el disco decía
+// [] y el motor se quedaba con nil.
+func TestSettingsEnforcementNormalizaAntesDeAplicar(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("demo")
+	body := map[string]any{"mode": "enforce", "live_actions": nil, "allow_wipe": true,
+		"wipe_allowlist": []string{}, "action_cooldown_seconds": 3600}
+	res, out := e.do("PUT", "/api/v1/settings/enforcement", body, true)
+	if res.StatusCode != 200 {
+		t.Fatalf("PUT enforcement con live_actions nula: %d %v", res.StatusCode, out)
+	}
+	for _, caso := range []struct {
+		nombre string
+		doc    map[string]any
+	}{
+		{"la respuesta del PUT", out},
+		{"GET /settings", segundo(e.do("GET", "/api/v1/settings", nil, true))},
+		{"GET /engine/status", segundo(e.do("GET", "/api/v1/engine/status", nil, true))},
+	} {
+		live, ok := bloque(t, caso.doc, "enforcement")["live_actions"].([]any)
+		if !ok || len(live) != 0 {
+			t.Fatalf("%s debe publicar la lista vacía, no nula: %v", caso.nombre, caso.doc["enforcement"])
+		}
+	}
+}
+
+// segundo devuelve solo el cuerpo decodificado de e.do, para poder usarlo
+// dentro de una tabla.
+func segundo(_ *http.Response, out map[string]any) map[string]any { return out }
+
 func TestSettingsEgressPersisteYValidateNoAbreSocket(t *testing.T) {
 	e := newTestEnv(t)
 	e.setup("demo")

@@ -89,6 +89,13 @@ func (s *server) persistSettings(w http.ResponseWriter, set settings.Settings, n
 		invalidSettings(w, err)
 		return
 	}
+	// Se normaliza DESPUÉS de validar (validar lo que mandó el cliente) y
+	// ANTES de guardar, aplicar y responder: SaveSettings normaliza su propia
+	// copia, así que sin esto el motor y la respuesta se quedaban con un
+	// documento distinto del que hay en disco. El caso que muerde es
+	// live_actions nula: el disco guarda [] y el guardarraíl se quedaba con
+	// nil, que hasta esta revisión significaba "todas en vivo".
+	set = set.Normalized()
 	if err := s.org().SaveSettings(set); err != nil {
 		s.fail(w, "settings.save", err)
 		return
