@@ -60,7 +60,7 @@ func TestRutasYOpenAPICoinciden(t *testing.T) {
 	org, _ := st.Org("default")
 	as, _ := auth.Open(st.AuthDir(), time.Now)
 	eng := engine.New(org, nil, engine.Options{Mode: "simulation"})
-	_, reg := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default()})
+	_, reg := New(Deps{Engine: eng, Org: org, Store: st, Auth: as, Web: http.NotFoundHandler(), Config: config.Default()})
 	documented := parseOpenAPI(t, "../../docs/openapi.yaml")
 	registered := map[string]string{}
 	for _, r := range reg.Routes() {

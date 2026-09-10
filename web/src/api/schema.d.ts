@@ -1264,11 +1264,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Últimas transiciones */
+        /** Transiciones paginadas, de la más reciente a la más antigua */
         get: {
             parameters: {
                 query?: {
                     limit?: components["parameters"]["Limit"];
+                    /** @description Cursor opaco devuelto como next_cursor por la página anterior. Ausente empieza por lo más reciente. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -1282,11 +1284,10 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            items: components["schemas"]["Transition"][];
-                        };
+                        "application/json": components["schemas"]["EventPage"];
                     };
                 };
+                400: components["responses"]["Error"];
             };
         };
         put?: never;
@@ -1304,11 +1305,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Últimas acciones ejecutadas */
+        /** Acciones paginadas, de la más reciente a la más antigua */
         get: {
             parameters: {
                 query?: {
                     limit?: components["parameters"]["Limit"];
+                    /** @description Cursor opaco devuelto como next_cursor por la página anterior. Ausente empieza por lo más reciente. */
+                    cursor?: components["parameters"]["Cursor"];
                 };
                 header?: never;
                 path?: never;
@@ -1322,11 +1325,10 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            items: components["schemas"]["ActionResult"][];
-                        };
+                        "application/json": components["schemas"]["ActionPage"];
                     };
                 };
+                400: components["responses"]["Error"];
             };
         };
         put?: never;
@@ -1987,6 +1989,247 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de la organización; los secretos nunca salen */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/enforcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cambia solo el bloque de enforcement y lo pone en vigor en el acto */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EnforcementSettings"];
+                };
+            };
+            responses: {
+                /** @description Ajustes completos ya vigentes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cambia solo el bloque de webhook; secret es de solo escritura */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WebhookSettingsUpdate"];
+                };
+            };
+            responses: {
+                /** @description Ajustes completos ya vigentes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/egress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cambia solo la allowlist de egress */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EgressSettings"];
+                };
+            };
+            responses: {
+                /** @description Ajustes completos ya vigentes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cambia solo el contexto de riesgo (turnos, riesgo por zona y franja nocturna) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RiskSettings"];
+                };
+            };
+            responses: {
+                /** @description Ajustes completos ya vigentes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comprueba los ajustes y las URLs de salida sin guardar ni enviar nada */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["SettingsValidationRequest"];
+                };
+            };
+            responses: {
+                /** @description Veredicto por canal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SettingsValidation"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2590,6 +2833,85 @@ export interface components {
             count: number;
             firings: components["schemas"]["AlertFiring"][];
         };
+        /** @description Canal de webhook firmado. secret_set dice si hay credencial guardada; el valor no sale nunca por la API. */
+        WebhookSettings: {
+            url: string;
+            /** @enum {string} */
+            format: "native" | "ocsf";
+            events: ("incident.opened" | "incident.closed" | "handoff.pending" | "action.executed" | "alert.fired")[];
+            enabled: boolean;
+            secret_set: boolean;
+        };
+        /** @description Cuerpo de PUT /settings/webhooks. secret es de solo escritura: si falta no se toca el secreto guardado, la cadena vacía lo borra y cualquier otro valor lo sustituye. secret_set no se acepta. */
+        WebhookSettingsUpdate: {
+            url: string;
+            /** @enum {string} */
+            format: "native" | "ocsf";
+            events: ("incident.opened" | "incident.closed" | "handoff.pending" | "action.executed" | "alert.fired")[];
+            enabled: boolean;
+            secret?: string;
+        };
+        NtfySettings: {
+            url: string;
+            enabled: boolean;
+            token_set: boolean;
+        };
+        /** @description Allowlist de salida. Vacía deniega todo; allow_private abre RFC1918 y loopback, nunca link-local. */
+        EgressSettings: {
+            hosts: string[];
+            allow_private: boolean;
+        };
+        RiskSettings: {
+            shift_zones: {
+                [key: string]: string;
+            };
+            zone_risk: {
+                [key: string]: number;
+            };
+            off_hours_start: number;
+            off_hours_end: number;
+        };
+        Settings: {
+            schema_version: number;
+            enforcement: components["schemas"]["EnforcementSettings"];
+            webhook: components["schemas"]["WebhookSettings"];
+            ntfy: components["schemas"]["NtfySettings"];
+            egress: components["schemas"]["EgressSettings"];
+            risk: components["schemas"]["RiskSettings"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Bloques que el formulario tiene en pantalla. Los ausentes se toman de los ajustes guardados. No acepta el secreto del webhook. */
+        SettingsValidationRequest: {
+            enforcement?: components["schemas"]["EnforcementSettings"];
+            webhook?: components["schemas"]["WebhookSettings"];
+            ntfy?: components["schemas"]["NtfySettings"];
+            egress?: components["schemas"]["EgressSettings"];
+            risk?: components["schemas"]["RiskSettings"];
+        };
+        SettingsValidationChannel: {
+            /** @enum {string} */
+            channel: "webhook" | "ntfy";
+            enabled: boolean;
+            url?: string;
+            ok: boolean;
+            reason?: string;
+            addresses?: string[];
+        };
+        SettingsValidation: {
+            ok: boolean;
+            error?: string;
+            field?: string;
+            channels: components["schemas"]["SettingsValidationChannel"][];
+        };
+        EventPage: {
+            items: components["schemas"]["Transition"][];
+            next_cursor: string;
+        };
+        ActionPage: {
+            items: components["schemas"]["ActionResult"][];
+            next_cursor: string;
+        };
     };
     responses: {
         /** @description Error con forma única */
@@ -2605,6 +2927,8 @@ export interface components {
     parameters: {
         ID: string;
         Limit: number;
+        /** @description Cursor opaco devuelto como next_cursor por la página anterior. Ausente empieza por lo más reciente. */
+        Cursor: string;
     };
     requestBodies: never;
     headers: never;

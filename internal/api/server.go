@@ -14,8 +14,11 @@ import (
 
 // Deps son las dependencias del servidor.
 type Deps struct {
-	Engine   *engine.Engine
-	Org      *store.OrgStore
+	Engine *engine.Engine
+	Org    *store.OrgStore
+	// Store es el almacén raíz: la API lo necesita para los secretos de la
+	// organización (<data>/secrets/<org>/), que no viven en el OrgStore.
+	Store    *store.Store
 	Auth     *auth.Store
 	Web      http.Handler
 	WebBuilt bool
@@ -31,6 +34,9 @@ type server struct {
 
 // New construye el handler raíz: /api/v1/* con auth y capacidades, / el dashboard.
 func New(d Deps) (http.Handler, *Registry) {
+	if d.Store == nil {
+		panic("api.New: Deps.Store es obligatorio (secretos de la organización, spec §5.8)")
+	}
 	if d.Logger == nil {
 		d.Logger = slog.Default()
 	}
@@ -46,6 +52,7 @@ func New(d Deps) (http.Handler, *Registry) {
 	s.registerPOIs()
 	s.registerPolicies()
 	s.registerEngine()
+	s.registerSettings()
 	s.registerIncidents()
 	s.registerAlerts()
 	s.registerPlaybooks()

@@ -126,7 +126,7 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 		Notifier: notifier})
 	dist := web.Dist()
 	webBuilt := web.IsBuilt(dist)
-	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Auth: as, Web: web.Handler(dist), WebBuilt: webBuilt, Config: cfg, Logger: logger})
+	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Store: st, Auth: as, Web: web.Handler(dist), WebBuilt: webBuilt, Config: cfg, Logger: logger})
 	return &app{cfg: cfg, store: st, org: org, auth: as, engine: eng, handler: handler, logger: logger, webBuilt: webBuilt}, nil
 }
 

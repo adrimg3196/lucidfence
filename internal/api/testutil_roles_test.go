@@ -61,11 +61,11 @@ func newRoleEnv(t *testing.T) *testEnv {
 	}
 	eng := engine.New(org, []uem.Adapter{&fakeFleet{now: clock}}, engine.Options{Mode: "simulation", Interval: time.Hour, Now: clock})
 	logs := &bytes.Buffer{}
-	h, _ := New(Deps{Engine: eng, Org: org, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock,
+	h, _ := New(Deps{Engine: eng, Org: org, Store: st, Auth: as, Web: http.NotFoundHandler(), Config: config.Default(), Now: clock,
 		Logger: slog.New(slog.NewTextHandler(logs, nil))})
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, logs: logs}
+	return &testEnv{t: t, srv: srv, auth: as, authDir: st.AuthDir(), org: org, st: st, logs: logs}
 }
 
 // seedRoleUsers escribe users.json con la forma que espera auth.Open: la

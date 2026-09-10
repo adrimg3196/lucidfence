@@ -580,41 +580,35 @@ paths:
   /api/v1/events:
     get:
       x-capability: device:read
-      summary: Últimas transiciones
+      summary: Transiciones paginadas, de la más reciente a la más antigua
       parameters:
         - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Transition"
-                required: [items]
+                $ref: "#/components/schemas/EventPage"
+        "400":
+          $ref: "#/components/responses/Error"
   /api/v1/actions:
     get:
       x-capability: device:read
-      summary: Últimas acciones ejecutadas
+      summary: Acciones paginadas, de la más reciente a la más antigua
       parameters:
         - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ActionResult"
-                required: [items]
+                $ref: "#/components/schemas/ActionPage"
+        "400":
+          $ref: "#/components/responses/Error"
   /api/v1/incidents:
     get:
       x-capability: incident:read
@@ -949,6 +943,112 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /api/v1/settings:
+    get:
+      x-capability: engine:config
+      summary: Ajustes de la organización; los secretos nunca salen
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+  /api/v1/settings/enforcement:
+    put:
+      x-capability: engine:config
+      summary: Cambia solo el bloque de enforcement y lo pone en vigor en el acto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnforcementSettings"
+      responses:
+        "200":
+          description: Ajustes completos ya vigentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/settings/webhooks:
+    put:
+      x-capability: engine:config
+      summary: Cambia solo el bloque de webhook; secret es de solo escritura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookSettingsUpdate"
+      responses:
+        "200":
+          description: Ajustes completos ya vigentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/settings/egress:
+    put:
+      x-capability: engine:config
+      summary: Cambia solo la allowlist de egress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EgressSettings"
+      responses:
+        "200":
+          description: Ajustes completos ya vigentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/settings/risk:
+    put:
+      x-capability: engine:config
+      summary: Cambia solo el contexto de riesgo (turnos, riesgo por zona y franja nocturna)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskSettings"
+      responses:
+        "200":
+          description: Ajustes completos ya vigentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/settings/validate:
+    post:
+      x-capability: engine:config
+      summary: Comprueba los ajustes y las URLs de salida sin guardar ni enviar nada
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsValidationRequest"
+      responses:
+        "200":
+          description: Veredicto por canal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsValidation"
+        "400":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     ID:
@@ -963,6 +1063,12 @@ components:
       schema:
         type: integer
         minimum: 1
+    Cursor:
+      name: cursor
+      in: query
+      description: Cursor opaco devuelto como next_cursor por la página anterior. Ausente empieza por lo más reciente.
+      schema:
+        type: string
   responses:
     Error:
       description: Error con forma única
@@ -2116,3 +2222,172 @@ components:
           items:
             $ref: "#/components/schemas/AlertFiring"
       required: [at, rules_evaluated, devices, count, firings]
+    WebhookSettings:
+      type: object
+      description: >-
+        Canal de webhook firmado. secret_set dice si hay credencial guardada;
+        el valor no sale nunca por la API.
+      properties:
+        url:
+          type: string
+        format:
+          type: string
+          enum: [native, ocsf]
+        events:
+          type: array
+          items:
+            type: string
+            enum: [incident.opened, incident.closed, handoff.pending, action.executed, alert.fired]
+        enabled:
+          type: boolean
+        secret_set:
+          type: boolean
+      required: [url, format, events, enabled, secret_set]
+    WebhookSettingsUpdate:
+      type: object
+      description: >-
+        Cuerpo de PUT /settings/webhooks. secret es de solo escritura: si
+        falta no se toca el secreto guardado, la cadena vacía lo borra y
+        cualquier otro valor lo sustituye. secret_set no se acepta.
+      properties:
+        url:
+          type: string
+        format:
+          type: string
+          enum: [native, ocsf]
+        events:
+          type: array
+          items:
+            type: string
+            enum: [incident.opened, incident.closed, handoff.pending, action.executed, alert.fired]
+        enabled:
+          type: boolean
+        secret:
+          type: string
+          writeOnly: true
+      required: [url, format, events, enabled]
+    NtfySettings:
+      type: object
+      properties:
+        url:
+          type: string
+        enabled:
+          type: boolean
+        token_set:
+          type: boolean
+      required: [url, enabled, token_set]
+    EgressSettings:
+      type: object
+      description: Allowlist de salida. Vacía deniega todo; allow_private abre RFC1918 y loopback, nunca link-local.
+      properties:
+        hosts:
+          type: array
+          items:
+            type: string
+        allow_private:
+          type: boolean
+      required: [hosts, allow_private]
+    RiskSettings:
+      type: object
+      properties:
+        shift_zones:
+          type: object
+          additionalProperties:
+            type: string
+        zone_risk:
+          type: object
+          additionalProperties:
+            type: number
+        off_hours_start:
+          type: integer
+        off_hours_end:
+          type: integer
+      required: [shift_zones, zone_risk, off_hours_start, off_hours_end]
+    Settings:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+        enforcement:
+          $ref: "#/components/schemas/EnforcementSettings"
+        webhook:
+          $ref: "#/components/schemas/WebhookSettings"
+        ntfy:
+          $ref: "#/components/schemas/NtfySettings"
+        egress:
+          $ref: "#/components/schemas/EgressSettings"
+        risk:
+          $ref: "#/components/schemas/RiskSettings"
+        updated_at:
+          type: string
+          format: date-time
+      required: [schema_version, enforcement, webhook, ntfy, egress, risk, updated_at]
+    SettingsValidationRequest:
+      type: object
+      description: >-
+        Bloques que el formulario tiene en pantalla. Los ausentes se toman de
+        los ajustes guardados. No acepta el secreto del webhook.
+      properties:
+        enforcement:
+          $ref: "#/components/schemas/EnforcementSettings"
+        webhook:
+          $ref: "#/components/schemas/WebhookSettings"
+        ntfy:
+          $ref: "#/components/schemas/NtfySettings"
+        egress:
+          $ref: "#/components/schemas/EgressSettings"
+        risk:
+          $ref: "#/components/schemas/RiskSettings"
+    SettingsValidationChannel:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [webhook, ntfy]
+        enabled:
+          type: boolean
+        url:
+          type: string
+        ok:
+          type: boolean
+        reason:
+          type: string
+        addresses:
+          type: array
+          items:
+            type: string
+      required: [channel, enabled, ok]
+    SettingsValidation:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+        field:
+          type: string
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettingsValidationChannel"
+      required: [ok, channels]
+    EventPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transition"
+        next_cursor:
+          type: string
+      required: [items, next_cursor]
+    ActionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionResult"
+        next_cursor:
+          type: string
+      required: [items, next_cursor]
