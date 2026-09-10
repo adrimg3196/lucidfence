@@ -1,5 +1,5 @@
 import { renderHook, act } from "@testing-library/react";
-import { I18nProvider, useT, useLang, es, en, detectLang } from "./i18n";
+import { I18nProvider, useT, useLang, es, en, detectLang, type Key } from "./i18n";
 
 test("traduce, interpola y cambia de idioma", () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => <I18nProvider initial="es">{children}</I18nProvider>;
@@ -29,4 +29,20 @@ test("detectLang respeta la preferencia guardada", () => {
   localStorage.setItem("lf.lang", "en");
   expect(detectLang()).toBe("en");
   localStorage.clear();
+});
+
+test("los bloques de M2 existen en los dos diccionarios y ninguna clave queda vacía", () => {
+  for (const prefix of ["nav.", "risk.", "policy.", "incident.", "alert.", "playbook.", "handoff.", "event.", "action.", "settings."]) {
+    const claves = Object.keys(es).filter((k) => k.startsWith(prefix));
+    expect(claves.length, prefix).toBeGreaterThan(0);
+    for (const k of claves) expect(en[k as Key], k).toBeTruthy();
+  }
+  for (const [k, v] of Object.entries(es)) expect(v, k).not.toBe("");
+});
+
+test("la severidad sin evaluar no se llama baja en ninguno de los dos idiomas", () => {
+  expect(es["risk.severity.unknown"]).toBe("Sin evaluar");
+  expect(en["risk.severity.unknown"]).toBe("Not evaluated");
+  expect(es["risk.severity.unknown"]).not.toBe(es["risk.severity.low"]);
+  expect(en["risk.severity.unknown"]).not.toBe(en["risk.severity.low"]);
 });

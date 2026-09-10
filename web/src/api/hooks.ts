@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, setCsrf, unwrap } from "./client";
+import { keys, useInvalidate } from "./keys";
 import type { components } from "./schema";
+
+export { keys, useInvalidate };
+export * from "./hooks.m2";
 
 export type Device = components["schemas"]["Device"];
 export type Fence = components["schemas"]["Fence"];
@@ -13,20 +17,6 @@ export type CycleStats = components["schemas"]["CycleStats"];
 export type Health = components["schemas"]["Health"];
 export type SessionResponse = components["schemas"]["SessionResponse"];
 export type TrailPoint = components["schemas"]["TrailPoint"];
-
-export const keys = {
-  health: ["health"] as const,
-  authStatus: ["auth", "status"] as const,
-  me: ["auth", "me"] as const,
-  devices: (p?: { state?: string; q?: string }) => ["devices", p ?? {}] as const,
-  device: (id: string) => ["devices", id] as const,
-  trail: (id: string, limit: number) => ["devices", id, "trail", limit] as const,
-  fences: ["fences"] as const,
-  fence: (id: string) => ["fences", id] as const,
-  engine: ["engine", "status"] as const,
-  events: (limit: number) => ["events", limit] as const,
-  actions: (limit: number) => ["actions", limit] as const,
-};
 
 export function useHealth() {
   return useQuery({ queryKey: keys.health, queryFn: async () => unwrap(await api.GET("/api/v1/health")) });
@@ -116,11 +106,6 @@ export function useFences() {
 
 export function useFence(id: string) {
   return useQuery({ queryKey: keys.fence(id), queryFn: async () => unwrap(await api.GET("/api/v1/fences/{id}", { params: { path: { id } } })), enabled: !!id });
-}
-
-function useInvalidate(...keysToInvalidate: readonly (readonly unknown[])[]) {
-  const qc = useQueryClient();
-  return () => Promise.all(keysToInvalidate.map((k) => qc.invalidateQueries({ queryKey: k })));
 }
 
 export function useCreateFence() {

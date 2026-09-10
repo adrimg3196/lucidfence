@@ -72,3 +72,37 @@ test("los botones de cabecera cambian de tema, de idioma y cierran la sesión", 
   await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/v1/auth/logout"));
   await waitFor(() => expect(screen.queryByText("Adri")).not.toBeInTheDocument());
 });
+
+const capsViewer = ["org:read", "device:read", "fence:read", "route:read", "policy:read", "incident:read", "report:read"];
+const capsOwner = [...capsViewer, "device:action", "fence:write", "route:write", "engine:run", "engine:config", "incident:write", "alert:write", "playbook:write", "handoff:approve"];
+
+function pintarShell(capabilities: string[]) {
+  vi.mocked(hooks.useMe).mockReturnValue({ data: { user: { name: "Adri", email: "a@x.com", role: "owner", org: "default" }, csrf: "x", capabilities } } as never);
+  vi.mocked(hooks.useLogout).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
+  return renderWithProviders(
+    <ThemeProvider>
+      <Routes>
+        <Route element={<Shell />}>
+          <Route path="/" element={<p>HOME</p>} />
+        </Route>
+      </Routes>
+    </ThemeProvider>,
+  );
+}
+
+test("la navegación de M2 aparece entera para quien puede todo y se recorta para un viewer", () => {
+  const { unmount } = pintarShell(capsOwner);
+  for (const etiqueta of ["Políticas", "Incidentes", "Alertas", "Playbooks", "Aprobaciones", "Eventos", "Acciones", "Ajustes"]) {
+    expect(screen.getByRole("link", { name: etiqueta })).toBeInTheDocument();
+  }
+  expect(screen.getByRole("link", { name: "Ajustes" })).toHaveAttribute("href", "/settings");
+  unmount();
+
+  pintarShell(capsViewer);
+  for (const etiqueta of ["Políticas", "Incidentes", "Alertas", "Eventos", "Acciones"]) {
+    expect(screen.getByRole("link", { name: etiqueta })).toBeInTheDocument();
+  }
+  for (const etiqueta of ["Playbooks", "Aprobaciones", "Ajustes"]) {
+    expect(screen.queryByRole("link", { name: etiqueta })).toBeNull();
+  }
+});

@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from "react-router";
 import { Moon, Sun, SignOut, Translate } from "@phosphor-icons/react";
-import { navItems } from "./nav";
+import { visibleNav } from "./nav";
 import { useTheme } from "./theme";
 import { useT, useLang } from "@/lib/i18n";
 import { useMe, useLogout } from "@/api/hooks";
@@ -14,12 +14,13 @@ export function Shell() {
   const me = useMe();
   const logout = useLogout();
   const user = me.data?.user;
+  const nav = visibleNav(me.data?.capabilities);
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[232px_1fr]">
       <aside className="border-b border-border bg-panel md:border-b-0 md:border-r">
         <div className="flex h-16 items-center px-5 text-base font-semibold tracking-tight">{t("app.name")}</div>
-        <nav aria-label="principal" className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
-          {navItems.map(({ to, key, icon: Icon }) => (
+        <nav aria-label="principal" className="flex gap-1 overflow-x-auto px-3 pb-3 md:max-h-[calc(100dvh-4rem)] md:flex-col md:overflow-y-auto md:pb-3">
+          {nav.map(({ to, key, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
