@@ -156,7 +156,9 @@ func TestElContratoDocumentaElVocabularioDelDominio(t *testing.T) {
 // openAPIParamEnum extrae el enum de un parámetro de query documentado bajo
 // paths.<opPath>.<method>.parameters, fuera del alcance de openAPIEnum (que
 // solo mira components.schemas). Mismo YAML restringido, misma disciplina de
-// fallar alto si el parámetro no documenta ningún enum.
+// fallar alto si el parámetro no documenta ningún enum. El recorrido vive en
+// paramScan: un método por nivel del árbol, para que ninguna función pase del
+// techo de complejidad ciclomática de 15 (spec §9.1.1).
 func openAPIParamEnum(t *testing.T, path, opPath, method, param string) []string {
 	t.Helper()
 	f, err := os.Open(path)
@@ -164,34 +166,86 @@ func openAPIParamEnum(t *testing.T, path, opPath, method, param string) []string
 		t.Fatalf("docs/openapi.yaml obligatorio (spec §6.1): %v", err)
 	}
 	defer func() { _ = f.Close() }()
-	inPath, inMethod, inParams, inParam := false, false, false, false
+	scan := paramScan{opPath: opPath, method: method, param: param}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		line := sc.Text()
-		indent := len(line) - len(strings.TrimLeft(line, " "))
-		trim := strings.TrimSpace(line)
-		switch {
-		case indent == 2 && strings.HasPrefix(trim, "/") && strings.HasSuffix(trim, ":"):
-			inPath = strings.TrimSuffix(trim, ":") == opPath
-			inMethod, inParams, inParam = false, false, false
-		case inPath && indent == 4 && strings.HasSuffix(trim, ":"):
-			inMethod = strings.TrimSuffix(trim, ":") == method
-			inParams, inParam = false, false
-		case inMethod && indent == 6 && trim == "parameters:":
-			inParams = true
-		case inParams && indent == 8 && strings.HasPrefix(trim, "- name:"):
-			inParam = strings.TrimSpace(strings.TrimPrefix(trim, "- name:")) == param
-		case inParam && indent >= 10 && strings.HasPrefix(trim, "enum: ["):
-			raw := strings.TrimSuffix(strings.TrimPrefix(trim, "enum: ["), "]")
-			out := strings.Split(raw, ",")
-			for i := range out {
-				out[i] = strings.TrimSpace(out[i])
-			}
-			return out
+		if values, ok := scan.step(sc.Text()); ok {
+			return values
 		}
 	}
 	t.Fatalf("%s %s: parámetro %q se documenta sin enum", method, opPath, param)
 	return nil
+}
+
+// paramScan recuerda en qué nivel del YAML va el recorrido de
+// openAPIParamEnum: la ruta, el método, el bloque parameters y el parámetro
+// buscado. Cada nivel tiene su método y decide una sola cosa.
+type paramScan struct {
+	opPath, method, param             string
+	inPath, inMethod, inList, inParam bool
+}
+
+// step consume una línea y devuelve el enum en cuanto lo encuentra dentro del
+// parámetro buscado.
+func (s *paramScan) step(line string) ([]string, bool) {
+	indent := len(line) - len(strings.TrimLeft(line, " "))
+	trim := strings.TrimSpace(line)
+	switch {
+	case indent == 2:
+		s.enterPath(trim)
+	case indent == 4:
+		s.enterMethod(trim)
+	case indent == 6:
+		s.enterList(trim)
+	case indent == 8:
+		s.enterParam(trim)
+	case s.inParam && indent >= 10:
+		return parseEnumInline(trim)
+	}
+	return nil, false
+}
+
+// enterPath solo reacciona a una clave de ruta ("/api/...:"): cualquier otra
+// cosa a esa indentación (components.parameters, por ejemplo) no toca nada.
+func (s *paramScan) enterPath(trim string) {
+	if !strings.HasPrefix(trim, "/") || !strings.HasSuffix(trim, ":") {
+		return
+	}
+	s.inPath = strings.TrimSuffix(trim, ":") == s.opPath
+	s.inMethod, s.inList, s.inParam = false, false, false
+}
+
+func (s *paramScan) enterMethod(trim string) {
+	if !s.inPath || !strings.HasSuffix(trim, ":") {
+		return
+	}
+	s.inMethod = strings.TrimSuffix(trim, ":") == s.method
+	s.inList, s.inParam = false, false
+}
+
+func (s *paramScan) enterList(trim string) {
+	if s.inMethod && trim == "parameters:" {
+		s.inList = true
+	}
+}
+
+func (s *paramScan) enterParam(trim string) {
+	if s.inList && strings.HasPrefix(trim, "- name:") {
+		s.inParam = strings.TrimSpace(strings.TrimPrefix(trim, "- name:")) == s.param
+	}
+}
+
+// parseEnumInline lee la forma en línea "enum: [a, b, c]", la única que usa
+// docs/openapi.yaml para los parámetros de query.
+func parseEnumInline(trim string) ([]string, bool) {
+	if !strings.HasPrefix(trim, "enum: [") {
+		return nil, false
+	}
+	out := strings.Split(strings.TrimSuffix(strings.TrimPrefix(trim, "enum: ["), "]"), ",")
+	for i := range out {
+		out[i] = strings.TrimSpace(out[i])
+	}
+	return out, true
 }
 
 // TestFiltroDeSeveridadDocumentaElVocabularioDelDominio (M2-R63): el filtro
