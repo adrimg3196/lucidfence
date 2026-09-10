@@ -182,15 +182,21 @@ func (s *server) settingsWebhooks(w http.ResponseWriter, r *http.Request, now ti
 	if !ok {
 		return
 	}
-	// El secreto se escribe después de validar (no se guarda credencial de
-	// una configuración rechazada) y antes de persistir los ajustes: si el
-	// guardado fallara, la verdad seguiría siendo la del almacén, que es lo
-	// que settingsView recalcula.
+	set.Webhook = cfg
+	// El documento entero se valida antes de tocar el almacén de secretos:
+	// una petición que va a terminar en 400 no puede dejar una credencial
+	// escrita —ni borrada— por un bloque que nadie mandó en el cuerpo.
+	if err := set.Validate(); err != nil {
+		invalidSettings(w, err)
+		return
+	}
+	// Con el documento ya válido, el secreto se escribe antes de persistir
+	// los ajustes: si el guardado fallara, la verdad seguiría siendo la del
+	// almacén, que es lo que settingsView recalcula.
 	if err := s.applyWebhookSecret(body.Secret); err != nil {
 		s.fail(w, "settings.webhooks.secret", err)
 		return
 	}
-	set.Webhook = cfg
 	s.persistSettings(w, set, now)
 }
 
