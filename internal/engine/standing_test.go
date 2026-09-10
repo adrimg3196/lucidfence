@@ -11,6 +11,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/risk"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
 	"github.com/adrimg3196/lucidfence/internal/store"
+	"github.com/adrimg3196/lucidfence/internal/uem"
 )
 
 // dwellT0 es el instante en que el dispositivo entra en la geocerca.
@@ -232,4 +233,45 @@ func accionesConTrigger(t *testing.T, org *store.OrgStore, trigger string) int {
 		}
 	}
 	return n
+}
+
+// TestLaMarcaDeEstanciaSobreviveAlReinicioDelMotor: "un solo disparo por
+// estancia" tiene que seguir siendo cierto después de reiniciar el proceso.
+// Con la marca solo en memoria, el primer ciclo de cada arranque repetía el
+// on_enter por permanencia de todo dispositivo que ya estuviera dentro y
+// pasado el umbral: un deploy convertía cada estancia en curso en una orden
+// duplicada, y el cooldown no lo tapa (solo mira acciones destructivas y solo
+// dentro de su ventana).
+func TestLaMarcaDeEstanciaSobreviveAlReinicioDelMotor(t *testing.T) {
+	dentro := geo.Point{Lat: 40.405, Lng: -3.711}
+	lejos := geo.Point{Lat: 40.421, Lng: -3.708}
+	e, org, clock, ad := motorConReloj(t, dentro)
+	if err := org.SaveFences(cercaConDwell()); err != nil {
+		t.Fatal(err)
+	}
+	corre := func(motor *Engine, quiero int, motivo string) {
+		t.Helper()
+		cicloViajero(t, motor, org)
+		if n := accionesConTrigger(t, org, TriggerDwell); n != quiero {
+			t.Fatalf("%s: %d órdenes de dwell, quiero %d", motivo, n, quiero)
+		}
+	}
+	// reinicio es lo que hace un deploy: motor nuevo sobre el MISMO store, con
+	// la memoria del proceso a cero y devices.json intacto.
+	reinicio := func() *Engine {
+		return New(org, []uem.Adapter{ad}, Options{Mode: "simulation", Interval: time.Minute, Now: clock.now})
+	}
+	corre(e, 0, "ciclo de entrada, permanencia 0")
+	clock.avanzar(10 * time.Minute)
+	corre(e, 1, "a los 600 s sale el on_enter")
+	clock.avanzar(10 * time.Minute)
+	corre(reinicio(), 1, "tras reiniciar, la misma estancia no vuelve a disparar")
+	ad.point = lejos
+	clock.avanzar(10 * time.Minute)
+	corre(reinicio(), 1, "fuera de la geocerca no hay permanencia que contar")
+	ad.point = dentro
+	clock.avanzar(10 * time.Minute)
+	corre(reinicio(), 1, "la estancia nueva empieza en cero")
+	clock.avanzar(10 * time.Minute)
+	corre(reinicio(), 2, "y al superar el umbral vuelve a disparar: borrar la marca también persiste")
 }

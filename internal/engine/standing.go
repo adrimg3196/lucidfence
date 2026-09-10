@@ -36,7 +36,10 @@ func (e *Engine) planDwell(cur device.Device, fences []fence.Fence) []Planned {
 		}
 		key := cur.ID + "|" + f.ID
 		if cur.FenceState != device.Inside || cur.InsideFence != f.ID {
-			delete(e.dwelled, key)
+			if _, había := e.dwelled[key]; había {
+				delete(e.dwelled, key)
+				e.dwellDirty = true
+			}
 			continue
 		}
 		acts := f.ActionsFor(fence.OnEnter)
@@ -45,6 +48,7 @@ func (e *Engine) planDwell(cur device.Device, fences []fence.Fence) []Planned {
 			continue
 		}
 		e.dwelled[key] = stay
+		e.dwellDirty = true
 		for _, a := range acts {
 			out = append(out, fromFence(cur, a, f.ID, TriggerDwell, risk.SeverityMedium))
 		}

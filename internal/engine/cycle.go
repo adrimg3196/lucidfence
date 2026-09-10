@@ -234,6 +234,17 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 			e.logPersistenceError(&st, "action", r.DeviceID, err)
 		}
 	}
+	// La memoria de estancias se guarda una vez por ciclo y solo si cambió:
+	// es lo que hace que "un solo disparo por estancia" siga siendo cierto
+	// después de reiniciar el proceso. Un fallo al guardarla no tumba el ciclo
+	// (M1-R11) y deja la marca sucia, así que el ciclo siguiente reintenta.
+	if e.dwellDirty {
+		if err := e.org.SaveDwellMarks(e.dwelled); err != nil {
+			e.logPersistenceError(&st, "dwell", "", err)
+		} else {
+			e.dwellDirty = false
+		}
+	}
 	st.DurationMS = time.Since(start).Milliseconds()
 	if err := e.org.AppendStats(st); err != nil {
 		e.logPersistenceError(&st, "stats", "", err)

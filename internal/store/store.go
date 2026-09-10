@@ -49,12 +49,12 @@ func WithDefaultEgress(egress settings.Egress) Option {
 }
 
 // WithLogger fija el logger con el que el almacén avisa de las anomalías que
-// decide tragarse para no parar el motor (hoy solo una: cooldowns.json
-// ilegible, ver cooldown.go). Sin esta opción los avisos se descartan en vez
-// de caer en slog.Default(): el destino y el nivel los elige cmd/ (spec §8,
-// "log/slog con nivel configurable"), que nunca llama a slog.SetDefault, así
-// que ni los tests ni los usos embebidos escriben en una salida que nadie les
-// ha dado.
+// decide tragarse para no parar el motor (dos: cooldowns.json ilegible, ver
+// cooldown.go, y dwell.json ilegible, ver dwell_marks.go). Sin esta opción los
+// avisos se descartan en vez de caer en slog.Default(): el destino y el nivel
+// los elige cmd/ (spec §8, "log/slog con nivel configurable"), que nunca llama
+// a slog.SetDefault, así que ni los tests ni los usos embebidos escriben en
+// una salida que nadie les ha dado.
 func WithLogger(l *slog.Logger) Option {
 	return func(s *Store) {
 		if l != nil {

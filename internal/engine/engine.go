@@ -92,10 +92,13 @@ type Engine struct {
 	violations map[string]int
 	// dwelled recuerda, por dispositivo y geocerca, el instante de inicio de
 	// la estancia cuyo on_enter por permanencia ya se emitió. Salir de la
-	// geocerca borra la entrada (ver planDwell).
-	dwelled map[string]string
-	fired   map[string]bool
-	wg      sync.WaitGroup
+	// geocerca borra la entrada (ver planDwell). Se rehidrata del store al
+	// arrancar y se guarda al final del ciclo en que cambió: "un solo disparo
+	// por estancia" también tiene que valer después de un reinicio.
+	dwelled    map[string]string
+	dwellDirty bool
+	fired      map[string]bool
+	wg         sync.WaitGroup
 
 	// evalHook, si no es nil, se llama al principio de evaluateDevice. Solo
 	// lo fijan los tests, para provocar de forma determinista un pánico por
@@ -124,6 +127,7 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 		dwelled: map[string]string{}, fired: map[string]bool{}}
 	if org != nil {
 		e.guard.Cooldowns = org
+		e.dwelled = org.DwellMarks()
 	}
 	for _, a := range adapters {
 		name := a.Name()
