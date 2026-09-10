@@ -4,6 +4,20 @@ import type { Key } from "@/lib/i18n";
 
 type T = (key: Key, vars?: Record<string, string | number>) => string;
 
+// numeroDeCampo protege a los cuatro campos numéricos del formulario de
+// ajustes. react-hook-form entrega "" desde un <input type="number"> vacío
+// (los controles se registran sin valueAsNumber) y z.coerce.number() lo
+// convierte en 0 sin error: vaciar el enfriamiento y guardar apagaba el
+// guardarraíl de cooldown en silencio. El preprocess convierte el vacío
+// -y el nulo- en NaN, que z.number() sí rechaza, así que el mensaje de
+// error que ya existía por fin se ve.
+function numeroDeCampo(msg: string, min: number, max?: number, entero = true) {
+  let n = z.coerce.number(msg).min(min, msg);
+  if (entero) n = n.int(msg);
+  if (max !== undefined) n = n.max(max, msg);
+  return z.preprocess((v) => (v === null || v === undefined || (typeof v === "string" && v.trim() === "") ? NaN : v), n);
+}
+
 // PUT /api/v1/settings/risk (T21) ya está en el contrato y en schema.d.ts,
 // pero T22 no exportó un alias propio para su cuerpo (solo lo hizo para
 // enforcement/webhook/egress). Derivarlo de Settings["risk"] en vez de
@@ -34,10 +48,7 @@ export function makeEnforcementSchema(t: T) {
     liveActions: z.array(z.enum(actionOptions)),
     allowWipe: z.boolean(),
     wipeAllowlist: z.array(z.object({ value: z.string().trim().min(1, t("settings.enforcement.wipeAllowlist.required")) })),
-    actionCooldownSeconds: z.coerce
-      .number(t("settings.error.cooldown"))
-      .int(t("settings.error.cooldown"))
-      .min(0, t("settings.error.cooldown")),
+    actionCooldownSeconds: numeroDeCampo(t("settings.error.cooldown"), 0),
   });
 }
 
@@ -145,19 +156,11 @@ export function makeRiskSchema(t: T) {
     zoneRisk: z.array(
       z.object({
         fenceId: z.string().trim().min(1, t("settings.risk.error.fenceId")),
-        weight: z.coerce.number(t("settings.risk.error.weight")).min(0, t("settings.risk.error.weight")).max(1, t("settings.risk.error.weight")),
+        weight: numeroDeCampo(t("settings.risk.error.weight"), 0, 1, false),
       }),
     ),
-    offHoursStart: z.coerce
-      .number(t("settings.risk.error.offHours"))
-      .int(t("settings.risk.error.offHours"))
-      .min(0, t("settings.risk.error.offHours"))
-      .max(23, t("settings.risk.error.offHours")),
-    offHoursEnd: z.coerce
-      .number(t("settings.risk.error.offHours"))
-      .int(t("settings.risk.error.offHours"))
-      .min(0, t("settings.risk.error.offHours"))
-      .max(23, t("settings.risk.error.offHours")),
+    offHoursStart: numeroDeCampo(t("settings.risk.error.offHours"), 0, 23),
+    offHoursEnd: numeroDeCampo(t("settings.risk.error.offHours"), 0, 23),
   });
 }
 

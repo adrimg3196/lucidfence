@@ -73,3 +73,12 @@ test("un wipe_allowlist con un id vacío muestra el error", async () => {
   await user.click(screen.getByRole("button", { name: "Guardar" }));
   expect(await screen.findByRole("alert")).toBeInTheDocument();
 });
+
+test("vaciar el enfriamiento no lo guarda como 0: muestra el error", async () => {
+  const mutateAsync = setup();
+  const user = userEvent.setup();
+  await user.clear(screen.getByLabelText("Enfriamiento entre acciones (s)"));
+  await user.click(screen.getByRole("button", { name: "Guardar" }));
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(mutateAsync).not.toHaveBeenCalled();
+});
