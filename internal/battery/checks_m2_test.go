@@ -58,27 +58,37 @@ func TestCheckRiskExplainedGoodAndBad(t *testing.T) {
 	}
 }
 
-func TestCheckObserveBlocksWipeGoodAndBad(t *testing.T) {
-	good := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+// wipeActionsServer sirve un /actions con una sola acción wipe, la que el
+// caso de prueba quiera: es el único dato que mira checkObserveBlocksWipe.
+func wipeActionsServer(t *testing.T, wipe map[string]any) *httptest.Server {
+	t.Helper()
+	return jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
 		"POST /api/v1/policies":        jsonOK(201, map[string]any{}),
 		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
-		"GET /api/v1/actions": jsonOK(200, map[string]any{"items": []any{
-			map[string]any{"action": "wipe", "dry_run": true, "blocked": true},
-		}}),
+		"GET /api/v1/actions":          jsonOK(200, map[string]any{"items": []any{wipe}}),
 	})
-	if err := checkObserveBlocksWipe(context.Background(), envFor(good)); err != nil {
-		t.Fatalf("wipe bloqueado en observe debía pasar: %v", err)
+}
+
+func TestCheckObserveBlocksWipeGoodAndBad(t *testing.T) {
+	// Las dos formas que el motor sí puede emitir. En observe (el modo por
+	// omisión de la batería) Guardrails.Decide ya devuelve dry_run antes de
+	// mirar la doble llave, así que blocked ni siquiera se pone —y el tag es
+	// omitempty, o sea que no viaja—; en enforce sin allow_wipe el resultado
+	// sale bloqueado y stamp le fija dry_run a false. Nunca los dos a la vez.
+	good := map[string]map[string]any{
+		"observe deja el wipe en dry-run": {"action": "wipe", "dry_run": true, "ok": true},
+		"enforce sin llave lo bloquea":    {"action": "wipe", "dry_run": false, "blocked": true, "ok": false},
+	}
+	for name, wipe := range good {
+		if err := checkObserveBlocksWipe(context.Background(), envFor(wipeActionsServer(t, wipe))); err != nil {
+			t.Fatalf("%s debía pasar: %v", name, err)
+		}
 	}
 
-	bad := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
-		"POST /api/v1/policies":        jsonOK(201, map[string]any{}),
-		"POST /api/v1/engine/run-once": jsonOK(200, map[string]any{}),
-		"GET /api/v1/actions": jsonOK(200, map[string]any{"items": []any{
-			map[string]any{"action": "wipe", "dry_run": false, "blocked": false},
-		}}),
-	})
-	if err := checkObserveBlocksWipe(context.Background(), envFor(bad)); err == nil {
-		t.Fatal("un wipe que escapa a dry-run no debía dar el check por bueno")
+	// Lo único inaceptable: un wipe de verdad, ni en dry-run ni bloqueado.
+	live := map[string]any{"action": "wipe", "dry_run": false, "blocked": false, "ok": true}
+	if err := checkObserveBlocksWipe(context.Background(), envFor(wipeActionsServer(t, live))); err == nil {
+		t.Fatal("un wipe ejecutado de verdad no debía dar el check por bueno")
 	}
 }
 

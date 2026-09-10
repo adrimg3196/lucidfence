@@ -22,7 +22,7 @@ var deliveryTimeout = 10 * time.Second
 func checksM2() []Check {
 	return []Check{
 		{Name: "riesgo explicable: score, motivos, procedencia y verificación", Run: checkRiskExplained},
-		{Name: "observe bloquea el wipe con doble llave", Run: checkObserveBlocksWipe},
+		{Name: "observe no ejecuta el wipe de verdad", Run: checkObserveBlocksWipe},
 		{Name: "webhook firmado entrega con las cuatro cabeceras", Run: checkWebhookSigned},
 		{Name: "OCSF 2004 sin coordenadas", Run: checkOCSFNoCoords},
 		{Name: "el cooldown suprime el segundo destructivo", Run: checkCooldownSuppressesSecond},
@@ -76,9 +76,13 @@ func checkRiskExplained(ctx context.Context, env *Env) error {
 }
 
 // checkObserveBlocksWipe crea una política que siempre casa (dwell_seconds
-// nunca es negativo) y ordena wipe. En observe, sin allow_wipe ni
-// allowlist, el guardarraíl debe bloquearla siempre: dry_run true y
-// blocked true, nunca una ejecución real.
+// nunca es negativo) y ordena wipe. Bajo los ajustes de fábrica el borrado
+// no puede llegar al dispositivo: en observe el guardarraíl lo deja en
+// dry_run (Decide devuelve dry-run por el modo, antes de mirar la doble
+// llave) y en enforce sin allow_wipe lo devuelve blocked con dry_run false.
+// Los dos indicadores son excluyentes por construcción, así que el check
+// exige uno u otro; lo que no puede aparecer nunca es un wipe con los dos a
+// false, que es un borrado real.
 func checkObserveBlocksWipe(ctx context.Context, env *Env) error {
 	policy := map[string]any{
 		"id": "battery-wipe-always", "name": "Batería: wipe siempre", "description": "política de prueba de guardarraíles",
@@ -107,8 +111,8 @@ func checkObserveBlocksWipe(ctx context.Context, env *Env) error {
 			continue
 		}
 		found = true
-		if !boolField(a, "dry_run") || !boolField(a, "blocked") {
-			return fmt.Errorf("wipe sin doble llave debe quedar en dry-run y bloqueado, nunca real: %v", a)
+		if !boolField(a, "dry_run") && !boolField(a, "blocked") {
+			return fmt.Errorf("wipe ejecutado de verdad: sin dry_run ni blocked no hay guardarraíl que valga: %v", a)
 		}
 	}
 	if !found {
