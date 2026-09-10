@@ -111,6 +111,16 @@ function ActionFeedback({ error }: { error: unknown }) {
 function ActionResultBanner({ result }: { result: ActionResult }) {
   const t = useT();
   const kind = result.action as ActionKind;
+  // set_compliance es la única acción cuyo "qué se hizo" no cabe en su nombre:
+  // la dirección viaja en los params y el resultado los devuelve tal cual
+  // (action.Result.Params, lo mismo desde el conector que desde el
+  // guardarraíl). Sin leerlos, la mitad de las veces el banner diría lo
+  // contrario de lo que el operador acaba de ejecutar.
+  const compliant = result.params?.compliant;
+  const label =
+    kind === "set_compliance" && typeof compliant === "boolean"
+      ? t(compliant ? "device.action.compliance.yes" : "device.action.compliance.no")
+      : t(`fence.action.${kind}`);
   let status = t("device.action.result.executed");
   let variant: "success" | "info" | "danger" = "success";
   if (!result.ok && !result.blocked && !result.dry_run) {
@@ -128,7 +138,7 @@ function ActionResultBanner({ result }: { result: ActionResult }) {
   return (
     <div role="status" className="flex items-center gap-2 rounded-[var(--radius-ui)] border border-border bg-bg-2 p-3 text-sm">
       <Badge variant={variant}>{status}</Badge>
-      <span className="text-muted">{t(`fence.action.${kind}`)}</span>
+      <span className="text-muted">{label}</span>
       {result.note && <span className="text-muted">· {result.note}</span>}
     </div>
   );

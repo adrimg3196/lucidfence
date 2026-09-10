@@ -90,3 +90,30 @@ test("un 409 de cooldown muestra cuándo volverá a estar disponible", () => {
   renderWithProviders(<DeviceActions device={device} />);
   expect(screen.getByRole("alert")).toHaveTextContent(formatDateTime(retryAfter, "es"));
 });
+
+// La dirección de set_compliance viaja en los params: es la única acción cuyo
+// nombre no dice qué se ejecutó.
+function mockResult(over: Record<string, unknown>) {
+  vi.mocked(hooks.useDeviceAction).mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+    data: { adapter: "simulation", ok: true, device_id: "dev-001", device_name: "Tablet Campo A1", dry_run: false, simulated: true, at: "2026-09-05T12:05:00Z", ...over },
+  } as never);
+}
+
+test("el resultado de marcar cumple no se anuncia como incumplimiento", () => {
+  mockMe(["device:action"]);
+  mockResult({ action: "set_compliance", params: { compliant: true } });
+  renderWithProviders(<DeviceActions device={device} />);
+  const banner = screen.getByRole("status");
+  expect(banner).toHaveTextContent("Marcar cumple");
+  expect(banner).not.toHaveTextContent("Marcar incumplimiento");
+});
+
+test("el resultado de marcar incumplimiento sí se anuncia como incumplimiento", () => {
+  mockMe(["device:action"]);
+  mockResult({ action: "set_compliance", params: { compliant: false } });
+  renderWithProviders(<DeviceActions device={device} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Marcar incumplimiento");
+});
