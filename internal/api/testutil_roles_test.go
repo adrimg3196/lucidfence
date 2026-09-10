@@ -23,12 +23,13 @@ const rolePassword = "contraseña-larga-1"
 
 // roleOrder fija el orden en que se siembran los usuarios (users.json es una
 // lista, y un orden estable hace el fichero reproducible entre ejecuciones).
-var roleOrder = []auth.Role{auth.Owner, auth.Operator, auth.Viewer, auth.Auditor}
+var roleOrder = []auth.Role{auth.Owner, auth.Admin, auth.Operator, auth.Viewer, auth.Auditor}
 
 // roleEmails da a cada rol un email reconocible en los mensajes de fallo y en
 // las entradas de auditoría que escriben los handlers.
 var roleEmails = map[auth.Role]string{
 	auth.Owner:    "owner@example.com",
+	auth.Admin:    "admin@example.com",
 	auth.Operator: "operator@example.com",
 	auth.Viewer:   "viewer@example.com",
 	auth.Auditor:  "auditor@example.com",

@@ -1,17 +1,21 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/adrimg3196/lucidfence/internal/auth"
+	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/engine"
 )
 
 func (s *server) registerDevices() {
 	s.reg.Add(Route{Method: "GET", Path: "/api/v1/devices", Cap: auth.DeviceRead, Handler: s.devicesList})
 	s.reg.Add(Route{Method: "GET", Path: "/api/v1/devices/{id}", Cap: auth.DeviceRead, Handler: s.deviceGet})
 	s.reg.Add(Route{Method: "GET", Path: "/api/v1/devices/{id}/trail", Cap: auth.DeviceRead, Handler: s.deviceTrail})
+	s.reg.Add(Route{Method: "POST", Path: "/api/v1/devices/{id}/actions", Cap: auth.DeviceAction, Handler: s.deviceAction})
 }
 
 func matchDevice(d device.Device, state, q string) bool {
@@ -80,4 +84,49 @@ func (s *server) deviceTrail(w http.ResponseWriter, r *http.Request, _ *auth.Pri
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": tr})
+}
+
+// deviceActionRequest es el cuerpo de POST /devices/{id}/actions.
+type deviceActionRequest struct {
+	Action string         `json:"action"`
+	Params map[string]any `json:"params,omitempty"`
+}
+
+// actionsHint enumera el catálogo para el mensaje de error, que es el único
+// sitio donde un operador ve qué puede pedir.
+func actionsHint() string {
+	names := make([]string, len(action.All))
+	for i, a := range action.All {
+		names[i] = string(a)
+	}
+	return strings.Join(names, "|")
+}
+
+// deviceAction lanza una acción a mano sobre un dispositivo. Pasa por la
+// misma tubería que el ciclo (engine.ExecuteManual: guardarraíles, conector
+// y registro en actions.jsonl con el actor), así que un wipe en observe sale
+// en dry-run y uno sin la doble llave sale bloqueado.
+//
+// Una acción bloqueada por el guardarraíl responde 200 con el resultado
+// dentro, no un 4xx: la petición era válida y el bloqueo, con su motivo, es
+// la respuesta. Una acción suprimida por cooldown sí es un 409, porque no se
+// ejecutó nada y no hay resultado que enseñar.
+func (s *server) deviceAction(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	var body deviceActionRequest
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid", err.Error())
+		return
+	}
+	a, err := action.Parse(strings.TrimSpace(body.Action))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid", err.Error()+" (usa "+actionsHint()+")")
+		return
+	}
+	id := pathID(r)
+	res, err := s.d.Engine.ExecuteManual(r.Context(), id, a, body.Params, actorOf(p))
+	if err == nil || errors.Is(err, engine.ErrActionBlocked) {
+		writeJSON(w, http.StatusOK, res)
+		return
+	}
+	s.writeEngineActionError(w, "devices.action", id, a, err)
 }

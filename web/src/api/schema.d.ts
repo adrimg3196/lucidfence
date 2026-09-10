@@ -393,6 +393,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ejecuta una acción sobre un dispositivo con los guardarraíles del motor */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceActionRequest"];
+                };
+            };
+            responses: {
+                /** @description Resultado de la acción, incluidas la ejecutada en dry-run y la bloqueada por un guardarraíl */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ActionResult"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fences": {
         parameters: {
             query?: never;
@@ -1660,6 +1705,285 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/playbooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista de playbooks SOAR */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PlaybookList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Crea un playbook */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Playbook"];
+                };
+            };
+            responses: {
+                /** @description Creado */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Playbook"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playbooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de playbook */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Playbook"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        /** Sustituye un playbook */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Playbook"];
+                };
+            };
+            responses: {
+                /** @description Actualizado */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Playbook"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        /** Elimina un playbook */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Eliminado */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja de aprobaciones (pendientes primero) */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "approved" | "rejected" | "executed";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HandoffList"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/handoffs/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aprueba un handoff y ejecuta su acción pasando por los guardarraíles */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["HandoffDecision"];
+                };
+            };
+            responses: {
+                /** @description Handoff decidido, con el resultado de la ejecución dentro */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Handoff"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/handoffs/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechaza un handoff sin tocar el dispositivo */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["HandoffDecision"];
+                };
+            };
+            responses: {
+                /** @description Handoff rechazado */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Handoff"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1984,6 +2308,62 @@ export interface components {
             incidents_open: number;
             notify: components["schemas"]["NotifyStatus"];
         };
+        Playbook: {
+            id: string;
+            name: string;
+            description: string;
+            when: components["schemas"]["PolicyCondition"][];
+            actions: components["schemas"]["PolicyAction"][];
+            enabled: boolean;
+            /** @enum {string} */
+            severity: "low" | "medium" | "high" | "critical";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlaybookList: {
+            items: components["schemas"]["Playbook"][];
+            total: number;
+        };
+        Handoff: {
+            id: string;
+            device_id: string;
+            device_name: string;
+            playbook_id: string;
+            playbook_name: string;
+            /** @enum {string} */
+            action: "lock" | "wipe" | "message" | "locate" | "reboot" | "clear_passcode" | "set_compliance" | "custom" | "notify";
+            params?: {
+                [key: string]: unknown;
+            };
+            reason: string;
+            /** @enum {string} */
+            severity: "low" | "medium" | "high" | "critical";
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected" | "executed";
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: date-time */
+            decided_at?: string;
+            decided_by?: string;
+            note?: string;
+            result?: components["schemas"]["ActionResult"];
+        };
+        HandoffList: {
+            items: components["schemas"]["Handoff"][];
+            total: number;
+        };
+        HandoffDecision: {
+            note?: string;
+        };
+        DeviceActionRequest: {
+            /** @enum {string} */
+            action: "lock" | "wipe" | "message" | "locate" | "reboot" | "clear_passcode" | "set_compliance" | "custom" | "notify";
+            params?: {
+                [key: string]: unknown;
+            };
+        };
         Transition: {
             /** Format: date-time */
             at: string;
@@ -2013,7 +2393,8 @@ export interface components {
             route_id?: string;
             policy_id?: string;
             playbook_id?: string;
-            severity?: string;
+            /** @enum {string} */
+            severity?: "low" | "medium" | "high" | "critical";
             /** @description Solo se emite si true; su ausencia no acredita autorización ni ejecución. */
             blocked?: boolean;
             error_type?: string;

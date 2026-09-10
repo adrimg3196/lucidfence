@@ -173,6 +173,31 @@ paths:
                     items:
                       $ref: "#/components/schemas/TrailPoint"
                 required: [items]
+  /api/v1/devices/{id}/actions:
+    post:
+      x-capability: device:action
+      summary: Ejecuta una acción sobre un dispositivo con los guardarraíles del motor
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceActionRequest"
+      responses:
+        "200":
+          description: Resultado de la acción, incluidas la ejecutada en dry-run y la bloqueada por un guardarraíl
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
   /api/v1/fences:
     get:
       x-capability: fence:read
@@ -770,6 +795,153 @@ paths:
         "204":
           description: Eliminada
         "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/playbooks:
+    get:
+      x-capability: policy:read
+      summary: Lista de playbooks SOAR
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybookList"
+    post:
+      x-capability: playbook:write
+      summary: Crea un playbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Playbook"
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playbook"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/playbooks/{id}:
+    get:
+      x-capability: policy:read
+      summary: Detalle de playbook
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playbook"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: playbook:write
+      summary: Sustituye un playbook
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Playbook"
+      responses:
+        "200":
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Playbook"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      x-capability: playbook:write
+      summary: Elimina un playbook
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminado
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/handoffs:
+    get:
+      x-capability: incident:read
+      summary: Bandeja de aprobaciones (pendientes primero)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected, executed]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HandoffList"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/handoffs/{id}/approve:
+    post:
+      x-capability: handoff:approve
+      summary: Aprueba un handoff y ejecuta su acción pasando por los guardarraíles
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandoffDecision"
+      responses:
+        "200":
+          description: Handoff decidido, con el resultado de la ejecución dentro
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handoff"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/handoffs/{id}/reject:
+    post:
+      x-capability: handoff:approve
+      summary: Rechaza un handoff sin tocar el dispositivo
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HandoffDecision"
+      responses:
+        "200":
+          description: Handoff rechazado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Handoff"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
 components:
   parameters:
@@ -1407,6 +1579,110 @@ components:
         notify:
           $ref: "#/components/schemas/NotifyStatus"
       required: [mode, enforcement, interval_seconds, running, cycles, providers, incidents_open, notify]
+    Playbook:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        when:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyCondition"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyAction"
+        enabled:
+          type: boolean
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, description, when, actions, enabled, severity, created_at, updated_at]
+    PlaybookList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Playbook"
+        total:
+          type: integer
+      required: [items, total]
+    Handoff:
+      type: object
+      properties:
+        id:
+          type: string
+        device_id:
+          type: string
+        device_name:
+          type: string
+        playbook_id:
+          type: string
+        playbook_name:
+          type: string
+        action:
+          type: string
+          enum: [lock, wipe, message, locate, reboot, clear_passcode, set_compliance, custom, notify]
+        params:
+          type: object
+          additionalProperties: true
+        reason:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [pending, approved, rejected, executed]
+        requested_at:
+          type: string
+          format: date-time
+        decided_at:
+          type: string
+          format: date-time
+        decided_by:
+          type: string
+        note:
+          type: string
+        result:
+          $ref: "#/components/schemas/ActionResult"
+      required: [id, device_id, device_name, playbook_id, playbook_name, action, reason, severity, status, requested_at]
+    HandoffList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Handoff"
+        total:
+          type: integer
+      required: [items, total]
+    HandoffDecision:
+      type: object
+      properties:
+        note:
+          type: string
+    DeviceActionRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [lock, wipe, message, locate, reboot, clear_passcode, set_compliance, custom, notify]
+        params:
+          type: object
+          additionalProperties: true
+      required: [action]
     Transition:
       type: object
       properties:
@@ -1463,6 +1739,7 @@ components:
           type: string
         severity:
           type: string
+          enum: [low, medium, high, critical]
         blocked:
           type: boolean
           description: Solo se emite si true; su ausencia no acredita autorización ni ejecución.
