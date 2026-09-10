@@ -104,6 +104,7 @@ func TestBandejaDeHandoffs(t *testing.T) {
 	t.Run("wipe sin allow_wipe queda bloqueado", func(t *testing.T) { checkAprobarWipeBloqueado(t, e, fleet) })
 	t.Run("rechazar no llama al conector", func(t *testing.T) { checkRechazar(t, e, fleet) })
 	t.Run("handoff inexistente", func(t *testing.T) { checkHandoffInexistente(t, e) })
+	t.Run("aprobar dentro del cooldown deja la petición varada", func(t *testing.T) { checkAprobarDentroDelCooldown(t, e, fleet) })
 }
 
 func checkHandoffsLista(t *testing.T, e *testEnv) {
@@ -218,6 +219,62 @@ func checkHandoffInexistente(t *testing.T, e *testEnv) {
 	res, out := e.do("POST", "/api/v1/handoffs/ho-nope/approve", map[string]any{"note": ""}, true)
 	if res.StatusCode != 404 || out["code"] != "not_found" {
 		t.Fatalf("id inexistente: %d %v", res.StatusCode, out)
+	}
+}
+
+// checkAprobarDentroDelCooldown fija el 409 cooldown de la aprobación —la
+// desviación que el propio brief se añadió (task-20-brief.md:1315) y que no
+// ejercitaba nadie— y, con él, lo que la supresión deja detrás.
+//
+// El par (dev-001, lock) ya se ejecutó en checkAprobarEnObserve dentro de la
+// misma ventana (el reloj del entorno está clavado en soarT0), así que una
+// segunda petición para ese par se suprime: el cooldown se decide antes que
+// todo lo demás (internal/engine/guardrails.go:103) y no depende del modo.
+//
+// Las tres últimas comprobaciones documentan el callejón sin salida de
+// M2-R52, que esta ronda NO corrige: T16 sella la decisión antes de ejecutar
+// (internal/engine/handoffs.go:37) y la máquina de estados solo sale de
+// approved a executed (internal/domain/playbook/handoff.go:104), así que el
+// reintento que promete retry_after no existe por esta ruta y la bandeja se
+// queda con una fila aprobada que nunca se ejecutó. Cuando la revisión final
+// del hito decida cómo se sale de ahí, este caso es el que hay que reescribir.
+func checkAprobarDentroDelCooldown(t *testing.T, e *testEnv, fleet *recordingFleet) {
+	t.Helper()
+	hs, err := e.org.Handoffs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otra := bandeja()[0] // dev-001 + lock: el mismo par que ya ejecutó checkAprobarEnObserve
+	otra.ID, otra.RequestedAt = "ho-cooldown", soarT0
+	if err := e.org.SaveHandoffs(append(hs, otra)); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("POST", "/api/v1/handoffs/ho-cooldown/approve", map[string]any{"note": "cambio de turno"}, true)
+	if res.StatusCode != 409 || out["code"] != "cooldown" {
+		t.Fatalf("dentro de la ventana la aprobación se suprime: %d %v", res.StatusCode, out)
+	}
+	detail := out["detail"].(map[string]any)
+	if detail["retry_after"] != "2026-09-05T13:00:00Z" {
+		t.Fatalf("el 409 dice cuándo volverá a estar disponible (una hora, la ventana por defecto): %v", detail)
+	}
+	if got := fleet.recibidas(); len(got) != 0 {
+		t.Fatalf("una acción suprimida no llega al conector: %v", got)
+	}
+	res, out = e.do("POST", "/api/v1/handoffs/ho-cooldown/approve", map[string]any{"note": "reintento"}, true)
+	if res.StatusCode != 409 || out["code"] != "conflict" {
+		t.Fatalf("la decisión ya está sellada: el reintento no existe por esta ruta (M2-R52): %d %v", res.StatusCode, out)
+	}
+	_, out = e.do("GET", "/api/v1/handoffs?status=approved", nil, true)
+	items := out["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("la bandeja conserva exactamente la petición varada: %v", out)
+	}
+	varada := items[0].(map[string]any)
+	if varada["id"] != "ho-cooldown" || varada["status"] != "approved" {
+		t.Fatalf("varada en approved: %v", varada)
+	}
+	if _, ejecutada := varada["result"]; ejecutada {
+		t.Fatalf("aprobada pero sin ejecutar: no hay resultado que enseñar: %v", varada)
 	}
 }
 

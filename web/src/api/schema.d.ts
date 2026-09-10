@@ -1903,7 +1903,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Aprueba un handoff y ejecuta su acción pasando por los guardarraíles */
+        /**
+         * Aprueba un handoff y ejecuta su acción pasando por los guardarraíles
+         * @description Un bloqueo del guardarraíl responde 200 con el resultado bloqueado dentro. Una supresión por cooldown responde 409 code=cooldown con detail.retry_after: la acción no llegó a ejecutarse, pero la decisión ya está sellada, la petición se queda en approved sin result y una segunda aprobación responde 409 code=conflict.
+         */
         post: {
             parameters: {
                 query?: never;

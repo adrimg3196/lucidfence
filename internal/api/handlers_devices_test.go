@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 )
 
 // TestDevicesListaDetalleYTrail delega cada paso en una función con nombre
@@ -105,6 +106,7 @@ func TestDeviceActionManual(t *testing.T) {
 	t.Run("wipe manual en observe es dry-run", func(t *testing.T) { checkAccionWipeEnObserve(t, e, fleet) })
 	t.Run("segunda llamada dentro del cooldown", func(t *testing.T) { checkAccionCooldown(t, e, fleet) })
 	t.Run("el resultado queda auditado con el actor", func(t *testing.T) { checkAccionAuditada(t, e) })
+	t.Run("wipe manual sin allow_wipe queda bloqueado", func(t *testing.T) { checkAccionWipeBloqueado(t, e, fleet) })
 }
 
 func checkAccionDesconocida(t *testing.T, e *testEnv) {
@@ -175,4 +177,39 @@ func checkAccionAuditada(t *testing.T, e *testEnv) {
 		return
 	}
 	t.Fatalf("la acción manual no quedó en actions.jsonl: %v", out)
+}
+
+// checkAccionWipeBloqueado es checkAprobarWipeBloqueado (la bandeja) visto
+// desde la otra entrada manual: la misma tubería, el mismo guardarraíl y el
+// mismo 200 con el bloqueo dentro. Es la red de la decisión de cabecera "un
+// bloqueo del guardarraíl es un 200, no un 4xx, ni en la aprobación ni en la
+// acción manual": sin él, borrar el `|| errors.Is(err, engine.ErrActionBlocked)`
+// de handlers_devices.go convierte un wipe bloqueado en un 500 genérico y la
+// suite entera sigue verde.
+//
+// Va el último y sobre dev-001, no sobre dev-004, por el estado que comparten
+// los subtests: dev-004 arrastra la marca de cooldown que dejó
+// checkAccionWipeEnObserve y el cooldown se decide antes que la doble llave
+// (internal/engine/guardrails.go:103), así que un wipe suyo saldría suprimido
+// y no bloqueado; y ni el enforce que enciende este caso ni la línea que añade
+// a actions.jsonl deben llegar a los casos anteriores.
+func checkAccionWipeBloqueado(t *testing.T, e *testEnv, fleet *recordingFleet) {
+	t.Helper()
+	set := settings.Default()
+	set.Enforcement.Mode = settings.ModeEnforce
+	set.Enforcement.LiveActions = []action.Action{action.Wipe}
+	set.Enforcement.AllowWipe = false
+	if err := e.org.SaveSettings(set); err != nil {
+		t.Fatal(err)
+	}
+	res, out := e.do("POST", "/api/v1/devices/dev-001/actions", map[string]any{"action": "wipe"}, true)
+	if res.StatusCode != 200 || out["blocked"] != true || out["ok"] != false {
+		t.Fatalf("un bloqueo no es un error de la petición: %d %v", res.StatusCode, out)
+	}
+	if out["error_type"] != "wipe_not_allowed" || out["trigger"] != "manual" {
+		t.Fatalf("el resultado dice por qué no salió la orden: %v", out)
+	}
+	if got := fleet.recibidas(); len(got) != 0 {
+		t.Fatalf("el conector jamás ve un wipe bloqueado: %v", got)
+	}
 }
