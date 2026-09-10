@@ -28,6 +28,7 @@ func (s *server) registerSettings() {
 	s.reg.Add(Route{Method: "GET", Path: "/api/v1/settings", Cap: auth.EngineConfig, Handler: s.settingsGet})
 	s.reg.Add(Route{Method: "PUT", Path: "/api/v1/settings/enforcement", Cap: auth.EngineConfig, Handler: s.withNow(s.settingsEnforcement)})
 	s.reg.Add(Route{Method: "PUT", Path: "/api/v1/settings/webhooks", Cap: auth.EngineConfig, Handler: s.withNow(s.settingsWebhooks)})
+	s.reg.Add(Route{Method: "PUT", Path: "/api/v1/settings/ntfy", Cap: auth.EngineConfig, Handler: s.withNow(s.settingsNtfy)})
 	s.reg.Add(Route{Method: "PUT", Path: "/api/v1/settings/egress", Cap: auth.EngineConfig, Handler: s.withNow(s.settingsEgress)})
 	s.reg.Add(Route{Method: "PUT", Path: "/api/v1/settings/risk", Cap: auth.EngineConfig, Handler: s.withNow(s.settingsRisk)})
 	s.reg.Add(Route{Method: "POST", Path: "/api/v1/settings/validate", Cap: auth.EngineConfig, Handler: s.settingsValidate})
@@ -200,7 +201,7 @@ func (s *server) settingsWebhooks(w http.ResponseWriter, r *http.Request, now ti
 	// Con el documento ya válido, el secreto se escribe antes de persistir
 	// los ajustes: si el guardado fallara, la verdad seguiría siendo la del
 	// almacén, que es lo que settingsView recalcula.
-	if err := s.applyWebhookSecret(body.Secret); err != nil {
+	if err := s.applySecret(body.Secret, secretWebhook); err != nil {
 		s.fail(w, "settings.webhooks.secret", err)
 		return
 	}
@@ -216,15 +217,66 @@ func (s *server) secretAfterUpdate(secret *string, name string) bool {
 	return *secret != ""
 }
 
-func (s *server) applyWebhookSecret(secret *string) error {
+// applySecret aplica la intención de un campo de credencial de solo
+// escritura (webhook.secret, ntfy.token): ausente no toca nada, cadena vacía
+// borra, cualquier otro valor sustituye.
+func (s *server) applySecret(secret *string, name string) error {
 	switch {
 	case secret == nil:
 		return nil
 	case *secret == "":
-		return s.d.Store.DeleteSecret(s.d.Config.Org, secretWebhook)
+		return s.d.Store.DeleteSecret(s.d.Config.Org, name)
 	default:
-		return s.d.Store.SaveSecret(s.d.Config.Org, secretWebhook, *secret)
+		return s.d.Store.SaveSecret(s.d.Config.Org, name, *secret)
 	}
+}
+
+// ntfyUpdate es el cuerpo de PUT /settings/ntfy: la configuración del canal
+// más un token de solo escritura con las mismas tres intenciones que el
+// secreto del webhook (ausente no toca el guardado, la cadena vacía lo borra
+// y cualquier otro valor lo sustituye). Nunca vuelve en una respuesta: lo que
+// sale es token_set, recalculado por settingsView contra el almacén.
+type ntfyUpdate struct {
+	URL     string  `json:"url"`
+	Enabled bool    `json:"enabled"`
+	Token   *string `json:"token,omitempty"`
+}
+
+// settingsNtfy cambia solo el canal ntfy. Sin esta ruta, el bloque ntfy que
+// GET /api/v1/settings publica desde T7 y que internal/notify entrega entero
+// (spec §4.1, §6.4 y §14: M2 incluye ntfy) era inalcanzable en escritura y
+// solo se podía activar editando settings.json a mano: el mismo argumento
+// con el que M2-C3 añadió PUT /settings/risk.
+func (s *server) settingsNtfy(w http.ResponseWriter, r *http.Request, now time.Time) {
+	var body ntfyUpdate
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid", err.Error())
+		return
+	}
+	cfg := settings.Ntfy{URL: body.URL, Enabled: body.Enabled,
+		TokenSet: s.secretAfterUpdate(body.Token, secretNtfy)}
+	if err := cfg.Validate(); err != nil {
+		invalidSettings(w, err)
+		return
+	}
+	set, ok := s.loadSettings(w, "settings.ntfy")
+	if !ok {
+		return
+	}
+	set.Ntfy = cfg
+	// Mismo orden que settingsWebhooks: el documento entero se valida antes
+	// de tocar el almacén de secretos (una petición que va a terminar en 400
+	// no puede dejar un token escrito ni borrado) y el token se escribe antes
+	// de persistir, porque la verdad de token_set es el almacén.
+	if err := set.Validate(); err != nil {
+		invalidSettings(w, err)
+		return
+	}
+	if err := s.applySecret(body.Token, secretNtfy); err != nil {
+		s.fail(w, "settings.ntfy.token", err)
+		return
+	}
+	s.persistSettings(w, set, now)
 }
 
 // settingsCandidate es el cuerpo (opcional) de POST /settings/validate: los

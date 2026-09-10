@@ -2108,6 +2108,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/ntfy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Cambia solo el canal ntfy; token es de solo escritura */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NtfySettingsUpdate"];
+                };
+            };
+            responses: {
+                /** @description Ajustes completos ya vigentes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/egress": {
         parameters: {
             query?: never;
@@ -2499,7 +2540,7 @@ export interface components {
             /** Format: date-time */
             last_ok?: string;
         };
-        /** @description Guardarraíles vigentes del motor (spec §5.4). live_actions nula significa "todas las acciones salen en vivo"; una lista vacía deja todo en dry-run. */
+        /** @description Guardarraíles vigentes del motor (spec §5.4). live_actions es una allowlist cerrada: solo lo listado sale en vivo, y una lista nula equivale a la lista vacía —ninguna acción sale en vivo, todo queda en dry-run—, porque 2.0 falla cerrado (spec §3 principio 3). */
         EnforcementSettings: {
             /** @enum {string} */
             mode: "observe" | "enforce";
@@ -2856,6 +2897,12 @@ export interface components {
             url: string;
             enabled: boolean;
             token_set: boolean;
+        };
+        /** @description Cuerpo de PUT /settings/ntfy. token es de solo escritura: si falta no se toca el token guardado, la cadena vacía lo borra y cualquier otro valor lo sustituye. token_set no se acepta. */
+        NtfySettingsUpdate: {
+            url: string;
+            enabled: boolean;
+            token?: string;
         };
         /** @description Allowlist de salida. Vacía deniega todo; allow_private abre RFC1918 y loopback, nunca link-local. */
         EgressSettings: {

@@ -997,6 +997,25 @@ paths:
                 $ref: "#/components/schemas/Settings"
         "400":
           $ref: "#/components/responses/Error"
+  /api/v1/settings/ntfy:
+    put:
+      x-capability: engine:config
+      summary: Cambia solo el canal ntfy; token es de solo escritura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NtfySettingsUpdate"
+      responses:
+        "200":
+          description: Ajustes completos ya vigentes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Error"
   /api/v1/settings/egress:
     put:
       x-capability: engine:config
@@ -1590,9 +1609,10 @@ components:
     EnforcementSettings:
       type: object
       description: >-
-        Guardarraíles vigentes del motor (spec §5.4). live_actions nula
-        significa "todas las acciones salen en vivo"; una lista vacía deja
-        todo en dry-run.
+        Guardarraíles vigentes del motor (spec §5.4). live_actions es una
+        allowlist cerrada: solo lo listado sale en vivo, y una lista nula
+        equivale a la lista vacía —ninguna acción sale en vivo, todo queda en
+        dry-run—, porque 2.0 falla cerrado (spec §3 principio 3).
       properties:
         mode:
           type: string
@@ -2281,6 +2301,21 @@ components:
         token_set:
           type: boolean
       required: [url, enabled, token_set]
+    NtfySettingsUpdate:
+      type: object
+      description: >-
+        Cuerpo de PUT /settings/ntfy. token es de solo escritura: si falta no
+        se toca el token guardado, la cadena vacía lo borra y cualquier otro
+        valor lo sustituye. token_set no se acepta.
+      properties:
+        url:
+          type: string
+        enabled:
+          type: boolean
+        token:
+          type: string
+          writeOnly: true
+      required: [url, enabled]
     EgressSettings:
       type: object
       description: Allowlist de salida. Vacía deniega todo; allow_private abre RFC1918 y loopback, nunca link-local.

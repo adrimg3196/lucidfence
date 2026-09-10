@@ -197,6 +197,48 @@ func TestSettingsEnforcementNormalizaAntesDeAplicar(t *testing.T) {
 // dentro de una tabla.
 func segundo(_ *http.Response, out map[string]any) map[string]any { return out }
 
+// TestSettingsNtfyGuardaElCanalYElTokenEsDeSoloEscritura (revisión final del
+// hito): sin PUT /settings/ntfy el canal que la spec §4.1/§6.4 exige y que
+// internal/notify entrega entero solo se podía activar editando settings.json
+// a mano. Mismo argumento que M2-C3 para PUT /settings/risk.
+func TestSettingsNtfyGuardaElCanalYElTokenEsDeSoloEscritura(t *testing.T) {
+	e := newTestEnv(t)
+	e.setup("demo")
+	const token = "tk-de-ntfy-que-no-debe-salir"
+	body := map[string]any{"url": "https://ntfy.ejemplo.com/lucidfence", "enabled": true, "token": token}
+	res, out := e.do("PUT", "/api/v1/settings/ntfy", body, true)
+	ntfy := bloque(t, out, "ntfy")
+	if res.StatusCode != 200 || ntfy["enabled"] != true || ntfy["token_set"] != true {
+		t.Fatalf("alta de ntfy: %d %v", res.StatusCode, out)
+	}
+	if contieneValor(out, token) {
+		t.Fatalf("el token no puede salir en ninguna respuesta: %v", out)
+	}
+	if _, err := os.Stat(filepath.Join(e.st.SecretsDir("default"), "ntfy_token.json")); err != nil {
+		t.Fatalf("el token se guarda donde lo busca el notificador: %v", err)
+	}
+	// Sin campo token el guardado normal del formulario no borra nada.
+	delete(body, "token")
+	if res, out = e.do("PUT", "/api/v1/settings/ntfy", body, true); res.StatusCode != 200 || bloque(t, out, "ntfy")["token_set"] != true {
+		t.Fatalf("sin campo token el existente se conserva: %d %v", res.StatusCode, out)
+	}
+	// Cadena vacía: borrar es una intención explícita.
+	body["token"] = ""
+	if res, out = e.do("PUT", "/api/v1/settings/ntfy", body, true); res.StatusCode != 200 || bloque(t, out, "ntfy")["token_set"] != false {
+		t.Fatalf("token vacío borra el token: %d %v", res.StatusCode, out)
+	}
+	// Un canal activo sin URL es un 400 que nombra el campo.
+	res, out = e.do("PUT", "/api/v1/settings/ntfy", map[string]any{"url": "", "enabled": true}, true)
+	detalle, _ := out["detail"].(map[string]any)
+	if res.StatusCode != 400 || out["code"] != "invalid" || detalle["field"] != "ntfy.url" {
+		t.Fatalf("ntfy activo sin URL: %d %v", res.StatusCode, out)
+	}
+	// El webhook no se ha tocado en ninguno de los PUT anteriores.
+	if _, out = e.do("GET", "/api/v1/settings", nil, true); bloque(t, out, "webhook")["enabled"] != false {
+		t.Fatalf("un PUT de ntfy no pisa el webhook: %v", out)
+	}
+}
+
 func TestSettingsEgressPersisteYValidateNoAbreSocket(t *testing.T) {
 	e := newTestEnv(t)
 	e.setup("demo")
