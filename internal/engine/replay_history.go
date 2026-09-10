@@ -84,7 +84,9 @@ func parseKey(key string) (device.FenceState, string) {
 // toda la resolución que da el trail. Sin él se usa el estado que registró el
 // histórico de eventos, con el instante exacto de la transición; antes de la
 // primera transición de un dispositivo el estado es unknown, que es con lo que
-// arranca el motor.
+// arranca el motor. Esa racha empieza, como muy pronto, en el primer punto de
+// la ventana simulada, así que el dwell que sale de aquí puede ser menor que la
+// permanencia real; quien lo declara es dwellFromWindow, no esta función.
 func (r *replayer) placeAt(entry store.TrailEntry) (device.FenceState, string, time.Time) {
 	if !r.req.UseCurrentFences {
 		ev, ok := r.history.advance(entry.DeviceID, entry.At)
@@ -114,16 +116,25 @@ func dwellSeconds(since, at time.Time) int {
 	return s
 }
 
+// dwellField es el campo de permanencia. Solo se reconstruye entero en modo
+// histórico, donde la transición fecha el inicio de la estancia.
+const dwellField = "dwell_seconds"
+
 // spatialFields son los campos que la simulación reconstruye del histórico. El
 // resto se lee del estado ACTUAL del dispositivo sobre una posición pasada y
 // convierte el resultado en una aproximación. risk_score y severity quedan
 // fuera a propósito, a diferencia de 1.x: se recalculan, sí, pero con señales
 // de postura y de inventario de hoy, así que presentarlos como exactos sería el
 // mismo falso verde que el proyecto prohíbe.
+//
+// dwellField está en la lista porque no se lee del dispositivo de hoy: es
+// pasado reconstruido, y en modo histórico es exacto. Que con las geocercas
+// actuales se quede corto es otra cosa, y de eso se ocupa dwellFromWindow: la
+// nota que le corresponde no es "se evalúa con el estado actual".
 var spatialFields = map[string]bool{
-	"fence_state":   true,
-	"inside_fence":  true,
-	"dwell_seconds": true,
+	"fence_state":  true,
+	"inside_fence": true,
+	dwellField:     true,
 }
 
 // timeSignalPrefix marca las señales que sí se reconstruyen: time_of_day sale
@@ -145,19 +156,45 @@ func nonSpatial(p policy.Policy) []string {
 	return out
 }
 
+// dwellFromWindow dice si la permanencia se está midiendo desde la ventana
+// simulada en vez de desde la entrada real. Pasa solo con UseCurrentFences: allí
+// la clave de estado es hipotética, ninguna transición la fecha y placeAt mide
+// la estancia por rachas sobre r.stance, que nace vacío en cada llamada, así que
+// el "desde" más antiguo posible es el primer punto de la ventana y el reloj se
+// reinicia además en cada cambio de clave que provoque la geocerca de hoy. El
+// dwell sale corto y la política dispara MENOS aquí que en producción, que es la
+// dirección que hace parecer inofensiva una regla destructiva. Si la política no
+// mira dwell_seconds la diferencia no cambia ningún resultado y la simulación
+// sigue siendo exacta.
+func (r *replayer) dwellFromWindow() bool {
+	if !r.req.UseCurrentFences {
+		return false
+	}
+	for _, c := range r.req.Policy.When {
+		if c.Field == dwellField {
+			return true
+		}
+	}
+	return false
+}
+
 // notes explica en español lo que los números no dicen: de dónde sale cada
 // cosa, qué no se pudo reconstruir y por qué un cero puede no significar nada.
 func (r *replayer) notes(fields []string, limit int) []string {
 	out := []string{"Simulación de solo lectura: no se ejecutó ninguna acción."}
+	dwellCorto := r.dwellFromWindow()
 	if r.req.UseCurrentFences {
 		out = append(out, "El estado de geocerca se recalculó con las geocercas actuales.")
 	} else {
 		out = append(out, "El estado de geocerca es el que registró el histórico de eventos.")
 	}
+	if dwellCorto {
+		out = append(out, "Con las geocercas actuales la permanencia se cuenta desde el primer punto de la ventana simulada, no desde la entrada real: dwell_seconds se queda corto y la política puede disparar aquí menos veces que en producción.")
+	}
 	if len(fields) > 0 {
 		out = append(out, "Aproximación: las condiciones sobre "+strings.Join(fields, ", ")+
 			" se evalúan con el estado actual del dispositivo sobre posiciones históricas.")
-	} else {
+	} else if !dwellCorto {
 		out = append(out, "Simulación exacta: la política solo usa campos reconstruidos del histórico.")
 	}
 	if r.res.PointsEvaluated == 0 {

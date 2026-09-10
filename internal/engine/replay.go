@@ -12,8 +12,9 @@
 // Límite honesto del modelo: la posición y el instante salen del histórico,
 // pero las señales no espaciales (conformidad, postura, inventario) salen del
 // estado ACTUAL del dispositivo. Para una política puramente espacial la
-// simulación es exacta; para el resto es una aproximación, y el resultado lo
-// declara en Approximation y lo explica en Notes.
+// simulación es exacta, con una excepción: con UseCurrentFences la permanencia
+// solo se puede medir dentro de la ventana simulada. En los dos casos el
+// resultado lo declara en Approximation y lo explica en Notes.
 package engine
 
 import (
@@ -211,7 +212,7 @@ func (r *replayer) fire(entry store.TrailEntry, d device.Device, v device.Verdic
 func (r *replayer) finish(limit int) ReplayResult {
 	fields := nonSpatial(r.req.Policy)
 	r.res.DevicesEvaluated = len(r.seen)
-	r.res.Approximation = len(fields) > 0
+	r.res.Approximation = len(fields) > 0 || r.dwellFromWindow()
 	r.res.Notes = r.notes(fields, limit)
 	return r.res
 }
