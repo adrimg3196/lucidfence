@@ -402,6 +402,7 @@ export const en: Record<Key, string> = {
   "action.trigger.transition": "Transition",
   "action.trigger.standing": "Standing violation",
   "action.trigger.policy": "Policy",
+  "action.trigger.playbook": "Playbook",
   "action.trigger.route_exit": "Route exit",
   "action.trigger.dwell": "Dwell",
   "action.trigger.manual": "Manual",

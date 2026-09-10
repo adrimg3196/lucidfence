@@ -69,6 +69,34 @@ test("una acción bloqueada muestra el motivo en ámbar y una simulada se etique
   expect(screen.getByText("Simulada")).toBeInTheDocument();
 });
 
+test("una acción de playbook se etiqueta como playbook, no como transición", async () => {
+  const playbook = { ...dryRun, trigger: "playbook", fence_id: undefined, playbook_id: "soar-noncompliant-outside" };
+  vi.mocked(hooks.useActionsPage).mockReturnValue({
+    data: { items: [playbook], next_cursor: "" },
+    isPending: false,
+    isFetching: false,
+    error: null,
+    refetch: vi.fn(),
+  } as never);
+  renderWithProviders(<ActionsPage />);
+  expect(await screen.findByText(/Playbook · soar-noncompliant-outside/)).toBeInTheDocument();
+  expect(screen.queryByText(/Transición/)).toBeNull();
+});
+
+test("un disparador que la UI no conoce se enseña tal cual", async () => {
+  const desconocido = { ...dryRun, trigger: "teletransporte", fence_id: undefined };
+  vi.mocked(hooks.useActionsPage).mockReturnValue({
+    data: { items: [desconocido], next_cursor: "" },
+    isPending: false,
+    isFetching: false,
+    error: null,
+    refetch: vi.fn(),
+  } as never);
+  renderWithProviders(<ActionsPage />);
+  expect(await screen.findByText("teletransporte")).toBeInTheDocument();
+  expect(screen.queryByText(/Transición/)).toBeNull();
+});
+
 test("cargar más pagina el registro de acciones con el cursor devuelto", async () => {
   const page1 = { items: [dryRun], next_cursor: "c2" };
   const page2 = { items: [blocked], next_cursor: "" };

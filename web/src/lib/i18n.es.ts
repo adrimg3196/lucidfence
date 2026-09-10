@@ -403,6 +403,7 @@ export const es = {
   "action.trigger.transition": "Transición",
   "action.trigger.standing": "Violación sostenida",
   "action.trigger.policy": "Política",
+  "action.trigger.playbook": "Playbook",
   "action.trigger.route_exit": "Salida de ruta",
   "action.trigger.dwell": "Permanencia",
   "action.trigger.manual": "Manual",

@@ -10,24 +10,30 @@ import { formatDateTime } from "@/lib/format";
 
 // El motor sigue usando on_enter/on_exit/on_violation/on_unknown para las
 // acciones de geocerca (M1, internal/engine/actions.go, sin cambios) y suma
-// policy/route_exit/dwell en este hito (T14); ExecuteManual (T16) deja
-// manual/handoff. T22 solo cerró siete claves action.trigger.*: los cuatro
-// sabores de transición de geocerca comparten "transition" y la violación
-// sostenida es la única que tiene bucket propio ("standing").
+// policy/route_exit/dwell en este hito (T14); soar.go añade playbook para la
+// acción no destructiva que pide un playbook, y ExecuteManual (T16) deja
+// manual/handoff. Los cuatro sabores de transición de geocerca comparten
+// "transition" y la violación sostenida es la única con bucket propio.
 const triggerKeys: Record<string, Key> = {
   on_enter: "action.trigger.transition",
   on_exit: "action.trigger.transition",
   on_unknown: "action.trigger.transition",
   on_violation: "action.trigger.standing",
   policy: "action.trigger.policy",
+  playbook: "action.trigger.playbook",
   route_exit: "action.trigger.route_exit",
   dwell: "action.trigger.dwell",
   manual: "action.trigger.manual",
   handoff: "action.trigger.handoff",
 };
 
-function triggerKey(trigger: string | undefined): Key {
-  return triggerKeys[trigger ?? ""] ?? "action.trigger.transition";
+// triggerLabel traduce el disparador conocido y, si no lo conoce, devuelve el
+// valor crudo del motor. El fallback anterior devolvía "Transición" para
+// cualquier cosa, que es como "playbook" pasó desapercibido: un disparador
+// nuevo tiene que verse tal cual y cantar, no disfrazarse del más común.
+function triggerLabel(t: (key: Key) => string, trigger: string | undefined): string {
+  const key = triggerKeys[trigger ?? ""];
+  return key ? t(key) : (trigger ?? "");
 }
 
 // El orden importa: un bloqueo del guardarraíl (una buena noticia: el
@@ -49,7 +55,7 @@ const resultVariant: Record<string, "success" | "warning" | "danger" | "neutral"
 
 function TriggerCell({ a }: { a: ActionResult }) {
   const t = useT();
-  const label = t(triggerKey(a.trigger));
+  const label = triggerLabel(t, a.trigger);
   // route_id no tiene página de detalle en este hito (ninguna tarea de M1-M2
   // publica una vista de rutas): se enseña como dato, no como enlace.
   if (a.policy_id) {
