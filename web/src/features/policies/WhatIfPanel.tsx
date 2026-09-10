@@ -17,7 +17,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function WhatIfPanel({ policy, onRun }: { policy: Policy; onRun?: () => void }) {
+export function WhatIfPanel({ policy, onRun }: { policy: Policy; onRun?: (simulated: Policy) => void }) {
   const t = useT();
   const { lang } = useLang();
   const replay = useReplayPolicy();
@@ -32,7 +32,9 @@ export function WhatIfPanel({ policy, onRun }: { policy: Policy; onRun?: () => v
           disabled={replay.isPending}
           // La política viaja en el cuerpo y no necesita existir (T18): se
           // simula lo que hay en el formulario, guardado o no.
-          onClick={() => replay.mutate({ policy, use_current_fences: true }, { onSuccess: () => onRun?.() })}
+          // `onRun` recibe la política que se ha simulado, no un aviso a secas:
+          // la puerta del editor compara lo que hay en el formulario con esto.
+          onClick={() => replay.mutate({ policy, use_current_fences: true }, { onSuccess: () => onRun?.(policy) })}
         >
           <Play size={16} aria-hidden /> {replay.isPending ? t("policy.whatif.running") : t("policy.whatif.run")}
         </Button>

@@ -16,7 +16,7 @@ import { ActionRows } from "./ActionRows";
 import { ConditionRows } from "./ConditionRows";
 import { TemplatesDialog } from "./TemplatesDialog";
 import { WhatIfPanel } from "./WhatIfPanel";
-import { emptyPolicyForm, fromPolicy, isDestructive, makePolicyFormSchema, severityValues, toPolicy, type PolicyFormValues } from "./policyForm";
+import { emptyPolicyForm, fromPolicy, isDestructive, makePolicyFormSchema, severityValues, simulationKey, toPolicy, type PolicyFormValues } from "./policyForm";
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
@@ -40,8 +40,11 @@ export function PolicyEditorPage() {
   const schema = useMemo(() => makePolicyFormSchema(t), [t]);
   const form = useForm<PolicyFormValues>({ resolver: zodResolver(schema), defaultValues: emptyPolicyForm });
   const [templatesOpen, setTemplatesOpen] = useState(search.get("plantillas") === "1");
-  // La puerta del what-if: haber simulado, no el veredicto de la simulación.
-  const [simulated, setSimulated] = useState(false);
+  // La puerta del what-if: haber simulado ESTA política, no el veredicto de
+  // la simulación. Se guarda la firma de lo simulado, no un booleano: con un
+  // booleano, simular algo inocuo y volver destructiva la acción después
+  // dejaba guardar un wipe que nadie había mirado.
+  const [simulatedKey, setSimulatedKey] = useState<string | null>(null);
   const values = form.watch();
   const name = values.name;
 
@@ -65,8 +68,9 @@ export function PolicyEditorPage() {
 
   const errs = form.formState.errors;
   const mutationError = create.error ?? update.error;
-  const destructive = values.actions.some((a) => isDestructive(a.action));
-  const blocked = destructive && !simulated;
+  const candidate = toPolicy(values, existing.data?.created_at ?? new Date().toISOString());
+  const destructive = candidate.actions.some((a) => isDestructive(a.action));
+  const blocked = destructive && simulatedKey !== simulationKey(candidate);
   return (
     <FormProvider {...form}>
       <form onSubmit={submit} noValidate className="max-w-3xl space-y-6">
@@ -116,7 +120,7 @@ export function PolicyEditorPage() {
             lleva el mismo hueco de error que `when` en vez de fallar en
             silencio contra el 400 del servidor. */}
         <FieldError message={errs.actions?.message} />
-        <WhatIfPanel policy={toPolicy(values, existing.data?.created_at ?? new Date().toISOString())} onRun={() => setSimulated(true)} />
+        <WhatIfPanel policy={candidate} onRun={(p) => setSimulatedKey(simulationKey(p))} />
         {blocked && <p className="text-sm text-sev-high">{t("policy.whatif.gate")}</p>}
         {mutationError && <ErrorState error={mutationError} />}
         <div className="flex gap-2">
@@ -132,7 +136,8 @@ export function PolicyEditorPage() {
           onOpenChange={setTemplatesOpen}
           onPick={(p) => {
             form.reset(fromPolicy(p));
-            setSimulated(false);
+            // No hace falta invalidar nada a mano: la plantilla trae otras
+            // condiciones y otras acciones, así que la firma deja de casar.
             setTemplatesOpen(false);
           }}
         />

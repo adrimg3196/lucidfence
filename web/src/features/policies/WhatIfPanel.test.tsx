@@ -98,10 +98,9 @@ test("un resultado de cero disparos es un vacío explicado, no un error", () => 
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-// La puerta vive en el editor (es quien tiene el botón de guardar), pero es
-// el what-if quien la abre: se prueba aquí, con el editor montado entero.
-test("con una acción destructiva el guardar está deshabilitado hasta ejecutar el what-if", async () => {
-  const mutate = mockReplay();
+// El editor entero montado con los hooks de T22 mockeados: la puerta vive en
+// él (es quien tiene el botón de guardar), pero es el what-if quien la abre.
+function editorMontado() {
   vi.mocked(hooks.usePolicy).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
   vi.mocked(hooks.usePolicyFields).mockReturnValue({ data: { fields: ["fence_state"], ops: ["eq"] }, isPending: false, error: null } as never);
   vi.mocked(hooks.usePolicyTemplates).mockReturnValue({ data: { items: [], total: 0 }, isPending: false, error: null } as never);
@@ -113,7 +112,12 @@ test("con una acción destructiva el guardar está deshabilitado hasta ejecutar 
     </Routes>,
     { route: "/policies/new" },
   );
-  const user = userEvent.setup();
+  return userEvent.setup();
+}
+
+test("con una acción destructiva el guardar está deshabilitado hasta ejecutar el what-if", async () => {
+  const mutate = mockReplay();
+  const user = editorMontado();
   await user.click(screen.getByRole("button", { name: "Añadir acción" }));
   await user.selectOptions(screen.getByLabelText("Acción"), "wipe");
   await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled());
@@ -121,4 +125,29 @@ test("con una acción destructiva el guardar está deshabilitado hasta ejecutar 
   await user.click(screen.getByRole("button", { name: "Simular" }));
   expect(mutate).toHaveBeenCalled();
   await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled());
+});
+
+test("volver destructiva una acción ya simulada cierra otra vez la puerta", async () => {
+  mockReplay();
+  const user = editorMontado();
+  await user.click(screen.getByRole("button", { name: "Añadir acción" }));
+  await user.click(screen.getByRole("button", { name: "Simular" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled());
+  await user.selectOptions(screen.getByLabelText("Acción"), "wipe");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled());
+  expect(screen.getByText("Esta política incluye una acción destructiva: ejecuta el what-if antes de guardarla.")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Simular" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled());
+});
+
+test("cambiar una condición después de simular cierra otra vez la puerta", async () => {
+  mockReplay();
+  const user = editorMontado();
+  await user.click(screen.getByRole("button", { name: "Añadir condición" }));
+  await user.click(screen.getByRole("button", { name: "Añadir acción" }));
+  await user.selectOptions(screen.getByLabelText("Acción"), "wipe");
+  await user.click(screen.getByRole("button", { name: "Simular" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled());
+  await user.type(screen.getByLabelText("Valor"), "outside");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled());
 });

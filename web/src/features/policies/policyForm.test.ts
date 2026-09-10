@@ -1,4 +1,4 @@
-import { describeCondition, emptyPolicyForm, fromPolicy, kindForField, kindOfValue, makePolicyFormSchema, parseValue, toPolicy } from "./policyForm";
+import { describeCondition, emptyPolicyForm, fromPolicy, kindForField, kindOfValue, makePolicyFormSchema, parseValue, simulationKey, toPolicy } from "./policyForm";
 import type { Policy } from "@/api/hooks";
 import type { Key } from "@/lib/i18n";
 
@@ -111,4 +111,17 @@ test("describeCondition traduce campo, operador y valor a lenguaje llano", () =>
   // clave i18n suelta (misma corrección que la aserción anterior: el brief
   // escribía aquí "policy.op.eq", la clave, en vez de "eq", el operador crudo).
   expect(describeCondition({ field: "signal:probe.value", op: "eq", value: "x" }, id as (k: Key) => string)).toBe("signal:probe.value eq x");
+});
+
+test("simulationKey firma cuándo dispara y qué hace, y nada más", () => {
+  const base = toPolicy(fromPolicy(policy), "2026-09-05T00:00:00Z");
+  // Los sellos de tiempo se rehacen en cada render del editor: si entraran en
+  // la firma, la puerta del what-if no se abriría nunca.
+  expect(simulationKey(toPolicy(fromPolicy(policy), "2027-01-01T00:00:00Z"))).toBe(simulationKey(base));
+  // El nombre, la severidad y el interruptor no mueven ni un disparo del
+  // resultado: pedir otra simulación por ellos sería puro peaje.
+  expect(simulationKey({ ...base, name: "otro nombre", severity: "low", enabled: false })).toBe(simulationKey(base));
+  // Volver destructiva una acción o mover una condición sí lo cambia todo.
+  expect(simulationKey({ ...base, actions: [{ action: "wipe" }] })).not.toBe(simulationKey(base));
+  expect(simulationKey({ ...base, when: [{ field: "fence_state", op: "eq", value: "inside" }] })).not.toBe(simulationKey(base));
 });

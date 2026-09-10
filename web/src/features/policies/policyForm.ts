@@ -156,6 +156,16 @@ function fromAction(a: PolicyAction): ActionRow {
   return { action: a.action, text: typeof text === "string" ? text : "", textKey, params, hadParams: a.params !== undefined };
 }
 
+// simulationKey es la firma de lo que el what-if simula: `when` (cuándo
+// dispara) y `actions` (qué hace). La puerta del editor no es "se ha simulado
+// alguna vez" sino "se ha simulado ESTO". Fuera quedan los sellos de tiempo
+// —`toPolicy` los rehace en cada render y la puerta no se abriría jamás— y
+// el nombre, la descripción, la severidad y `enabled`, que no mueven ni un
+// disparo del resultado y solo harían pedir una simulación de más.
+export function simulationKey(p: Policy): string {
+  return JSON.stringify({ when: p.when, actions: p.actions });
+}
+
 export function toPolicy(v: PolicyFormValues, now: string): Policy {
   const out: Policy = {
     id: v.id,
