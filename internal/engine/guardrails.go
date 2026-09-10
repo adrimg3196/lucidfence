@@ -62,9 +62,9 @@ func (g Guardrails) Mode() string {
 // guarda y publica, con el mismo criterio de Mode(): cualquier valor que no
 // sea "enforce" es "observe". Devuelve además si hubo que sanearlo, para que
 // el motor pueda avisar de un settings.json con un modo que no existe. Solo
-// toca el modo: una live_actions nula sigue significando "todas" (§5.4), que
-// es lo contrario de la lista vacía, así que aquí no se llama a
-// settings.Normalized(), que las confunde.
+// toca el modo: el resto del bloque se publica tal cual llegó, y no hace
+// falta convertir una live_actions nula porque live() ya la trata como la
+// lista vacía (ninguna acción en vivo), igual que settings.Normalized().
 func normalizedEnforcement(enf settings.Enforcement) (settings.Enforcement, bool) {
 	mode := Guardrails{Enforcement: enf}.Mode()
 	saneado := mode != enf.Mode
@@ -81,12 +81,12 @@ func (g Guardrails) now() time.Time {
 }
 
 // live indica si la acción puede salir en vivo según enforcement.live_actions.
-// Una lista nula significa "todas" (semántica de 1.x); una lista vacía pero
-// presente significa "ninguna".
+// La allowlist es cerrada en los dos sentidos: lo que no está listado nunca
+// sale en vivo, y una lista ausente (nula) vale exactamente lo mismo que la
+// lista vacía, NINGUNA. 1.x leía el nil como "todas"; 2.0 falla cerrado (spec
+// §3 principio 3), que es además lo que declara el dominio
+// (settings.Enforcement) y lo que se guarda en settings.json.
 func (g Guardrails) live(a action.Action) bool {
-	if g.Enforcement.LiveActions == nil {
-		return true
-	}
 	for _, la := range g.Enforcement.LiveActions {
 		if la == a {
 			return true

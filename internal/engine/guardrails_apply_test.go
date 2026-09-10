@@ -88,7 +88,7 @@ func TestApplyBloqueaElWipeSinLlave(t *testing.T) {
 	cd := newFakeCooldowns()
 	ad := &recordingAdapter{}
 	e := engineWith(guardWith(settings.Enforcement{Mode: settings.ModeEnforce,
-		ActionCooldownSeconds: 3600}, cd), ad)
+		LiveActions: []action.Action{action.Wipe}, ActionCooldownSeconds: 3600}, cd), ad)
 	st := &CycleStats{}
 	res, logged := e.apply(context.Background(), Planned{Device: devA(), Action: action.Wipe, FenceID: "f", Trigger: "on_enter"}, st)
 	if !logged || !res.Blocked || res.OK || res.ErrorType != BlockedWipeNotAllowed {

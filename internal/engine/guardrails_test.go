@@ -70,9 +70,9 @@ func TestEnforcementVacioEquivaleAObserve(t *testing.T) {
 }
 
 // TestNormalizedEnforcementSoloSaneaElModo fija lo que el saneo NO hace: no
-// toca las llaves ni la ventana, y sobre todo no convierte una live_actions
-// nula ("todas") en la lista vacía ("ninguna"), que es lo que haría
-// settings.Normalized() y significa lo contrario.
+// toca las llaves, ni la ventana, ni las listas. No hace falta convertir la
+// live_actions nula porque live() ya la trata como la lista vacía: ninguna
+// acción en vivo.
 func TestNormalizedEnforcementSoloSaneaElModo(t *testing.T) {
 	enf, saneado := normalizedEnforcement(settings.Enforcement{Mode: "Enforce",
 		AllowWipe: true, ActionCooldownSeconds: 3600})
@@ -83,21 +83,24 @@ func TestNormalizedEnforcementSoloSaneaElModo(t *testing.T) {
 		t.Fatalf("el saneo no toca el resto del bloque: %+v", enf)
 	}
 	if enf.LiveActions != nil {
-		t.Fatalf("una live_actions nula sigue significando todas: %+v", enf.LiveActions)
+		t.Fatalf("el saneo no inventa una lista donde no la había: %+v", enf.LiveActions)
 	}
 	if enf, saneado := normalizedEnforcement(settings.Enforcement{Mode: settings.ModeEnforce}); enf.Mode != settings.ModeEnforce || saneado {
 		t.Fatalf("enforce se respeta tal cual: %+v %v", enf, saneado)
 	}
 }
 
-func TestEnforceSinLiveActionsEjecutaTodoEnVivo(t *testing.T) {
+// TestEnforceSinLiveActionsNoEjecutaNadaEnVivo: la allowlist ausente es la
+// allowlist vacía. Enforce con AllowWipe y sin live_actions no puede tocar un
+// solo dispositivo de verdad; todo sale en dry-run.
+func TestEnforceSinLiveActionsNoEjecutaNadaEnVivo(t *testing.T) {
 	g := guardWith(settings.Enforcement{Mode: settings.ModeEnforce, AllowWipe: true}, newFakeCooldowns())
 	if g.Mode() != settings.ModeEnforce {
 		t.Fatalf("mode: %q", g.Mode())
 	}
 	for _, a := range action.All {
-		if dec := g.Decide(devA(), a); !dec.Allow || dec.DryRun {
-			t.Fatalf("live_actions nula significa todas: %s -> %+v", a, dec)
+		if dec := g.Decide(devA(), a); !dec.Allow || !dec.DryRun || dec.Blocked {
+			t.Fatalf("live_actions nula no saca nada en vivo: %s -> %+v", a, dec)
 		}
 	}
 }
@@ -141,7 +144,7 @@ func TestWipeEnEnforceSinLlaveSeBloquea(t *testing.T) {
 
 func TestWipeAllowlistAcotaElRadio(t *testing.T) {
 	g := guardWith(settings.Enforcement{Mode: settings.ModeEnforce, AllowWipe: true,
-		WipeAllowlist: []string{"dev-a"}}, newFakeCooldowns())
+		LiveActions: []action.Action{action.Wipe}, WipeAllowlist: []string{"dev-a"}}, newFakeCooldowns())
 	if dec := g.Decide(devA(), action.Wipe); !dec.Allow || dec.DryRun || dec.Blocked {
 		t.Fatalf("dev-a está en la allowlist y sale en vivo: %+v", dec)
 	}
@@ -155,7 +158,8 @@ func TestWipeAllowlistAcotaElRadio(t *testing.T) {
 }
 
 func TestAllowlistVaciaNoAcotaNada(t *testing.T) {
-	g := guardWith(settings.Enforcement{Mode: settings.ModeEnforce, AllowWipe: true}, newFakeCooldowns())
+	g := guardWith(settings.Enforcement{Mode: settings.ModeEnforce, AllowWipe: true,
+		LiveActions: []action.Action{action.Wipe}}, newFakeCooldowns())
 	if dec := g.Decide(devB(), action.Wipe); !dec.Allow || dec.Blocked {
 		t.Fatalf("sin allowlist la llave abierta basta: %+v", dec)
 	}
