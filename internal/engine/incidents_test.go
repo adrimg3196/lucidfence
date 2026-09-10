@@ -142,6 +142,48 @@ func TestElCicloAbreYCierraElIncidenteDeSalidaDeGeocerca(t *testing.T) {
 	}
 }
 
+// TestElCicloReabreElIncidenteQueElMismoCerro cierra el agujero de la
+// revisión final del hito: tras una ida y vuelta, la salida de geocerca que
+// reaparece tiene que volver a abrir y volver a anunciarse. El id es
+// determinista ("inc-<tipo>-<device>") y no caduca, así que sin reapertura
+// ese par (dispositivo, tipo) no vuelve a producir un incident.opened jamás.
+func TestElCicloReabreElIncidenteQueElMismoCerro(t *testing.T) {
+	ad := nuevaFlotaMovil(fueraHQ)
+	e, org := newEngine(t, ad)
+
+	if _, err := e.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	ad.mover(dentroHQ)
+	st, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.IncidentsClosed == 0 {
+		t.Fatalf("el segundo ciclo cierra solo: %+v", st)
+	}
+
+	ad.mover(fueraHQ)
+	st, err = e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.IncidentsOpened != 1 {
+		t.Fatalf("la condición que vuelve reabre y se anuncia: %+v", st)
+	}
+	reabierto := incidenteGuardado(t, org, incidenteFuera)
+	if reabierto.Status != incident.StatusOpen || reabierto.ClosedAt != nil {
+		t.Fatalf("el incidente vuelve a estar abierto: %+v", reabierto)
+	}
+	if e.Status().Incidents != 1 {
+		t.Fatalf("engine/status vuelve a contarlo como pendiente: %+v", e.Status())
+	}
+	last := reabierto.Timeline[len(reabierto.Timeline)-1]
+	if last.Actor != incident.ActorSystem || last.From != "closed" || last.To != "open" {
+		t.Fatalf("la reapertura la firma el sistema: %+v", reabierto.Timeline)
+	}
+}
+
 // TestUnIncidenteAceptadoSobreviveALosCiclos es el caso dorado de
 // legacy/tests/test_incidents.py::test_incident_lifecycle_persists_and_records_audit:
 // el ciclo refresca los hechos y jamás pisa el estado, la asignación ni la

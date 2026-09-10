@@ -63,6 +63,31 @@ func TestMergeConservaElCerradoAunqueLaCondicionSeVuelvaADerivar(t *testing.T) {
 	}
 }
 
+func TestMergeReabreLoQueElCicloHabiaCerradoCuandoLaCondicionVuelve(t *testing.T) {
+	// Ciclo 1: la condición aparece y abre.
+	primero, _, _ := Merge(nil, []Incident{sample("inc-a", StatusOpen)}, t0)
+	// Ciclo 2: deja de observarse y el ciclo la cierra solo.
+	segundo, _, cerrados := Merge(primero, nil, t0.Add(15*time.Minute))
+	if len(cerrados) != 1 || segundo[0].Status != StatusClosed {
+		t.Fatalf("el ciclo 2 cierra solo: %d cerrados, %+v", len(cerrados), segundo[0])
+	}
+	// Ciclo 3: vuelve a derivarse. Sin reapertura este par (dispositivo, tipo)
+	// se quedaría mudo para siempre: el id es determinista y no caduca.
+	vuelta := t0.Add(30 * time.Minute)
+	tercero, abiertos, cerrados3 := Merge(segundo, []Incident{sample("inc-a", StatusOpen)}, vuelta)
+	if len(abiertos) != 1 || abiertos[0].ID != "inc-a" || len(cerrados3) != 0 {
+		t.Fatalf("la condición que vuelve reabre y se anuncia: %d abiertos, %d cerrados", len(abiertos), len(cerrados3))
+	}
+	got := tercero[0]
+	if got.Status != StatusOpen || got.ClosedAt != nil || !got.OpenedAt.Equal(vuelta) || got.Count != 2 {
+		t.Fatalf("reapertura: %+v", got)
+	}
+	last := got.Timeline[len(got.Timeline)-1]
+	if len(got.Timeline) != 2 || last.Actor != ActorSystem || last.From != "closed" || last.To != "open" || last.Note == "" {
+		t.Fatalf("la reapertura queda firmada por el sistema y conserva la auditoría: %+v", got.Timeline)
+	}
+}
+
 func TestMergeCierraElAbiertoCuyaCondicionDesaparece(t *testing.T) {
 	merged, _, _ := Merge(nil, []Incident{sample("inc-a", StatusOpen), sample("inc-b", StatusOpen)}, t0)
 	later := t0.Add(30 * time.Minute)

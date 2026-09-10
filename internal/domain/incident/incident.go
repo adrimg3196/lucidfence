@@ -136,10 +136,11 @@ func (i Incident) Transition(to Status, actor, assignee, note string, at time.Ti
 
 // Merge cruza lo persistido con lo que el ciclo acaba de derivar. Refresca los
 // hechos conservando el estado operativo, abre los que no existían, cierra solo
-// los abiertos cuya condición ha desaparecido y deja intactos los ya cerrados
-// (un cerrado no se reabre solo: eso sería un bucle abrir/cerrar eterno sobre
-// una condición permanente). Devuelve la lista completa ordenada más las de
-// aperturas y cierres para que el motor sepa qué notificar.
+// los abiertos cuya condición ha desaparecido y vuelve a abrir los que había
+// cerrado el propio ciclo cuando la condición reaparece. Un cierre humano sí es
+// terminal: el ciclo no le lleva la contraria a una persona, y quien quiera
+// reabrirlo tiene el botón de la bandeja. Devuelve la lista completa ordenada
+// más las de aperturas y cierres para que el motor sepa qué notificar.
 func Merge(stored, derived []Incident, at time.Time) (merged, opened, closed []Incident) {
 	byID := make(map[string]Incident, len(stored)+len(derived))
 	order := make([]string, 0, len(stored)+len(derived))
@@ -165,6 +166,12 @@ func Merge(stored, derived []Incident, at time.Time) (merged, opened, closed []I
 			byID[d.ID] = fresh
 			order = append(order, d.ID)
 			opened = append(opened, fresh)
+			continue
+		}
+		if closedBySystem(prev) {
+			again := reopen(prev, d, at)
+			byID[d.ID] = again
+			opened = append(opened, again)
 			continue
 		}
 		byID[d.ID] = refresh(prev, d, at)
@@ -209,6 +216,34 @@ func refresh(stored, derived Incident, at time.Time) Incident {
 	out.Evidence = append(make([]string, 0, len(derived.Evidence)), derived.Evidence...)
 	out.Count = stored.Count + 1
 	out.UpdatedAt = at
+	return out
+}
+
+// closedBySystem dice si el último movimiento del incidente lo firmó el motor
+// al dejar de observar la condición (autoClose). Un cierre humano, o un
+// cerrado sin auditoría, no cuentan: solo se reabre solo lo que se cerró solo.
+func closedBySystem(in Incident) bool {
+	if in.Status != StatusClosed || len(in.Timeline) == 0 {
+		return false
+	}
+	last := in.Timeline[len(in.Timeline)-1]
+	return last.Actor == ActorSystem && last.To == string(StatusClosed)
+}
+
+// reopen vuelve a abrir lo que el ciclo cerró y ha vuelto a ver: sin esto, la
+// primera ida y vuelta dejaría mudo para siempre a ese par (dispositivo, tipo),
+// porque el id es determinista y no caduca. La auditoría se conserva y gana la
+// entrada del reingreso; los sellos se refrescan porque es una ocurrencia
+// nueva, y Count sigue contando las veces que la condición se ha observado.
+func reopen(stored, derived Incident, at time.Time) Incident {
+	out := refresh(stored, derived, at)
+	out.Status = StatusOpen
+	out.AckedAt, out.ClosedAt = nil, nil
+	out.OpenedAt = at
+	out.Timeline = append(out.Timeline, Entry{
+		At: at, Actor: ActorSystem, From: string(StatusClosed), To: string(StatusOpen),
+		Note: "la condición volvió a observarse en el ciclo",
+	})
 	return out
 }
 
