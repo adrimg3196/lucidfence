@@ -209,13 +209,28 @@ func TestCursorMasAllaDelFinalSeAjusta(t *testing.T) {
 	}
 }
 
-func TestLineaMalformadaDevuelveError(t *testing.T) {
+// TestLineaIlegibleNoTumbaElHistorico: un JSONL de solo append se corrompe
+// por el final (un kill a mitad de AppendJSONL, un disco lleno). Esa media
+// línea se descarta y el resto del histórico se sirve; devolver error dejaba
+// /api/v1/events, /api/v1/actions y el what-if en 500 para siempre, sin más
+// recuperación que editar el fichero a mano. Es lo que TrailAll ya hacía.
+func TestLineaIlegibleNoTumbaElHistorico(t *testing.T) {
 	o := org(t)
 	seedEvents(t, o, 0, 2)
 	if err := AppendJSONL(o.Path("events.jsonl"), json.RawMessage(`"no es un objeto"`)); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := o.EventsPage(10, ""); err == nil {
-		t.Fatal("una línea ilegible debe devolver error, no una página a medias")
+	seedEvents(t, o, 2, 3)
+
+	items, next, err := o.EventsPage(10, "")
+	if err != nil || next != "" {
+		t.Fatalf("una línea ilegible no puede tumbar la página: %v %q", err, next)
+	}
+	if len(items) != 3 || !items[0].At.Equal(pageT0.Add(2*time.Minute)) {
+		t.Fatalf("las tres líneas buenas se sirven, la ilegible no: %+v", items)
+	}
+	recientes, err := o.RecentEvents(0)
+	if err != nil || len(recientes) != 3 {
+		t.Fatalf("RecentEvents (lo que lee el what-if) tampoco se cae: %v %+v", err, recientes)
 	}
 }

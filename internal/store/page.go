@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -67,15 +66,10 @@ func pageLines[T any](o *OrgStore, name string, limit int, cursor string) ([]T, 
 	if err != nil {
 		return nil, "", err
 	}
-	out := make([]T, 0, len(raws))
-	for _, r := range raws {
-		var v T
-		if err := json.Unmarshal(r, &v); err != nil {
-			return nil, "", err
-		}
-		out = append(out, v)
-	}
-	return out, next, nil
+	// El cursor lo calcula pageJSONL sobre índices de LÍNEA, así que saltar
+	// una línea ilegible al decodificar acorta la página sin descolocar la
+	// paginación: la siguiente sigue empezando donde toca.
+	return decodeLines[T](o, name, raws), next, nil
 }
 
 // EventsPage devuelve una página de transiciones, de la más reciente a la más

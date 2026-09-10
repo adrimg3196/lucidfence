@@ -117,15 +117,33 @@ func readLines[T any](o *OrgStore, name string, limit int) ([]T, error) {
 	if err != nil {
 		return nil, err
 	}
+	return decodeLines[T](o, name, raws), nil
+}
+
+// decodeLines decodifica lo que se puede y salta lo que no. Un JSONL de solo
+// append se corrompe por el final (un kill a mitad de un AppendJSONL, un disco
+// lleno que devuelve escritura corta) y esa media línea no puede dejar
+// /api/v1/events, /api/v1/actions y el what-if de políticas en 500 para
+// siempre, sin más salida que editar el fichero a mano en la máquina del
+// tenant. Es el criterio que trailEntries ya trae de load_trail_points de 1.x;
+// aquí se aplica también al resto del histórico, y lo descartado se avisa por
+// el logger del almacén en vez de tragárselo en silencio.
+func decodeLines[T any](o *OrgStore, name string, raws []json.RawMessage) []T {
 	out := make([]T, 0, len(raws))
+	descartadas := 0
 	for _, r := range raws {
 		var v T
 		if err := json.Unmarshal(r, &v); err != nil {
-			return nil, err
+			descartadas++
+			continue
 		}
 		out = append(out, v)
 	}
-	return out, nil
+	if descartadas > 0 {
+		o.logger.Warn("líneas ilegibles descartadas: el histórico se sirve sin ellas",
+			"file", name, "org", o.id, "lines", descartadas)
+	}
+	return out
 }
 
 // AppendEvent registra una transición.
