@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
+	"github.com/adrimg3196/lucidfence/internal/domain/policy"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
 	"github.com/adrimg3196/lucidfence/internal/domain/transition"
 )
@@ -137,5 +139,79 @@ func TestSalidaDeCorredorSoloEnLaTransicion(t *testing.T) {
 	// Volver a entrar y salir otra vez sí vuelve a avisar.
 	if got := planRoute(&prev, fueraDelCorredor(), rs); len(got) != 1 {
 		t.Fatalf("una salida nueva vuelve a avisar: %+v", got)
+	}
+}
+
+// disparadores devuelve el disparador de cada orden en el orden en que plan
+// las devolvió.
+func disparadores(ps []Planned) []string {
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, p.Trigger)
+	}
+	return out
+}
+
+// TestOrdenDePlanificacion fija el orden de las fuentes de plan: políticas →
+// salida de corredor → transición de geocerca → dwell → violación sostenida,
+// el de run_once de 1.x. Va en dos casos porque las cinco no pueden salir en
+// la misma llamada: planDwell exige el dispositivo dentro y planStanding lo
+// exige fuera.
+func TestOrdenDePlanificacion(t *testing.T) {
+	e := motorMudo()
+	since := dwellT0
+	dentro := dispositivoConRiesgo(70)
+	dentro.InsideFence, dentro.FenceStateSince, dentro.DwellSeconds = "almacen", &since, 300
+	prev := enCorredor()
+	in := cycleInput{
+		fences:   append(cercaConDwell(), testFences()...),
+		routes:   rutaConAcciones(fence.Action{Action: action.Notify, When: fence.OnExit, Enabled: true}),
+		policies: []policy.Policy{politicaRiesgo("p-riesgo", policy.Action{Action: action.Lock})},
+	}
+	got := disparadores(e.plan(in, &prev, &dentro, &transition.Transition{From: "demo-hq:inside", To: "almacen:inside"}))
+	quiero := []string{TriggerPolicy, TriggerRouteExit, string(fence.OnExit), TriggerDwell}
+	if !slices.Equal(got, quiero) {
+		t.Fatalf("dentro de la geocerca: %v, quiero %v", got, quiero)
+	}
+	e = motorMudo()
+	fuera := dispositivoConRiesgo(70)
+	fuera.FenceState, fuera.InsideFence, fuera.LastInsideFence = device.Outside, "", "demo-hq"
+	in.fences = testFences()
+	got = disparadores(e.plan(in, &prev, &fuera, &transition.Transition{From: "demo-hq:inside", To: "none:outside"}))
+	quiero = []string{TriggerPolicy, TriggerRouteExit, string(fence.OnExit), string(fence.OnViolation)}
+	if !slices.Equal(got, quiero) {
+		t.Fatalf("fuera de la geocerca: %v, quiero %v", got, quiero)
+	}
+}
+
+// TestLaOrdenDeduplicadaSeAtribuyeALaPolitica es el porqué de ese orden: el
+// dedupe conserva la primera de cada cubo (dispositivo|acción|geocerca), y una
+// política y el on_enter de la geocerca en la que está el dispositivo caen en
+// el mismo cubo. Que sobreviva la de la política es lo que hace que el
+// registro de acciones (T26), el detalle de dispositivo (T27) y los incidentes
+// (T15) puedan decir qué regla pidió la orden.
+func TestLaOrdenDeduplicadaSeAtribuyeALaPolitica(t *testing.T) {
+	e := motorMudo()
+	fs := testFences()
+	fs[0].Actions = []fence.Action{{Action: action.Lock, When: fence.OnEnter, Enabled: true}}
+	cur := dispositivoConRiesgo(70)
+	in := cycleInput{fences: fs,
+		policies: []policy.Policy{politicaRiesgo("p-riesgo", policy.Action{Action: action.Lock})}}
+	planned := e.plan(in, nil, &cur, &transition.Transition{From: "none:outside", To: "demo-hq:inside"})
+	if len(planned) != 2 {
+		t.Fatalf("la política y la geocerca piden las dos el mismo lock: %+v", planned)
+	}
+	var ejecutadas []Planned
+	for _, p := range planned {
+		if e.alreadyFired(p) {
+			continue
+		}
+		ejecutadas = append(ejecutadas, p)
+	}
+	if len(ejecutadas) != 1 {
+		t.Fatalf("mismo dispositivo, misma acción y misma geocerca: una sola ejecución: %+v", ejecutadas)
+	}
+	if ejecutadas[0].PolicyID != "p-riesgo" || ejecutadas[0].Trigger != TriggerPolicy {
+		t.Fatalf("la superviviente debe llevar el policy_id de quien la pidió: %+v", ejecutadas[0])
 	}
 }
