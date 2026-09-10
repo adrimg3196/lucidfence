@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrimg3196/lucidfence/internal/domain/action"
+	"github.com/adrimg3196/lucidfence/internal/domain/playbook"
 	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/notify"
 	"github.com/adrimg3196/lucidfence/internal/store"
@@ -275,5 +277,54 @@ func TestUnEventoFueraDeLaListaNoSeEntrega(t *testing.T) {
 	}
 	if ds, err := org.RecentDeliveries(10); err != nil || len(ds) != 0 {
 		t.Fatalf("lo no suscrito no deja línea en deliveries.jsonl: %v %v", ds, err)
+	}
+}
+
+// TestUnHandoffNuevoSeAnunciaUnaVezPorElNotificador es la línea del brief que
+// no sujetaba nada ("cada handoff nuevo emite un handoff.pending por el
+// notificador de T15") y su reverso ("solo se anuncian los que este ciclo
+// abre"), comprobadas donde se ven de verdad: en el receptor del webhook, no
+// en la bandeja. Que HandoffsPending valga uno no demuestra que el SOC se
+// haya enterado; sin este test, borrar e.handoffEvents() de notifyCycle deja
+// los diecisiete tests de la tarea en verde y el aviso de que hay una acción
+// destructiva esperando una firma humana desaparece en silencio.
+func TestUnHandoffNuevoSeAnunciaUnaVezPorElNotificador(t *testing.T) {
+	rec, url := arrancarReceptor(t, http.StatusOK)
+	rel := &reloj{at: tSOAR}
+	// Fuera de la geocerca y no conforme casa con el playbook de fábrica
+	// soar-noncompliant-outside, cuyo lock es destructivo: abre handoff.
+	fleet := &grabadora{clock: rel, punto: fueraHQ, conforme: false}
+	e, _ := motorNotificadoEn(t, ajustesWebhook(url, settings.FormatNative, settings.WebhookEvents), fleet, rel)
+
+	if st := unCiclo(t, e); st.HandoffsPending != 1 {
+		t.Fatalf("el ciclo deja exactamente una petición esperando: %+v", st)
+	}
+	got := rec.porEvento(notify.EventHandoffPending)
+	if len(got) != 1 {
+		t.Fatalf("un handoff nuevo sale por el notificador una vez: %d entregas", len(got))
+	}
+	verificarEntrega(t, rec, notify.EventHandoffPending)
+
+	var cuerpo map[string]any
+	if err := json.Unmarshal(got[0].cuerpo, &cuerpo); err != nil {
+		t.Fatal(err)
+	}
+	ho, _ := cuerpo["handoff"].(map[string]any)
+	quiero := playbook.HandoffID("dev-1", "soar-noncompliant-outside", action.Lock)
+	if ho["id"] != quiero || ho["status"] != string(playbook.HandoffPending) {
+		t.Fatalf("el sobre lleva la petición pendiente con su id determinista: %v", ho)
+	}
+	if ho["action"] != string(action.Lock) || ho["device_id"] != "dev-1" {
+		t.Fatalf("el sobre dice qué se pide y sobre qué dispositivo: %v", ho)
+	}
+
+	// Segundo ciclo dentro de la ventana: la petición sigue pendiente, e.opened
+	// queda vacío y el aviso no se repite con el mismo id.
+	rel.avanzar(HandoffReopenAfter / 2)
+	if st := unCiclo(t, e); st.HandoffsPending != 1 {
+		t.Fatalf("la petición sigue esperando decisión: %+v", st)
+	}
+	if n := len(rec.porEvento(notify.EventHandoffPending)); n != 1 {
+		t.Fatalf("una pendiente que sigue pendiente no se vuelve a anunciar: %d entregas", n)
 	}
 }
