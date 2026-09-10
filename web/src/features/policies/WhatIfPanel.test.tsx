@@ -83,10 +83,10 @@ test("ejecutar el what-if muestra disparos, dispositivos y ejemplos con sus razo
   expect(screen.getByText(/fuera de horario/)).toBeInTheDocument();
 });
 
-test("approximation true muestra el aviso de que las señales no espaciales son las de hoy", () => {
+test("approximation true declara que el resultado es aproximado y deja el motivo a las notas", () => {
   mockReplay({ data: { ...result, approximation: true, notes: ["la postura se ha tomado del estado actual"] } });
   renderWithProviders(<WhatIfPanel policy={policy as never} />);
-  expect(screen.getByText(/las señales no espaciales/)).toBeInTheDocument();
+  expect(screen.getByText("El resultado es aproximado: las notas de abajo explican por qué.")).toBeInTheDocument();
   expect(screen.getByText("la postura se ha tomado del estado actual")).toBeInTheDocument();
 });
 

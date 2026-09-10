@@ -450,7 +450,7 @@ export const es = {
   "policy.whatif.samples": "Ejemplos",
   "policy.whatif.reasons": "Razones",
   "policy.whatif.empty.help": "Se han simulado {points} puntos del histórico y ninguno cumple las condiciones.",
-  "policy.whatif.approximation": "Aproximación: las señales no espaciales (postura, cumplimiento, inventario) son las de hoy, no las del momento de cada punto.",
+  "policy.whatif.approximation": "El resultado es aproximado: las notas de abajo explican por qué.",
   "policy.whatif.gate": "Esta política incluye una acción destructiva: ejecuta el what-if antes de guardarla.",
   "state.inside": "dentro",
   "state.outside": "fuera",

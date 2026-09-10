@@ -449,7 +449,7 @@ export const en: Record<Key, string> = {
   "policy.whatif.samples": "Examples",
   "policy.whatif.reasons": "Reasons",
   "policy.whatif.empty.help": "{points} points of the history were simulated and none matches the conditions.",
-  "policy.whatif.approximation": "Approximation: non-spatial signals (posture, compliance, inventory) are today's, not those of each point in time.",
+  "policy.whatif.approximation": "The result is approximate: the notes below explain why.",
   "policy.whatif.gate": "This policy includes a destructive action: run the what-if before saving it.",
   "state.inside": "inside",
   "state.outside": "outside",
