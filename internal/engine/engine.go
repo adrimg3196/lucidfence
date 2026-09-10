@@ -90,8 +90,12 @@ type Engine struct {
 	nextAt     *time.Time
 	providers  map[string]ProviderHealth
 	violations map[string]int
-	fired      map[string]bool
-	wg         sync.WaitGroup
+	// dwelled recuerda, por dispositivo y geocerca, el instante de inicio de
+	// la estancia cuyo on_enter por permanencia ya se emitió. Salir de la
+	// geocerca borra la entrada (ver planDwell).
+	dwelled map[string]string
+	fired   map[string]bool
+	wg      sync.WaitGroup
 
 	// evalHook, si no es nil, se llama al principio de evaluateDevice. Solo
 	// lo fijan los tests, para provocar de forma determinista un pánico por
@@ -116,7 +120,8 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 	e := &Engine{org: org, adapters: map[string]uem.Adapter{}, opts: opts,
 		guard:     Guardrails{Enforcement: settings.Default().Enforcement, Now: opts.Now},
 		riskCfg:   settings.Default().Risk,
-		providers: map[string]ProviderHealth{}, violations: map[string]int{}, fired: map[string]bool{}}
+		providers: map[string]ProviderHealth{}, violations: map[string]int{},
+		dwelled: map[string]string{}, fired: map[string]bool{}}
 	if org != nil {
 		e.guard.Cooldowns = org
 	}

@@ -51,6 +51,16 @@ func (e *Engine) loadInput() (cycleInput, error) {
 		prevAll: ds, prev: device.Index(ds)}, nil
 }
 
+// previous devuelve el estado del dispositivo en el ciclo anterior, o nil si
+// es la primera vez que se ve. Devuelve un puntero a una copia: nadie puede
+// modificar la entrada del ciclo a través de él.
+func (in cycleInput) previous(id string) *device.Device {
+	if p, ok := in.prev[id]; ok {
+		return &p
+	}
+	return nil
+}
+
 // settingsOrDefault lee los ajustes del ciclo. Un settings.json ilegible no
 // puede tumbar el ciclo ni, mucho menos, dejar el motor en un enforcement que
 // nadie ha podido leer: se cae a los de fábrica (observe, jornada 20-7) y se
@@ -132,10 +142,7 @@ func (e *Engine) evaluateDevice(in cycleInput, cur *device.Device, now time.Time
 	if e.evalHook != nil {
 		e.evalHook(cur)
 	}
-	var prev *device.Device
-	if p, ok := in.prev[cur.ID]; ok {
-		prev = &p
-	}
+	prev := in.previous(cur.ID)
 	tr = transition.Evaluate(prev, cur, in.fences, now)
 	cur.RouteState, cur.RouteID, cur.RouteDeviationM = device.Unassigned, "", nil
 	if r, ok := route.ForDevice(in.routes, cur.ID); ok && cur.Location.Point != nil {
@@ -179,8 +186,7 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 		}
 	}
 	var results []action.Result
-	planned := append(PlanTransition(*cur, tr, in.fences), e.planStanding(*cur, in.fences)...)
-	for _, p := range planned {
+	for _, p := range e.plan(in, in.previous(cur.ID), cur, tr) {
 		if e.alreadyFired(p) {
 			st.ActionsSuppressed++
 			e.opts.Logger.Debug("acción duplicada en el ciclo", "device", p.Device.ID,
