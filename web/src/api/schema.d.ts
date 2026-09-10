@@ -1672,8 +1672,11 @@ export interface components {
             when: components["schemas"]["PolicyCondition"][];
             actions: components["schemas"]["PolicyAction"][];
             enabled: boolean;
-            /** @description low, medium, high o critical; vacío se lee como medium (políticas importadas de 1.x) */
-            severity: string;
+            /**
+             * @description Severidad que la política estampa en las acciones que dispara; obligatoria, el servidor rechaza cualquier otro valor con 400
+             * @enum {string}
+             */
+            severity: "low" | "medium" | "high" | "critical";
             source?: string;
             template_id?: string;
             /** Format: date-time */

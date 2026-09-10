@@ -1331,7 +1331,8 @@ components:
           type: boolean
         severity:
           type: string
-          description: low, medium, high o critical; vacío se lee como medium (políticas importadas de 1.x)
+          enum: [low, medium, high, critical]
+          description: Severidad que la política estampa en las acciones que dispara; obligatoria, el servidor rechaza cualquier otro valor con 400
         source:
           type: string
         template_id:
