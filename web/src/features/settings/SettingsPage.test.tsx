@@ -74,7 +74,7 @@ test("un rol sin engine:config no ve la vista y el router redirige", () => {
   expect(screen.queryByText("Ajustes")).toBeNull();
 });
 
-test("con engine:config muestra las cuatro pestañas", () => {
+test("con engine:config muestra las cinco pestañas", () => {
   mockFormHooks();
   vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:config"] }, isPending: false } as never);
   vi.mocked(hooks.useSettings).mockReturnValue({ data: settings, isPending: false, error: null } as never);
@@ -82,6 +82,7 @@ test("con engine:config muestra las cuatro pestañas", () => {
   expect(screen.getByRole("heading", { name: "Ajustes" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Enforcement" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Notificaciones" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "ntfy" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Salida de red" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Riesgo" })).toBeInTheDocument();
 });

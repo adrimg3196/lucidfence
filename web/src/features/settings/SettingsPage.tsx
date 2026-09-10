@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n";
 import { can } from "@/lib/permissions";
 import { EgressForm } from "./EgressForm";
 import { EnforcementForm } from "./EnforcementForm";
+import { NtfyForm } from "./NtfyForm";
 import { RiskForm } from "./RiskForm";
 import { WebhooksForm } from "./WebhooksForm";
 
@@ -33,6 +34,7 @@ export function SettingsPage() {
         <TabsList>
           <TabsTrigger value="enforcement">{t("settings.tab.enforcement")}</TabsTrigger>
           <TabsTrigger value="webhooks">{t("settings.tab.webhooks")}</TabsTrigger>
+          <TabsTrigger value="ntfy">{t("settings.tab.ntfy")}</TabsTrigger>
           <TabsTrigger value="egress">{t("settings.tab.egress")}</TabsTrigger>
           <TabsTrigger value="risk">{t("settings.tab.risk")}</TabsTrigger>
         </TabsList>
@@ -41,6 +43,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="webhooks" className="pt-4">
           <WebhooksForm settings={s} />
+        </TabsContent>
+        <TabsContent value="ntfy" className="pt-4">
+          <NtfyForm settings={s} />
         </TabsContent>
         <TabsContent value="egress" className="pt-4">
           <EgressForm settings={s} />

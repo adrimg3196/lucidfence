@@ -113,6 +113,32 @@ export function toWebhook(v: WebhookFormValues): WebhookSettings {
   return (v.secretTouched ? { ...base, secret: v.secret } : base) as WebhookSettings;
 }
 
+// El canal ntfy (spec §4.1 y §6.4) contra PUT /api/v1/settings/ntfy. Mismo
+// patrón de tres estados que el secreto del webhook: el token nunca llega
+// del servidor (GET solo manda token_set), el formulario arranca con "" y
+// tokenTouched distingue "no lo toqué" (no se envía) de "lo vacié a
+// propósito" (se envía "").
+export type NtfySettings = Settings["ntfy"];
+export type NtfyUpdate = Omit<NtfySettings, "token_set"> & { token?: string };
+
+export type NtfyFormValues = { url: string; enabled: boolean; token: string; tokenTouched: boolean };
+
+export function makeNtfySchema(t: T) {
+  return z
+    .object({ url: z.string().trim(), enabled: z.boolean(), token: z.string(), tokenTouched: z.boolean() })
+    .refine((v) => v.url === "" || v.url.startsWith("https://"), { path: ["url"], message: t("settings.error.url") })
+    .refine((v) => !v.enabled || v.url !== "", { path: ["url"], message: t("settings.error.url") });
+}
+
+export function fromNtfy(n: NtfySettings): NtfyFormValues {
+  return { url: n.url, enabled: n.enabled, token: "", tokenTouched: false };
+}
+
+export function toNtfy(v: NtfyFormValues): NtfyUpdate {
+  const base = { url: v.url.trim(), enabled: v.enabled };
+  return v.tokenTouched ? { ...base, token: v.token } : base;
+}
+
 export type EgressFormValues = { hosts: { value: string }[]; allowPrivate: boolean };
 
 export function makeEgressSchema(t: T) {
