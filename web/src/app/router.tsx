@@ -9,6 +9,8 @@ import { DevicesPage } from "@/features/devices/DevicesPage";
 import { DeviceDetailPage } from "@/features/devices/DeviceDetailPage";
 import { FencesPage } from "@/features/fences/FencesPage";
 import { FenceEditorPage } from "@/features/fences/FenceEditorPage";
+import { PoliciesPage } from "@/features/policies/PoliciesPage";
+import { PolicyEditorPage } from "@/features/policies/PolicyEditorPage";
 
 export const router = createBrowserRouter([
   { path: "/setup", element: <SetupPage /> },
@@ -26,6 +28,9 @@ export const router = createBrowserRouter([
           { path: "/fences", element: <FencesPage /> },
           { path: "/fences/new", element: <FenceEditorPage /> },
           { path: "/fences/:id", element: <FenceEditorPage /> },
+          { path: "/policies", element: <PoliciesPage /> },
+          { path: "/policies/new", element: <PolicyEditorPage /> },
+          { path: "/policies/:id", element: <PolicyEditorPage /> },
         ],
       },
     ],
