@@ -44,6 +44,7 @@ func New(d Deps) (http.Handler, *Registry) {
 	s.registerFences()
 	s.registerRoutes()
 	s.registerPOIs()
+	s.registerPolicies()
 	s.registerEngine()
 	mux := http.NewServeMux()
 	for _, rt := range s.reg.Routes() {

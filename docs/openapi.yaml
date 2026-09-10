@@ -409,6 +409,125 @@ paths:
       responses:
         "204":
           description: Eliminado
+  /api/v1/policies:
+    get:
+      x-capability: policy:read
+      summary: Lista de políticas
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyList"
+    post:
+      x-capability: policy:write
+      summary: Crea una política
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Policy"
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/policies/fields:
+    get:
+      x-capability: policy:read
+      summary: Catálogo de campos y operadores del editor de políticas
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyFieldCatalog"
+  /api/v1/policies/replay:
+    post:
+      x-capability: policy:read
+      summary: Simula una política candidata contra el histórico (solo lectura)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplayRequest"
+      responses:
+        "200":
+          description: Resumen de la simulación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayResult"
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/policies/templates:
+    get:
+      x-capability: policy:read
+      summary: Plantillas de política listas para usar
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyTemplateList"
+  /api/v1/policies/{id}:
+    get:
+      x-capability: policy:read
+      summary: Detalle de política
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: policy:write
+      summary: Sustituye una política
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Policy"
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      x-capability: policy:write
+      summary: Elimina una política
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminada
+        "404":
+          $ref: "#/components/responses/Error"
   /api/v1/engine/status:
     get:
       x-capability: device:read
@@ -1169,3 +1288,163 @@ components:
         error_type:
           type: string
       required: [adapter, ok, device_id, device_name, action, dry_run, simulated, at]
+    PolicyCondition:
+      type: object
+      properties:
+        field:
+          type: string
+          description: Uno de los de /api/v1/policies/fields, o "signal:<nombre>.<clave>" para una señal de riesgo
+        op:
+          type: string
+          enum: [eq, ne, gt, gte, lt, lte, in, contains]
+        value: {}
+      required: [field, op, value]
+    PolicyAction:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [lock, wipe, message, locate, reboot, clear_passcode, set_compliance, custom, notify]
+        params:
+          type: object
+          additionalProperties: true
+      required: [action]
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        when:
+          type: array
+          description: Condiciones unidas por AND; una lista vacía nunca dispara y no se puede guardar
+          items:
+            $ref: "#/components/schemas/PolicyCondition"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyAction"
+        enabled:
+          type: boolean
+        severity:
+          type: string
+          description: low, medium, high o critical; vacío se lee como medium (políticas importadas de 1.x)
+        source:
+          type: string
+        template_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, when, actions, enabled, severity, created_at, updated_at]
+    PolicyList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Policy"
+        total:
+          type: integer
+      required: [items, total]
+    PolicyTemplateList:
+      type: object
+      properties:
+        items:
+          type: array
+          description: Plantillas sin fechar; las sella quien las guarda
+          items:
+            $ref: "#/components/schemas/Policy"
+        total:
+          type: integer
+      required: [items, total]
+    PolicyFieldCatalog:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            type: string
+        ops:
+          type: array
+          items:
+            type: string
+            enum: [eq, ne, gt, gte, lt, lte, in, contains]
+      required: [fields, ops]
+    ReplayRequest:
+      type: object
+      properties:
+        policy:
+          $ref: "#/components/schemas/Policy"
+        limit:
+          type: integer
+          description: Puntos del histórico a simular. Ausente o menor que 1 usa 5000; por encima de 20000 se acota a 20000, nunca es un error
+        use_current_fences:
+          type: boolean
+          description: Recalcula el estado de geocerca con las geocercas de hoy en vez de leerlo del histórico de eventos
+      required: [policy]
+    ReplaySample:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        device_id:
+          type: string
+        device_name:
+          type: string
+        fence_state:
+          type: string
+        score:
+          type: [number, "null"]
+        severity:
+          type: string
+        reasons:
+          type: array
+          items:
+            type: string
+      required: [at, device_id, device_name, fence_state, score, severity, reasons]
+    ReplayResult:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        points_evaluated:
+          type: integer
+        devices_evaluated:
+          type: integer
+        firings:
+          type: integer
+        by_device:
+          type: object
+          additionalProperties:
+            type: integer
+        by_action:
+          type: object
+          additionalProperties:
+            type: integer
+        approximation:
+          type: boolean
+          description: True cuando la política usa campos que la simulación no reconstruye del histórico
+        notes:
+          type: array
+          description: Qué se pudo reconstruir y qué no, en español; un cero sin notas sería un falso verde
+          items:
+            type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplaySample"
+      required: [policy_id, points_evaluated, devices_evaluated, firings, by_device, by_action, approximation, notes, samples]

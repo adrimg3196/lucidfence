@@ -876,6 +876,269 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lista de políticas */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Crea una política */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            responses: {
+                /** @description Creada */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Policy"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catálogo de campos y operadores del editor de políticas */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyFieldCatalog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Simula una política candidata contra el histórico (solo lectura) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReplayRequest"];
+                };
+            };
+            responses: {
+                /** @description Resumen de la simulación */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReplayResult"];
+                    };
+                };
+                400: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas de política listas para usar */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PolicyTemplateList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de política */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Policy"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        /** Sustituye una política */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            responses: {
+                /** @description Actualizada */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Policy"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        /** Elimina una política */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Eliminada */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/engine/status": {
         parameters: {
             query?: never;
@@ -1386,6 +1649,88 @@ export interface components {
             /** @description Solo se emite si true; su ausencia no acredita autorización ni ejecución. */
             blocked?: boolean;
             error_type?: string;
+        };
+        PolicyCondition: {
+            /** @description Uno de los de /api/v1/policies/fields, o "signal:<nombre>.<clave>" para una señal de riesgo */
+            field: string;
+            /** @enum {string} */
+            op: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "contains";
+            value: unknown;
+        };
+        PolicyAction: {
+            /** @enum {string} */
+            action: "lock" | "wipe" | "message" | "locate" | "reboot" | "clear_passcode" | "set_compliance" | "custom" | "notify";
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        Policy: {
+            id: string;
+            name: string;
+            description?: string;
+            /** @description Condiciones unidas por AND; una lista vacía nunca dispara y no se puede guardar */
+            when: components["schemas"]["PolicyCondition"][];
+            actions: components["schemas"]["PolicyAction"][];
+            enabled: boolean;
+            /** @description low, medium, high o critical; vacío se lee como medium (políticas importadas de 1.x) */
+            severity: string;
+            source?: string;
+            template_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PolicyList: {
+            items: components["schemas"]["Policy"][];
+            total: number;
+        };
+        PolicyTemplateList: {
+            /** @description Plantillas sin fechar; las sella quien las guarda */
+            items: components["schemas"]["Policy"][];
+            total: number;
+        };
+        PolicyFieldCatalog: {
+            fields: string[];
+            ops: ("eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "contains")[];
+        };
+        ReplayRequest: {
+            policy: components["schemas"]["Policy"];
+            /** @description Puntos del histórico a simular. Ausente o menor que 1 usa 5000; por encima de 20000 se acota a 20000, nunca es un error */
+            limit?: number;
+            /** @description Recalcula el estado de geocerca con las geocercas de hoy en vez de leerlo del histórico de eventos */
+            use_current_fences?: boolean;
+        };
+        ReplaySample: {
+            /** Format: date-time */
+            at: string;
+            device_id: string;
+            device_name: string;
+            fence_state: string;
+            score: number | null;
+            severity: string;
+            reasons: string[];
+        };
+        ReplayResult: {
+            policy_id: string;
+            points_evaluated: number;
+            devices_evaluated: number;
+            firings: number;
+            by_device: {
+                [key: string]: number;
+            };
+            by_action: {
+                [key: string]: number;
+            };
+            /** @description True cuando la política usa campos que la simulación no reconstruye del histórico */
+            approximation: boolean;
+            /** @description Qué se pudo reconstruir y qué no, en español; un cero sin notas sería un falso verde */
+            notes: string[];
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            samples: components["schemas"]["ReplaySample"][];
         };
     };
     responses: {
