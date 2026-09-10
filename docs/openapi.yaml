@@ -590,6 +590,187 @@ paths:
                     items:
                       $ref: "#/components/schemas/ActionResult"
                 required: [items]
+  /api/v1/incidents:
+    get:
+      x-capability: incident:read
+      summary: Bandeja de incidentes
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, ack, closed]
+        - name: device_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentList"
+  /api/v1/incidents/analytics:
+    get:
+      x-capability: incident:read
+      summary: Agregados de la cartera de incidentes
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentAnalytics"
+  /api/v1/incidents/export:
+    get:
+      x-capability: report:export
+      summary: Exporta los incidentes en CSV
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, ack, closed]
+        - name: device_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: CSV con cabecera en español y Content-Disposition de descarga
+          content:
+            text/csv:
+              schema:
+                type: string
+  /api/v1/incidents/{id}:
+    get:
+      x-capability: incident:read
+      summary: Detalle de incidente
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "404":
+          $ref: "#/components/responses/Error"
+    patch:
+      x-capability: incident:write
+      summary: Cambia el estado del incidente y anota la auditoría
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentPatch"
+      responses:
+        "200":
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/alerts:
+    get:
+      x-capability: incident:read
+      summary: Reglas de alerta
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRuleList"
+    post:
+      x-capability: alert:write
+      summary: Crea una regla de alerta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRule"
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/alerts/evaluate:
+    post:
+      x-capability: alert:write
+      summary: Vista previa; devuelve los disparos sin notificar ni persistir
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertEvaluation"
+  /api/v1/alerts/{id}:
+    get:
+      x-capability: incident:read
+      summary: Detalle de regla de alerta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "404":
+          $ref: "#/components/responses/Error"
+    put:
+      x-capability: alert:write
+      summary: Sustituye una regla de alerta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRule"
+      responses:
+        "200":
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      x-capability: alert:write
+      summary: Elimina una regla de alerta
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "204":
+          description: Eliminada
+        "404":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     ID:
@@ -1449,3 +1630,206 @@ components:
           items:
             $ref: "#/components/schemas/ReplaySample"
       required: [policy_id, points_evaluated, devices_evaluated, firings, by_device, by_action, approximation, notes, samples]
+    IncidentTimelineEntry:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        actor:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        note:
+          type: string
+      required: [at, actor, from, to, note]
+    Incident:
+      type: object
+      properties:
+        id:
+          type: string
+        device_id:
+          type: string
+        device_name:
+          type: string
+        kind:
+          type: string
+        severity:
+          type: string
+        title:
+          type: string
+        recommendation:
+          type: string
+        fence_id:
+          type: string
+        assignee:
+          type: string
+        status:
+          type: string
+          enum: [open, ack, closed]
+        risk_score:
+          type: [number, "null"]
+        count:
+          type: integer
+        evidence:
+          type: array
+          items:
+            type: string
+        opened_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        acked_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncidentTimelineEntry"
+      required: [id, device_id, device_name, kind, severity, title, recommendation, status, risk_score, count, evidence, opened_at, updated_at, timeline]
+    IncidentList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Incident"
+        total:
+          type: integer
+      required: [items, total]
+    IncidentPatch:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [open, ack, closed]
+        assignee:
+          type: string
+        note:
+          type: string
+      required: [status]
+    IncidentAnalytics:
+      type: object
+      properties:
+        total:
+          type: integer
+        open:
+          type: integer
+        ack:
+          type: integer
+        closed:
+          type: integer
+        by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+        by_kind:
+          type: object
+          additionalProperties:
+            type: integer
+        by_day:
+          type: array
+          items:
+            type: object
+            properties:
+              day:
+                type: string
+              count:
+                type: integer
+            required: [day, count]
+        mttr_seconds:
+          type: [number, "null"]
+          description: Nulo mientras no haya ningún incidente cerrado con sello; nunca 0
+        top_devices:
+          type: array
+          items:
+            type: object
+            properties:
+              device_id:
+                type: string
+              device_name:
+                type: string
+              count:
+                type: integer
+            required: [device_id, device_name, count]
+      required: [total, open, ack, closed, by_severity, by_kind, by_day, mttr_seconds, top_devices]
+    AlertRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [outside_duration, risk_above, noncompliant, battery_below, storage_low, stale_checkin]
+        threshold:
+          type: number
+        severity:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name, kind, threshold, severity, enabled]
+    AlertRuleList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertRule"
+        total:
+          type: integer
+      required: [items, total]
+    AlertFiring:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        rule_id:
+          type: string
+        rule_name:
+          type: string
+        kind:
+          type: string
+        device_id:
+          type: string
+        device_name:
+          type: string
+        severity:
+          type: string
+        reason:
+          type: string
+        value:
+          type: number
+      required: [at, rule_id, rule_name, kind, device_id, device_name, severity, reason, value]
+    AlertEvaluation:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        rules_evaluated:
+          type: integer
+        devices:
+          type: integer
+        count:
+          type: integer
+        firings:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertFiring"
+      required: [at, rules_evaluated, devices, count, firings]

@@ -46,6 +46,8 @@ func New(d Deps) (http.Handler, *Registry) {
 	s.registerPOIs()
 	s.registerPolicies()
 	s.registerEngine()
+	s.registerIncidents()
+	s.registerAlerts()
 	mux := http.NewServeMux()
 	for _, rt := range s.reg.Routes() {
 		mux.Handle(rt.Method+" "+rt.Path, s.wrap(rt))

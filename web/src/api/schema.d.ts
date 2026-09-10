@@ -1292,6 +1292,374 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja de incidentes */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "open" | "ack" | "closed";
+                    device_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IncidentList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/analytics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agregados de la cartera de incidentes */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IncidentAnalytics"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exporta los incidentes en CSV */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "open" | "ack" | "closed";
+                    device_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description CSV con cabecera en español y Content-Disposition de descarga */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/incidents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de incidente */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Incident"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia el estado del incidente y anota la auditoría */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IncidentPatch"];
+                };
+            };
+            responses: {
+                /** @description Actualizado */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Incident"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reglas de alerta */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlertRuleList"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Crea una regla de alerta */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            responses: {
+                /** @description Creada */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlertRule"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                409: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vista previa; devuelve los disparos sin notificar ni persistir */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlertEvaluation"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de regla de alerta */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlertRule"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        /** Sustituye una regla de alerta */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AlertRule"];
+                };
+            };
+            responses: {
+                /** @description Actualizada */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AlertRule"];
+                    };
+                };
+                400: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        /** Elimina una regla de alerta */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ID"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Eliminada */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1734,6 +2102,109 @@ export interface components {
             /** Format: date-time */
             to?: string;
             samples: components["schemas"]["ReplaySample"][];
+        };
+        IncidentTimelineEntry: {
+            /** Format: date-time */
+            at: string;
+            actor: string;
+            from: string;
+            to: string;
+            note: string;
+        };
+        Incident: {
+            id: string;
+            device_id: string;
+            device_name: string;
+            kind: string;
+            severity: string;
+            title: string;
+            recommendation: string;
+            fence_id?: string;
+            assignee?: string;
+            /** @enum {string} */
+            status: "open" | "ack" | "closed";
+            risk_score: number | null;
+            count: number;
+            evidence: string[];
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            acked_at?: string;
+            /** Format: date-time */
+            closed_at?: string;
+            timeline: components["schemas"]["IncidentTimelineEntry"][];
+        };
+        IncidentList: {
+            items: components["schemas"]["Incident"][];
+            total: number;
+        };
+        IncidentPatch: {
+            /** @enum {string} */
+            status: "open" | "ack" | "closed";
+            assignee?: string;
+            note?: string;
+        };
+        IncidentAnalytics: {
+            total: number;
+            open: number;
+            ack: number;
+            closed: number;
+            by_severity: {
+                [key: string]: number;
+            };
+            by_kind: {
+                [key: string]: number;
+            };
+            by_day: {
+                day: string;
+                count: number;
+            }[];
+            /** @description Nulo mientras no haya ningún incidente cerrado con sello; nunca 0 */
+            mttr_seconds: number | null;
+            top_devices: {
+                device_id: string;
+                device_name: string;
+                count: number;
+            }[];
+        };
+        AlertRule: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "outside_duration" | "risk_above" | "noncompliant" | "battery_below" | "storage_low" | "stale_checkin";
+            threshold: number;
+            severity: string;
+            enabled: boolean;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        AlertRuleList: {
+            items: components["schemas"]["AlertRule"][];
+            total: number;
+        };
+        AlertFiring: {
+            /** Format: date-time */
+            at: string;
+            rule_id: string;
+            rule_name: string;
+            kind: string;
+            device_id: string;
+            device_name: string;
+            severity: string;
+            reason: string;
+            value: number;
+        };
+        AlertEvaluation: {
+            /** Format: date-time */
+            at: string;
+            rules_evaluated: number;
+            devices: number;
+            count: number;
+            firings: components["schemas"]["AlertFiring"][];
         };
     };
     responses: {
