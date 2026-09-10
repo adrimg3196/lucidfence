@@ -1328,6 +1328,7 @@ export interface components {
             incidents_opened: number;
             incidents_closed: number;
             alerts_fired: number;
+            handoffs_pending: number;
             deliveries: number;
             deliveries_failed: number;
             evaluation_errors: number;

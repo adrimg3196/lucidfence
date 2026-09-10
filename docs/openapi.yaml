@@ -1063,6 +1063,8 @@ components:
           type: integer
         alerts_fired:
           type: integer
+        handoffs_pending:
+          type: integer
         deliveries:
           type: integer
         deliveries_failed:
@@ -1075,7 +1077,7 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderHealth"
-      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, incidents_opened, incidents_closed, alerts_fired, deliveries, deliveries_failed, evaluation_errors, persistence_errors, providers, risk_evaluated, risk_failed, by_severity]
+      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, incidents_opened, incidents_closed, alerts_fired, handoffs_pending, deliveries, deliveries_failed, evaluation_errors, persistence_errors, providers, risk_evaluated, risk_failed, by_severity]
     EngineStatus:
       type: object
       properties:

@@ -9,6 +9,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/alert"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
 	"github.com/adrimg3196/lucidfence/internal/domain/geo"
+	"github.com/adrimg3196/lucidfence/internal/domain/playbook"
 	"github.com/adrimg3196/lucidfence/internal/domain/poi"
 	"github.com/adrimg3196/lucidfence/internal/domain/policy"
 	"github.com/adrimg3196/lucidfence/internal/domain/risk"
@@ -78,14 +79,21 @@ func demoPOIs() []poi.POI {
 }
 
 // seedAutomation siembra la automatización del modo demo: dos plantillas de
-// política activadas, una regla de alerta de riesgo alto y settings.json en
-// observe con el contexto de riesgo de la demo. Como el resto de SeedDemo,
-// solo escribe donde no hay nada.
+// política activadas, los tres playbooks de fábrica, una regla de alerta de
+// riesgo alto y settings.json en observe. Como el resto de SeedDemo, solo
+// escribe donde no hay nada.
 func seedAutomation(org *store.OrgStore, now time.Time) error {
 	if ps, err := org.Policies(); err != nil {
 		return err
 	} else if len(ps) == 0 {
 		if err := org.SavePolicies(demoPolicies(now)); err != nil {
+			return err
+		}
+	}
+	if pbs, err := org.Playbooks(); err != nil {
+		return err
+	} else if len(pbs) == 0 {
+		if err := org.SavePlaybooks(demoPlaybooks(now)); err != nil {
 			return err
 		}
 	}
@@ -155,4 +163,18 @@ func demoAlerts(now time.Time) []alert.Rule {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}}
+}
+
+// demoPlaybooks son los tres playbooks de fábrica de T6 sellados con el reloj
+// de la siembra. La demo los trae activados para que un solo ciclo deje una
+// petición esperando a una persona (dev-004 está fuera de geocerca y no es
+// conforme), que es lo que enseña la bandeja de aprobaciones. Ninguno de ellos
+// puede tocar un dispositivo por su cuenta: el lock del primero es
+// destructivo, así que abre handoff en vez de ejecutarse.
+func demoPlaybooks(now time.Time) []playbook.Playbook {
+	out := playbook.Defaults()
+	for i := range out {
+		out[i].CreatedAt, out[i].UpdatedAt = now, now
+	}
+	return out
 }

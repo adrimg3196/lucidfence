@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/domain/playbook"
 	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/notify"
 	"github.com/adrimg3196/lucidfence/internal/store"
@@ -65,6 +66,7 @@ type CycleStats struct {
 	IncidentsOpened   int                       `json:"incidents_opened"`
 	IncidentsClosed   int                       `json:"incidents_closed"`
 	AlertsFired       int                       `json:"alerts_fired"`
+	HandoffsPending   int                       `json:"handoffs_pending"`
 	Deliveries        int                       `json:"deliveries"`
 	DeliveriesFailed  int                       `json:"deliveries_failed"`
 	EvaluationErrors  int                       `json:"evaluation_errors"`
@@ -113,7 +115,17 @@ type Engine struct {
 	// por estancia" también tiene que valer después de un reinicio.
 	dwelled    map[string]string
 	dwellDirty bool
-	fired      map[string]bool
+	// handoffs es la bandeja del ciclo en curso (la que evaluatePlaybooks
+	// consulta para no duplicar) y opened las peticiones que este ciclo ha
+	// abierto: de ahí salen la persistencia y los avisos handoff.pending.
+	handoffs []playbook.Handoff
+	opened   []playbook.Handoff
+	// manualMu serializa todo lo que toca handoffs.json fuera del recorrido
+	// de la flota: las dos decisiones, la acción manual y la escritura de la
+	// bandeja al final del ciclo. Así una aprobación concurrente no se pierde
+	// y dos wipes manuales simultáneos no se cuelan los dos por el cooldown.
+	manualMu sync.Mutex
+	fired    map[string]bool
 	// alerted recuerda, por regla y dispositivo, cuándo salió el último
 	// alert.fired. Una condición que sigue encendida no vuelve a avisar hasta
 	// que pase alertCooldown; una que se apaga pierde su marca y su episodio

@@ -8,6 +8,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/fence"
+	"github.com/adrimg3196/lucidfence/internal/domain/playbook"
 	"github.com/adrimg3196/lucidfence/internal/domain/policy"
 	"github.com/adrimg3196/lucidfence/internal/domain/risk"
 	"github.com/adrimg3196/lucidfence/internal/domain/route"
@@ -24,6 +25,11 @@ type cycleInput struct {
 	// consume el planificador de T14.
 	settings settings.Settings
 	policies []policy.Policy
+	// playbooks son las respuestas automatizadas del ciclo y handoffs la
+	// bandeja tal cual estaba al empezar: evaluatePlaybooks la consulta para
+	// no abrir dos veces la misma petición.
+	playbooks []playbook.Playbook
+	handoffs  []playbook.Handoff
 	// prevAll es devices.json tal cual se leyó (con su orden); prev lo
 	// indexa por id para buscar el estado previo de cada dispositivo.
 	prevAll []device.Device
@@ -43,12 +49,20 @@ func (e *Engine) loadInput() (cycleInput, error) {
 	if err != nil {
 		return cycleInput{}, err
 	}
+	pbs, err := e.org.Playbooks()
+	if err != nil {
+		return cycleInput{}, err
+	}
+	hs, err := e.org.Handoffs()
+	if err != nil {
+		return cycleInput{}, err
+	}
 	ds, err := e.org.Devices()
 	if err != nil {
 		return cycleInput{}, err
 	}
-	return cycleInput{fences: fs, routes: rs, policies: ps, settings: e.settingsOrDefault(),
-		prevAll: ds, prev: device.Index(ds)}, nil
+	return cycleInput{fences: fs, routes: rs, policies: ps, playbooks: pbs, handoffs: hs,
+		settings: e.settingsOrDefault(), prevAll: ds, prev: device.Index(ds)}, nil
 }
 
 // previous devuelve el estado del dispositivo en el ciclo anterior, o nil si
@@ -186,7 +200,9 @@ func (e *Engine) processDevice(ctx context.Context, in cycleInput, cur *device.D
 		}
 	}
 	var results []action.Result
-	for _, p := range e.plan(in, in.previous(cur.ID), cur, tr) {
+	planned := e.plan(in, in.previous(cur.ID), cur, tr)
+	planned = append(planned, e.soar(in, *cur, now)...)
+	for _, p := range planned {
 		if e.alreadyFired(p) {
 			st.ActionsSuppressed++
 			e.opts.Logger.Debug("acción duplicada en el ciclo", "device", p.Device.ID,
@@ -210,6 +226,7 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 		return st, err
 	}
 	e.applySettings(in.settings)
+	e.startHandoffs(in.handoffs)
 	e.opts.Logger.Debug("entrada del ciclo", "fences", len(in.fences), "routes", len(in.routes),
 		"policies", len(in.policies), "devices", len(in.prevAll), "enforcement", in.settings.Enforcement.Mode)
 	devices := e.fetchAll(ctx, &st)
@@ -245,6 +262,7 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 			e.dwellDirty = false
 		}
 	}
+	e.persistHandoffs(&st)
 	e.notifyCycle(ctx, devices, results, now, &st)
 	st.DurationMS = time.Since(start).Milliseconds()
 	if err := e.org.AppendStats(st); err != nil {

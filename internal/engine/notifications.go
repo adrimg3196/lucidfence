@@ -151,7 +151,7 @@ func (e *Engine) dispatch(ctx context.Context, evs []notify.Event, st *CycleStat
 // recuento que devuelve dispatch se registra aquí: es la línea que explica
 // en el log por qué un ciclo tardó lo que tardó cuando hay canales lentos.
 func (e *Engine) notifyCycle(ctx context.Context, devices []device.Device, results []action.Result, now time.Time, st *CycleStats) {
-	evs := e.syncIncidents(devices, results, now, st)
+	evs := append(e.handoffEvents(), e.syncIncidents(devices, results, now, st)...)
 	alerts := e.evaluateAlerts(devices, now)
 	// alerts_fired cuenta los avisos que salen, no las condiciones que siguen
 	// encendidas: el enfriamiento de evaluateAlerts ya filtró.
