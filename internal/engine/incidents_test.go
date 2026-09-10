@@ -65,19 +65,17 @@ func (f *flotaMovil) TestConnection(context.Context) uem.ConnectionResult {
 	return uem.ConnectionResult{OK: true, Verified: "simulated"}
 }
 
-// incidenteGuardado lee el incidente de salida de dev-movil de
-// incidents.json, no de memoria: el round-trip por JSON es parte de lo que se
-// comprueba. Los tres tests de este fichero solo derivan ese incidente, así
-// que el id no es un parámetro: unparam lo marcaría muerto.
-func incidenteGuardado(t *testing.T, org *store.OrgStore) incident.Incident {
+// incidenteGuardado lee un incidente de incidents.json, no de memoria: el
+// round-trip por JSON es parte de lo que se comprueba.
+func incidenteGuardado(t *testing.T, org *store.OrgStore, id string) incident.Incident {
 	t.Helper()
 	is, err := org.Incidents()
 	if err != nil {
 		t.Fatal(err)
 	}
-	inc, ok := incident.FindByID(is, incidenteFuera)
+	inc, ok := incident.FindByID(is, id)
 	if !ok {
-		t.Fatalf("incidents.json debe contener %s: %+v", incidenteFuera, is)
+		t.Fatalf("incidents.json debe contener %s: %+v", id, is)
 	}
 	return inc
 }
@@ -119,7 +117,7 @@ func TestElCicloAbreYCierraElIncidenteDeSalidaDeGeocerca(t *testing.T) {
 	if st.IncidentsOpened == 0 || st.IncidentsClosed != 0 {
 		t.Fatalf("el primer ciclo abre el incidente de salida y no cierra nada: %+v", st)
 	}
-	abierto := incidenteGuardado(t, org)
+	abierto := incidenteGuardado(t, org, incidenteFuera)
 	if abierto.Status != incident.StatusOpen || abierto.DeviceID != "dev-movil" || abierto.Count != 1 {
 		t.Fatalf("incidente recién abierto: %+v", abierto)
 	}
@@ -135,7 +133,7 @@ func TestElCicloAbreYCierraElIncidenteDeSalidaDeGeocerca(t *testing.T) {
 	if st.IncidentsClosed == 0 {
 		t.Fatalf("volver dentro cierra el incidente de salida: %+v", st)
 	}
-	cerrado := incidenteGuardado(t, org)
+	cerrado := incidenteGuardado(t, org, incidenteFuera)
 	if cerrado.Status != incident.StatusClosed || cerrado.ClosedAt == nil {
 		t.Fatalf("el incidente debe quedar cerrado y sellado: %+v", cerrado)
 	}
@@ -166,7 +164,7 @@ func TestUnIncidenteAceptadoSobreviveALosCiclos(t *testing.T) {
 		}
 	}
 
-	inc := incidenteGuardado(t, org)
+	inc := incidenteGuardado(t, org, incidenteFuera)
 	if inc.Status != incident.StatusAck || inc.Assignee != "soc@acme.test" || inc.AckedAt == nil {
 		t.Fatalf("el ciclo no puede pisar lo que puso el operador: %+v", inc)
 	}
@@ -197,11 +195,55 @@ func TestUnIncidenteCerradoAManoNoSeReabre(t *testing.T) {
 	if st.IncidentsOpened != 0 || st.IncidentsClosed != 0 {
 		t.Fatalf("un cerrado que se vuelve a derivar no abre ni cierra nada: %+v", st)
 	}
-	inc := incidenteGuardado(t, org)
+	inc := incidenteGuardado(t, org, incidenteFuera)
 	if inc.Status != incident.StatusClosed || inc.ClosedAt == nil {
 		t.Fatalf("sigue cerrado: %+v", inc)
 	}
 	if inc.Count != 2 {
 		t.Fatalf("cerrado no es invisible: el ciclo sigue contando la repetición: %+v", inc)
+	}
+}
+
+// incidenteBeta es el incidente de salida del dispositivo del conector que se
+// cae en el caso de abajo.
+const incidenteBeta = "inc-" + incident.KindGeofenceExit + "-dev-beta"
+
+// TestUnConectorCaidoNoCierraLosIncidentesDeSuFlota fija la decisión de
+// cabecera de esta tarea: la flota que se deriva es la COMPLETA que se va a
+// persistir, con los dispositivos conservados de un conector caído dentro
+// (staleDevices). Hoy se cumple solo por el orden de dos líneas de runCycle
+// —los conservados entran en el mismo slice que luego recibe notifyCycle—, y
+// eso no se ve desde incidents.go. Si alguien pasara solo lo evaluado, una
+// caída pasajera del proveedor cerraría en falso todos los incidentes de su
+// flota y publicaría la tormenta de incident.closed que esta decisión existe
+// para evitar.
+func TestUnConectorCaidoNoCierraLosIncidentesDeSuFlota(t *testing.T) {
+	beta := &fleetAdapter{name: "beta", devices: []device.Device{fleetDevice("beta", "dev-beta", fueraHQ)},
+		failOn: map[int]bool{2: true}}
+	e, org := newEngine(t, beta)
+
+	st, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.IncidentsOpened != 1 {
+		t.Fatalf("el primer ciclo abre el incidente de salida de dev-beta: %+v", st)
+	}
+
+	caido, err := e.RunOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if caido.Providers["beta"].OK {
+		t.Fatalf("este ciclo tiene que encontrarse el conector caído: %+v", caido.Providers)
+	}
+	if caido.IncidentsClosed != 0 {
+		t.Fatalf("una caída del proveedor no cierra los incidentes de su flota: %+v", caido)
+	}
+	if n := e.Status().Incidents; n != 1 {
+		t.Fatalf("la bandeja no se vacía porque el proveedor no conteste: incidents_open=%d", n)
+	}
+	if inc := incidenteGuardado(t, org, incidenteBeta); inc.Status != incident.StatusOpen || inc.ClosedAt != nil {
+		t.Fatalf("el incidente sigue abierto en incidents.json: %+v", inc)
 	}
 }
