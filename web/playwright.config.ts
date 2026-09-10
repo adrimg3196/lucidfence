@@ -4,7 +4,10 @@ const port = 8770;
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
+  // riesgo.spec.ts encadena política + what-if + ciclo + dispositivo +
+  // incidente + handoff en un único test serie; 60 s se queda corto en un
+  // runner de CI cargado.
+  timeout: 90_000,
   fullyParallel: false,
   workers: 1,
   // Sin reintentos: el servidor (y su directorio de datos) se arranca una vez por ejecución,
