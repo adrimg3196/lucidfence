@@ -51,23 +51,49 @@ func notifyStatusOf(n *notify.Notifier) notify.Status {
 	return n.Status()
 }
 
+// alertCooldown es el silencio entre dos avisos de la misma condición sobre
+// el mismo dispositivo. Es la ventana de fábrica de 1.x
+// (AlertRule.cooldown_minutes = 30, lucidfence/core/alerts.py), que nunca
+// mandó el mismo aviso dos veces en media hora. Sin ella una condición
+// estable —un dispositivo con riesgo alto durante días— sale por webhook y
+// por ntfy una vez por ciclo, para siempre. No es configurable por regla
+// todavía: ese campo cambia el contrato de alerts y llega con su editor
+// (M2-R41).
+const alertCooldown = 30 * time.Minute
+
 // evaluateAlerts corre las reglas de alerts.json contra la flota del ciclo y
-// devuelve un evento por disparo. Unas reglas ilegibles no tumban el ciclo:
-// una alerta solo avisa, así que dejar de avisar es preferible a dejar de
-// vigilar. Con las políticas, que sí actúan, la lectura es la contraria y el
-// ciclo falla (T13).
+// devuelve un evento por disparo NUEVO: el enfriamiento por regla y
+// dispositivo vive aquí, en el motor, que es donde lo dejó el contrato del
+// dominio ("el enfriamiento y la entrega viven fuera del dominio", package
+// alert). Unas reglas ilegibles no tumban el ciclo: una alerta solo avisa,
+// así que dejar de avisar es preferible a dejar de vigilar. Con las
+// políticas, que sí actúan, la lectura es la contraria y el ciclo falla (T13).
 func (e *Engine) evaluateAlerts(devices []device.Device, now time.Time) []notify.Event {
 	rules, err := e.org.Alerts()
 	if err != nil {
 		e.opts.Logger.Warn("reglas de alerta ilegibles: el ciclo no las evalúa", "error", err)
+		// El enfriamiento se queda como está: un fichero ilegible no es el
+		// final de ningún episodio, y borrarlo haría que el ciclo siguiente
+		// volviera a anunciar todo lo ya anunciado.
 		return nil
 	}
 	firings := alert.Evaluate(rules, devices, now)
 	evs := make([]notify.Event, 0, len(firings))
+	// activos se reconstruye con los disparos de este ciclo: lo que ya no
+	// dispara pierde la marca, así que un episodio nuevo avisa sin esperar la
+	// ventana y el mapa no crece con reglas o dispositivos que ya no existen.
+	activos := make(map[string]time.Time, len(firings))
 	for _, f := range firings {
+		k := f.RuleID + "|" + f.DeviceID
+		if last, avisado := e.alerted[k]; avisado && now.Sub(last) < alertCooldown {
+			activos[k] = last
+			continue
+		}
 		cp := f
+		activos[k] = now
 		evs = append(evs, notify.Event{Kind: notify.EventAlertFired, At: now, Firing: &cp})
 	}
+	e.alerted = activos
 	return evs
 }
 
@@ -127,6 +153,8 @@ func (e *Engine) dispatch(ctx context.Context, evs []notify.Event, st *CycleStat
 func (e *Engine) notifyCycle(ctx context.Context, devices []device.Device, results []action.Result, now time.Time, st *CycleStats) {
 	evs := e.syncIncidents(devices, results, now, st)
 	alerts := e.evaluateAlerts(devices, now)
+	// alerts_fired cuenta los avisos que salen, no las condiciones que siguen
+	// encendidas: el enfriamiento de evaluateAlerts ya filtró.
 	st.AlertsFired = len(alerts)
 	evs = append(evs, alerts...)
 	evs = append(evs, actionEvents(results, now)...)

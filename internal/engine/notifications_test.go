@@ -100,6 +100,14 @@ func ajustesWebhook(url, formato string, eventos []string) settings.Settings {
 // intentos sin dormir).
 func motorNotificado(t *testing.T, set settings.Settings, ad uem.Adapter) (*Engine, *store.OrgStore) {
 	t.Helper()
+	return motorNotificadoEn(t, set, ad, &reloj{at: time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)})
+}
+
+// motorNotificadoEn es lo mismo con el reloj que le pase el test: el
+// enfriamiento de las alertas solo se puede observar moviendo la hora entre
+// ciclos (el tipo reloj vive en risk_dwell_test.go, mismo paquete).
+func motorNotificadoEn(t *testing.T, set settings.Settings, ad uem.Adapter, clock *reloj) (*Engine, *store.OrgStore) {
+	t.Helper()
 	s, err := store.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -108,9 +116,7 @@ func motorNotificado(t *testing.T, set settings.Settings, ad uem.Adapter) (*Engi
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
-	reloj := func() time.Time { return now }
-	if err := SeedDemo(org, now); err != nil {
+	if err := SeedDemo(org, clock.now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := org.SaveSettings(set); err != nil {
@@ -118,11 +124,11 @@ func motorNotificado(t *testing.T, set settings.Settings, ad uem.Adapter) (*Engi
 	}
 	mudo := slog.New(slog.DiscardHandler)
 	n := notify.New(set, secretosFijos{notify.SecretWebhook: secretoWebhook}, org, notify.Options{
-		Now: reloj, Backoff: []time.Duration{0, 0, 0}, Logger: mudo,
+		Now: clock.now, Backoff: []time.Duration{0, 0, 0}, Logger: mudo,
 		NewID: func() string { return "dlv-fijo" },
 	})
 	e := New(org, []uem.Adapter{ad}, Options{Mode: "simulation", Interval: time.Hour,
-		Now: reloj, Logger: mudo, Notifier: n})
+		Now: clock.now, Logger: mudo, Notifier: n})
 	return e, org
 }
 

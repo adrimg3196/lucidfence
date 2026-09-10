@@ -114,6 +114,13 @@ type Engine struct {
 	dwelled    map[string]string
 	dwellDirty bool
 	fired      map[string]bool
+	// alerted recuerda, por regla y dispositivo, cuándo salió el último
+	// alert.fired. Una condición que sigue encendida no vuelve a avisar hasta
+	// que pase alertCooldown; una que se apaga pierde su marca y su episodio
+	// siguiente avisa en el acto (ver evaluateAlerts). Es memoria del proceso,
+	// como en 1.x: lo que se repite tras un reinicio es un aviso, no una orden
+	// a un dispositivo (M2-R41).
+	alerted map[string]time.Time
 	// notifier lo construye New y no se sustituye nunca: applySettings lo
 	// recarga con Reload, que es seguro para uso concurrente.
 	notifier *notify.Notifier
@@ -146,7 +153,8 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 		guard:     Guardrails{Enforcement: settings.Default().Enforcement, Now: opts.Now},
 		riskCfg:   settings.Default().Risk,
 		providers: map[string]ProviderHealth{}, violations: map[string]int{},
-		dwelled: map[string]string{}, fired: map[string]bool{}}
+		dwelled: map[string]string{}, fired: map[string]bool{},
+		alerted: map[string]time.Time{}}
 	if org != nil {
 		e.guard.Cooldowns = org
 		e.dwelled = org.DwellMarks()
