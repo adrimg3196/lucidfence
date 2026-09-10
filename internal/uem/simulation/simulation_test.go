@@ -149,3 +149,33 @@ func TestLaSeedTransportaLaPostura(t *testing.T) {
 		t.Fatal("el conector ya publica postura: la capacidad tiene que decirlo")
 	}
 }
+
+// TestLaSeedObservaHardwareYPais: hardware_health y Posture.Country no los
+// rellenaba nadie en el producto. Sin ellos, la regla hardware_degraded (10
+// puntos y la lista de componentes que el detalle de dispositivo pinta) y el
+// campo de política posture.country solo se ejecutaban en los tests del
+// dominio. dev-001 queda fuera a propósito: es el dispositivo de postura
+// desconocida de la demo y checkPostureUnknown exige que emita posture:{}.
+func TestLaSeedObservaHardwareYPais(t *testing.T) {
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	a := New(DefaultSeed(), func() time.Time { return now })
+	ds, err := a.FetchDevices(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := map[string]device.Posture{}
+	for _, d := range ds {
+		idx[d.ID] = d.Posture
+	}
+	if got := idx["dev-002"].HardwareHealth["battery"]; got != "degraded" {
+		t.Fatalf("el terminal de reparto observa su batería degradada, got %q", got)
+	}
+	for _, id := range []string{"dev-002", "dev-003", "dev-004", "dev-005", "dev-006"} {
+		if got := idx[id].Country; got != "ES" {
+			t.Fatalf("%s declara el país observado, got %q", id, got)
+		}
+	}
+	if u := idx["dev-001"]; u.Country != "" || u.Site != "" {
+		t.Fatalf("dev-001 conserva la postura desconocida entera: %+v", u)
+	}
+}

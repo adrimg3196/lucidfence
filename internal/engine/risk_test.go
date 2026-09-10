@@ -49,6 +49,7 @@ func TestCicloEvaluaElRiesgoDeTodaLaFlota(t *testing.T) {
 	t.Run("flota evaluada", func(t *testing.T) { assertFlotaEvaluada(t, st, idx) })
 	t.Run("sano en cero", func(t *testing.T) { assertSanoEnCero(t, idx["dev-001"]) })
 	t.Run("fuera y no conforme", func(t *testing.T) { assertFueraYNoConforme(t, idx["dev-004"]) })
+	t.Run("hardware degradado", func(t *testing.T) { assertHardwareDegradado(t, idx["dev-002"]) })
 	t.Run("reparto por severidad", func(t *testing.T) { assertRepartoPorSeveridad(t, st) })
 }
 
@@ -116,11 +117,32 @@ func assertFueraYNoConforme(t *testing.T, d device.Device) {
 	}
 }
 
+// assertHardwareDegradado: la batería degradada de dev-002 es la única
+// entrada de hardware_health del binario entregado. Sin ella, la regla
+// hardware_degraded, su razón con el componente y la lista que el detalle de
+// dispositivo pinta no se ejecutarían nunca fuera de los tests del dominio.
+func assertHardwareDegradado(t *testing.T, d device.Device) {
+	t.Helper()
+	degradado, ok := d.Signals["device_posture"]["hardware_degraded"].(bool)
+	if !ok || !degradado {
+		t.Fatalf("dev-002 publica el hardware degradado en sus señales: %v", d.Signals["device_posture"])
+	}
+	if !tieneRazon(d.Risk.Reasons, "salud de hardware degradada (battery)") {
+		t.Fatalf("la razón nombra el componente observado: %v", d.Risk.Reasons)
+	}
+	// 35 (fuera de geocerca) + 10 (hardware degradado) − 5 (crédito de ruta).
+	// El reparto por severidad no se mueve: dev-002 ya era el único medium.
+	if d.Risk.Score == nil || *d.Risk.Score != 40 || d.Risk.Severity != risk.SeverityMedium {
+		t.Fatalf("dev-002 suma los 10 puntos del hardware sin cambiar de severidad: %+v", d.Risk)
+	}
+}
+
 func assertRepartoPorSeveridad(t *testing.T, st CycleStats) {
 	t.Helper()
 	// dev-001 y dev-006 en 0, dev-003 en 10 (Lockdown Mode), dev-005 en 22
 	// (Android 12 sin parchear mas el riesgo de la zona del almacén),
-	// dev-002 en 30 (fuera menos crédito de ruta) y dev-004 saturado en 100
+	// dev-002 en 40 (fuera, con la batería degradada, menos el crédito de
+	// ruta) y dev-004 saturado en 100
 	// (fuera, no conforme, sin cifrar, con root, con el SO desactualizado,
 	// con osquery inválido y fuera de su turno).
 	want := map[string]int{risk.SeverityLow: 4, risk.SeverityMedium: 1, risk.SeverityCritical: 1}

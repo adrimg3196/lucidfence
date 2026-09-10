@@ -114,12 +114,7 @@ func assertPosturaDeLaSeed(t *testing.T, org *store.OrgStore) {
 	if sana.Rooted == nil || *sana.Rooted || sana.OsqueryConfigValid == nil || !*sana.OsqueryConfigValid {
 		t.Fatalf("dev-006 acredita una postura sana explícita: %+v", sana)
 	}
-	// dev-001 se queda sin postura a propósito: es el dispositivo del check
-	// checkPostureUnknown de la batería M1, que exige posture:{} en la API.
-	// device.Posture lleva un mapa, así que no se compara con ==.
-	if u := post["dev-001"]; u.Rooted != nil || u.OSOutdated != nil || u.OsqueryConfigValid != nil || u.HardwareHealth != nil {
-		t.Fatalf("dev-001 conserva la postura desconocida: %+v", u)
-	}
+	assertPosturaDesconocida(t, post["dev-001"])
 }
 
 func assertPosturaComprometida(t *testing.T, p device.Posture) {
@@ -129,6 +124,22 @@ func assertPosturaComprometida(t *testing.T, p device.Posture) {
 	}
 	if p.OsqueryConfigValid == nil || *p.OsqueryConfigValid {
 		t.Fatalf("dev-004 tiene la configuración de osquery inválida: %+v", p)
+	}
+}
+
+// assertPosturaDesconocida: dev-001 es el dispositivo de postura desconocida
+// de la demo y no puede llevar ni un campo. checkPostureUnknown de la batería
+// M1 exige que GET /api/v1/devices/dev-001 emita un posture con cero claves,
+// así que un country o un site sueltos aquí la pondrían roja (ruling M2-R36).
+// Este test lo protege sin servidor ni binario. device.Posture lleva un mapa,
+// así que no se compara con ==.
+func assertPosturaDesconocida(t *testing.T, p device.Posture) {
+	t.Helper()
+	if p.Rooted != nil || p.OSOutdated != nil || p.OsqueryConfigValid != nil {
+		t.Fatalf("dev-001 conserva la postura desconocida: %+v", p)
+	}
+	if p.HardwareHealth != nil || p.Country != "" || p.Site != "" {
+		t.Fatalf("un campo suelto en dev-001 rompe checkPostureUnknown: %+v", p)
 	}
 }
 
