@@ -376,6 +376,7 @@ export const en: Record<Key, string> = {
   "settings.tab.enforcement": "Enforcement",
   "settings.tab.webhooks": "Notifications",
   "settings.tab.egress": "Network egress",
+  "settings.tab.risk": "Risk",
   "settings.enforcement.mode": "Mode",
   "settings.enforcement.mode.observe": "Observe",
   "settings.enforcement.mode.enforce": "Enforce",
@@ -385,7 +386,7 @@ export const en: Record<Key, string> = {
   "settings.enforcement.allowWipe": "Allow full wipe",
   "settings.enforcement.allowWipe.help": "Two keys: besides enabling this, the device must be on the list.",
   "settings.enforcement.wipeAllowlist": "Devices allowed to be wiped",
-  "settings.enforcement.wipeAllowlist.help": "One identifier per line.",
+  "settings.enforcement.wipeAllowlist.help": "One device identifier per row. Use “Add” to add another and the trash icon to remove it.",
   "settings.enforcement.cooldown": "Cooldown between actions (s)",
   "settings.enforcement.cooldown.help": "Minimum time between two identical actions on the same device.",
   "settings.webhook.enabled": "Webhook enabled",
@@ -402,7 +403,7 @@ export const en: Record<Key, string> = {
   "settings.ntfy.token": "Token",
   "settings.ntfy.token.set": "Configured",
   "settings.egress.hosts": "Allowed hosts",
-  "settings.egress.hosts.help": "One host per line. No request leaves for a host outside this list.",
+  "settings.egress.hosts.help": "One allowed host per row. No request leaves for a host outside this list. Use “Add” to add another.",
   "settings.egress.allowPrivate": "Allow private networks",
   "settings.egress.allowPrivate.help": "When off, any destination resolving to a private IP is rejected.",
   "settings.validate": "Check",
@@ -412,6 +413,36 @@ export const en: Record<Key, string> = {
   "settings.error.url": "The URL must start with https://",
   "settings.error.host": "Invalid host",
   "settings.error.cooldown": "Cooldown must be a whole number of seconds greater than or equal to 0",
+  // M2-R61: five keys needed so T26 does not leave fixed Spanish text inside
+  // the JSX (empty wipe_allowlist entry, the enforce warning, the "Add"
+  // button shared by both field lists, the OCSF warning and the "Check"
+  // helper line).
+  "settings.enforcement.wipeAllowlist.required": "The identifier cannot be empty",
+  "settings.enforcement.mode.enforce.warning": "With enforcement active, the live actions listed below reach real devices, not just the log.",
+  "settings.add": "Add",
+  "settings.webhook.format.ocsf.help": "The event is sent in OCSF format, not in the LucidFence native envelope: fence_id, route_id, policy_id and playbook_id do not travel as their own fields.",
+  "settings.validate.help": "Checks the settings already saved, not whatever is unsaved above: save first if you just changed the list.",
+  // M2-C3: risk-context tab (shifts, per-zone risk and off-hours window)
+  // against PUT /api/v1/settings/risk. shift_zones pairs a device id with the
+  // fence it is expected in during its shift
+  // (internal/domain/settings/settings.go:97, checked against
+  // internal/engine/risk.go:31-34 and the shift_match signal); zone_risk
+  // pairs a fence with the 0-1 weight it adds to the score.
+  "settings.risk.offHours": "Off-hours window",
+  "settings.risk.offHours.help": "Outside this hourly range, the risk signal counts the device as off-hours.",
+  "settings.risk.offHoursStart": "Starts at",
+  "settings.risk.offHoursEnd": "Ends at",
+  "settings.risk.shiftZones": "Expected fence per device",
+  "settings.risk.shiftZones.help": "Which fence each device is expected in during its shift; the shift-match signal compares this with where it actually is.",
+  "settings.risk.zoneRisk": "Risk by fence",
+  "settings.risk.zoneRisk.help": "Weight from 0 to 1 that each fence adds to the risk score of the device inside it.",
+  "settings.risk.deviceId": "Device ID",
+  "settings.risk.fenceId": "Fence",
+  "settings.risk.weight": "Weight (0-1)",
+  "settings.risk.error.deviceId": "The device identifier cannot be empty",
+  "settings.risk.error.fenceId": "The fence cannot be empty",
+  "settings.risk.error.weight": "The weight must be between 0 and 1",
+  "settings.risk.error.offHours": "The hour must be a whole number between 0 and 23",
   "policies.title": "Policies",
   "policies.new": "New policy",
   "policies.template": "Start from a template",

@@ -377,6 +377,7 @@ export const es = {
   "settings.tab.enforcement": "Enforcement",
   "settings.tab.webhooks": "Notificaciones",
   "settings.tab.egress": "Salida de red",
+  "settings.tab.risk": "Riesgo",
   "settings.enforcement.mode": "Modo",
   "settings.enforcement.mode.observe": "Observación",
   "settings.enforcement.mode.enforce": "Aplicación",
@@ -386,7 +387,7 @@ export const es = {
   "settings.enforcement.allowWipe": "Permitir borrado completo",
   "settings.enforcement.allowWipe.help": "Doble llave: además de activarlo, el dispositivo tiene que estar en la lista.",
   "settings.enforcement.wipeAllowlist": "Dispositivos con borrado permitido",
-  "settings.enforcement.wipeAllowlist.help": "Un identificador por línea.",
+  "settings.enforcement.wipeAllowlist.help": "Un identificador de dispositivo por fila. Usa «Añadir» para sumar otro y la papelera para quitarlo.",
   "settings.enforcement.cooldown": "Enfriamiento entre acciones (s)",
   "settings.enforcement.cooldown.help": "Tiempo mínimo entre dos acciones iguales sobre el mismo dispositivo.",
   "settings.webhook.enabled": "Webhook activo",
@@ -403,7 +404,7 @@ export const es = {
   "settings.ntfy.token": "Token",
   "settings.ntfy.token.set": "Configurado",
   "settings.egress.hosts": "Hosts permitidos",
-  "settings.egress.hosts.help": "Un host por línea. Fuera de esta lista no sale ninguna petición.",
+  "settings.egress.hosts.help": "Un host permitido por fila. Fuera de esta lista no sale ninguna petición. Usa «Añadir» para sumar otro.",
   "settings.egress.allowPrivate": "Permitir redes privadas",
   "settings.egress.allowPrivate.help": "Desactivado, se rechaza cualquier destino que resuelva a una IP privada.",
   "settings.validate": "Comprobar",
@@ -413,6 +414,36 @@ export const es = {
   "settings.error.url": "La URL debe empezar por https://",
   "settings.error.host": "Host inválido",
   "settings.error.cooldown": "El enfriamiento debe ser un número entero de segundos mayor o igual que 0",
+  // M2-R61: cinco claves que faltaban para no dejar texto en español fijo
+  // dentro del JSX de T26 (wipe_allowlist vacío, aviso de enforce, "Añadir"
+  // compartido por las dos listas de campos, aviso de OCSF y ayuda de
+  // "Comprobar").
+  "settings.enforcement.wipeAllowlist.required": "El identificador no puede estar vacío",
+  "settings.enforcement.mode.enforce.warning": "Con aplicación activa, las acciones en vivo de la lista de abajo tocarán dispositivos reales, no solo el registro.",
+  "settings.add": "Añadir",
+  "settings.webhook.format.ocsf.help": "El evento se envía en formato OCSF, no en el sobre nativo de LucidFence: fence_id, route_id, policy_id y playbook_id no viajan como campos propios.",
+  "settings.validate.help": "Comprueba los ajustes ya guardados, no lo que haya sin guardar arriba: guarda primero si acabas de cambiar la lista.",
+  // M2-C3: pestaña de contexto de riesgo (turnos, riesgo por zona y franja
+  // fuera de turno) contra PUT /api/v1/settings/risk. shift_zones empareja un
+  // id de dispositivo con la geocerca donde se le espera durante su turno
+  // (internal/domain/settings/settings.go:97, verificado contra
+  // internal/engine/risk.go:31-34 y la señal shift_match); zone_risk empareja
+  // una geocerca con el peso 0-1 que suma a la puntuación.
+  "settings.risk.offHours": "Franja fuera de turno",
+  "settings.risk.offHours.help": "Fuera de este rango horario, la señal de riesgo cuenta el dispositivo como fuera de turno.",
+  "settings.risk.offHoursStart": "Empieza a las",
+  "settings.risk.offHoursEnd": "Termina a las",
+  "settings.risk.shiftZones": "Geocerca esperada por dispositivo",
+  "settings.risk.shiftZones.help": "Qué geocerca corresponde a cada dispositivo durante su turno; la señal de coincidencia de turno compara esto con dónde está de verdad.",
+  "settings.risk.zoneRisk": "Riesgo por geocerca",
+  "settings.risk.zoneRisk.help": "Peso de 0 a 1 que cada geocerca suma a la puntuación de riesgo del dispositivo que está dentro.",
+  "settings.risk.deviceId": "ID de dispositivo",
+  "settings.risk.fenceId": "Geocerca",
+  "settings.risk.weight": "Peso (0-1)",
+  "settings.risk.error.deviceId": "El identificador de dispositivo no puede estar vacío",
+  "settings.risk.error.fenceId": "La geocerca no puede estar vacía",
+  "settings.risk.error.weight": "El peso debe estar entre 0 y 1",
+  "settings.risk.error.offHours": "La hora debe ser un número entero entre 0 y 23",
   "policies.title": "Políticas",
   "policies.new": "Nueva política",
   "policies.template": "Partir de una plantilla",

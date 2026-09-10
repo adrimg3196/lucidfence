@@ -17,6 +17,9 @@ import { AlertsPage } from "@/features/alerts/AlertsPage";
 import { PlaybooksPage } from "@/features/playbooks/PlaybooksPage";
 import { PlaybookEditorPage } from "@/features/playbooks/PlaybookEditorPage";
 import { HandoffsPage } from "@/features/handoffs/HandoffsPage";
+import { EventsPage } from "@/features/events/EventsPage";
+import { ActionsPage } from "@/features/actions/ActionsPage";
+import { SettingsPage } from "@/features/settings/SettingsPage";
 
 export const router = createBrowserRouter([
   { path: "/setup", element: <SetupPage /> },
@@ -44,6 +47,9 @@ export const router = createBrowserRouter([
           { path: "/playbooks/new", element: <PlaybookEditorPage /> },
           { path: "/playbooks/:id", element: <PlaybookEditorPage /> },
           { path: "/handoffs", element: <HandoffsPage /> },
+          { path: "/events", element: <EventsPage /> },
+          { path: "/actions", element: <ActionsPage /> },
+          { path: "/settings", element: <SettingsPage /> },
         ],
       },
     ],
