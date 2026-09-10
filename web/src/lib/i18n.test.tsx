@@ -46,3 +46,10 @@ test("la severidad sin evaluar no se llama baja en ninguno de los dos idiomas", 
   expect(es["risk.severity.unknown"]).not.toBe(es["risk.severity.low"]);
   expect(en["risk.severity.unknown"]).not.toBe(en["risk.severity.low"]);
 });
+
+test("la etiqueta genérica de set_compliance no declara dirección en ninguno de los dos idiomas", () => {
+  for (const d of [es, en]) {
+    expect(d["fence.action.set_compliance"]).not.toBe(d["device.action.compliance.yes"]);
+    expect(d["fence.action.set_compliance"]).not.toBe(d["device.action.compliance.no"]);
+  }
+});

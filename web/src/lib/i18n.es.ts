@@ -138,7 +138,7 @@ export const es = {
   "fence.action.reboot": "Reiniciar",
   "fence.action.clear_passcode": "Borrar código de acceso",
   "fence.action.wipe": "Borrado completo",
-  "fence.action.set_compliance": "Marcar incumplimiento",
+  "fence.action.set_compliance": "Fijar cumplimiento",
   "fence.action.custom": "Personalizada",
   "fence.when": "Cuándo",
   "fence.when.on_enter": "Al entrar",

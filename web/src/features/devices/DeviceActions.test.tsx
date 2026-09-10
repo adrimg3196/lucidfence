@@ -117,3 +117,12 @@ test("el resultado de marcar incumplimiento sí se anuncia como incumplimiento",
   renderWithProviders(<DeviceActions device={device} />);
   expect(screen.getByRole("status")).toHaveTextContent("Marcar incumplimiento");
 });
+
+test("un set_compliance sin dirección en los params usa la etiqueta neutra", () => {
+  mockMe(["device:action"]);
+  mockResult({ action: "set_compliance" });
+  renderWithProviders(<DeviceActions device={device} />);
+  const banner = screen.getByRole("status");
+  expect(banner).toHaveTextContent("Fijar cumplimiento");
+  expect(banner).not.toHaveTextContent("Marcar");
+});
