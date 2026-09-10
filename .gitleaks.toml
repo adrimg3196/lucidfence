@@ -3,3 +3,12 @@ useDefault = true
 
 [allowlist]
 paths = ['''web/package-lock.json''']
+# La constante de los tests del notificador (internal/engine/notifications_test.go)
+# y su copia literal dentro del plan del hito M2. No es una credencial: es la
+# clave con la que los tests firman el HMAC del webhook contra un receptor de
+# mentira. Se allowlista por VALOR y no por fichero ni por regla, para que
+# generic-api-key siga vigilando esos mismos ficheros: cualquier otra cadena
+# con forma de secreto seguiría saltando. No se puede resolver renombrando la
+# constante: gitleaks escanea los parches de los 53 commits de la rama, y los
+# de T15 seguirían añadiéndola.
+regexes = ['''s3cr3to-de-pruebas''']
