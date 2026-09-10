@@ -510,6 +510,33 @@ components:
         lng:
           type: number
       required: [lat, lng]
+    ChannelStatus:
+      type: object
+      description: Estado de un canal de notificación; nunca lleva secretos (spec §6.4)
+      properties:
+        enabled:
+          type: boolean
+        target:
+          type: string
+          description: URL de destino sin userinfo, sin query y sin fragmento
+        last_ok:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        delivered:
+          type: integer
+        failed:
+          type: integer
+      required: [enabled, delivered, failed]
+    NotifyStatus:
+      type: object
+      properties:
+        webhook:
+          $ref: "#/components/schemas/ChannelStatus"
+        ntfy:
+          $ref: "#/components/schemas/ChannelStatus"
+      required: [webhook, ntfy]
     Health:
       type: object
       properties:
@@ -549,6 +576,8 @@ components:
             last_error:
               type: string
           required: [ok]
+        notify:
+          $ref: "#/components/schemas/NotifyStatus"
         map:
           type: object
           properties:
@@ -557,7 +586,7 @@ components:
             tiles_url:
               type: string
           required: [enabled, tiles_url]
-      required: [status, version, mode, enforcement, web_built, setup_required, engine, persistence, map]
+      required: [status, version, mode, enforcement, web_built, setup_required, engine, persistence, notify, map]
     SetupRequest:
       type: object
       properties:
@@ -1028,6 +1057,16 @@ components:
           type: integer
         actions_blocked:
           type: integer
+        incidents_opened:
+          type: integer
+        incidents_closed:
+          type: integer
+        alerts_fired:
+          type: integer
+        deliveries:
+          type: integer
+        deliveries_failed:
+          type: integer
         evaluation_errors:
           type: integer
         persistence_errors:
@@ -1036,7 +1075,7 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderHealth"
-      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, evaluation_errors, persistence_errors, providers, risk_evaluated, risk_failed, by_severity]
+      required: [at, duration_ms, mode, devices_total, inside, outside, unknown, transitions, actions_planned, actions_executed, actions_suppressed, actions_blocked, incidents_opened, incidents_closed, alerts_fired, deliveries, deliveries_failed, evaluation_errors, persistence_errors, providers, risk_evaluated, risk_failed, by_severity]
     EngineStatus:
       type: object
       properties:
@@ -1061,7 +1100,11 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderHealth"
-      required: [mode, enforcement, interval_seconds, running, cycles, providers]
+        incidents_open:
+          type: integer
+        notify:
+          $ref: "#/components/schemas/NotifyStatus"
+      required: [mode, enforcement, interval_seconds, running, cycles, providers, incidents_open, notify]
     Transition:
       type: object
       properties:

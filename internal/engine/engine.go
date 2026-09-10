@@ -12,6 +12,7 @@ import (
 
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/settings"
+	"github.com/adrimg3196/lucidfence/internal/notify"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 )
@@ -25,6 +26,14 @@ type Options struct {
 	Interval time.Duration
 	Now      func() time.Time
 	Logger   *slog.Logger
+	// Notifier entrega los eventos del ciclo. serve lo construye con los
+	// ajustes de la organización, el resolutor de secretos y el OrgStore
+	// como Sink; si es nil, New construye uno equivalente (newNotifier).
+	Notifier *notify.Notifier
+	// Secrets resuelve webhook_secret y ntfy_token cuando New tiene que
+	// construir el Notifier. El motor nunca lee su valor: lo consulta el
+	// Notifier en el momento del envío.
+	Secrets notify.Secrets
 }
 
 // ProviderHealth es la salud de un conector.
@@ -53,6 +62,11 @@ type CycleStats struct {
 	ActionsExecuted   int                       `json:"actions_executed"`
 	ActionsSuppressed int                       `json:"actions_suppressed"`
 	ActionsBlocked    int                       `json:"actions_blocked"`
+	IncidentsOpened   int                       `json:"incidents_opened"`
+	IncidentsClosed   int                       `json:"incidents_closed"`
+	AlertsFired       int                       `json:"alerts_fired"`
+	Deliveries        int                       `json:"deliveries"`
+	DeliveriesFailed  int                       `json:"deliveries_failed"`
 	EvaluationErrors  int                       `json:"evaluation_errors"`
 	PersistenceErrors int                       `json:"persistence_errors"`
 	Providers         map[string]ProviderHealth `json:"providers"`
@@ -69,6 +83,8 @@ type Status struct {
 	LastError       string                    `json:"last_error,omitempty"`
 	NextCycleAt     *time.Time                `json:"next_cycle_at,omitempty"`
 	Providers       map[string]ProviderHealth `json:"providers"`
+	Incidents       int                       `json:"incidents_open"`
+	Notify          notify.Status             `json:"notify"`
 }
 
 // Engine es el motor de una organización.
@@ -98,7 +114,13 @@ type Engine struct {
 	dwelled    map[string]string
 	dwellDirty bool
 	fired      map[string]bool
-	wg         sync.WaitGroup
+	// notifier lo construye New y no se sustituye nunca: applySettings lo
+	// recarga con Reload, que es seguro para uso concurrente.
+	notifier *notify.Notifier
+	// incidents es el número de incidentes sin cerrar tras el último ciclo;
+	// lo publica Status() y lo escribe syncIncidents bajo stateMu.
+	incidents int
+	wg        sync.WaitGroup
 
 	// evalHook, si no es nil, se llama al principio de evaluateDevice. Solo
 	// lo fijan los tests, para provocar de forma determinista un pánico por
@@ -129,6 +151,7 @@ func New(org *store.OrgStore, adapters []uem.Adapter, opts Options) *Engine {
 		e.guard.Cooldowns = org
 		e.dwelled = org.DwellMarks()
 	}
+	e.notifier = newNotifier(org, opts)
 	for _, a := range adapters {
 		name := a.Name()
 		if _, dup := e.adapters[name]; dup {
@@ -166,6 +189,11 @@ func (e *Engine) applySettings(set settings.Settings) {
 	e.guard.Enforcement = enf
 	e.riskCfg = set.Risk
 	e.stateMu.Unlock()
+	// Reload cambia configuración, no contadores: delivered/failed siguen
+	// siendo el histórico del proceso que publica health (T11).
+	if n := e.Notifier(); n != nil {
+		n.Reload(set)
+	}
 }
 
 // RunOnce ejecuta un ciclo si no hay otro en curso. Si runCycle falla (p. ej.
@@ -251,5 +279,15 @@ func (e *Engine) Status() Status {
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
 	return Status{Mode: e.opts.Mode, Enforcement: e.guard.Enforcement, IntervalSeconds: int(e.opts.Interval / time.Second),
-		Running: e.running, Cycles: e.cycles, LastCycle: e.last, LastError: e.lastErr, NextCycleAt: e.nextAt, Providers: e.providers}
+		Running: e.running, Cycles: e.cycles, LastCycle: e.last, LastError: e.lastErr, NextCycleAt: e.nextAt,
+		Providers: e.providers, Incidents: e.incidents, Notify: notifyStatusOf(e.notifier)}
+}
+
+// setOpenIncidents guarda el número de incidentes sin cerrar del último
+// ciclo. Lo llama syncIncidents, que corre bajo el lock del ciclo, no bajo
+// stateMu.
+func (e *Engine) setOpenIncidents(n int) {
+	e.stateMu.Lock()
+	e.incidents = n
+	e.stateMu.Unlock()
 }

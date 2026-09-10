@@ -60,6 +60,12 @@ func assertDemoStats(t *testing.T, st CycleStats) {
 	if st.DevicesTotal != 6 || st.Inside < 2 || st.Transitions != 6 || st.Providers["simulation"].Devices != 6 || !st.Providers["simulation"].OK {
 		t.Fatalf("stats: %+v", st)
 	}
+	if st.IncidentsOpened < 1 || st.AlertsFired < 1 {
+		t.Fatalf("la demo abre incidentes y dispara la regla de riesgo alto: %+v", st)
+	}
+	if st.Deliveries != 0 {
+		t.Fatalf("la demo no configura ningún canal: no puede haber entregas: %+v", st)
+	}
 }
 
 func assertDemoDeviceStates(t *testing.T, idx map[string]device.Device) {
@@ -125,6 +131,9 @@ func assertDemoStatus(t *testing.T, e *Engine) {
 	t.Helper()
 	if e.Status().Cycles != 2 || e.Status().Enforcement.Mode != settings.ModeObserve || e.Status().LastCycle == nil {
 		t.Fatalf("status: %+v", e.Status())
+	}
+	if e.Status().Incidents < 1 || e.Status().Notify.Webhook.Enabled || e.Status().Notify.Ntfy.Enabled {
+		t.Fatalf("la demo deja bandeja de incidentes y ningún canal habilitado: %+v", e.Status())
 	}
 }
 

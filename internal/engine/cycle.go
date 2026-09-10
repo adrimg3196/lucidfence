@@ -245,6 +245,7 @@ func (e *Engine) runCycle(ctx context.Context) (CycleStats, error) {
 			e.dwellDirty = false
 		}
 	}
+	e.notifyCycle(ctx, devices, results, now, &st)
 	st.DurationMS = time.Since(start).Milliseconds()
 	if err := e.org.AppendStats(st); err != nil {
 		e.logPersistenceError(&st, "stats", "", err)

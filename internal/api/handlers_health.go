@@ -32,7 +32,11 @@ func (s *server) health(w http.ResponseWriter, _ *http.Request, _ *auth.Principa
 		"setup_required": !s.d.Auth.HasUsers(),
 		"engine":         engineView,
 		"persistence":    persistenceView(st),
-		"map":            map[string]any{"enabled": s.d.Config.Map.Enabled, "tiles_url": s.d.Config.Map.TilesURL},
+		// notify sale tal cual del motor: notify.ChannelStatus ya viene sin
+		// secretos y con el destino redactado (T11), así que api no tiene
+		// que conocer el paquete notify para publicarlo.
+		"notify": st.Notify,
+		"map":    map[string]any{"enabled": s.d.Config.Map.Enabled, "tiles_url": s.d.Config.Map.TilesURL},
 	})
 }
 

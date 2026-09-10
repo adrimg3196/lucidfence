@@ -1042,6 +1042,21 @@ export interface components {
             lat: number;
             lng: number;
         };
+        /** @description Estado de un canal de notificación; nunca lleva secretos (spec §6.4) */
+        ChannelStatus: {
+            enabled: boolean;
+            /** @description URL de destino sin userinfo, sin query y sin fragmento */
+            target?: string;
+            /** Format: date-time */
+            last_ok?: string;
+            last_error?: string;
+            delivered: number;
+            failed: number;
+        };
+        NotifyStatus: {
+            webhook: components["schemas"]["ChannelStatus"];
+            ntfy: components["schemas"]["ChannelStatus"];
+        };
         Health: {
             status: string;
             version: string;
@@ -1062,6 +1077,7 @@ export interface components {
                 ok: boolean;
                 last_error?: string;
             };
+            notify: components["schemas"]["NotifyStatus"];
             map: {
                 enabled: boolean;
                 tiles_url: string;
@@ -1309,6 +1325,11 @@ export interface components {
             actions_executed: number;
             actions_suppressed: number;
             actions_blocked: number;
+            incidents_opened: number;
+            incidents_closed: number;
+            alerts_fired: number;
+            deliveries: number;
+            deliveries_failed: number;
             evaluation_errors: number;
             persistence_errors: number;
             providers: {
@@ -1328,6 +1349,8 @@ export interface components {
             providers: {
                 [key: string]: components["schemas"]["ProviderHealth"];
             };
+            incidents_open: number;
+            notify: components["schemas"]["NotifyStatus"];
         };
         Transition: {
             /** Format: date-time */

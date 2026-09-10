@@ -18,6 +18,9 @@ func TestBuildAppSimulacionPorDefecto(t *testing.T) {
 	if a.cfg.Mode != "simulation" || a.engine == nil || a.handler == nil || a.auth == nil || a.org.ID() != "default" {
 		t.Fatalf("%+v", a.cfg)
 	}
+	if a.engine.Notifier() == nil {
+		t.Fatal("serve debe dejar el motor con su notificador construido")
+	}
 }
 
 func TestBuildAppModoLiveNoDisponibleEnM1(t *testing.T) {

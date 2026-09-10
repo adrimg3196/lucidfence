@@ -15,6 +15,7 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/config"
 	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 	"github.com/adrimg3196/lucidfence/internal/engine"
+	"github.com/adrimg3196/lucidfence/internal/notify"
 	"github.com/adrimg3196/lucidfence/internal/store"
 	"github.com/adrimg3196/lucidfence/internal/uem"
 	"github.com/adrimg3196/lucidfence/internal/uem/simulation"
@@ -115,7 +116,14 @@ func buildApp(f commonFlags, logger *slog.Logger) (*app, error) {
 	if err != nil {
 		return nil, err
 	}
-	eng := engine.New(org, adapters, engine.Options{Mode: cfg.Mode, Interval: cfg.Interval(), Logger: logger})
+	set, err := org.Settings()
+	if err != nil {
+		logger.Warn("ajustes ilegibles: los canales de notificación arrancan apagados", "error", err)
+		set = settings.Default()
+	}
+	notifier := notify.New(set, orgSecrets{st: st, org: cfg.Org}, org, notify.Options{Logger: logger})
+	eng := engine.New(org, adapters, engine.Options{Mode: cfg.Mode, Interval: cfg.Interval(), Logger: logger,
+		Notifier: notifier})
 	dist := web.Dist()
 	webBuilt := web.IsBuilt(dist)
 	handler, _ := api.New(api.Deps{Engine: eng, Org: org, Auth: as, Web: web.Handler(dist), WebBuilt: webBuilt, Config: cfg, Logger: logger})
@@ -167,3 +175,14 @@ func newLogger(level string, w io.Writer) *slog.Logger {
 	_ = lvl.UnmarshalText([]byte(level))
 	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: lvl}))
 }
+
+// orgSecrets ata el store a una organización para satisfacer notify.Secrets:
+// el Notifier pide "webhook_secret" o "ntfy_token" y el store resuelve
+// LUCIDFENCE_WEBHOOK_SECRET o <data>/secrets/<org>/webhook_secret.json. El
+// valor nunca se guarda en memoria ni se registra.
+type orgSecrets struct {
+	st  *store.Store
+	org string
+}
+
+func (s orgSecrets) Secret(name string) (string, error) { return s.st.Secret(s.org, name) }
