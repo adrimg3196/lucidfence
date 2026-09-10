@@ -18,7 +18,7 @@ func checkWebhookSigned(ctx context.Context, env *Env) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = stop() }()
+	defer func() { _ = stop(); disableWebhook(ctx, env) }()
 	if err := putEgressAndWebhook(ctx, env, rcv, "native"); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func checkOCSFNoCoords(ctx context.Context, env *Env) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = stop() }()
+	defer func() { _ = stop(); disableWebhook(ctx, env) }()
 	if err := putEgressAndWebhook(ctx, env, rcv, "ocsf"); err != nil {
 		return err
 	}
@@ -76,6 +76,20 @@ func checkOCSFNoCoords(ctx context.Context, env *Env) error {
 		return fmt.Errorf("el receptor no vio una entrega OCSF firmada en 10s")
 	}
 	return nil
+}
+
+// disableWebhook apaga el canal al salir del check. El Receiver muere con el
+// defer de arriba, pero los ajustes de la organización se quedan con su URL y
+// enabled:true: a partir de ahí CADA evento suscrito del resto de la batería
+// se entrega contra un puerto cerrado, y la entrega es síncrona dentro del
+// ciclo (engine.dispatch → notify.Notifier.Notify, 3 intentos con backoff
+// 1 s + 2 s). Medido contra el binario: el check del handoff pasaba de
+// milisegundos a 27 s, a 3 s del Timeout de 30 s del cliente (server.go:82).
+// El error se ignora a propósito: esto es limpieza, no una aserción, y el
+// check ya tiene su propio veredicto.
+func disableWebhook(ctx context.Context, env *Env) {
+	off := map[string]any{"url": "", "format": "native", "enabled": false, "events": []string{}}
+	_, _ = env.PutJSON(context.WithoutCancel(ctx), "/api/v1/settings/webhooks", off, nil)
 }
 
 func putEgressAndWebhook(ctx context.Context, env *Env, rcv *Receiver, format string) error {

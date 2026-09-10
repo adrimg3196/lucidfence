@@ -40,10 +40,11 @@ func sendDelivery(t *testing.T, url string, body []byte, sig string) {
 // webhookState recuerda la última configuración de webhook mandada por PUT,
 // para que el servidor de mentira sepa a dónde y con qué secreto entregar.
 type webhookState struct {
-	mu     sync.Mutex
-	url    string
-	secret string
-	format string
+	mu      sync.Mutex
+	url     string
+	secret  string
+	format  string
+	enabled bool
 }
 
 func (s *webhookState) put(body map[string]any) {
@@ -52,12 +53,21 @@ func (s *webhookState) put(body map[string]any) {
 	s.url, _ = body["url"].(string)
 	s.secret, _ = body["secret"].(string)
 	s.format, _ = body["format"].(string)
+	s.enabled, _ = body["enabled"].(bool)
 }
 
 func (s *webhookState) snapshot() (url, secret, format string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.url, s.secret, s.format
+}
+
+// apagado dice si el último PUT dejó el canal sin URL y deshabilitado, que es
+// lo que los dos checks tienen que hacer al salir.
+func (s *webhookState) apagado() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.enabled && s.url == ""
 }
 
 // webhookDispatcherServer acepta la configuración de egress/webhook, la
@@ -68,8 +78,17 @@ func (s *webhookState) snapshot() (url, secret, format string) {
 // vista previa de /alerts/evaluate.
 func webhookDispatcherServer(t *testing.T, deliver func(t *testing.T, url, secret, format string)) *httptest.Server {
 	t.Helper()
+	srv, _ := webhookDispatcherServerCon(t, deliver)
+	return srv
+}
+
+// webhookDispatcherServerCon es webhookDispatcherServer devolviendo además el
+// estado compartido, para los casos que necesitan afirmar sobre la última
+// configuración con la que el check se va (por ejemplo, que se apagó).
+func webhookDispatcherServerCon(t *testing.T, deliver func(t *testing.T, url, secret, format string)) (*httptest.Server, *webhookState) {
+	t.Helper()
 	state := &webhookState{}
-	return jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
+	srv := jsonRoutes(t, map[string]func(http.ResponseWriter, *http.Request){
 		"PUT /api/v1/settings/egress": jsonOK(200, map[string]any{}),
 		"PUT /api/v1/settings/webhooks": func(w http.ResponseWriter, r *http.Request) {
 			var body map[string]any
@@ -85,6 +104,7 @@ func webhookDispatcherServer(t *testing.T, deliver func(t *testing.T, url, secre
 			jsonOK(200, map[string]any{})(w, r)
 		},
 	})
+	return srv, state
 }
 
 func deliverGood(t *testing.T, url, secret, format string) {
@@ -136,6 +156,27 @@ func TestCheckOCSFNoCoordsGoodAndBad(t *testing.T) {
 	bad := webhookDispatcherServer(t, deliverBadOCSF)
 	if err := checkOCSFNoCoords(context.Background(), envFor(bad)); err == nil {
 		t.Fatal("class_uid erróneo y coordenadas presentes no debían dar el check por bueno")
+	}
+}
+
+// TestLosChecksDelWebhookDejanElCanalApagado: el Receiver muere con el check
+// y el webhook no puede quedarse apuntando a su puerto. Si se queda, cada
+// evento suscrito de los checks siguientes se entrega contra un puerto
+// cerrado con 3 intentos y backoff dentro del ciclo (~3 s por evento).
+func TestLosChecksDelWebhookDejanElCanalApagado(t *testing.T) {
+	casos := map[string]func(context.Context, *Env) error{
+		"webhook firmado": checkWebhookSigned,
+		"OCSF":            checkOCSFNoCoords,
+	}
+	for nombre, check := range casos {
+		srv, state := webhookDispatcherServerCon(t, deliverGood)
+		if err := check(context.Background(), envFor(srv)); err != nil {
+			t.Fatalf("%s: %v", nombre, err)
+		}
+		if !state.apagado() {
+			url, _, _ := state.snapshot()
+			t.Fatalf("%s deja el webhook apagado al salir: url=%q", nombre, url)
+		}
 	}
 }
 
