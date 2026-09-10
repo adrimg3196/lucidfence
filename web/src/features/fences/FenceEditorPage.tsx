@@ -128,7 +128,7 @@ export function FenceEditorPage() {
           <FieldError message={errs.dwellSeconds?.message} />
         </div>
       </div>
-      {/* M1-R27: el motor todavía no aplica estas reglas (C3 diferido a M2). */}
+      {/* M2 (T14): el motor aplica estas reglas desde este hito (planDwell y planStanding en internal/engine). */}
       <p className="text-sm text-muted">{t("fence.rules.help")}</p>
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">

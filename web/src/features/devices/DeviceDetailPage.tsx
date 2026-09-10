@@ -5,9 +5,13 @@ import { StateBadge } from "@/components/StateBadge";
 import { Loading } from "@/components/states/Loading";
 import { ErrorState } from "@/components/states/ErrorState";
 import { Empty } from "@/components/states/Empty";
-import { useDevice, useDeviceTrail, useEvents } from "@/api/hooks";
+import { useDevice, useDeviceTrail, useEvents, useIncidents, useMe } from "@/api/hooks";
 import { useT, useLang } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/format";
+import { can } from "@/lib/permissions";
+import { RiskExplain } from "./RiskExplain";
+import { SignalsTable } from "./SignalsTable";
+import { DeviceActions } from "./DeviceActions";
 
 export function DeviceDetailPage() {
   const { id = "" } = useParams();
@@ -16,6 +20,9 @@ export function DeviceDetailPage() {
   const device = useDevice(id);
   const trail = useDeviceTrail(id, 20);
   const events = useEvents(200);
+  const incidents = useIncidents({ device_id: id, status: "open" });
+  const me = useMe();
+  const canAct = can(me.data?.capabilities, "device:action");
   if (device.isPending) return <Loading rows={6} />;
   if (device.error) return <ErrorState error={device.error} onRetry={() => device.refetch()} />;
   const d = device.data!;
@@ -66,7 +73,7 @@ export function DeviceDetailPage() {
             <CardTitle>{t("device.risk")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted">{d.risk?.score == null ? t("device.risk.pending") : `${d.risk.score} · ${d.risk.severity}`}</p>
+            <RiskExplain verdict={d.risk} signals={d.signals} />
           </CardContent>
         </Card>
         <Card>
@@ -104,6 +111,46 @@ export function DeviceDetailPage() {
                       <span className="text-muted">{ev.from}</span> → <span>{ev.to}</span>
                     </span>
                     <span className="text-muted">{formatDateTime(ev.at, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle>{t("risk.signals")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SignalsTable signals={d.signals} />
+          </CardContent>
+        </Card>
+        {canAct && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>{t("device.actions")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DeviceActions device={d} />
+            </CardContent>
+          </Card>
+        )}
+        <Card className={canAct ? "" : "lg:col-span-3"}>
+          <CardHeader>
+            <CardTitle>{t("device.incidents")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {incidents.isPending && <Loading rows={2} />}
+            {incidents.error && <ErrorState error={incidents.error} onRetry={() => incidents.refetch()} />}
+            {incidents.data && incidents.data.items.length === 0 && <Empty title={t("device.incidents.empty")} />}
+            {incidents.data && incidents.data.items.length > 0 && (
+              <ul className="divide-y divide-border text-sm">
+                {incidents.data.items.map((inc) => (
+                  <li key={inc.id} className="flex items-center justify-between py-2">
+                    <Link to={`/incidents/${inc.id}`} className="font-medium hover:text-accent">
+                      {inc.title}
+                    </Link>
+                    <span className="text-muted">{formatDateTime(inc.opened_at, lang)}</span>
                   </li>
                 ))}
               </ul>

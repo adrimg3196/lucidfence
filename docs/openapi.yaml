@@ -131,6 +131,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical, unknown]
       responses:
         "200":
           description: OK

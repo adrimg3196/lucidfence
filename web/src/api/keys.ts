@@ -7,7 +7,7 @@ export const keys = {
   health: ["health"] as const,
   authStatus: ["auth", "status"] as const,
   me: ["auth", "me"] as const,
-  devices: (p?: { state?: string; q?: string }) => ["devices", p ?? {}] as const,
+  devices: (p?: { state?: string; q?: string; severity?: string }) => ["devices", p ?? {}] as const,
   device: (id: string) => ["devices", id] as const,
   trail: (id: string, limit: number) => ["devices", id, "trail", limit] as const,
   fences: ["fences"] as const,

@@ -8,8 +8,23 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/auth"
 	"github.com/adrimg3196/lucidfence/internal/domain/action"
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
+	"github.com/adrimg3196/lucidfence/internal/domain/risk"
 	"github.com/adrimg3196/lucidfence/internal/engine"
 )
+
+// severities es el vocabulario válido del filtro ?severity: los cuatro
+// niveles de risk.Severities más "unknown" (risk.SeverityUnknown), el único
+// quinto valor que Verdict.Severity puede llevar (T3). Se calcula una vez.
+var severities = append(append([]string{}, risk.Severities...), risk.SeverityUnknown)
+
+func validSeverity(s string) bool {
+	for _, v := range severities {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
 
 func (s *server) registerDevices() {
 	s.reg.Add(Route{Method: "GET", Path: "/api/v1/devices", Cap: auth.DeviceRead, Handler: s.devicesList})
@@ -18,8 +33,14 @@ func (s *server) registerDevices() {
 	s.reg.Add(Route{Method: "POST", Path: "/api/v1/devices/{id}/actions", Cap: auth.DeviceAction, Handler: s.deviceAction})
 }
 
-func matchDevice(d device.Device, state, q string) bool {
+// matchDevice descarta, no rechaza, una severidad fuera del vocabulario: un
+// valor inválido en la URL deja el listado sin filtrar por severidad en vez
+// de convertir GET /devices en un 400.
+func matchDevice(d device.Device, state, q, severity string) bool {
 	if state != "" && string(d.FenceState) != state {
+		return false
+	}
+	if severity != "" && validSeverity(severity) && d.Risk.Severity != severity {
 		return false
 	}
 	if q == "" {
@@ -40,10 +61,10 @@ func (s *server) devicesList(w http.ResponseWriter, r *http.Request, _ *auth.Pri
 		s.fail(w, "devices.list", err)
 		return
 	}
-	state, q := r.URL.Query().Get("state"), r.URL.Query().Get("q")
+	state, q, severity := r.URL.Query().Get("state"), r.URL.Query().Get("q"), r.URL.Query().Get("severity")
 	out := make([]device.Device, 0, len(ds))
 	for _, d := range ds {
-		if matchDevice(d, state, q) {
+		if matchDevice(d, state, q, severity) {
 			out = append(out, d)
 		}
 	}

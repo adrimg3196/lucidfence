@@ -286,6 +286,7 @@ export interface paths {
                 query?: {
                     state?: "inside" | "outside" | "unknown";
                     q?: string;
+                    severity?: "low" | "medium" | "high" | "critical" | "unknown";
                 };
                 header?: never;
                 path?: never;

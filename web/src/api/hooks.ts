@@ -80,7 +80,7 @@ export function useLogout() {
   });
 }
 
-export function useDevices(params?: { state?: string; q?: string }) {
+export function useDevices(params?: { state?: string; q?: string; severity?: string }) {
   return useQuery({
     queryKey: keys.devices(params),
     queryFn: async () => unwrap(await api.GET("/api/v1/devices", { params: { query: params as never } })),

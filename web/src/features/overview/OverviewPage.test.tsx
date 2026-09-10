@@ -6,20 +6,56 @@ import { ApiError } from "@/api/client";
 
 vi.mock("@/api/hooks", async (orig) => ({
   ...(await orig<typeof hooks>()),
-  useDevices: vi.fn(), useEngineStatus: vi.fn(), useEvents: vi.fn(), useRunOnce: vi.fn(), useMe: vi.fn(),
+  useDevices: vi.fn(),
+  useEngineStatus: vi.fn(),
+  useEvents: vi.fn(),
+  useRunOnce: vi.fn(),
+  useMe: vi.fn(),
+  useHandoffs: vi.fn(),
 }));
 
-const device = (id: string, fence_state: string, compliant: boolean | null) => ({ id, name: id, fence_state, compliant });
+// Ancla nextSibling de forma determinista sobre el severity de la insignia,
+// igual que el resto de este fichero hace con Kpi.
+vi.mock("@/components/SeverityBadge", () => ({
+  SeverityBadge: ({ severity }: { severity: string }) => <span data-testid={`sev-${severity}`}>{severity}</span>,
+}));
 
-function mock(over: Partial<Record<"devices" | "engine" | "events", unknown>> = {}) {
-  vi.mocked(hooks.useDevices).mockReturnValue({ data: { items: [device("a", "inside", true), device("b", "outside", false), device("c", "unknown", null)], total: 3 }, isPending: false, error: null, refetch: vi.fn(), ...(over.devices as object) } as never);
-  vi.mocked(hooks.useEngineStatus).mockReturnValue({ data: { mode: "simulation", enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 }, interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" } }, isPending: false, error: null, ...(over.engine as object) } as never);
-  vi.mocked(hooks.useEvents).mockReturnValue({ data: { items: [{ at: "2026-09-05T12:00:00Z", device_id: "a", device_name: "a", from: "none:unknown", to: "demo-hq:inside" }] }, isPending: false, error: null, ...(over.events as object) } as never);
+const device = (id: string, fence_state: string, compliant: boolean | null, severity = "unknown") => ({ id, name: id, fence_state, compliant, risk: { severity } });
+
+function mock(over: Partial<Record<"devices" | "engine" | "events" | "handoffs", unknown>> = {}) {
+  vi.mocked(hooks.useDevices).mockReturnValue({
+    data: { items: [device("a", "inside", true, "low"), device("b", "outside", false, "high"), device("c", "unknown", null, "high")], total: 3 },
+    isPending: false,
+    error: null,
+    refetch: vi.fn(),
+    ...(over.devices as object),
+  } as never);
+  vi.mocked(hooks.useEngineStatus).mockReturnValue({
+    data: {
+      mode: "simulation",
+      enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 },
+      interval_seconds: 900,
+      running: true,
+      cycles: 2,
+      providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } },
+      last_cycle: { at: "2026-09-05T12:00:00Z" },
+    },
+    isPending: false,
+    error: null,
+    ...(over.engine as object),
+  } as never);
+  vi.mocked(hooks.useEvents).mockReturnValue({
+    data: { items: [{ at: "2026-09-05T12:00:00Z", device_id: "a", device_name: "a", from: "none:unknown", to: "demo-hq:inside" }] },
+    isPending: false,
+    error: null,
+    ...(over.events as object),
+  } as never);
   vi.mocked(hooks.useRunOnce).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   vi.mocked(hooks.useMe).mockReturnValue({ data: { capabilities: ["engine:run"] } } as never);
+  vi.mocked(hooks.useHandoffs).mockReturnValue({ data: { items: [{ id: "ho-1" }], total: 1 }, isPending: false, error: null, refetch: vi.fn(), ...(over.handoffs as object) } as never);
 }
 
-test("contenido: KPIs, motor, transiciones y proveedores", () => {
+test("contenido: KPIs, motor, riesgo de la flota, handoffs, transiciones y proveedores", () => {
   mock();
   renderWithProviders(<OverviewPage />);
   expect(screen.getByText("Dispositivos").nextSibling).toHaveTextContent("3");
@@ -27,10 +63,10 @@ test("contenido: KPIs, motor, transiciones y proveedores", () => {
   expect(screen.getByText("Cumplimiento").nextSibling).toHaveTextContent("33 %");
   expect(screen.getByRole("button", { name: "Ejecutar ciclo ahora" })).toBeEnabled();
   expect(screen.getByText("demo-hq:inside")).toBeInTheDocument();
-  // "simulation" es a la vez el modo del motor y el nombre del proveedor demo
-  // (ver internal/config/config.go y internal/uem/simulation), así que
-  // aparece dos veces: en la tarjeta del motor y en la lista de proveedores.
   expect(screen.getAllByText("simulation")).toHaveLength(2);
+  expect(screen.getByTestId("sev-low").nextSibling).toHaveTextContent("1");
+  expect(screen.getByTestId("sev-high").nextSibling).toHaveTextContent("2");
+  expect(screen.getByTestId("handoffs-pending-count")).toHaveTextContent("1");
 });
 
 test("cargando, vacío y error", () => {
@@ -56,7 +92,27 @@ test("un 409 de run-once se muestra como texto", () => {
 });
 
 test("last_error del motor se muestra como texto", () => {
-  mock({ engine: { data: { mode: "simulation", enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 }, interval_seconds: 900, running: true, cycles: 2, providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } }, last_cycle: { at: "2026-09-05T12:00:00Z" }, last_error: "proveedor simulation: tiempo agotado" } } });
+  mock({
+    engine: {
+      data: {
+        mode: "simulation",
+        enforcement: { mode: "observe", live_actions: null, allow_wipe: false, wipe_allowlist: null, action_cooldown_seconds: 3600 },
+        interval_seconds: 900,
+        running: true,
+        cycles: 2,
+        providers: { simulation: { ok: true, devices: 3, latency_ms: 4 } },
+        last_cycle: { at: "2026-09-05T12:00:00Z" },
+        last_error: "proveedor simulation: tiempo agotado",
+      },
+    },
+  });
   renderWithProviders(<OverviewPage />);
   expect(screen.getByText("proveedor simulation: tiempo agotado")).toBeInTheDocument();
+});
+
+test("un error de la bandeja de handoffs no rompe el resto de la página", () => {
+  mock({ handoffs: { data: undefined, error: new ApiError(500, "internal", "error interno"), refetch: vi.fn() } });
+  renderWithProviders(<OverviewPage />);
+  expect(screen.getByRole("heading", { name: "Visión general" })).toBeInTheDocument();
+  expect(screen.getAllByRole("alert").some((a) => a.textContent?.includes("error interno"))).toBe(true);
 });

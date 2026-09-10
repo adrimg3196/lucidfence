@@ -158,10 +158,9 @@ test("los mensajes de validación respetan el idioma activo (M1-R27, C15)", asyn
   expect(screen.queryByText("El nombre es obligatorio")).toBeNull();
 });
 
-// M1-R27: las reglas (violationIntervalCycles/dwellSeconds) aún no las
-// aplica el motor (C3 diferido a M2); el editor debe avisarlo junto a esos
-// campos para que no parezca que ya tienen efecto.
-test("avisa de que el motor aún no aplica las reglas (M1-R27)", () => {
+// M2 (T14): el motor ya aplica dwell_seconds y violation_interval_cycles;
+// el aviso de "a partir de M2" se sustituye por la ayuda definitiva.
+test("explica qué hacen la permanencia mínima y los ciclos entre violaciones, sin el aviso de M1 (M2)", () => {
   vi.mocked(hooks.useFence).mockReturnValue({ data: undefined, isPending: false, error: null } as never);
   vi.mocked(hooks.useCreateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
   vi.mocked(hooks.useUpdateFence).mockReturnValue({ mutateAsync: vi.fn(), isPending: false, error: null } as never);
@@ -171,7 +170,12 @@ test("avisa de que el motor aún no aplica las reglas (M1-R27)", () => {
     </Routes>,
     { route: "/fences/new" },
   );
-  expect(screen.getByText("El motor aplicará estas reglas a partir de M2")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "«Permanencia mínima» retrasa la acción de entrada hasta que el dispositivo lleva ese tiempo en el nuevo estado; «Ciclos entre violaciones» repite la acción cada N ciclos mientras la violación sigue activa.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("El motor aplicará estas reglas a partir de M2")).toBeNull();
 });
 
 test("evita el id reservado 'none' al generar el slug desde el nombre (M1-R12)", async () => {

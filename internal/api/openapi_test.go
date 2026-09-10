@@ -152,3 +152,56 @@ func TestElContratoDocumentaElVocabularioDelDominio(t *testing.T) {
 		}
 	}
 }
+
+// openAPIParamEnum extrae el enum de un parámetro de query documentado bajo
+// paths.<opPath>.<method>.parameters, fuera del alcance de openAPIEnum (que
+// solo mira components.schemas). Mismo YAML restringido, misma disciplina de
+// fallar alto si el parámetro no documenta ningún enum.
+func openAPIParamEnum(t *testing.T, path, opPath, method, param string) []string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("docs/openapi.yaml obligatorio (spec §6.1): %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	inPath, inMethod, inParams, inParam := false, false, false, false
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		trim := strings.TrimSpace(line)
+		switch {
+		case indent == 2 && strings.HasPrefix(trim, "/") && strings.HasSuffix(trim, ":"):
+			inPath = strings.TrimSuffix(trim, ":") == opPath
+			inMethod, inParams, inParam = false, false, false
+		case inPath && indent == 4 && strings.HasSuffix(trim, ":"):
+			inMethod = strings.TrimSuffix(trim, ":") == method
+			inParams, inParam = false, false
+		case inMethod && indent == 6 && trim == "parameters:":
+			inParams = true
+		case inParams && indent == 8 && strings.HasPrefix(trim, "- name:"):
+			inParam = strings.TrimSpace(strings.TrimPrefix(trim, "- name:")) == param
+		case inParam && indent >= 10 && strings.HasPrefix(trim, "enum: ["):
+			raw := strings.TrimSuffix(strings.TrimPrefix(trim, "enum: ["), "]")
+			out := strings.Split(raw, ",")
+			for i := range out {
+				out[i] = strings.TrimSpace(out[i])
+			}
+			return out
+		}
+	}
+	t.Fatalf("%s %s: parámetro %q se documenta sin enum", method, opPath, param)
+	return nil
+}
+
+// TestFiltroDeSeveridadDocumentaElVocabularioDelDominio (M2-R63): el filtro
+// ?severity de GET /api/v1/devices documenta los cuatro niveles de
+// risk.Severities más "unknown" (risk.SeverityUnknown, el quinto valor real
+// de Verdict.Severity), ni uno menos ni uno de más.
+func TestFiltroDeSeveridadDocumentaElVocabularioDelDominio(t *testing.T) {
+	want := append(append([]string{}, risk.Severities...), risk.SeverityUnknown)
+	got := openAPIParamEnum(t, "../../docs/openapi.yaml", "/api/v1/devices", "get", "severity")
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("severity documenta %v; el dominio valida %v", got, want)
+	}
+}

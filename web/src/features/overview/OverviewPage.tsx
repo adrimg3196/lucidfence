@@ -1,13 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SeverityBadge } from "@/components/SeverityBadge";
 import { Loading } from "@/components/states/Loading";
 import { Empty } from "@/components/states/Empty";
 import { ErrorState } from "@/components/states/ErrorState";
-import { useDevices, useEngineStatus, useEvents } from "@/api/hooks";
+import { useDevices, useEngineStatus, useEvents, useHandoffs } from "@/api/hooks";
 import { useT, useLang } from "@/lib/i18n";
 import { formatDateTime, percent } from "@/lib/format";
 import { Kpi } from "./Kpi";
 import { EngineCard } from "./EngineCard";
+
+const severityOrder = ["low", "medium", "high", "critical", "unknown"] as const;
 
 export function OverviewPage() {
   const t = useT();
@@ -15,9 +18,15 @@ export function OverviewPage() {
   const devices = useDevices();
   const events = useEvents(10);
   const engine = useEngineStatus();
+  const handoffs = useHandoffs("pending");
   const items = devices.data?.items ?? [];
   const count = (s: string) => items.filter((d) => d.fence_state === s).length;
   const compliant = items.filter((d) => d.compliant === true).length;
+  const bySeverity = severityOrder.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s]: 0 }), {});
+  for (const d of items) {
+    const s = d.risk.severity;
+    bySeverity[s in bySeverity ? s : "unknown"] += 1;
+  }
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">{t("overview.title")}</h1>
@@ -35,6 +44,37 @@ export function OverviewPage() {
       <div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
         <div className="space-y-6">
           <EngineCard />
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("overview.riskDistribution")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {devices.data && (
+                <ul className="flex flex-wrap gap-4 text-sm">
+                  {severityOrder.map((s) => (
+                    <li key={s} className="flex items-center gap-2">
+                      <SeverityBadge severity={s} />
+                      <span className="tabular-nums text-muted">{bySeverity[s]}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("overview.handoffsPending")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {handoffs.isPending && <Loading rows={1} />}
+              {handoffs.error && <ErrorState error={handoffs.error} onRetry={() => handoffs.refetch()} />}
+              {handoffs.data && (
+                <p data-testid="handoffs-pending-count" className="text-3xl font-semibold tabular-nums">
+                  {handoffs.data.total}
+                </p>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>{t("overview.providers")}</CardTitle>

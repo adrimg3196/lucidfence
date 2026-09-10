@@ -20,6 +20,8 @@ func TestDevicesListaDetalleYTrail(t *testing.T) {
 	t.Run("run-once carga la flota fake", func(t *testing.T) { checkRunOnceCargaFlota(t, e) })
 	t.Run("lista devuelve las seis fichas", func(t *testing.T) { checkDevicesLista(t, e) })
 	t.Run("filtro state=inside", func(t *testing.T) { checkDevicesFiltroInside(t, e) })
+	t.Run("filtro por severidad", func(t *testing.T) { checkDevicesFiltroSeveridad(t, e) })
+	t.Run("severidad fuera del vocabulario se descarta, no se rechaza", func(t *testing.T) { checkDevicesFiltroSeveridadInvalida(t, e) })
 	t.Run("búsqueda por nombre", func(t *testing.T) { checkDevicesBusquedaPorNombre(t, e) })
 	t.Run("detalle de un dispositivo", func(t *testing.T) { checkDeviceDetalle(t, e) })
 	t.Run("404 en dispositivo inexistente", func(t *testing.T) { checkDeviceNoEncontrado(t, e) })
@@ -48,6 +50,42 @@ func checkDevicesFiltroInside(t *testing.T, e *testEnv) {
 	items := out["items"].([]any)
 	if res.StatusCode != 200 || len(items) == 0 || items[0].(map[string]any)["fence_state"] != "inside" {
 		t.Fatalf("filtro inside: %v", out)
+	}
+}
+
+// checkDevicesFiltroSeveridad (M2-R63) prueba de extremo a extremo el filtro
+// que DevicesPage ofrece en un <NativeSelect>: toma la severidad del primer
+// dispositivo de la lista sin filtrar y comprueba que el filtro devuelve un
+// subconjunto no vacío y homogéneo, nunca la flota entera disfrazada.
+func checkDevicesFiltroSeveridad(t *testing.T, e *testEnv) {
+	t.Helper()
+	_, all := e.do("GET", "/api/v1/devices", nil, true)
+	items := all["items"].([]any)
+	severity := items[0].(map[string]any)["risk"].(map[string]any)["severity"].(string)
+	res, out := e.do("GET", "/api/v1/devices?severity="+severity, nil, true)
+	got := out["items"].([]any)
+	if res.StatusCode != 200 || len(got) == 0 {
+		t.Fatalf("filtro por severidad %q: %d %v", severity, res.StatusCode, out)
+	}
+	if len(got) >= len(items) {
+		t.Fatalf("el filtro debería excluir al menos un dispositivo (severidad %q): %d de %d", severity, len(got), len(items))
+	}
+	for _, it := range got {
+		if s := it.(map[string]any)["risk"].(map[string]any)["severity"]; s != severity {
+			t.Fatalf("un dispositivo de otra severidad se coló en el filtro: %v", it)
+		}
+	}
+}
+
+// checkDevicesFiltroSeveridadInvalida cubre la mitad del ruling que un 400
+// no puede cumplir por sí solo: un valor fuera de risk.Severities+unknown se
+// descarta, no rechaza, así que un typo en la URL sigue devolviendo 200 con
+// la flota entera en vez de romper el listado.
+func checkDevicesFiltroSeveridadInvalida(t *testing.T, e *testEnv) {
+	t.Helper()
+	res, out := e.do("GET", "/api/v1/devices?severity=nope", nil, true)
+	if res.StatusCode != 200 || len(out["items"].([]any)) != 6 {
+		t.Fatalf("severidad fuera del vocabulario se descarta, no se rechaza: %d %v", res.StatusCode, out)
 	}
 }
 
