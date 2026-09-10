@@ -14,6 +14,9 @@ import { PolicyEditorPage } from "@/features/policies/PolicyEditorPage";
 import { IncidentsPage } from "@/features/incidents/IncidentsPage";
 import { IncidentDetailPage } from "@/features/incidents/IncidentDetailPage";
 import { AlertsPage } from "@/features/alerts/AlertsPage";
+import { PlaybooksPage } from "@/features/playbooks/PlaybooksPage";
+import { PlaybookEditorPage } from "@/features/playbooks/PlaybookEditorPage";
+import { HandoffsPage } from "@/features/handoffs/HandoffsPage";
 
 export const router = createBrowserRouter([
   { path: "/setup", element: <SetupPage /> },
@@ -37,6 +40,10 @@ export const router = createBrowserRouter([
           { path: "/incidents", element: <IncidentsPage /> },
           { path: "/incidents/:id", element: <IncidentDetailPage /> },
           { path: "/alerts", element: <AlertsPage /> },
+          { path: "/playbooks", element: <PlaybooksPage /> },
+          { path: "/playbooks/new", element: <PlaybookEditorPage /> },
+          { path: "/playbooks/:id", element: <PlaybookEditorPage /> },
+          { path: "/handoffs", element: <HandoffsPage /> },
         ],
       },
     ],
