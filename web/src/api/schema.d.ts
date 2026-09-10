@@ -1725,7 +1725,7 @@ export interface components {
             by_action: {
                 [key: string]: number;
             };
-            /** @description True cuando la política usa campos que la simulación no reconstruye del histórico */
+            /** @description True cuando el resultado no es exacto, porque hay campos que se leen del dispositivo de hoy o porque la permanencia se midió desde la ventana simulada; el motivo concreto va en notes */
             approximation: boolean;
             /** @description Qué se pudo reconstruir y qué no, en español; un cero sin notas sería un falso verde */
             notes: string[];
