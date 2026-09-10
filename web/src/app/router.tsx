@@ -11,6 +11,9 @@ import { FencesPage } from "@/features/fences/FencesPage";
 import { FenceEditorPage } from "@/features/fences/FenceEditorPage";
 import { PoliciesPage } from "@/features/policies/PoliciesPage";
 import { PolicyEditorPage } from "@/features/policies/PolicyEditorPage";
+import { IncidentsPage } from "@/features/incidents/IncidentsPage";
+import { IncidentDetailPage } from "@/features/incidents/IncidentDetailPage";
+import { AlertsPage } from "@/features/alerts/AlertsPage";
 
 export const router = createBrowserRouter([
   { path: "/setup", element: <SetupPage /> },
@@ -31,6 +34,9 @@ export const router = createBrowserRouter([
           { path: "/policies", element: <PoliciesPage /> },
           { path: "/policies/new", element: <PolicyEditorPage /> },
           { path: "/policies/:id", element: <PolicyEditorPage /> },
+          { path: "/incidents", element: <IncidentsPage /> },
+          { path: "/incidents/:id", element: <IncidentDetailPage /> },
+          { path: "/alerts", element: <AlertsPage /> },
         ],
       },
     ],
