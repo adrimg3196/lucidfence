@@ -6,16 +6,26 @@ import (
 	"github.com/adrimg3196/lucidfence/internal/domain/device"
 	"github.com/adrimg3196/lucidfence/internal/domain/integrity"
 	"github.com/adrimg3196/lucidfence/internal/domain/risk"
+	"github.com/adrimg3196/lucidfence/internal/domain/settings"
 )
 
-// riskContext construye el contexto de riesgo del ciclo: el reloj es el del
-// motor y los turnos, el riesgo de zona y la jornada salen de los ajustes que
-// applySettings dejó vigentes al empezar el ciclo. Los mapas se copian: quien
-// reciba el contexto no puede mutar la configuración viva del motor.
+// riskContext construye el contexto de las señales con el reloj del ciclo y
+// los ajustes de riesgo que applySettings dejó vigentes al empezar el ciclo.
 func (e *Engine) riskContext(now time.Time) risk.Context {
 	e.stateMu.RLock()
 	cfg := e.riskCfg
 	e.stateMu.RUnlock()
+	return riskContextFrom(cfg, now)
+}
+
+// riskContextFrom construye el contexto a partir de unos ajustes cualesquiera.
+// Copia los mapas (risk.DefaultContext los deja a nil) para que quien reciba el
+// contexto no pueda mutar la configuración viva del motor. Las horas se copian
+// tal cual, sin corregirlas: 0/0 es una jornada legítima "sin franja nocturna"
+// (T7 no las rellena a propósito) y quien quiera la de fábrica parte de
+// settings.Default(). El simulador lo llama con los ajustes recién leídos del
+// disco, sin tocar el estado del motor.
+func riskContextFrom(cfg settings.Risk, now time.Time) risk.Context {
 	ctx := risk.DefaultContext(now)
 	ctx.OffHoursStart, ctx.OffHoursEnd = cfg.OffHoursStart, cfg.OffHoursEnd
 	ctx.ShiftZones = make(map[string]string, len(cfg.ShiftZones))

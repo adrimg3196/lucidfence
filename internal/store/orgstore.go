@@ -146,36 +146,91 @@ func (o *OrgStore) RecentActions(limit int) ([]action.Result, error) {
 	return readLines[action.Result](o, "actions.jsonl", limit)
 }
 
+// trailLine es la línea de trail.jsonl tal cual se lee. Point es puntero a
+// propósito: así una línea sin coordenadas se distingue de una en el (0,0)
+// del golfo de Guinea, que es una posición válida.
 type trailLine struct {
+	DeviceID string     `json:"device_id"`
+	At       time.Time  `json:"at"`
+	Point    *geo.Point `json:"point"`
+}
+
+// TrailEntry es un punto del histórico global: la posición de un dispositivo
+// en un instante. Es lo que consume el simulador what-if del motor.
+type TrailEntry struct {
 	DeviceID string    `json:"device_id"`
 	At       time.Time `json:"at"`
 	Point    geo.Point `json:"point"`
 }
 
+// MaxTrailPoints es el techo duro de puntos que devuelve TrailAll. Protege al
+// servidor local: un trail de meses no puede convertirse en una simulación que
+// se coma la memoria de la máquina del operador.
+const MaxTrailPoints = 20_000
+
 // AppendTrail registra una posición.
 func (o *OrgStore) AppendTrail(deviceID string, p geo.Point, at time.Time) error {
-	return appendLine(o, "trail.jsonl", trailLine{DeviceID: deviceID, At: at, Point: p})
+	return appendLine(o, "trail.jsonl", TrailEntry{DeviceID: deviceID, At: at, Point: p})
+}
+
+// trailEntries lee trail.jsonl entero y descarta lo que no se puede usar: una
+// línea corrupta, sin dispositivo, sin instante o con coordenadas imposibles se
+// salta en vez de tumbar la lectura (porte de load_trail_points de 1.x). El
+// fichero es append-only y el motor sella cada punto con su propio reloj, así
+// que el orden del fichero es el orden cronológico.
+func (o *OrgStore) trailEntries() ([]TrailEntry, error) {
+	o.mu.RLock()
+	raws, err := ReadJSONL(o.Path("trail.jsonl"), 0)
+	o.mu.RUnlock()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TrailEntry, 0, len(raws))
+	for _, raw := range raws {
+		var l trailLine
+		if err := json.Unmarshal(raw, &l); err != nil {
+			continue
+		}
+		if l.DeviceID == "" || l.At.IsZero() || l.Point == nil || l.Point.Valid() != nil {
+			continue
+		}
+		out = append(out, TrailEntry{DeviceID: l.DeviceID, At: l.At, Point: *l.Point})
+	}
+	return out, nil
 }
 
 // Trail devuelve las últimas posiciones de un dispositivo.
 func (o *OrgStore) Trail(deviceID string, limit int) ([]device.TrailPoint, error) {
-	all, err := readLines[trailLine](o, "trail.jsonl", 0)
+	all, err := o.trailEntries()
 	if err != nil {
 		return nil, err
 	}
-	var out []device.TrailPoint
-	for _, l := range all {
-		if l.DeviceID == deviceID {
-			out = append(out, device.TrailPoint{At: l.At, Point: l.Point})
+	out := []device.TrailPoint{}
+	for _, e := range all {
+		if e.DeviceID == deviceID {
+			out = append(out, device.TrailPoint{At: e.At, Point: e.Point})
 		}
 	}
 	if limit > 0 && len(out) > limit {
 		out = out[len(out)-limit:]
 	}
-	if out == nil {
-		out = []device.TrailPoint{}
-	}
 	return out, nil
+}
+
+// TrailAll devuelve los últimos limit puntos del histórico de toda la flota, en
+// orden cronológico. limit <= 0 o por encima del techo valen MaxTrailPoints.
+func (o *OrgStore) TrailAll(limit int) ([]TrailEntry, error) {
+	if limit <= 0 || limit > MaxTrailPoints {
+		limit = MaxTrailPoints
+	}
+	all, err := o.trailEntries()
+	if err != nil {
+		return nil, err
+	}
+	if len(all) > limit {
+		all = all[len(all)-limit:]
+	}
+	return all, nil
 }
 
 // AppendStats registra las estadísticas de un ciclo.

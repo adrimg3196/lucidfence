@@ -1,7 +1,9 @@
 package store
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,5 +196,103 @@ func TestSinOpcionDeEgressLaSiembraEsVacia(t *testing.T) {
 	}
 	if set.Egress.Hosts == nil || len(set.Egress.Hosts) != 0 || set.Egress.AllowPrivate {
 		t.Fatalf("sin opción: allowlist vacía y no nil, sin redes privadas: %+v", set.Egress)
+	}
+}
+
+// El histórico global es lo que consume el simulador what-if del motor (Task
+// 17): TrailAll no puede caerse por una línea corrupta, no puede devolver el
+// fichero entero y respeta el orden de escritura, que es el cronológico.
+
+func escribirTrail(t *testing.T, o *OrgStore, lineas ...string) {
+	t.Helper()
+	if err := os.WriteFile(o.Path("trail.jsonl"), []byte(strings.Join(lineas, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTrailAllDevuelveElHistoricoDeTodaLaFlotaEnOrden(t *testing.T) {
+	o := org(t)
+	at := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	_ = o.AppendTrail("dev-1", geo.Point{Lat: 40.42, Lng: -3.70}, at)
+	_ = o.AppendTrail("dev-2", geo.Point{Lat: 41.38, Lng: 2.17}, at.Add(time.Minute))
+	_ = o.AppendTrail("dev-1", geo.Point{Lat: 40.43, Lng: -3.71}, at.Add(2*time.Minute))
+	got, err := o.TrailAll(0)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("histórico global: %v %+v", err, got)
+	}
+	if got[0].DeviceID != "dev-1" || got[1].DeviceID != "dev-2" || got[2].DeviceID != "dev-1" {
+		t.Fatalf("el orden del fichero es el cronológico: %+v", got)
+	}
+	if !got[2].At.Equal(at.Add(2*time.Minute)) || got[1].Point.Lng != 2.17 {
+		t.Fatalf("punto mal decodificado: %+v", got[2])
+	}
+}
+
+func TestTrailAllSaltaLoQueNoSePuedeSimular(t *testing.T) {
+	o := org(t)
+	escribirTrail(t, o,
+		`{"device_id":"dev-1","at":"2026-09-05T12:00:00Z","point":{"lat":40.42,"lng":-3.7}}`,
+		`{corrupto`,
+		`{"device_id":"","at":"2026-09-05T12:01:00Z","point":{"lat":40.42,"lng":-3.7}}`,
+		`{"device_id":"dev-2","at":"2026-09-05T12:02:00Z"}`,
+		`{"device_id":"dev-3","at":"2026-09-05T12:03:00Z","point":{"lat":91,"lng":-3.7}}`,
+		`{"device_id":"dev-4","point":{"lat":40.42,"lng":-3.7}}`,
+		`{"device_id":"dev-5","at":"2026-09-05T12:05:00Z","point":{"lat":40.5,"lng":-3.7}}`,
+	)
+	got, err := o.TrailAll(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].DeviceID != "dev-1" || got[1].DeviceID != "dev-5" {
+		t.Fatalf("corrupta, sin dispositivo, sin punto, con punto imposible y sin instante fuera: %+v", got)
+	}
+}
+
+func TestTrailAllAplicaElLimiteYElTechoDuro(t *testing.T) {
+	o := org(t)
+	at := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	lineas := make([]string, 0, MaxTrailPoints+10)
+	for i := 0; i < MaxTrailPoints+10; i++ {
+		lineas = append(lineas, fmt.Sprintf(`{"device_id":"dev-1","at":%q,"point":{"lat":40.42,"lng":-3.7}}`,
+			at.Add(time.Duration(i)*time.Second).Format(time.RFC3339)))
+	}
+	escribirTrail(t, o, lineas...)
+	ultimo := at.Add(time.Duration(MaxTrailPoints+9) * time.Second)
+
+	todos, err := o.TrailAll(0)
+	if err != nil || len(todos) != MaxTrailPoints {
+		t.Fatalf("sin límite manda el techo duro: %v %d", err, len(todos))
+	}
+	if !todos[len(todos)-1].At.Equal(ultimo) {
+		t.Fatalf("el techo se queda con los últimos puntos, no con los primeros: %v", todos[len(todos)-1].At)
+	}
+	tres, _ := o.TrailAll(3)
+	if len(tres) != 3 || !tres[2].At.Equal(ultimo) {
+		t.Fatalf("límite de 3: %+v", tres)
+	}
+	excesivo, _ := o.TrailAll(MaxTrailPoints * 2)
+	if len(excesivo) != MaxTrailPoints {
+		t.Fatalf("un límite por encima del techo cae al techo: %d", len(excesivo))
+	}
+}
+
+func TestTrailAllSinFicheroDevuelveVacioNoError(t *testing.T) {
+	o := org(t)
+	got, err := o.TrailAll(0)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("sin trail.jsonl: %v %+v", err, got)
+	}
+}
+
+func TestTrailNoSeCaePorUnaLineaCorrupta(t *testing.T) {
+	o := org(t)
+	escribirTrail(t, o,
+		`{"device_id":"dev-1","at":"2026-09-05T12:00:00Z","point":{"lat":1,"lng":1}}`,
+		`{corrupto`,
+		`{"device_id":"dev-1","at":"2026-09-05T12:01:00Z","point":{"lat":2,"lng":1}}`,
+	)
+	tr, err := o.Trail("dev-1", 10)
+	if err != nil || len(tr) != 2 || tr[1].Point.Lat != 2 {
+		t.Fatalf("el detalle de un dispositivo tampoco se cae: %v %+v", err, tr)
 	}
 }
