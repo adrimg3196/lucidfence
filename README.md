@@ -4,13 +4,13 @@
 riesgo explicable sobre los UEM que ya tienes (Applivery, Intune, Jamf, Fleet,
 Workspace ONE). Tu dato de ubicación no sale de tu máquina.
 
-> **Estado: LucidFence 2.0 en construcción.** `main` contiene la reescritura en
-> Go. Última pre-release: **2.0.0-alpha.2** (riesgo y acciones, hito M2), en
-> [GitHub Releases](https://github.com/adrimg3196/lucidfence/releases). La última
-> versión estable sigue siendo **1.6.1** (Python): código en la rama
+> **El producto es LucidFence 2.0** (Go, un binario, dashboard embebido).
+> Release actual: **[2.0.0-alpha.2](https://github.com/adrimg3196/lucidfence/releases/latest)**
+> (riesgo y acciones, hito M2). `main` es 2.0.
+>
+> El Python 1.6.1 queda archivado en
 > [`legacy/python`](https://github.com/adrimg3196/lucidfence/tree/legacy/python)
-> y tag `v1.6.1-python-final`. Homebrew, Docker y la vitrina siguen sirviendo 1.6.1
-> hasta la release 2.0.0.
+> (`v1.6.1-python-final`). No es el producto que se enseña.
 
 ## Por qué 2.0
 
